@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -44,6 +45,7 @@ import com.example.myapplication.data.local.CalendarEventEntity
 import com.example.myapplication.data.local.EventType
 import com.example.myapplication.data.local.VisitStatus
 import com.example.myapplication.presentation.components.*
+import com.example.myapplication.presentation.components.Utilidades.MaverickTacticalButton
 import com.example.myapplication.presentation.profile.ProfileViewModel
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import java.text.SimpleDateFormat
@@ -121,6 +123,14 @@ fun CalendarScreenContent(
     var selectedEvent by remember { mutableStateOf<CalendarEventEntity?>(null) } // Abre el Modal de Detalles
     var eventToCancel by remember { mutableStateOf<CalendarEventEntity?>(null) } // Abre el Modal de Confirmación
 
+    // --- 🏗️ SECCIÓN: LÓGICA DE ANIMACIÓN DE CABECERA (SCROLL) ---
+    val scrollState = rememberScrollState()
+    val collapseFraction by remember {
+        derivedStateOf {
+            (scrollState.value.toFloat() / 250f).coerceIn(0f, 1f)
+        }
+    }
+
     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val selectedDateStr = dateFormat.format(selectedDate.time)
 /**
@@ -178,27 +188,33 @@ fun CalendarScreenContent(
             containerColor = Color.Transparent,
             topBar = {
                 if (!isSearchActive) {
-                    TopAppBar(
-                        title = {
-                            Column {
-                                Text("Agenda Técnica", fontWeight = FontWeight.Black, color = Color.White, fontSize = 20.sp)
-                                Text("CONTROL DE VISITAS Y TURNOS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray, letterSpacing = 1.sp)
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White) }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBg.copy(alpha = 0.95f))
+                    // ==========================================================================================
+                    // --- 🏗️ SECCIÓN: CABECERA DINÁMICA MAVERICK (REEMPLAZO DE TOPAPPBAR) ---
+                    // ==========================================================================================
+                    BarraCabezera(
+                        title = "Mi Agenda",
+                        subtitle = "Control de visitas y turnos",
+                        emoji = "📅",
+                        onBack = onBack,
+                        onInfoClick = { isCalendarExpanded = !isCalendarExpanded },
+                        collapseFraction = collapseFraction,
+                        accentColor = Color(0xFF2197F5)
                     )
                 }
             }
         ) { paddingValues ->
+            val safePadding = PaddingValues(
+                start = paddingValues.calculateStartPadding(LocalLayoutDirection.current).coerceAtLeast(0.dp),
+                top = paddingValues.calculateTopPadding().coerceAtLeast(0.dp),
+                end = paddingValues.calculateEndPadding(LocalLayoutDirection.current).coerceAtLeast(0.dp),
+                bottom = paddingValues.calculateBottomPadding().coerceAtLeast(0.dp)
+            )
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .verticalScroll(rememberScrollState())
+                    .padding(safePadding)
+                    .verticalScroll(scrollState)
             ) {
                 // --- 1. WIDGET DEL CALENDARIO GLASS ---
                 Surface(
@@ -653,7 +669,11 @@ fun EventDetailsModal(
                                 Text("Prestador / Profesional", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
                                 Text(event.provider, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Medium)
                             }
-                            IconButton(onClick = { onChatClick(event.providerId) }, modifier = Modifier.background(MaverickBlue.copy(0.15f), CircleShape)) {
+                            MaverickTacticalButton(
+                                onClick = { onChatClick(event.providerId) },
+                                size = 36.dp,
+                                accentColor = MaverickBlue
+                            ) {
                                 Icon(Icons.AutoMirrored.Filled.Message, null, tint = MaverickBlue, modifier = Modifier.size(18.dp))
                             }
                         }

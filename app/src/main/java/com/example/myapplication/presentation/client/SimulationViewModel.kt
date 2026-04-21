@@ -5,8 +5,7 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.*
-import com.example.myapplication.data.model.MessageType
-import com.example.myapplication.data.model.Provider
+import com.example.myapplication.data.model.*
 import com.example.myapplication.data.repository.BudgetRepository
 import com.example.myapplication.data.repository.ChatRepository
 import com.example.myapplication.data.repository.ProviderRepository
@@ -16,6 +15,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
+import com.example.myapplication.presentation.client.CategoryVisuals
+import com.example.myapplication.data.local.SembradoServiciosInicia
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
 import kotlin.random.Random
@@ -35,6 +39,66 @@ class SimulationViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val notificationHelper = NotificationHelper(application)
+
+    // ==================================================================================
+    // --- 🚀 SECCIÓN: MIGRACIÓN DE CATEGORÍAS A FIRESTORE (PLAN DE ACCIÓN) ---
+    // ==================================================================================
+    /**
+     * Sube todas las categorías hardcoded de CategorySampleDataFalso a Firestore.
+     * Colección: "Servicios"
+     * Se utiliza Batch para mayor eficiencia.
+     */
+    fun uploadCategoriesToFirestore() {
+        viewModelScope.launch {
+            val currentUser = auth.currentUser
+            if (currentUser == null) {
+                Toast.makeText(application, "Error: Debes estar autenticado para migrar datos.", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val batch = db.batch()
+                val collectionRef = db.collection("Servicios")
+
+                // 1. Limpiar o preparar (Firestore no permite borrar colecciones desde el cliente masivamente de forma simple, 
+                // pero aquí estamos creando documentos nuevos con IDs automáticos)
+                SembradoServiciosInicia.categories.forEach { item ->
+                    val docRef = collectionRef.document() 
+                    
+                    val dto = hashMapOf(
+                        "name" to item.name,
+                        "icon" to item.icon,
+                        "description" to item.description, // [CORRECCIÓN] Se agrega la descripción
+                        "superCategory" to item.superCategory,
+                        "superCategoryIcon" to item.superCategoryIcon,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                    batch.set(docRef, dto)
+                }
+
+                // 2. Actualizar la versión global para disparar la sincronización en todos los clientes
+                val metadataRef = db.collection("config").document("metadata")
+                batch.set(metadataRef, mapOf("categoriesVersion" to System.currentTimeMillis() / 1000)) // Usamos timestamp como versión
+
+                batch.commit().await()
+                
+                Toast.makeText(application, "¡MIGRACIÓN EXITOSA! Versión actualizada.", Toast.LENGTH_LONG).show()
+                notificationHelper.showNotification("Maverick Admin", "Categorías sincronizadas con Firestore.")
+                
+            } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
+                if (e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    Toast.makeText(application, "ERROR DE PERMISOS: Revisa las Reglas de Seguridad en la Consola de Firebase.", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(application, "Error Firestore: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+                e.printStackTrace()
+            } catch (e: Exception) {
+                Toast.makeText(application, "Error inesperado: ${e.message}", Toast.LENGTH_LONG).show()
+                e.printStackTrace()
+            }
+        }
+    }
 
     // ==========================================================================================
     // --- PARÁMETROS AJUSTABLES PARA EL DESARROLLADOR ---
@@ -239,6 +303,158 @@ class SimulationViewModel @Inject constructor(
                 notificationHelper.showNotification("Oferta Flash 🔥", "¡${it.displayName} publicó un nuevo descuento en sus servicios!")
             }
             Toast.makeText(application, "Nuevas Promociones simuladas.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // ==========================================================================================
+    // --- NUEVA SECCIÓN: SIMULACIÓN MASIVA DE PRESTADORES (SÉMBRADO DE DATOS) ---
+    // ==========================================================================================
+
+    /**
+     * Genera prestadores ficticios con datos realistas para pruebas de filtros y distancia.
+     * [CORRECCIÓN ULTRA] Geolocalización precisa en San Miguel de Tucumán y calles reales.
+     * [ESTABILIDAD] Se optimizó la inserción masiva para evitar crasheos de memoria (SIGSEGV).
+     * [MEJORA] Sincronizado con la lógica de PrestadorSampleDataFalso (Empresas, Sucursales, Staff, Galería).
+     */
+    fun simulateMassiveProviders(
+        categories: List<String>,
+        areaCode: String,
+        providerCount: Int,
+        companiesMax: Int = 3,
+        branchesMax: Int = 3
+    ) {
+        viewModelScope.launch {
+            val NOMBRES = listOf("Juan", "Pedro", "María", "Ana", "Carlos", "Lucía", "Diego", "Elena", "Roberto", "Sonia", "Facundo", "Martina", "Gonzalo", "Paola")
+            val APELLIDOS = listOf("García", "Rodríguez", "López", "Martínez", "Sánchez", "Pérez", "Gómez", "Díaz", "Álvarez", "Nanterne", "Romero", "Sosa", "Torres")
+            val TITULOS = listOf("Técnico Matriculado", "Ingeniero Especialista", "Maestro Mayor de Obras", "Especialista Senior", "Certificado Oficial")
+            
+            val callesTucuman = listOf("San Martin", "Catamarca", "Salta", "Jujuy", "Santiago del Estero", "9 de julio", "Congreso", "Crisostomo Alvarez", "Av. Sarmiento", "Av. Mitre")
+
+            val providerListToInsert = mutableListOf<Provider>()
+
+            repeat(providerCount) { pIdx ->
+                yield() 
+                
+                val nombre = NOMBRES.random()
+                val apellido = APELLIDOS.random()
+                val id = "SIM-P-${UUID.randomUUID().toString().take(6)}"
+                
+                val baseLat = -26.82414 
+                val baseLon = -65.22260
+                val lat = baseLat + (Random.nextDouble() - 0.5) * 0.03
+                val lon = baseLon + (Random.nextDouble() - 0.5) * 0.03
+                
+                val address = AddressProvider(
+                    id = UUID.randomUUID().toString(),
+                    calle = callesTucuman.random(),
+                    numero = (50..2500).random().toString(),
+                    localidad = "San Miguel de Tucumán",
+                    provincia = "Tucumán",
+                    pais = "Argentina",
+                    codigoPostal = areaCode,
+                    latitude = lat,
+                    longitude = lon
+                )
+
+                // --- GENERACIÓN DE EMPRESAS Y SUCURSALES (LÓGICA ACTUALIZADA) ---
+                val simulatedCompanies = mutableListOf<CompanyProvider>()
+                val hasCompany = Random.nextFloat() > 0.3f
+                
+                if (hasCompany) {
+                    repeat(Random.nextInt(1, (companiesMax + 1))) { cIdx ->
+                        val companyName = "Empresa ${APELLIDOS.random()} & Asociados"
+                        val branches = mutableListOf<BranchProvider>()
+                        
+                        repeat(Random.nextInt(1, (branchesMax + 1))) { bIdx ->
+                            val bLat = baseLat + (Random.nextDouble() - 0.5) * 0.04
+                            val bLon = baseLon + (Random.nextDouble() - 0.5) * 0.04
+                            
+                            branches.add(BranchProvider(
+                                id = "SIM-B-$id-$cIdx-$bIdx",
+                                name = if(bIdx == 0) "Casa Central Tucumán" else "Sucursal ${callesTucuman.random()}",
+                                address = address.copy(
+                                    id = UUID.randomUUID().toString(), 
+                                    calle = callesTucuman.random(),
+                                    numero = (100..2800).random().toString(),
+                                    latitude = bLat,
+                                    longitude = bLon
+                                ),
+                                workingHours = "08:30 a 13:00 y 17:00 a 21:00 hs",
+                                doesService = Random.nextBoolean(),
+                                doesProduct = Random.nextBoolean(),
+                                works24h = Random.nextBoolean(),
+                                hasPhysicalLocation = true,
+                                rating = (35..50).random() / 10f,
+                                employees = List(Random.nextInt(1, 3)) { eIdx ->
+                                    EmployeeProvider(
+                                        name = NOMBRES.random(),
+                                        lastName = APELLIDOS.random(),
+                                        position = if (eIdx == 0) "Gerente" else "Técnico Especialista",
+                                        photoUrl = "https://picsum.photos/seed/emp_${id}_${cIdx}_${bIdx}_$eIdx/200/200"
+                                    )
+                                },
+                                galleryImages = List(Random.nextInt(2, 4)) { "https://picsum.photos/seed/br_${id}_${cIdx}_${bIdx}_$it/400/300" }
+                            ))
+                        }
+                        
+                        simulatedCompanies.add(CompanyProvider(
+                            id = "SIM-C-$id-$cIdx",
+                            name = companyName,
+                            razonSocial = "$companyName S.R.L.",
+                            description = "Líder regional en ${categories.joinToString(", ")}.",
+                            categories = categories,
+                            branches = branches,
+                            isVerified = true,
+                            photoUrl = "https://picsum.photos/seed/comp_${id}_$cIdx/200/200",
+                            bannerImageUrl = "https://picsum.photos/seed/cb_${id}_$cIdx/800/400"
+                        ))
+                    }
+                }
+
+                val provider = Provider(
+                    uid = id,
+                    email = "${nombre.lowercase()}.${apellido.lowercase()}@maverick-sim.com.ar",
+                    phoneNumber = "+54 9 381 " + (4000000..6999999).random().toString(),
+                    displayName = "$nombre $apellido",
+                    name = nombre,
+                    lastName = apellido,
+                    titulo = TITULOS.random(),
+                    matricula = "MAT-TUC-" + (1000..9999).random(),
+                    addresses = listOf(address, address.copy(id = UUID.randomUUID().toString(), calle = callesTucuman.random(), numero = "100")),
+                    address = address,
+                    categories = categories,
+                    isOnline = Random.nextBoolean(),
+                    isSubscribed = Random.nextBoolean(),
+                    isVerified = Random.nextBoolean(),
+                    doesService = true,
+                    doesProduct = Random.nextBoolean(),
+                    works24h = Random.nextBoolean(),
+                    hasPhysicalLocation = Random.nextBoolean(),
+                    doesHomeVisits = Random.nextBoolean(),
+                    doesShipping = Random.nextBoolean(),
+                    acceptsAppointments = Random.nextBoolean(),
+                    rating = (35..50).random() / 10f,
+                    companies = simulatedCompanies,
+                    hasCompanyProfile = simulatedCompanies.isNotEmpty(),
+                    description = "Especialista con amplia trayectoria en la zona de Tucumán.",
+                    createdAt = System.currentTimeMillis(),
+                    photoUrl = "https://picsum.photos/seed/$id/200/200",
+                    bannerImageUrl = "https://picsum.photos/seed/b_$id/800/400",
+                    galleryImages = List(Random.nextInt(3, 6)) { "https://picsum.photos/seed/gal_${id}_$it/600/400" }
+                )
+
+                providerListToInsert.add(provider)
+            }
+            
+            try {
+                providerListToInsert.chunked(25).forEach { chunk ->
+                    chunk.forEach { providerRepository.saveProviderProfile(it) }
+                    delay(150) 
+                }
+                Toast.makeText(application, "Sembrado Tucumán PRO completado ($providerCount prestadores).", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(application, "Error en siembra: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

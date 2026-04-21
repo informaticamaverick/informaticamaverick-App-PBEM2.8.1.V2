@@ -16,6 +16,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.example.myapplication.presentation.client.CategoryVisuals
+import com.example.myapplication.data.local.SembradoServiciosInicia
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
 import kotlin.random.Random
@@ -37,6 +41,54 @@ class SimulationViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val notificationHelper = NotificationHelper(application)
+
+    // ==================================================================================
+    // --- 🚀 SECCIÓN: MIGRACIÓN DE CATEGORÍAS A FIRESTORE (PLAN DE ACCIÓN) ---
+    // ==================================================================================
+    /**
+     * Sube todas las categorías hardcoded de CategorySampleDataFalso a Firestore.
+     * Colección: "Servicios"
+     * Se utiliza Batch para mayor eficiencia.
+     */
+    fun uploadCategoriesToFirestore() {
+        viewModelScope.launch {
+            try {
+                val db = FirebaseFirestore.getInstance()
+                val batch = db.batch()
+                val collectionRef = db.collection("Servicios")
+
+                SembradoServiciosInicia.categories.forEach { item ->
+                    val docRef = collectionRef.document() // Genera ID automático
+                    
+                    // Convertimos el Color a String Hex para Firestore
+                  //  val colorHex = String.format("#%08X", item.color.value.toLong())
+
+                    val dto = hashMapOf(
+                        "name" to item.name,
+                        "icon" to item.icon,
+                        "description" to item.description, // [CORRECCIÓN] Se agrega la descripción
+                        "superCategory" to item.superCategory,
+                        "superCategoryIcon" to item.superCategoryIcon,
+                       // "imageUrl" to item.imageUrl,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                    batch.set(docRef, dto)
+                }
+
+                // Actualizamos la versión en config/metadata
+                val metadataRef = db.collection("config").document("metadata")
+                batch.set(metadataRef, mapOf("categoriesVersion" to System.currentTimeMillis() / 1000))
+
+                batch.commit().await()
+                
+                Toast.makeText(application, "¡MIGRACIÓN EXITOSA! Categorías en 'Servicios'", Toast.LENGTH_LONG).show()
+                notificationHelper.showNotification("Admin", "Sincronización Firestore completada.")
+                
+            } catch (e: Exception) {
+                Toast.makeText(application, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     fun simulateFullChatFlow() {
         viewModelScope.launch {

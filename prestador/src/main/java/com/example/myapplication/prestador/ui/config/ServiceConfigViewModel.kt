@@ -39,7 +39,7 @@ class ServiceConfigViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val document = firestore.collection("usuarios")
+                val document = firestore.collection("providers")
                     .document(userId)
                     .get()
                     .await()
@@ -83,7 +83,7 @@ class ServiceConfigViewModel @Inject constructor(
                     "lastUpdated" to com.google.firebase.Timestamp.now()
                 )
 
-                firestore.collection("usuarios")
+                firestore.collection("providers")
                     .document(userId)
                     .update(updates)
                     .await()

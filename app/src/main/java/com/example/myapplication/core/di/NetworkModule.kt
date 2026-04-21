@@ -1,6 +1,5 @@
 package com.example.myapplication.core.di
 
-import com.example.myapplication.data.remote.ApiService
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import dagger.Module
 import dagger.Provides
@@ -55,9 +54,6 @@ object NetworkModule {
             .build()
     }
 
-    @Provides
-    @Singleton
-    fun provideApiService(retrofit: Retrofit): ApiService {
-        return retrofit.create(ApiService::class.java)
-    }
+    // --- ApiService eliminado para evitar errores de compilación ya que el archivo fue comentado ---
+    // Si necesitas conectar a un backend propio en el futuro, vuelve a definirlo aquí.
 }

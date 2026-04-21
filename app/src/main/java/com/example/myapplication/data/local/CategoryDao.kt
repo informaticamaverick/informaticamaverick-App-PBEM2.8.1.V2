@@ -26,5 +26,13 @@ interface CategoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(categories: List<CategoryEntity>)
 
+    // [NUEVO] Para verificar si la base de datos está vacía antes de sincronizar
+    @Query("SELECT COUNT(*) FROM categories_table")
+    suspend fun getCount(): Int
+
+    // [NUEVO] Limpiar tabla para sincronización total
+    @Query("DELETE FROM categories_table")
+    suspend fun deleteAll()
+
     // NOTA: No hay función @Delete. El usuario no puede borrar datos.
 }

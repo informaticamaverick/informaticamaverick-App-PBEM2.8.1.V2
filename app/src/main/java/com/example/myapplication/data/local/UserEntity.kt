@@ -61,7 +61,10 @@ data class UserEntity(
     // --- GEOLOCALIZACIÓN Y TIEMPO ---
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    
+    // --- FLAG DE CONTROL DE SINCRONIZACIÓN ---
+    val isSynced: Boolean = true // Indica si los datos locales coinciden con Firebase
 ) {
     /**
      * Propiedad calculada para obtener el nombre completo o el apodo si no hay datos.
@@ -105,7 +108,8 @@ data class UserEntity(
             favoriteProviderIds = favoriteProviderIds,
             latitude = latitude,
             longitude = longitude,
-            createdAt = createdAt
+            createdAt = createdAt,
+            isSynced = isSynced
         )
     }
 }
@@ -140,6 +144,7 @@ fun User.toEntity(): UserEntity {
         favoriteProviderIds = favoriteProviderIds,
         latitude = latitude,
         longitude = longitude,
-        createdAt = createdAt
+        createdAt = createdAt,
+        isSynced = isSynced
     )
 }

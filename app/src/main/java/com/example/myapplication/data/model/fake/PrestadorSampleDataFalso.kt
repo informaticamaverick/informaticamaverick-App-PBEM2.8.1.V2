@@ -10,26 +10,55 @@ import java.util.UUID
 import kotlin.random.Random
 
 /**
- * --- GENERADOR DE DATOS DE PRUEBA MAESTRO (VERSIÓN FINAL INTERCONECTADA) ---
- * Propósito: Poblar Room con un ecosistema completo y funcional de Prestadores, Licitaciones y Eventos de Agenda.
+ * --- GENERADOR DE DATOS DE PRUEBA MAESTRO PRO ULTRA ---
+ * [ACTUALIZADO] Reducción de cantidad de prestadores y enfoque 100% en San Miguel de Tucumán (CP 4000).
  */
 object PrestadorSampleDataFalso {
 
-    const val CLIENT_ID = "user_demo_66" // Hecho público para que CalendarScreen y ChatViewModel lo puedan leer
+    const val CLIENT_ID = "user_demo_66"
 
-    /**
-     * Función principal llamada desde AppDatabase.
-     * @param realCategories Lista de categorías obtenidas de la base de datos para sembrar prestadores.
-     */
+    // =========================================
+    // 📚 SECCIÓN: DICCIONARIOS DE DATOS REALES
+    // =========================================
+    private val NOMBRES = listOf("Juan", "Pedro", "María", "Ana", "Carlos", "Lucía", "Diego", "Elena", "Roberto", "Sonia", "Facundo", "Martina", "Gonzalo", "Paola")
+    private val APELLIDOS = listOf("García", "Rodríguez", "López", "Martínez", "Sánchez", "Pérez", "Gómez", "Díaz", "Álvarez", "Nanterne", "Romero", "Sosa", "Torres")
+    
+    // Lista de calles reales de San Miguel de Tucumán proporcionada por el usuario
+    private val CALLES = listOf("San Martin", "Catamarca", "Salta", "Jujuy", "Santiago del Estero", "9 de julio", "Congreso", "Crisostomo Alvarez", "Av. Sarmiento", "Av. Mitre")
+    
+    private val BARRIOS = listOf("Barrio Norte", "Barrio Sur", "Centro", "Yerba Buena", "Villa Luján", "Ciudadela")
+    
+    private val TITULOS_PROFESIONALES = listOf(
+        "Técnico Matriculado", "Ingeniero Especialista", "Maestro Mayor de Obras", 
+        "Especialista Senior", "Certificado Oficial", "Consultor Técnico"
+    )
+
+    private val LICITACIONES_POR_CATEGORIA = mapOf(
+        "Informatica" to listOf(
+            "Reparación de Notebook" to "La pantalla parpadea y calienta mucho al usar programas de diseño.",
+            "Instalación de Red WiFi" to "Necesito extender la señal a un segundo piso en oficina comercial.",
+            "Limpieza de Software" to "Mi PC está muy lenta y aparecen anuncios solos. Posible virus."
+        ),
+        "Electricidad" to listOf(
+            "Recableado Completo" to "Casa antigua, saltan las térmicas seguido. Necesito cambiar cables.",
+            "Instalación de Aire Acondicionado" to "Instalar split de 3000 frigorías con línea independiente.",
+            "Cambio de Tablero" to "Reemplazar tapones antiguos por disyuntor y térmicas nuevas."
+        ),
+        "Plomería" to listOf(
+            "Pérdida en Termotanque" to "Gotea por la base, necesito ver si tiene arreglo o cambio.",
+            "Destape de Cañería" to "Cocina obstruida, ya probé con productos y no funciona.",
+            "Instalación de Grifería" to "Cambiar juego de baño completo por uno tipo monocomando."
+        ),
+        "Hogar" to listOf(
+            "Pintura de Living" to "Pintar paredes y techo, aprox 30m2. Incluye enduído de grietas.",
+            "Arreglo de Persiana" to "Se cortó la cinta y quedó trabada arriba.",
+            "Armado de Mueble" to "Necesito armar un ropero de 6 puertas comprado en caja."
+        )
+    )
+
     fun generateAll(realCategories: List<CategoryEntity>): DataSeedBundle {
-
-        // PASO 1: Generar Prestadores (Ahora todos con empresa y sucursal y la NUEVA ESTRUCTURA)
         val providers = generateProviders(realCategories)
-
-        // PASO 2: Generar Licitaciones de ejemplo
         val tenders = generateTenders(realCategories, providers)
-
-        // PASO 3: Generar Agenda Técnica (Visitas, Turnos, Envíos)
         val calendarEvents = generateCalendarEvents(providers)
 
         return DataSeedBundle(
@@ -41,272 +70,263 @@ object PrestadorSampleDataFalso {
         )
     }
 
-    private fun generateTenders(realCategories: List<CategoryEntity>, providers: List<ProviderEntity>): List<TenderEntity> {
-        val categoryNames = realCategories.map { it.name }.ifEmpty { listOf("Informatica", "Hogar", "Electricidad") }
-        val tenders = mutableListOf<TenderEntity>()
-
-        val titlesMap = mapOf(
-            "ABIERTA" to listOf("Arreglo de Techo", "Pintura de Fachada", "Instalación de AC"),
-            "CERRADA" to listOf("Mantenimiento de Jardín", "Limpieza de Tanque", "Recableado Eléctrico"),
-            "ADJUDICADA" to listOf("Reparación de Cañería", "Instalación de Cámaras", "Servicio de Flete"),
-            "CANCELADA" to listOf("Construcción de Quincho", "Pulido de Pisos", "Cambio de Aberturas")
-        )
-
-        // Generamos al menos 2 por cada estado solicitado
-        listOf("ABIERTA", "CERRADA", "ADJUDICADA", "CANCELADA").forEach { status ->
-            val titles = titlesMap[status] ?: listOf("Tarea de $status")
-
-            repeat(Random.nextInt(2, 4)) { i ->
-                val id = "T-${status.take(1)}-$i-${UUID.randomUUID().toString().take(4)}"
-                val provider = if (status == "ADJUDICADA") providers.random() else null
-
-                tenders.add(
-                    TenderEntity(
-                        tenderId = id,
-                        title = titles.random() + " #$i",
-                        isActive = status == "ABIERTA",
-                        clientId = CLIENT_ID,
-                        description = "Requerimiento para el hogar/negocio. Se solicita presupuesto detallado para $status.",
-                        category = categoryNames.random(),
-                        status = status,
-                        dateTimestamp = System.currentTimeMillis() - (86400000 * Random.nextInt(1, 16)),
-                        startDate = System.currentTimeMillis() - (86400000 * Random.nextInt(1, 5)),
-                        endDate = System.currentTimeMillis() + (86400000 * Random.nextInt(5, 20)),
-                        cancellationDate = if (status == "CANCELADA") System.currentTimeMillis() - 7200000 else null,
-                        awardedProviderId = provider?.id,
-                        awardedProviderName = provider?.displayName,
-                        budgetCount = Random.nextInt(1, 12),
-                        requiresVisit = Random.nextBoolean(),
-                        requiresPaymentMethod = Random.nextBoolean(),
-                        requiresWorkGuarantee = Random.nextBoolean(),
-                        requiresProviderDoc = Random.nextBoolean(),
-                        locationAddress = "Calle Falsa",
-                        locationNumber = "123",
-                        locationLocality = "San Miguel de Tucumán",
-                        locationType = "PERSONAL"
-                    )
-                )
-            }
-        }
-        return tenders.shuffled()
-    }
-
+    // =========================================
+    // 👤 SECCIÓN: GENERACIÓN DE PRESTADORES
+    // =========================================
     private fun generateProviders(realCategories: List<CategoryEntity>): List<ProviderEntity> {
         val providers = mutableListOf<ProviderEntity>()
-
-        // El prestador Maverick (ID 1001) es nuestra referencia de calidad absoluta. Carga COMPLETA.
         providers.add(generateMaverickProvider())
 
         realCategories.forEach { category ->
-            // Generamos entre 8 y 20 prestadores para CADA categoría
-            val countPerCategory = Random.nextInt(8, 21)
-
-            repeat(countPerCategory) { index ->
-                if (!(category.name == "Informatica" && index == 0)) {
-                    providers.add(generateRandomProvider(category.name, index))
-                }
+            // [REQUERIMIENTO] Reducido de 1 a 2 por categoría
+            val countPerCategory = Random.nextInt(1, 3) 
+            repeat(countPerCategory) {
+                providers.add(generateRandomProvider(category.name, realCategories))
             }
         }
         return providers
     }
 
-    /**
-     * Genera una agenda activa con turnos en locales, visitas técnicas y envíos.
-     */
-    private fun generateCalendarEvents(providers: List<ProviderEntity>): List<CalendarEventEntity> {
-        val events = mutableListOf<CalendarEventEntity>()
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private fun generateRandomProvider(category: String, allCats: List<CategoryEntity>): ProviderEntity {
+        val nombre = NOMBRES.random()
+        val apellido = APELLIDOS.random()
+        val id = "P-${UUID.randomUUID().toString().take(8)}"
+        val isVerified = Random.nextFloat() > 0.2f
+        val hasCompany = isVerified && Random.nextFloat() < 0.65f
+        
+        val myCategories = mutableSetOf(category)
+        repeat(Random.nextInt(1, 3)) { myCategories.add(allCats.random().name) }
 
-        val baseTime = System.currentTimeMillis()
-        val dayInMillis = 86400000L
+        val mainEmail = "${nombre.lowercase()}.${apellido.lowercase()}@maverickpro.com"
+        val dni = Random.nextInt(25000000, 45000000).toString()
+        
+        // Coordenadas centradas en S.M. de Tucumán
+        val baseLat = -26.82414 
+        val baseLon = -65.22260
+        val lat = baseLat + (Random.nextDouble() - 0.5) * 0.03
+        val lon = baseLon + (Random.nextDouble() - 0.5) * 0.03
 
-        val activeProvidersForCalendar = providers.shuffled().take(25)
+        val address = AddressProvider(
+            calle = CALLES.random(), 
+            numero = Random.nextInt(10, 2500).toString(), 
+            localidad = "San Miguel de Tucumán",
+            provincia = "Tucumán",
+            pais = "Argentina",
+            codigoPostal = "4000",
+            latitude = lat,
+            longitude = lon
+        )
 
-        activeProvidersForCalendar.forEachIndexed { index, provider ->
-
-            // Extraemos la primera categoría (Como ahora es lista, usamos firstOrNull)
-            val mainCategory = provider.categories.firstOrNull() ?: "Servicios"
-            val catLower = mainCategory.lowercase()
-
-            val eventType = when {
-                catLower.contains("flete") || catLower.contains("transporte") || catLower.contains("envío") -> EventType.SHIPPING
-                catLower.contains("peluquería") || catLower.contains("cancha") || catLower.contains("salud") || catLower.contains("estética") -> EventType.APPOINTMENT
-                else -> listOf(EventType.VISIT, EventType.APPOINTMENT).random()
-            }
-
-            // Usamos la Casa Central si existe, si no, una dirección de prueba
-            val firstCompany = provider.companies.firstOrNull()
-            val branchAddress = firstCompany?.mainBranch?.address ?: firstCompany?.branches?.firstOrNull()?.address
-
-            val address = if (eventType == ImageVector.Companion.hashCode().let { EventType.APPOINTMENT } && branchAddress != null) {
-                "${branchAddress.calle} ${branchAddress.numero}, ${branchAddress.localidad}"
-            } else {
-                "Barrio Matienzo 1339, San Miguel de Tucumán"
-            }
-
-            val daysOffset = Random.nextInt(-2, 8)
-            val eventTimeMillis = baseTime + (daysOffset * dayInMillis)
-            val dateStr = dateFormat.format(Date(eventTimeMillis))
-
-            val hour = Random.nextInt(9, 18)
-            val minute = listOf("00", "15", "30", "45").random()
-            val timeStr = "${hour.toString().padStart(2, '0')}:$minute"
-
-            val title = when (eventType) {
-                EventType.VISIT -> "Revisión en domicilio - $mainCategory"
-                EventType.APPOINTMENT -> "Reserva de turno en local"
-                EventType.SHIPPING -> "Entrega de pedido"
-            }
-
-            val status = when {
-                daysOffset < 0 -> listOf(VisitStatus.CONFIRMED, VisitStatus.CANCELLED).random()
-                daysOffset == 0 -> VisitStatus.CONFIRMED
-                else -> listOf(VisitStatus.CONFIRMED, VisitStatus.PENDING).random()
-            }
-
-            events.add(
-                CalendarEventEntity(
-                    id = UUID.randomUUID().toString(),
-                    date = dateStr,
-                    time = timeStr,
-                    type = eventType,
-                    title = title,
-                    provider = provider.displayName,
-                    providerId = provider.id,
-                    address = address,
-                    status = status,
-                    providerPhotoUrl = provider.photoUrl
-                )
-            )
-        }
-
-        return events
+        return ProviderEntity(
+            id = id,
+            email = mainEmail,
+            emails = listOf(mainEmail, "contacto.${nombre.lowercase()}@gmail.com"),
+            displayName = "$nombre $apellido",
+            name = nombre,
+            lastName = apellido,
+            phoneNumber = "+54 9 381 ${Random.nextInt(4000000, 6999999)}",
+            additionalPhones = listOf("+54 9 381 ${Random.nextInt(1000000, 9999999)}"),
+            address = address,
+            addresses = listOf(address, address.copy(id = UUID.randomUUID().toString(), calle = CALLES.random(), numero = "${Random.nextInt(10, 2000)}")),
+            isVerified = isVerified,
+            isSubscribed = Random.nextBoolean(),
+            works24h = Random.nextBoolean(),
+            doesService = true,
+            doesHomeVisits = Random.nextBoolean(),
+            hasPhysicalLocation = Random.nextBoolean(),
+            categories = myCategories.toList(),
+            rating = 3.8f + (Random.nextFloat() * 1.2f),
+            titulo = TITULOS_PROFESIONALES.random(),
+            cuilCuit = "20-$dni-${Random.nextInt(0, 9)}",
+            workingHours = "Lunes a Viernes: 09:00 a 13:00 y 17:00 a 21:00 hs",
+            hasCompanyProfile = hasCompany,
+            // [REQUERIMIENTO] Se generan hasta 3 empresas de manera aleatoria
+            companies = if (hasCompany) List(Random.nextInt(1, 4)) { generateRandomCompany(category, allCats) } else emptyList(),
+            createdAt = System.currentTimeMillis() - (Random.nextLong(1000000, 100000000)),
+            photoUrl = "https://picsum.photos/seed/$id/200/200",
+            bannerImageUrl = "https://picsum.photos/seed/b_$id/800/400",
+            galleryImages = List(Random.nextInt(2, 5)) { "https://picsum.photos/seed/gal_${id}_$it/600/400" },
+            description = "Profesional especializado en ${myCategories.joinToString(", ")} con amplia trayectoria en Tucumán."
+        )
     }
 
-    /**
-     * 🔥 MAVERICK: EL GOLD STANDARD (Estructura COMPLETAMENTE cargada)
-     */
-    private fun generateMaverickProvider(): ProviderEntity {
+    private fun generateRandomCompany(category: String, allCats: List<CategoryEntity>): CompanyProvider {
+        val companyName = "Empresa ${APELLIDOS.random()} & Asociados"
+        val compId = UUID.randomUUID().toString().take(6)
+        return CompanyProvider(
+            id = "C-$compId",
+            name = companyName,
+            razonSocial = "$companyName S.R.L.",
+            cuit = "30-${Random.nextInt(10000000, 99999999)}-${Random.nextInt(0, 9)}",
+            isVerified = true,
+            description = "Líderes en soluciones integrales de $category y rubros afines en el NOA.",
+            categories = listOf(category, allCats.random().name),
+            photoUrl = "https://picsum.photos/seed/c_$compId/200/200",
+            bannerImageUrl = "https://picsum.photos/seed/cb_$compId/800/400",
+            // [REQUERIMIENTO] Cada empresa tiene de 1 a 3 sucursales
+            branches = List(Random.nextInt(1, 4)) { bIdx ->
+                BranchProvider(
+                    id = "B-$compId-$bIdx",
+                    name = if (bIdx == 0) "Casa Central Tucumán" else "Sucursal ${BARRIOS.random()}",
+                    address = AddressProvider(
+                        calle = CALLES.random(), 
+                        numero = "${Random.nextInt(100, 2500)}", 
+                        localidad = "San Miguel de Tucumán",
+                        provincia = "Tucumán",
+                        codigoPostal = "4000",
+                        latitude = -26.82414 + (Random.nextDouble() - 0.5) * 0.04,
+                        longitude = -65.22260 + (Random.nextDouble() - 0.5) * 0.04
+                    ),
+                    workingHours = "08:30 a 13:00 y 17:00 a 21:00 hs",
+                    doesService = true,
+                    doesShipping = Random.nextBoolean(),
+                    hasPhysicalLocation = true,
+                    works24h = Random.nextFloat() > 0.7f,
+                    employees = List(Random.nextInt(1, 4)) { eIdx ->
+                        val eNombre = NOMBRES.random()
+                        val eApellido = APELLIDOS.random()
+                        EmployeeProvider(
+                            id = "E-$compId-$bIdx-$eIdx",
+                            name = eNombre,
+                            lastName = eApellido,
+                            position = if (eIdx == 0) "Gerente de Operaciones" else "Técnico Especialista",
+                            detail = "Especialista certificado con atención personalizada en Tucumán.",
+                            photoUrl = "https://picsum.photos/seed/emp_$eIdx${Random.nextInt()}/200/200"
+                        )
+                    },
+                    galleryImages = List(Random.nextInt(2, 4)) { "https://picsum.photos/seed/br_${compId}_${bIdx}_$it/400/300" }
+                )
+            }
+        )
+    }
+
+    fun generateMaverickProvider(): ProviderEntity {
+        val mainAddress = AddressProvider(
+            calle = "San Martín", 
+            numero = "450", 
+            localidad = "San Miguel de Tucumán", 
+            provincia = "Tucumán", 
+            codigoPostal = "4000",
+            latitude = -26.82414,
+            longitude = -65.22260
+        )
         return ProviderEntity(
             id = "1001",
             email = "MAVERICKINFORMATICA@maverick.com",
-            alternateEmail = "maximiliano.nanterne@gmail.com",
+            emails = listOf("MAVERICKINFORMATICA@maverick.com", "soporte@maverick.com"),
             displayName = "Maverick Informática",
             name = "Maximiliano",
             lastName = "Nanterne",
-            phoneNumber = "381-1234567",
-            additionalPhones = listOf("381-7654321"),
-            matricula = "MP-9922",
-            titulo = "Ingeniero de Software & Tech Lead",
-            cuilCuit = "20-30405060-7", 
-
-            address = AddressProvider(
-                calle = "San Martín", numero = "450",
-                localidad = "San Miguel de Tucumán", provincia = "Tucumán",
-                pais = "Argentina", codigoPostal = "4000",
-                latitude = -26.830, longitude = -65.202
-            ),
-
-            works24h = true,
-            hasPhysicalLocation = true,
-            doesHomeVisits = true,
-            doesShipping = true,
-            acceptsAppointments = true,
-            isSubscribed = true, // Premium
+            phoneNumber = "+54 9 381 1234567",
+            address = mainAddress,
+            addresses = listOf(mainAddress),
             isVerified = true,
-            isFavorite = true,
-            isOnline = true,
-
+            isSubscribed = true,
+            works24h = true,
+            categories = listOf("Informatica", "Desarrollo Móvil", "Seguridad"),
             rating = 5.0f,
-            workingHours = "Lunes a Sábado: 09:00 a 20:00 hs", 
-            categories = listOf("Informatica", "Desarrollo Móvil", "Seguridad", "Redes"), 
-            description = "Especialistas en soluciones tecnológicas de alta complejidad. Desarrollo de software nativo y multiplataforma.",
-
+            titulo = "Ingeniero de Software & Tech Lead",
+            cuilCuit = "20-30405060-7",
+            workingHours = "Lunes a Viernes: 09:00 a 21:00 hs",
             hasCompanyProfile = true,
             companies = listOf(
                 CompanyProvider(
+                    id = "C-MAVERICK",
                     name = "Maverick Tech S.A.",
                     razonSocial = "Maverick Soluciones Digitales S.R.L.",
                     cuit = "30-12345678-9",
-                    description = "Nuestra misión es llevar la tecnología a cada negocio de Tucumán.",
-                    rating = 4.9f,
-                    categories = listOf("Consultoría IT", "Hardware", "Software"), 
-                    productImages = listOf(
-                        "https://images.unsplash.com/photo-1517694712202-14dd9538aa97",
-                        "https://images.unsplash.com/photo-1498050108023-c5249f4df085"
-                    ),
-                    photoUrl = "https://picsum.photos/seed/maverick_logo/200/200",
-                    bannerImageUrl = "https://picsum.photos/seed/maverick_corp_banner/800/400",
-                    workingHours = "Lunes a Viernes: 08:00 a 18:00 hs", 
-                    works24h = false,
-                    hasPhysicalLocation = true,
-                    doesHomeVisits = true,
-                    doesShipping = true,
-                    acceptsAppointments = true,
+                    description = "Innovación tecnológica al servicio de Tucumán.",
+                    categories = listOf("Consultoría IT", "Software"),
                     isVerified = true,
-
-                    mainBranch = BranchProvider(
-                        name = "Sede Central Barrio Sur",
-                        address = AddressProvider(calle = "Lavalle", numero = "1500", localidad = "San Miguel de Tucumán"),
-                        works24h = true,
-                        hasPhysicalLocation = true,
-                        doesShipping = true,
-                        acceptsAppointments = true,
-                        workingHours = "Lunes a Sábado: 09:00 a 20:00 hs",
-                        galleryImages = listOf("https://images.unsplash.com/photo-1497366216548-37526070297c"),
-                        employees = listOf(
-                            EmployeeProvider(name = "Maximiliano", lastName = "Nanterne", position = "CEO & Founder", detail = "Fundador y líder técnico del proyecto.", photoUrl = "https://picsum.photos/seed/max/200/200"),
-                            EmployeeProvider(name = "Ana", lastName = "Gómez", position = "Líder de Soporte", detail = "Encargada de la experiencia del cliente.", photoUrl = "https://picsum.photos/seed/ana/200/200")
-                        )
-                    ),
-
                     branches = listOf(
                         BranchProvider(
-                            name = "Sucursal Yerba Buena",
-                            address = AddressProvider(calle = "Av. Aconquija", numero = "2000", localidad = "Yerba Buena"),
-                            works24h = false,
+                            id = "B-MAV-1",
+                            name = "Sede Central Barrio Sur",
+                            address = AddressProvider(
+                                calle = "Lavalle", 
+                                numero = "1500", 
+                                localidad = "San Miguel de Tucumán", 
+                                provincia = "Tucumán", 
+                                codigoPostal = "4000",
+                                latitude = -26.832,
+                                longitude = -65.225
+                            ),
+                            workingHours = "08:00 a 20:00 hs",
+                            doesService = true,
+                            works24h = true,
                             hasPhysicalLocation = true,
-                            doesShipping = true,
-                            acceptsAppointments = true,
-                            workingHours = "Lunes a Viernes: 10:00 a 19:00 hs",
-                            galleryImages = listOf("https://images.unsplash.com/photo-1497215728101-856f4ea42174"),
-                            employees = emptyList()
+                            employees = listOf(
+                                EmployeeProvider(id = "E-MAV-1", name = "Maximiliano", lastName = "Nanterne", position = "CEO", detail = "Tech Lead con 10 años de experiencia."),
+                                EmployeeProvider(id = "E-MAV-2", name = "Ana", lastName = "Gómez", position = "Líder de Soporte", detail = "Especialista en atención al cliente.")
+                            ),
+                            galleryImages = listOf("https://picsum.photos/seed/m1/400/300", "https://picsum.photos/seed/m2/400/300")
                         )
                     )
                 )
             ),
-            createdAt = System.currentTimeMillis()
+            galleryImages = listOf("https://picsum.photos/seed/g1/400/300", "https://picsum.photos/seed/g2/400/300"),
+            createdAt = System.currentTimeMillis(),
+            photoUrl = "https://picsum.photos/seed/maverick/200/200",
+            bannerImageUrl = "https://picsum.photos/seed/maverick_banner/800/400",
+            description = "Expertos en desarrollo de software, seguridad informática y soluciones móviles corporativas."
         )
     }
 
-    private fun generateRandomProvider(category: String, index: Int): ProviderEntity {
-        val names = listOf("Juan", "Pedro", "Carlos", "Luis", "Miguel", "Jorge", "Andrés", "Marcos")
-        val lastNames = listOf("Pérez", "García", "López", "Rodríguez", "Sánchez", "Martínez", "Gómez", "Díaz")
-        val name = names.random()
-        val lastName = lastNames.random()
-        val isPremium = Random.nextInt(0, 10) > 7
+    private fun generateTenders(realCategories: List<CategoryEntity>, providers: List<ProviderEntity>): List<TenderEntity> {
+        val tenders = mutableListOf<TenderEntity>()
+        
+        listOf("ABIERTA", "CERRADA", "ADJUDICADA", "CANCELADA").forEach { status ->
+            repeat(2) {
+                val categoryName = LICITACIONES_POR_CATEGORIA.keys.random()
+                val data = LICITACIONES_POR_CATEGORIA[categoryName]?.random()!!
+                
+                val provider = if (status == "ADJUDICADA") providers.random() else null
+                
+                tenders.add(
+                    TenderEntity(
+                        tenderId = "T-${UUID.randomUUID().toString().take(6)}",
+                        title = data.first,
+                        isActive = status == "ABIERTA",
+                        clientId = CLIENT_ID,
+                        description = data.second,
+                        category = categoryName,
+                        status = status,
+                        dateTimestamp = System.currentTimeMillis() - (Random.nextLong(1, 10) * 86400000L),
+                        awardedProviderId = provider?.id,
+                        awardedProviderName = provider?.displayName,
+                        budgetCount = Random.nextInt(1, 8),
+                        locationAddress = CALLES.random() + " " + Random.nextInt(100, 2000),
+                        locationLocality = "San Miguel de Tucumán"
+                    )
+                )
+            }
+        }
+        return tenders
+    }
 
-        return ProviderEntity(
-            id = "P-${category.take(3)}-$index",
-            email = "${name.lowercase()}.${lastName.lowercase()}@example.com",
-            displayName = "$name $lastName",
-            name = name,
-            lastName = lastName,
-            phoneNumber = "381-${Random.nextInt(1000000, 9999999)}",
-            rating = 3.5f + (Random.nextFloat() * 1.5f),
-            categories = listOf(category),
-            description = "Servicio profesional de $category. Amplia experiencia y garantía.",
-            isSubscribed = isPremium,
-            isVerified = Random.nextBoolean(),
-            isOnline = Random.nextBoolean(),
-            hasCompanyProfile = Random.nextBoolean(),
-            address = AddressProvider(
-                calle = "Calle ${Random.nextInt(1, 100)}",
-                numero = "${Random.nextInt(100, 2000)}",
-                localidad = "San Miguel de Tucumán"
-            ),
-            createdAt = System.currentTimeMillis()
-        )
+    private fun generateCalendarEvents(providers: List<ProviderEntity>): List<CalendarEventEntity> {
+        val events = mutableListOf<CalendarEventEntity>()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val baseTime = System.currentTimeMillis()
+        
+        providers.shuffled().take(12).forEach { provider ->
+            val daysOffset = Random.nextInt(-1, 4)
+            events.add(
+                CalendarEventEntity(
+                    id = UUID.randomUUID().toString(),
+                    date = dateFormat.format(Date(baseTime + (daysOffset * 86400000L))),
+                    time = "${Random.nextInt(9, 19)}:00",
+                    type = listOf(EventType.VISIT, EventType.APPOINTMENT).random(),
+                    title = "Servicio Técnico: ${provider.categories.firstOrNull() ?: "General"}",
+                    provider = provider.displayName,
+                    providerId = provider.id,
+                    address = provider.address?.fullString() ?: "Domicilio del Cliente",
+                    status = VisitStatus.CONFIRMED,
+                    providerPhotoUrl = provider.photoUrl
+                )
+            )
+        }
+        return events
     }
 }
 

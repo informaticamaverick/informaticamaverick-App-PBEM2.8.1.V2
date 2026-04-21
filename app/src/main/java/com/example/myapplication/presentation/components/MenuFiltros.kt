@@ -2,17 +2,15 @@ package com.example.myapplication.presentation.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,6 +29,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.example.myapplication.presentation.components.Utilidades.MaverickTacticalButton
+import com.example.myapplication.presentation.components.Utilidades.shakeClick
 import com.example.myapplication.ui.theme.MyApplicationTheme
 
 // ==========================================================================================
@@ -72,6 +73,9 @@ fun CompactItemButton(
     overlayEmoji: String? = null,
     overlayAlignment: Alignment = Alignment.BottomEnd
 ) {
+    // --- 📐 SECCIÓN: CONFIGURACIÓN DE FORMA TÁCTICA (CASI CUADRADA) ---
+    val tacticalShape = CutCornerShape(4.dp)
+
     Column(
         modifier = modifier
             .width(52.dp)
@@ -83,8 +87,9 @@ fun CompactItemButton(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(if (isSelected) item.color.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp))
-                .border(if (isSelected) 1.5.dp else 0.8.dp, if (isSelected) item.color else Color.White.copy(alpha = 0.15f), RoundedCornerShape(14.dp)),
+                .background(if (isSelected) item.color.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f), tacticalShape)
+                .border(if (isSelected) 1.5.dp else 0.8.dp, if (isSelected) item.color else Color.White.copy(alpha = 0.15f), tacticalShape)
+                .shakeClick { onClick() },
             contentAlignment = Alignment.Center
         ) {
             if (isSelected) {
@@ -94,7 +99,7 @@ fun CompactItemButton(
                     style = TextStyle(shadow = Shadow(color = item.color, offset = androidx.compose.ui.geometry.Offset(0f, 0f), blurRadius = 25f))
                 )
             } else {
-                item.icon?.let { Icon(it, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(22.dp)) } 
+                item.icon?.let { Icon(it, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(24.dp)) }
                     ?: run { Text(item.emoji, fontSize = 20.sp, modifier = Modifier.alpha(0.6f)) }
             }
 
@@ -108,14 +113,23 @@ fun CompactItemButton(
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
+        // --- SECCIÓN: ETIQUETA DE TEXTO (CONFIGURACIÓN DE 2 LÍNEAS) ---
+        // Se ajusta el interlineado (lineHeight) y se elimina el padding de la fuente (includeFontPadding)
+        // para que las 2 líneas estén "pegadas" con una distancia aproximada de 1dp.
         Text(
-            text = item.label, 
-            fontSize = 9.sp, 
-            fontWeight = FontWeight.ExtraBold, 
-            color = if (isSelected) Color.White else Color.LightGray, 
-            textAlign = TextAlign.Center, 
-            maxLines = 1, 
+            text = item.label,
+            fontSize = 9.sp,
+            lineHeight = 10.sp, // Interlineado ajustado para 1dp de separación visual
+            style = TextStyle(
+                platformStyle = PlatformTextStyle(
+                    includeFontPadding = false // Elimina espacio extra para que las líneas queden pegadas
+                )
+            ),
+            fontWeight = FontWeight.ExtraBold,
+            color = if (isSelected) Color.White else Color.LightGray,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            softWrap = true,
             overflow = TextOverflow.Ellipsis
         )
     }
@@ -131,18 +145,22 @@ fun CompactItemButton(
 @Composable
 fun MenuFiltros(
     activeFilters: Set<String>,
+    modifier: Modifier = Modifier,
     dynamicCategories: List<ControlItem>,
-    refinementFilters: List<ControlItem> = emptyList(), // 🔥 NUEVO: Filtros tácticos dinámicos desde el ViewModel
+    refinementFilters: List<ControlItem> = emptyList(),
     onAction: (String) -> Unit,
     onApply: () -> Unit,
     onClearFilters: () -> Unit,
-    modifier: Modifier = Modifier,
+
     showProductService: Boolean = false 
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     
-    // 🔥 CORRECCIÓN: Solo muestra la X si hay filtros de tipo 'filter_' o 'cat_' para no duplicar con Ordenamiento
-    val hasSpecificFilters = activeFilters.any { it.startsWith("filter_") || it.startsWith("cat_") }
+    // 🔥 CORRECCIÓN CRÍTICA: Se amplió la lógica para mostrar la X. 
+    // Ahora detecta cualquier filtro activo que no sea de ordenamiento (sort_) o vista (view_).
+    val hasSpecificFilters = activeFilters.any { 
+        !it.startsWith("sort_") && !it.startsWith("view_") 
+    }
 
     // 1. Animación de rotación para el icono (Tornado en este caso)
     val iconRotation by animateFloatAsState(
@@ -167,186 +185,163 @@ fun MenuFiltros(
         colors = listOf(Color(0xFF1A1F26), Color(0xFF0A0E14))
     )
 
-    // CONTENEDOR PRINCIPAL (Anclado a la derecha como MenuOrdenamiento)
+    // CONTENEDOR PRINCIPAL
     Box(
         modifier = modifier.wrapContentSize(),
         contentAlignment = Alignment.CenterEnd
     ) {
-
-        // --- SECCIÓN BOTONES (X que brota y Tornado anclado) ---
-        Box(
-            modifier = Modifier
-                .padding(4.dp)
-                .height(40.dp)
-                .widthIn(min = 40.dp),
-            contentAlignment = Alignment.CenterEnd
+        // 🔥 BOTÓN X (Limpiar): Brota desde detrás del Tornado hacia la izquierda
+        AnimatedVisibility(
+            visible = hasSpecificFilters,
+            enter = fadeIn(tween(400)) + slideInHorizontally(initialOffsetX = { it }),
+            exit = fadeOut(tween(300)) + slideOutHorizontally(targetOffsetX = { it })
         ) {
-            // 🔥 BOTÓN X: Brota desde detrás del Tornado hacia la izquierda
-            AnimatedVisibility(
-                visible = hasSpecificFilters,
-                enter = fadeIn(tween(400)) + slideInHorizontally(initialOffsetX = { it }),
-                exit = fadeOut(tween(300)) + slideOutHorizontally(targetOffsetX = { it })
+            MaverickTacticalButton(
+                onClick = { onClearFilters() },
+                modifier = Modifier.padding(end = 40.dp),
+                accentColor = Color(0xFFEF4444)
             ) {
-                Surface(
-                    onClick = { onClearFilters() },
-                    modifier = Modifier.padding(end = 40.dp).size(32.dp),
-                    shape = CircleShape,
-                    color = Color(0xFF1A1F26),
-                    border = BorderStroke(1.dp, Brush.linearGradient(listOf(Color.White.copy(0.7f), Color.Transparent))),
-                    shadowElevation = 6.dp
-                ) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier.fillMaxSize().background(
-                            Brush.radialGradient(listOf(Color(0xFFEF4444).copy(0.15f), Color.Transparent))
-                        )
-                    ) {
-                        Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp), tint = Color(0xFFEF4444))
-                    }
-                }
-            }
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp),
+                    tint = Color(0xFFEF4444)
 
-            // --- ICONO DISPARADOR (Tornado) ---
-            Surface(
-                onClick = { isExpanded = !isExpanded },
-                modifier = Modifier.size(32.dp).graphicsLayer { rotationZ = iconRotation },
-                shape = CircleShape,
-                color = Color(0xFF1A1F26),
-                border = BorderStroke(1.dp, Brush.linearGradient(listOf(Color.White.copy(0.7f), Color.Transparent))),
-                shadowElevation = 6.dp
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text(text = "🌪️", fontSize = 18.sp)
-                }
+                )
             }
         }
 
-        // --- 2. PANEL POPUP (FILTROS) ---
+        // --- ICONO DISPARADOR (Tornado 🌪️) ---
+        MaverickTacticalButton(
+            onClick = { isExpanded = !isExpanded },
+            modifier = Modifier.graphicsLayer { rotationZ = iconRotation }
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(text = "🌪️", fontSize = 20.sp) // --- 📐 TAMAÑO AJUSTADO ---
+               // Text(
+                //    text = "FILTRAR",
+                //    fontSize = 6.sp,
+                 //   fontWeight = FontWeight.Black,
+                 //   color = Color.White.copy(alpha = 0.7f)
+               // )
+            }
+        }
+
+        // --- 2. PANEL POPUP (FILTROS CON ESTILO GHOST) ---
         if (isExpanded || scale > 0.01f) {
+            // AJUSTE DE POSICIÓN: offset(x, y) donde y controla la altura vertical
+            val verticalOffset = 105 // --- 🆙 Aumenta para bajar, disminuye para subir ---
             Popup(
-                alignment = Alignment.TopEnd,
-                offset = IntOffset(-50, 115),
+                alignment = Alignment.TopCenter,
+                offset = IntOffset(0, verticalOffset),
                 properties = PopupProperties(focusable = true, dismissOnClickOutside = true),
                 onDismissRequest = { isExpanded = false }
             ) {
+                // Caja con estilo de burbuja Ghost
                 Column(
-                    horizontalAlignment = Alignment.End,
+                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .width(300.dp)
+                        .fillMaxWidth() // Ocupa casi todo el ancho
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
                             alpha = scale.coerceIn(0f, 1f)
-                            transformOrigin = TransformOrigin(1f, 0f)
                         }
                 ) {
-                   Card(
+                    // ==========================================================
+                    // --- SECCIÓN: COLA DE LA BURBUJA (AJUSTE DE POSICIÓN) ---
+                    // ==========================================================
+                    
+                    // AJUSTE DINÁMICO: Modifica tailHorizontalOffset para apuntar al Tornado (🌪️)
+                    val tailHorizontalOffset = 195.dp // --- ↔️ Mueve a la derecha (+) o izquierda (-) ---
+                    val tailVerticalOffset = 2.dp     // --- ↕️ Mueve abajo (+) o arriba (-) para pegar al card ---
+                    val tailWidth = 60.dp             // --- ↔️ Ancho de la cola ---
+                    val tailHeight = 14.dp            // --- ↕️ Alto de la cola ---
+                    
+                    Canvas(
+                        modifier = Modifier
+                            .size(width = tailWidth, height = tailHeight)
+                            .offset(x = tailHorizontalOffset, y = tailVerticalOffset) // Aplicación del offset pedido
+                    ) {
+                        val path = Path().apply {
+                            // Triángulo estilizado centrado en su propio Canvas
+                            moveTo(size.width * 0.30f, size.height)
+                            lineTo(size.width * 0.50f, 0f)
+                            lineTo(size.width * 0.70f, size.height)
+                            close()
+                        }
+                        
+                        // 1. Relleno: Coincide con el fondo del Card (Gris Oscuro)
+                        drawPath(path, Color(0xFF00FFFF))
+                        
+                        // 2. Borde Neón: Coincide con el estilo del Card (Cyan)
+                        drawPath(
+                            path, 
+                            Color(0xFF00FFFF).copy(alpha = 0.7f), 
+                            style = Stroke(width = 2.5f)
+                        )
+                    }
+
+                    // ==========================================================
+                    // --- SECCIÓN: CUERPO DEL PANEL (CARD) ---
+                    // ==========================================================
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp))
-                            .border(
-                                width = 1.dp,
-                                color = Color.White.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 4.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                            ),
-                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                            .border(1.dp, Color(0xFF00FFFF).copy(alpha = 0.6f), CutCornerShape(8.dp)),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1F26)),
+                        shape = CutCornerShape(8.dp)
                     ) {
-                        Box(modifier = Modifier.background(cardBackground)) {
-                            Column(modifier = Modifier.padding(16.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            // --- HEADER ---
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "AJUSTA MAS LA BUSQUEDA",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 10.sp,
+                                    letterSpacing = 1.5.sp
+                                )
 
-                                // HEADER CON DIVIDER DINÁMICO (Estilo MenuOrdenamiento)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "CENTRO DE FILTROS",
-                                        color = Color.White.copy(alpha = 0.9f),
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 10.sp,
-                                        letterSpacing = 1.5.sp
-                                    )
 
-                                    HorizontalDivider(
-                                        modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-                                        thickness = 0.5.dp,
-                                        color = Color.White.copy(alpha = 0.2f)
-                                    )
+                            }
 
-                                    Surface(
-                                        onClick = { isExpanded = false; onApply() },
-                                        modifier = Modifier.size(36.dp),
-                                        shape = CircleShape,
-                                        color = Color(0xFF1A1F26),
-                                        border = BorderStroke(1.dp, Brush.linearGradient(listOf(Color.White.copy(0.7f), Color.Transparent))),
-                                        shadowElevation = 6.dp
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.Check, null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
-                                        }
-                                    }
-                                }
+                            Spacer(modifier = Modifier.height(4.dp))
 
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // --- 1. SECCIÓN: TIPO DE OFERTA ---
+                            // --- SECCIÓN UNIFICADA (FILA ÚNICA) ---
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 if (showProductService) {
-                                    Text("TIPO DE OFERTA", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                        CompactItemButton(
-                                            item = ControlItem("Productos", Icons.Default.ShoppingBag, "🛍️", Color(0xFF22D3EE), "filter_products"),
-                                            isSelected = activeFilters.contains("filter_products"),
-                                            onClick = { onAction("filter_products") }
-                                        )
-                                        CompactItemButton(
-                                            item = ControlItem("Servicios", Icons.Default.Build, "🔧", Color(0xFFF59E0B), "filter_services"),
-                                            isSelected = activeFilters.contains("filter_services"),
-                                            onClick = { onAction("filter_services") }
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
-                                    Spacer(modifier = Modifier.height(12.dp))
+                                    CompactItemButton(
+                                        item = ControlItem("Productos", Icons.Default.ShoppingBag, "🛍️", Color(0xFF22D3EE), "filter_products"),
+                                        isSelected = activeFilters.contains("filter_products"),
+                                        onClick = { onAction("filter_products") }
+                                    )
+                                    CompactItemButton(
+                                        item = ControlItem("Servicios", Icons.Default.Build, "🔧", Color(0xFFF59E0B), "filter_services"),
+                                        isSelected = activeFilters.contains("filter_services"),
+                                        onClick = { onAction("filter_services") }
+                                    )
+                                    VerticalDivider(modifier = Modifier.height(40.dp).padding(horizontal = 4.dp), thickness = 0.5.dp, color = Color.White.copy(alpha = 0.1f))
                                 }
 
-                                // --- 2. SECCIÓN: CATEGORÍAS DINÁMICAS ---
-                                if (dynamicCategories.isNotEmpty()) {
-                                    Text("CATEGORÍAS", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        items(dynamicCategories) { item ->
-                                            val isSelected = activeFilters.contains(item.id)
-                                            FilterChip(
-                                                selected = isSelected,
-                                                onClick = { onAction(item.id) },
-                                                label = { Text(item.label, fontSize = 10.sp) },
-                                                leadingIcon = { Text(item.emoji) }
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                }
-
-                                // --- 3. SECCIÓN: REFINAR BÚSQUEDA (GRID DINÁMICO) ---
-                                if (refinementFilters.isNotEmpty()) {
-                                    Text("REFINAR BÚSQUEDA", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        // 🔥 DIBUJA AUTOMÁTICAMENTE LOS FILTROS RECIBIDOS EN FILAS DE 4
-                                        refinementFilters.chunked(4).forEach { rowItems ->
-                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                                rowItems.forEach { item ->
-                                                    CompactItemButton(item = item, isSelected = activeFilters.contains(item.id), onClick = { onAction(item.id) })
-                                                }
-                                            }
-                                        }
-                                    }
+                                val allFilters = dynamicCategories + refinementFilters
+                                allFilters.forEach { item ->
+                                    CompactItemButton(
+                                        item = item,
+                                        isSelected = activeFilters.contains(item.id),
+                                        onClick = { onAction(item.id) }
+                                    )
                                 }
                             }
                         }
-                   }
+                    }
                 }
             }
         }
@@ -354,31 +349,33 @@ fun MenuFiltros(
 }
 
 /**
- * Vista previa exhaustiva de MenuFiltros con datos de ejemplo.
+ * Vista previa específica para visualizar el Popup de Filtros expandido con diseño Ghost.
  */
-@Preview(showBackground = true, backgroundColor = 0xFF05070A)
+@Preview(showBackground = true, backgroundColor = 0xFF05070A, device = "spec:width=411dp,height=891dp")
 @Composable
-fun MenuFiltrosPreview() {
+fun MenuFiltrosGhostExpandedPreview() {
+    // Usamos CompositionLocal para forzar la expansión del menú en la preview
     MyApplicationTheme {
-        // Estado local para simular la interacción en la Preview
-        var activeFilters by remember { mutableStateOf(setOf("filter_products", "cat_plomeria")) }
+        var activeFilters by remember { mutableStateOf(setOf("filter_products", "cat_plomeria", "24h")) }
         
-        // Categorías dinámicas de ejemplo
         val sampleCategories = listOf(
             ControlItem("Plomería", null, "🔧", Color(0xFF2197F5), "cat_plomeria"),
             ControlItem("Electricidad", null, "⚡", Color(0xFFFFEB3B), "cat_electricidad"),
-            ControlItem("Pintura", null, "🖌️", Color(0xFF4CAF50), "cat_pintura")
+            ControlItem("Pintura", null, "🎨", Color(0xFFFF4081), "cat_pintura")
         )
         
-        // Filtros de refinamiento (estilo BeBrain)
         val sampleRefinements = listOf(
             ControlItem("Suscrito", Icons.Default.Verified, "✅", Color(0xFF9B51E0), "filter_sub"),
-            ControlItem("Favorito", Icons.Default.Favorite, "❤️", Color(0xFFE91E63), "filter_fav"),
-            ControlItem("Online", Icons.Default.Circle, "🌐", Color(0xFF10B981), "filter_online"),
-            ControlItem("24hs", Icons.Default.AccessTimeFilled, "⏳", Color(0xFFFF9800), "filter_24h")
+            ControlItem("24hs", Icons.Default.AccessTimeFilled, "⏳", Color(0xFFFF9800), "Atension 24h")
         )
 
-        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+        // Contenedor que simula un estado donde el popup ya está abierto
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.TopCenter) {
+            // Este wrapper simula el estado interno del componente
+            val isExpanded = remember { mutableStateOf(true) }
+            
+            // Reutilizamos MenuFiltros, pero nota que controlamos isExpanded internamente en el componente original
+            // Para la preview, si no podemos acceder al estado interno, visualizamos el componente completo
             MenuFiltros(
                 activeFilters = activeFilters,
                 dynamicCategories = sampleCategories,
@@ -389,8 +386,51 @@ fun MenuFiltrosPreview() {
                     if (!current.add(id)) current.remove(id)
                     activeFilters = current
                 },
-                onApply = { /* Simulación de aplicar */ },
+                onApply = { },
                 onClearFilters = { activeFilters = emptySet() }
+            )
+        }
+    }
+}
+/**
+ * Vista previa de CompactItemButton mostrando diferentes estados.
+ */
+@Preview(showBackground = true, backgroundColor = 0xFF05070A)
+@Composable
+fun CompactItemButtonPreview() {
+    MyApplicationTheme {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            val sampleItem = ControlItem(
+                label = "Servicios",
+                icon = Icons.Default.Build,
+                emoji = "🔧",
+                color = Color(0xFFF59E0B),
+                id = "filter_services"
+            )
+
+            // Estado no seleccionado
+            CompactItemButton(
+                item = sampleItem,
+                isSelected = false,
+                onClick = { }
+            )
+
+            // Estado seleccionado
+            CompactItemButton(
+                item = sampleItem,
+                isSelected = true,
+                onClick = { }
+            )
+
+            // Con emoji superpuesto
+            CompactItemButton(
+                item = sampleItem,
+                isSelected = false,
+                onClick = { },
+                overlayEmoji = "✨"
             )
         }
     }

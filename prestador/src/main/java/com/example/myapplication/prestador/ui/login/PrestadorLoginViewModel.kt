@@ -8,6 +8,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.messaging.FirebaseMessaging
+
+
+
 
 @HiltViewModel
 class PrestadorLoginViewModel @Inject constructor(
@@ -34,6 +39,7 @@ class PrestadorLoginViewModel @Inject constructor(
                 
                 result.onSuccess { user ->
                     // Verificar si el usuario tiene perfil completo
+                    saveFcmToken(user.uid)
                     val profileExists = authRepository.checkUserProfileExists(user.uid)
                     _hasProfile.value = profileExists
                     _loginState.value = LoginState.Success
@@ -50,6 +56,10 @@ class PrestadorLoginViewModel @Inject constructor(
         _loginState.value = LoginState.Loading
     }
 
+    fun resetLoginState() {
+        _loginState.value = LoginState.Idle
+    }
+
     fun handleGoogleSignInResult(idToken: String) {
         viewModelScope.launch {
             try {
@@ -58,6 +68,7 @@ class PrestadorLoginViewModel @Inject constructor(
                 
                 result.onSuccess { user ->
                     // Verificar si el usuario tiene perfil completo
+                    saveFcmToken(user.uid)
                     val profileExists = authRepository.checkUserProfileExists(user.uid)
                     _hasProfile.value = profileExists
                     _loginState.value = LoginState.Success
@@ -126,6 +137,15 @@ class PrestadorLoginViewModel @Inject constructor(
 
     fun resetPasswordEmailSentFlag() {
         _passwordResetEmailSent.value = false
+    }
+
+    private fun saveFcmToken(uid: String) {
+        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            FirebaseFirestore.getInstance()
+                .collection("providers")
+                .document(uid)
+                .set(hashMapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+        }
     }
 }
 

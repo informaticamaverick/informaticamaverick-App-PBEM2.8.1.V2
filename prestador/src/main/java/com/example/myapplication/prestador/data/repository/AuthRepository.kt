@@ -11,7 +11,8 @@ import javax.inject.Singleton
 @Singleton
 class AuthRepository @Inject constructor(
     private val auth: FirebaseAuth,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val application: android.app.Application
 ) {
     // Obtener usuario actual
     fun getCurrentUser(): FirebaseUser? {
@@ -39,9 +40,16 @@ class AuthRepository @Inject constructor(
         }
     }
 
-    // Cerrar sesión
+    // Cerrar sesión (Firebase + limpiar credenciales Google para forzar re-selección de cuenta)
     fun signOut() {
         auth.signOut()
+        com.google.android.gms.auth.api.signin.GoogleSignIn
+            .getClient(
+                application,
+                com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+                    com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+                ).build()
+            ).signOut()
     }
 
     // Enviar email de recuperacion de contraseña
@@ -60,38 +68,18 @@ class AuthRepository @Inject constructor(
         return try {
             android.util.Log.d("PrestadorAuthRepo", "Verificando perfil para uid: $uid")
 
-            val doc = firestore.collection("usuarios").document(uid).get().await()
+            val doc = firestore.collection("providers").document(uid).get().await()
 
             android.util.Log.d("PrestadorAuthRepo", "Documento existe: ${doc.exists()}")
 
             if (!doc.exists()) {
-                android.util.Log.d("PrestadorAuthRepos", "El documento no existe")
+                android.util.Log.d("PrestadorAuthRepos", "El documento no existe en providers")
                 return false
             }
 
-            // Verificar si tiene el rol de prestador
-            val roles = doc.get("roles") as? List<*>
-            val hasPrestadorRole = roles?.contains("prestador") == true
-
-            android.util.Log.d("PrestadorAuthRepo", "Roles encontrados: $roles")
-            android.util.Log.d("PrestadorAuthRepo", "¿Tiene rol prestador?: $hasPrestadorRole")
-
-            if (!hasPrestadorRole) {
-                android.util.Log.d("PrestadorAuthRepo", "No tiene rol de prestador")
-                return false
-            }
-
-            // Verificar que tenga los campos específicos del prestador completos
-            val servicios = doc.get("servicios") as? List<*>
-            val provincia = doc.getString("provincia")
-
-            android.util.Log.d("PrestadorAuthRepo", "Servicios: $servicios, Provincia: $provincia")
-
-            val hasCompleteProfile = !servicios.isNullOrEmpty() && !provincia.isNullOrEmpty()
-
-            android.util.Log.d("PrestadorAuthRepo", "¿Perfil prestador completo?: $hasCompleteProfile")
-
-            hasCompleteProfile
+            // El documento existe en la colección "providers" — es un prestador
+            android.util.Log.d("PrestadorAuthRepo", "Perfil prestador encontrado en providers")
+            true
         } catch (e: Exception) {
             android.util.Log.e("PrestadorAuthRepo", "Error verificando perfil: ${e.message}")
             false

@@ -13,6 +13,9 @@ interface ChatDao {
     @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY timestamp ASC")
     fun getMessagesForChat(chatId: String): Flow<List<MessageEntity>>
 
+    @Query("SELECT * FROM messages WHERE chatId IN (:chatIds) ORDER BY timestamp ASC")
+    fun getMessagesForChats(chatIds: List<String>): Flow<List<MessageEntity>>
+
     // Inserta o actualiza un mensaje
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity)
@@ -20,6 +23,9 @@ interface ChatDao {
     // Marcar todos los mensajes de una conversación como leídos
     @Query("UPDATE messages SET isRead = 1 WHERE chatId = :chatId AND receiverId = :myUserId AND isRead = 0")
     suspend fun markChatAsRead(chatId: String, myUserId: String)
+
+    @Query("UPDATE messages SET isRead = 1 WHERE chatId IN (:chatIds) AND receiverId = :myUserId AND isRead = 0")
+    suspend fun markChatsAsRead(chatIds: List<String>, myUserId: String)
 
     // Contar total de mensajes no leídos para el usuario actual
     @Query("SELECT COUNT(*) FROM messages WHERE receiverId = :myUserId AND isRead = 0")
@@ -41,6 +47,30 @@ interface ChatDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllMessages(messages: List<MessageEntity>)
+
+    @Query("SELECT COUNT(*) > 0 FROM messages WHERE id = :id")
+    suspend fun messageExists(id: String): Boolean
+
+    @Query("""SELECT m1.chatId, m1.content as lastMessage, m1.timestamp as lastTimestamp, m1.senderId as lastSenderId
+        FROM messages m1 WHERE (m1.senderId = :myUserId OR m1.receiverId = :myUserId)
+        AND m1.timestamp = (SELECT MAX(m2.timestamp) FROM messages m2 WHERE m2.chatId = m1.chatId)
+        GROUP BY m1.chatId""")
+    fun getLastMessagePerChat(myUserId: String): Flow<List<ChatLastMessage>>
+
+    @Query("UPDATE messages SET appointmentStatus = :status WHERE id = :messageId")
+    suspend fun updateAppointmentStatus(messageId: String, status: String)
+
+    @Query("UPDATE messages SET isRead = :isRead WHERE id = :messageId")
+    suspend fun updateMessageIsRead(messageId: String, isRead: Boolean)
+
+    @Query("UPDATE messages SET status = :status WHERE id = :messageId")
+    suspend fun updateMessageStatus(messageId: String, status: String)
+
+    @Query("SELECT id FROM messages WHERE chatId = :chatId AND receiverId = :myUserId AND isRead = 0")
+    suspend fun getUnreadMessageIds(chatId: String, myUserId: String): List<String>
+
+    @Query("UPDATE messages SET isSynced = 1 WHERE id = :messageId")
+    suspend fun updateMessageSynced(messageId: String)
 }
 
 // Clase de apoyo para el resultado del GROUP BY
@@ -48,3 +78,11 @@ data class ChatUnreadCount(
     val chatId: String,
     val count: Int
 )
+
+data class ChatLastMessage(
+    val chatId: String,
+    val lastMessage: String,
+    val lastTimestamp: Long,
+    val lastSenderId: String
+)
+

@@ -9,6 +9,11 @@ import com.example.myapplication.presentation.components.BeMessage
 object BeDictionary {
     val HomeMessages = listOf(
         BeMessage("💡", "Usa el Menú Táctico inferior para filtrar prestadores verificados.", null, Color(0xFF22D3EE), emotion = BeEmotion.NORMAL),
+        BeMessage("💡", "Guía Rápida para el Usuario\n" +
+                "• Toque Simple: Activa o alterna el estado del filtro/ordenamiento.\n" +
+                "• Icono Gris: El filtro está desactivado.\n" +
+                "• Icono Resaltado: El filtro está aplicando cambios en la lista actual.\n" +
+                "• Botón Fecha: Mantén presionado para abrir el calendario personalizado.", null, Color(0xFF22D3EE), emotion = BeEmotion.NORMAL),
         BeMessage("🚀", "¡Nuevas categorías disponibles! Explora los servicios destacados hoy.", null, Color(0xFF10B981), emotion = BeEmotion.HAPPY)
     )
     val BudgetMessages = listOf(
@@ -23,6 +28,61 @@ object BeDictionary {
         BeMessage("📅", "Recuerda que si cancelas un turno, el sistema le avisará automáticamente.", null, Color(0xFF10B981), emotion = BeEmotion.NORMAL),
         BeMessage("⏰", "Tienes turnos pendientes de confirmación. ¡No los pierdas!", "VER TURNOS", Color(0xFFF59E0B), emotion = BeEmotion.SURPRISED)
     )
+
+    // ==========================================================================================
+    // --- SECCIÓN: MENSAJES CONVERSACIONALES (Burbuja de búsqueda) ---
+    // ==========================================================================================
+    object SearchConversationalMessages {
+        val Welcome = BeMessage("👋", "¡Hola! Estoy listo para ayudarte a encontrar lo que buscas.", null, Color(0xFF00FFFF), emotion = BeEmotion.HAPPY)
+        val Help = BeMessage("💡", "Puedo filtrar por categorías, ordenar por precio o buscar lugares cercanos.", "VER TIPS", Color(0xFF00FFFF), emotion = BeEmotion.THINKING)
+        val WhoAmI = BeMessage("✨", "Soy Be, tu asistente inteligente. Mi misión es optimizar tu búsqueda.", null, Color(0xFFE11D48), emotion = BeEmotion.HAPPY)
+        val NotFound = BeMessage("❓", "No estoy muy seguro de qué buscas... ¿Podrías intentar con otra palabra?", null, Color.Gray, emotion = BeEmotion.THINKING)
+        fun Searching(query: String) = BeMessage("🔍", "Buscando coincidencias para \"$query\"...", null, Color(0xFF00FFFF), emotion = BeEmotion.THINKING)
+    }
+
+    // ==========================================================================================
+    // --- SECCIÓN: HUEVO DE PASCUA (MAXI - BEM ORIGINS) ---
+    // ==========================================================================================
+    object EasterEggMessages {
+        val Step1 = BeMessage(
+            icon = "💡",
+            text = "Me llamo Be, por que Buscar se escribe con B 😂",
+            bubbleColor = Color(0xFF22D3EE),
+            emotion = BeEmotion.HAPPY
+        )
+        val Step2 = BeMessage(
+            icon = "❤️",
+            text = "🌟 ¡FELICIDADES! 🌟\n\n" +
+                    "Has descubierto el secreto mejor guardado...\n" +
+                    "El Huevo de Pascua de Maxi...\n" +
+                    "Te voy a contar la verda de mi Nombre...\n" +
+                    "Be, es un Acronimo !!!\n\n" +
+                    "Son las primeras letras de los logros mas importantes de mi Desarrollador\n\n" +
+                    "💖 B... por  Bautista 💖 \n" +
+                    "💖 E... por  Emma 💖\n\n" +
+                    "Ellos son su verdadera inspiración \n " +
+                    "y esa es la razon de mi nombre, o a caso no es COOL BE ??? 😁 \n " +
+                    "Pero te pido algo? ¡ Guarda el secreto Por Favor! 🙊\n\n" +
+                    "En Maverick Developers trabajamos con el corazón y siempre dando nuestro MAXIMO ESFUERZO !!! \n " +
+                    "para tratar de inspirar y ayudar a las personas \n " +
+                    "y de esta manera TODOS tengamos las mismas oportunidades.\n\n" +
+                    "¡GRACIAS POR SER PARTE DE ESTO Y USAR NUESTRA APP!\n" +
+                    "🚀 GRACIAS TOTALES 🚀\n\n" +
+                    "🎁 Ahora lo mejor , tu regalo !!! 🎁 \n" +
+                    "por que nada es gratis en la vida, esta es la recompensa a tu esfuerzo por buscar este Huevo de Pascua 🐣",
+            bubbleColor = Color(0xFFFFB6C1),
+            actionText = "OBTENER REGALO",
+            emotion = BeEmotion.BLUSHING,
+            isCentered = true
+        )
+        val Failure = BeMessage(
+            icon = "😢",
+            text = "esta bien esperaba que me dijeras que era un buen chite 😔😢😭",
+            bubbleColor = Color.Gray,
+            emotion = BeEmotion.SAD
+        )
+    }
+
     val DefaultMessages = listOf(
         BeMessage("🤖", "Hola, soy Be. Estoy aquí para asistirte en todo lo que necesites.", null, Color(0xFF22D3EE), emotion = BeEmotion.NORMAL)
     )

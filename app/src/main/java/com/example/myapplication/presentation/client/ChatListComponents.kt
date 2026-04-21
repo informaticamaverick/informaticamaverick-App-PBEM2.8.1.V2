@@ -1,4 +1,3 @@
-
 package com.example.myapplication.presentation.client
 
 import androidx.compose.foundation.background
@@ -116,9 +115,9 @@ fun ChatItemNormal(chat: ChatPreviewData, onClick: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(4.dp))
-                
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
@@ -141,7 +140,7 @@ fun ChatItemNormal(chat: ChatPreviewData, onClick: () -> Unit) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    
+
                     // Badge de no leídos
                     if (chat.unreadCount > 0) {
                         Spacer(modifier = Modifier.width(8.dp))
@@ -231,7 +230,7 @@ fun ChatItemCompact(chat: ChatPreviewData, onClick: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
@@ -332,9 +331,9 @@ fun ChatItemCard(chat: ChatPreviewData, onClick: () -> Unit) {
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    
+
                     Spacer(modifier = Modifier.width(8.dp))
-                    
+
                     // Etiqueta de tiempo con fondo
                     Surface(
                         color = MaterialTheme.colorScheme.primaryContainer,
@@ -349,9 +348,9 @@ fun ChatItemCard(chat: ChatPreviewData, onClick: () -> Unit) {
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(6.dp))
-                
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
@@ -402,3 +401,5 @@ fun ChatItemCard(chat: ChatPreviewData, onClick: () -> Unit) {
         }
     }
 }
+
+

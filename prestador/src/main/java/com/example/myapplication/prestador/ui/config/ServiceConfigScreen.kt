@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.ui.theme.PrestadorOrange
+import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -25,6 +26,7 @@ fun ServiceConfigScreen(
     onBack: () -> Unit,
     viewModel: ServiceConfigViewModel = hiltViewModel()
 ) {
+    val colors = getPrestadorColors()
     val configState by viewModel.configState.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
@@ -60,12 +62,12 @@ fun ServiceConfigScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
+            .background(colors.backgroundColor)
     ) {
         // TopBar personalizado
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = Color.White,
+            color = colors.surfaceColor,
             shadowElevation = 2.dp
         ) {
             Row(
@@ -79,7 +81,7 @@ fun ServiceConfigScreen(
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
                         contentDescription = "Volver",
-                        tint = Color(0xFF1E293B)
+                        tint = colors.textPrimary
                     )
                 }
                 
@@ -87,7 +89,7 @@ fun ServiceConfigScreen(
                     text = "Configuración de Servicio",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF1E293B),
+                    color = colors.textPrimary,
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 48.dp),
@@ -97,7 +99,7 @@ fun ServiceConfigScreen(
         }
         
         HorizontalDivider(
-            color = Color(0xFFE2E8F0),
+            color = colors.divider,
             thickness = 1.dp
         )
         
@@ -111,7 +113,7 @@ fun ServiceConfigScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated),
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(
@@ -127,7 +129,7 @@ fun ServiceConfigScreen(
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = null,
-                            tint = Color(0xFF64748B),
+                            tint = colors.textSecondary,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -135,7 +137,7 @@ fun ServiceConfigScreen(
                             text = "CONFIGURACIÓN DE SERVICIO",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF64748B),
+                            color = colors.textSecondary,
                             letterSpacing = 0.5.sp
                         )
                     }
@@ -180,7 +182,7 @@ fun ServiceConfigScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
+                colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated),
                 elevation = CardDefaults.cardElevation(2.dp)
             ) {
                 Column(
@@ -196,7 +198,7 @@ fun ServiceConfigScreen(
                         Icon(
                             imageVector = Icons.Default.Build,
                             contentDescription = null,
-                            tint = Color(0xFF64748B),
+                            tint = colors.textSecondary,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -204,7 +206,7 @@ fun ServiceConfigScreen(
                             text = "SERVICIOS QUE PRESTA",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF64748B),
+                            color = colors.textSecondary,
                             letterSpacing = 0.5.sp
                         )
                     }
@@ -212,7 +214,7 @@ fun ServiceConfigScreen(
                     Text(
                         text = "Selecciona los servicios que ofreces",
                         fontSize = 14.sp,
-                        color = Color(0xFF64748B),
+                        color = colors.textSecondary,
                         modifier = Modifier.padding(bottom = 12.dp)
                     )
                     
@@ -234,8 +236,8 @@ fun ServiceConfigScreen(
                                 },
                                 label = { Text(service) },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = PrestadorOrange.copy(alpha = 0.2f),
-                                    selectedLabelColor = PrestadorOrange
+                                    selectedContainerColor = colors.primaryOrange.copy(alpha = 0.2f),
+                                    selectedLabelColor = colors.primaryOrange
                                 )
                             )
                         }
@@ -274,7 +276,7 @@ fun ServiceConfigScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PrestadorOrange
+                    containerColor = colors.primaryOrange
                 ),
                 enabled = !isLoading,
                 shape = RoundedCornerShape(12.dp)
@@ -305,6 +307,7 @@ fun SwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true
 ) {
+    val colors = getPrestadorColors()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -315,7 +318,7 @@ fun SwitchRow(
         Text(
             text = text,
             fontSize = 16.sp,
-            color = if (enabled) Color(0xFF334155) else Color(0xFF94A3B8),
+            color = if (enabled) colors.textPrimary else colors.textSecondary,
             modifier = Modifier.weight(1f)
         )
         Switch(
@@ -324,9 +327,9 @@ fun SwitchRow(
             enabled = enabled,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = PrestadorOrange,
+                checkedTrackColor = colors.primaryOrange,
                 uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = Color(0xFFCBD5E1)
+                uncheckedTrackColor = colors.border
             )
         )
     }

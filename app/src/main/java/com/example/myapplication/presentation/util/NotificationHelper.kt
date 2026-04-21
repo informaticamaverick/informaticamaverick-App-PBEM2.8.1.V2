@@ -88,6 +88,39 @@ class NotificationHelper(private val context: Context) {
             e.printStackTrace()
         }
     }
+
+    @SuppressLint("MissingPermission")
+    fun showChatNotification(
+        senderId: String,
+        senderName: String,
+        msgType: String,
+        appointmentStatus: String? = null,
+        appointmentTitle: String? = null
+    ) {
+        val title = senderName
+        val content = when (msgType) {
+            "TEXT" -> "Nuevo mensaje de texto"
+            "IMAGE" -> "Imagen recibida"
+            "AUDIO" -> "Audio recibido"
+            "LOCATION" -> "Ubicación recibida"
+            "VIDEO" -> "Video recibido"
+            "BUDGET" -> "Nuevo presupuesto"
+            "APPOINTMENT", "VISIT" -> {
+                val status = when (appointmentStatus) {
+                    "PENDING" -> "Pendiente"
+                    "ACCEPTED" -> "Aceptada"
+                    "REJECTED" -> "Rechazada"
+                    "CANCELLED" -> "Cancelada"
+                    "COMPLETED" -> "Completada"
+                    else -> appointmentStatus ?: ""
+                }
+                if (status.isNotEmpty()) "Cita $status: ${appointmentTitle ?: ""}"
+                else "Nueva cita: ${appointmentTitle ?: ""}"
+            }
+            else -> "Nuevo mensaje"
+        }
+        showNotification(title, content)
+    }
 }
 
 

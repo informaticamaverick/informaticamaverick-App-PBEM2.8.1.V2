@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.net.Uri
+import android.util.Log
 import androidx.compose.material.icons.Icons
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModel
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Clear
 import com.example.myapplication.presentation.components.BeSmallActionModel
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 
 /**
@@ -72,14 +74,55 @@ class ProfileViewModel @Inject constructor(
     init {
         // Cargamos datos iniciales de Room al UI State para los formularios
         loadUserProfileIntoUiState()
-        // Refrescamos desde Firebase para asegurar sincronización
-        refreshData()
+
+        // LÓGICA DE OPTIMIZACIÓN DE COSTOS (Firestore):
+        // Solo refrescamos desde remoto si Room nos dice que los datos no están sincronizados.
+        viewModelScope.launch {
+            val user = userRepository.userProfile.firstOrNull()
+            if (user == null || !user.isSynced) {
+                Log.d("ProfileViewModel", "🚀 Datos no sincronizados o nuevos. Iniciando refresh remoto...")
+                refreshData()
+            } else {
+                Log.d("ProfileViewModel", "⚡ Datos sincronizados en Room. Omitiendo refresh remoto inicial.")
+            }
+        }
     }
 
-    /** Refresca los datos del usuario desde la fuente remota (Firestore) */
-    fun refreshData() {
+    /** 
+     * --- SECCIÓN: ACTUALIZACIÓN INTELIGENTE (Pull-to-Refresh) ---
+     * Refresca los datos del usuario. 
+     * - Si se detecta que los datos locales están desincronizados, prioriza Firebase.
+     * - Si están sincronizados, notifica que se está usando la copia local optimizada
+     *   a menos que el usuario fuerce la carga remota.
+     */
+    fun refreshData(forceRemote: Boolean = true) {
         viewModelScope.launch {
-            userRepository.refreshUserFromRemote()
+            _uiState.update { it.copy(isLoading = true, error = null, successMessage = null) }
+            try {
+                val currentUser = userRepository.userProfile.firstOrNull()
+                val isSynced = currentUser?.isSynced ?: false
+
+                if (!isSynced || forceRemote) {
+                    // ESCENARIO A: Sincronización con la Nube (Firebase)
+                    Log.d("ProfileViewModel", "🔄 [REMOTO] Iniciando sincronización con Firebase...")
+                    userRepository.refreshUserFromRemote()
+                    _uiState.update { it.copy(successMessage = "✨ Perfil sincronizado con la nube") }
+                } else {
+                    // ESCENARIO B: Optimización Local (Room)
+                    Log.d("ProfileViewModel", "⚡ [LOCAL] Datos ya sincronizados. Usando copia local.")
+                    _uiState.update { it.copy(successMessage = "⚡ Perfil actualizado (Copia Local)") }
+                }
+            } catch (e: Exception) {
+                Log.e("ProfileViewModel", "❌ Error al refrescar datos: ${e.message}")
+                val errorMsg = when {
+                    e.message?.contains("PERMISSION_DENIED") == true -> "🚫 Error de permisos en el servidor"
+                    e.message?.contains("network") == true -> "🌐 Sin conexión a internet"
+                    else -> "⚠️ Error: ${e.message}"
+                }
+                _uiState.update { it.copy(error = errorMsg) }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
         }
     }
     // ==================================================================================
@@ -159,6 +202,10 @@ class ProfileViewModel @Inject constructor(
     // --- MANEJO DE DIRECCIONES ---
     fun updatePersonalAddresses(newList: List<AddressClient>) = _uiState.update { it.copy(personalAddresses = newList) }
     
+    // --- MANEJO DE CONTACTOS ADICIONALES ---
+    fun updateAdditionalEmails(newList: List<String>) = _uiState.update { it.copy(additionalEmails = newList) }
+    fun updateAdditionalPhones(newList: List<String>) = _uiState.update { it.copy(additionalPhones = newList) }
+
     // --- MANEJO DE EMPRESAS ---
     fun onHasCompanyProfileChange(value: Boolean) = _uiState.update { it.copy(isEmpresa = value) }
     fun updateCompanies(newList: List<CompanyClient>) = _uiState.update { it.copy(companies = newList) }
@@ -168,17 +215,19 @@ class ProfileViewModel @Inject constructor(
     // ==================================================================================
 
     /** 
+     * SECCIÓN 4: LÓGICA DE PERSISTENCIA Y SEGURIDAD
      * Guarda el perfil completo usando el Repositorio (Single Source of Truth)
-     * Basado en la nueva estructura unificada de UserEntity.
+     * Basado en la nueva estructura unificada de UserEntity y Sync Jerárquico.
      */
     fun saveProfile() {
         if (!validateInputs()) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, error = null, successMessage = null) }
             try {
                 val s = _uiState.value
 
-                // Si hay datos en los campos de dirección temporales, creamos un objeto AddressClient
+                // --- 4.1. CONSTRUCCIÓN DE DIRECCIONES ---
+                // Si hay datos en los campos temporales del formulario, creamos un objeto AddressClient
                 val updatedAddresses = if (s.address.isNotBlank() || s.city.isNotBlank()) {
                     val newAddr = AddressClient(
                         calle = s.address,
@@ -187,7 +236,7 @@ class ProfileViewModel @Inject constructor(
                         codigoPostal = s.zipCode,
                         label = "Principal"
                     )
-                    // Evitamos duplicados básicos si ya existe una dirección igual
+                    // Evitamos duplicados básicos
                     if (s.personalAddresses.none { it.calle == newAddr.calle && it.localidad == newAddr.localidad }) {
                         s.personalAddresses + newAddr
                     } else {
@@ -197,6 +246,17 @@ class ProfileViewModel @Inject constructor(
                     s.personalAddresses
                 }
 
+                // --- 4.2. VALIDACIÓN MAVERICK: DIRECCIÓN OBLIGATORIA CON CÓDIGO POSTAL ---
+                val hasValidAddress = updatedAddresses.any { it.codigoPostal.isNotBlank() }
+                if (!hasValidAddress) {
+                    _uiState.update { it.copy(
+                        isLoading = false, 
+                        error = "CRITICAL_ERROR: Debes cargar al menos una dirección con Código Postal para continuar." 
+                    ) }
+                    return@launch
+                }
+
+                // --- 4.3. CREACIÓN DE ENTIDAD DE USUARIO (UserEntity) ---
                 val entity = UserEntity(
                     id = auth.currentUser?.uid ?: "",
                     email = s.email,
@@ -220,56 +280,68 @@ class ProfileViewModel @Inject constructor(
                     isPublicProfile = s.isPublicProfile,
                     isProfileComplete = true,
                     rating = s.rating,
-                    favoriteProviderIds = s.favoriteProviderIds
+                    favoriteProviderIds = s.favoriteProviderIds,
+                    latitude = s.latitude,
+                    longitude = s.longitude
                 )
-                userRepository.saveCompleteProfile(entity, s.password)
-                _uiState.update { it.copy(
-                    isLoading = false, 
-                    isComplete = true, 
-                    isEditMode = false, // Desactivamos el modo edición al guardar
-                    successMessage = "✓ Perfil guardado con éxito" 
-                ) }
+
+                // --- 4.4. PERSISTENCIA Y SINCRONIZACIÓN (Deep Sync) ---
+                // Usamos syncUserWithFirebase para activar la subida jerárquica y compresión
+                userRepository.syncUserWithFirebase(entity.toDomain())
+                
+                // Forzamos un refresco local para asegurar que uiState tenga las URLs finales de Firebase
+                // userRepository.refreshUserFromRemote() // Opcional: syncUserWithFirebase ya actualiza Room
+
+                _uiState.update { currentState ->
+                    mapUserToUiState(entity, currentState).copy(
+                        isLoading = false,
+                        isComplete = true,
+                        isEditMode = false,
+                        successMessage = "✓ Perfil y multimedia sincronizados con éxito"
+                    )
+                }
+                
+                // Opcional: Refrescar desde remoto en segundo plano para obtener URLs finales de Storage si las hubo
+                viewModelScope.launch {
+                    userRepository.refreshUserFromRemote()
+                }
+                
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message ?: "Error al guardar") }
             }
         }
     }
 
-    /** Permite guardar una entidad completa directamente (Útil para actualizaciones rápidas como fotos) */
-    fun saveUserProfile(user: UserEntity) {
-        viewModelScope.launch {
-            try {
-                userRepository.saveCompleteProfile(user, "")
-                refreshData()
-            } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
-            }
-        }
-    }
-
-    /** Actualiza la foto de perfil en Firestore y Room */
+    /** Actualiza la foto de perfil usando el flujo de Sincronización Jerárquica */
     fun updateProfilePhoto(uri: Uri) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                val uid = auth.currentUser?.uid ?: return@launch
-                firestore.collection("usuarios").document(uid).update("photoUrl", uri.toString()).await()
-                userRepository.refreshUserFromRemote()
-                _uiState.update { it.copy(isLoading = false, photoUrl = uri.toString(), successMessage = "✓ Foto actualizada") }
+                // Obtenemos el usuario actual del estado global
+                val currentUser = userState.value?.toDomain() ?: return@launch
+                val updatedUser = currentUser.copy(photoUrl = uri.toString())
+                
+                // Sincroniza: comprime, sube a storage jerárquicamente y actualiza DB
+                userRepository.syncUserWithFirebase(updatedUser)
+                
+                _uiState.update { it.copy(isLoading = false, photoUrl = uri.toString(), successMessage = "✓ Foto de perfil actualizada") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
     }
 
-    /** Actualiza la foto de banner en Firestore y Room */
+    /** Actualiza la foto de banner usando el flujo de Sincronización Jerárquica */
     fun updateBannerPhoto(uri: Uri) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                val uid = auth.currentUser?.uid ?: return@launch
-                firestore.collection("usuarios").document(uid).update("bannerImageUrl", uri.toString()).await()
-                userRepository.refreshUserFromRemote()
+                val currentUser = userState.value?.toDomain() ?: return@launch
+                val updatedUser = currentUser.copy(bannerImageUrl = uri.toString())
+                
+                // Sincroniza jerárquicamente
+                userRepository.syncUserWithFirebase(updatedUser)
+
                 _uiState.update { it.copy(isLoading = false, coverPhotoUrl = uri.toString(), successMessage = "✓ Banner actualizado") }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -334,33 +406,53 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             userRepository.userProfile.collect { user ->
                 user?.let { u ->
-                    _uiState.update { it.copy(
-                        uid = u.id,
-                        displayName = u.displayName,
-                        name = u.name,
-                        lastName = u.lastName,
-                        email = u.email,
-                        phoneNumber = u.phoneNumber,
-                        bio = u.bio,
-                        photoUrl = u.photoUrl ?: "",
-                        coverPhotoUrl = u.bannerImageUrl ?: "",
-                        personalAddresses = u.personalAddresses,
-                        additionalEmails = u.additionalEmails,
-                        additionalPhones = u.additionalPhones,
-                        galleryImages = u.galleryImages,
-                        isEmpresa = u.hasCompanyProfile,
-                        companies = u.companies,
-                        isOnline = u.isOnline,
-                        isSubscribed = u.isSubscribed,
-                        isVerified = u.isVerified,
-                        notificationsEnabled = u.notificationsEnabled,
-                        isPublicProfile = u.isPublicProfile,
-                        rating = u.rating,
-                        favoriteProviderIds = u.favoriteProviderIds
-                    ) }
+                    _uiState.update { currentState ->
+                        // Si estamos en modo edición, evitamos sobreescribir lo que el usuario está escribiendo
+                        // a menos que sea el primer cargado o un cambio externo real.
+                        if (currentState.isEditMode && currentState.uid == u.id) {
+                            currentState
+                        } else {
+                            mapUserToUiState(u, currentState)
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private fun updateUiStateFromUser(u: UserEntity) {
+        _uiState.update { currentState ->
+            mapUserToUiState(u, currentState)
+        }
+    }
+
+    private fun mapUserToUiState(u: UserEntity, currentState: ProfileUiState): ProfileUiState {
+        return currentState.copy(
+            uid = u.id,
+            displayName = u.displayName,
+            name = u.name,
+            lastName = u.lastName,
+            email = u.email,
+            phoneNumber = u.phoneNumber,
+            bio = u.bio,
+            photoUrl = u.photoUrl ?: "",
+            coverPhotoUrl = u.bannerImageUrl ?: "",
+            personalAddresses = u.personalAddresses,
+            additionalEmails = u.additionalEmails,
+            additionalPhones = u.additionalPhones,
+            galleryImages = u.galleryImages,
+            isEmpresa = u.hasCompanyProfile,
+            companies = u.companies,
+            isOnline = u.isOnline,
+            isSubscribed = u.isSubscribed,
+            isVerified = u.isVerified,
+            notificationsEnabled = u.notificationsEnabled,
+            isPublicProfile = u.isPublicProfile,
+            rating = u.rating,
+            favoriteProviderIds = u.favoriteProviderIds,
+            latitude = u.latitude,
+            longitude = u.longitude
+        )
     }
 
     fun logout() {

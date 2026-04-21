@@ -23,6 +23,8 @@ import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,9 +54,10 @@ import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.example.myapplication.data.local.CategoryEntity
 import com.example.myapplication.data.local.UserEntity
-import com.example.myapplication.data.model.Provider
+import com.example.myapplication.data.model.ServiceDisplayModel
 import com.example.myapplication.presentation.components.*
-import com.example.myapplication.presentation.profile.ProfileViewModel // 🔥 NUEVO CEREBRO UNIFICADO
+import com.example.myapplication.presentation.components.Utilidades.MaverickTacticalButton
+import com.example.myapplication.presentation.profile.ProfileViewModel
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import java.util.Calendar
 import java.util.Locale
@@ -61,54 +65,72 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 // ==========================================================================================
-// --- PANTALLA FAST (STATEFUL - CONECTADA AL VIEWMODEL) ---
+// --- PANTALLA FAST (STATEFUL - CONECTADA AL OBRERO UNIFICADO) ---
 // ==========================================================================================
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun FastScreen(
     navController: NavHostController,
-    profileViewModel: ProfileViewModel = hiltViewModel(), // 🔥 MIGRADO AL CEREBRO UNICO
+    bottomPadding: PaddingValues, // 🔥 Padding del HUD para evitar solapamientos
+    profileViewModel: ProfileViewModel = hiltViewModel(),
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
-    fastViewModel: FastViewModel = hiltViewModel(),
-    weatherViewModel: WeatherViewModel = hiltViewModel() 
+    // 🔥 LÓGICA MIGRADA AL OBRERO UNIFICADO
+    ubicacionObrero: UbicacionClimaViewModel = hiltViewModel()
 ) {
+    val context = LocalContext.current
     val userState by profileViewModel.userState.collectAsStateWithLifecycle()
-    val allProviders by providerViewModel.providers.collectAsStateWithLifecycle()
-    val allCategories by categoryViewModel.categories.collectAsStateWithLifecycle()
-    val weatherDesc by weatherViewModel.weatherDescription.collectAsState()
 
-    val isSearching by fastViewModel.isSearching.collectAsStateWithLifecycle()
-    val searchFinished by fastViewModel.searchFinished.collectAsStateWithLifecycle()
-    val searchResults by fastViewModel.searchResults.collectAsStateWithLifecycle()
+    // --- SECCIÓN: DATOS DE PROVEEDORES (CEREBRO) ---
+    val unifiedServices by providerViewModel.unifiedServices.collectAsStateWithLifecycle()
+    //val allCategories by categoryViewModel.categories.collectAsStateWithLifecycle()
+    val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
+
+    // --- SECCIÓN: CONEXIÓN AL OBRERO (UBICACIÓN, CLIMA Y LÓGICA FAST) ---
+    val weatherDesc by ubicacionObrero.weatherDescription.collectAsStateWithLifecycle()
+    val userLat by ubicacionObrero.latitude.collectAsStateWithLifecycle()
+    val userLon by ubicacionObrero.longitude.collectAsStateWithLifecycle()
+    
+    // Estados de búsqueda Fast ahora en el Obrero
+    val isSearching by ubicacionObrero.isSearchingFast.collectAsStateWithLifecycle()
+    val searchFinished by ubicacionObrero.searchFinishedFast.collectAsStateWithLifecycle()
+    val searchResults by ubicacionObrero.searchResultsFast.collectAsStateWithLifecycle()
 
     FastScreenContent(
         navController = navController,
+        bottomPadding = bottomPadding,
         userState = userState,
-        allProviders = allProviders,
-        allCategories = allCategories,
+        allServices = unifiedServices,
+        allCategories = categories,
         weatherDescription = weatherDesc,
+        userLat = userLat ?: -26.8310,
+        userLon = userLon ?: -65.2045,
         isSearching = isSearching,
         searchFinished = searchFinished,
         searchResults = searchResults,
-        onStartSearch = { category, lat, lon -> fastViewModel.startEmergencySearch(category, allProviders, lat, lon) },
-        onResetSearch = { fastViewModel.resetSearch() }
+        onStartSearch = { category, lat, lon ->
+            ubicacionObrero.ejecutarBusquedaEmergenciaFast(category, unifiedServices, lat, lon)
+        },
+        onResetSearch = { ubicacionObrero.resetBusquedaFast() }
     )
 }
 
 // ==========================================================================================
-// --- PANTALLA FAST (STATELESS - PURA UI) ---
+// --- PANTALLA FAST (STATELESS - UI LIMPIA SIN CABECERA DE DIRECCIÓN) ---
 // ==========================================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FastScreenContent(
     navController: NavHostController,
+    bottomPadding: PaddingValues, // 🔥 Para elevar la UI sobre las herramientas de Be
     userState: UserEntity?,
-    allProviders: List<Provider>,
+    allServices: List<ServiceDisplayModel>,
     allCategories: List<CategoryEntity>,
     weatherDescription: String,
+    userLat: Double,
+    userLon: Double,
     isSearching: Boolean,
     searchFinished: Boolean,
     searchResults: List<ProviderWithDistance>,
@@ -117,33 +139,17 @@ fun FastScreenContent(
 ) {
     var showManualSearchSheet by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<CategoryEntity?>(null) }
-
-    // Estado para el popup interactivo del radar
     var selectedProviderOnRadar by remember { mutableStateOf<ProviderWithDistance?>(null) }
-
-    // Estado del panel inferior (Colapsado por defecto)
     var isBottomSheetExpanded by remember { mutableStateOf(false) }
 
-    // --- ALERTA CONTEXTUAL (CLIMA Y HORARIO) ---
+    // --- LÓGICA CONTEXTUAL ---
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val isNightTime = currentHour >= 21 || currentHour < 6
     val isRaining = remember(weatherDescription) {
-        weatherDescription.contains("lluvia", true) ||
-                weatherDescription.contains("tormenta", true) ||
-                weatherDescription.contains("rain", true) ||
-                weatherDescription.contains("storm", true)
+        weatherDescription.contains("lluvia", true) || weatherDescription.contains("tormenta", true)
     }
 
-    // Mostramos la alerta si es de noche o está lloviendo
     var showContextAlert by remember { mutableStateOf(isNightTime || isRaining) }
-
-    // Mock Coords (Plaza Independencia Tucumán aprox) para alimentar el ViewModel por ahora
-    val mockUserLat = -26.8310
-    val mockUserLon = -65.2045
-
-    var currentLocationState by remember {
-        mutableStateOf<LocationOption>(LocationOption.Gps(address = "Buscando...", locality = ""))
-    }
 
     val topCategories = remember(allCategories) {
         allCategories.filter { it.name in listOf("Electricidad", "Plomería", "Fletes", "Cerrajería") }.take(4)
@@ -155,42 +161,22 @@ fun FastScreenContent(
         }
     }
 
-    // Auto-colapsar la lista de resultados al buscar nuevamente o resetear
     LaunchedEffect(isSearching, searchFinished) {
         if (!searchFinished) isBottomSheetExpanded = false
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF05070A))) {
 
-        // 1. FONDO: MAPA TÁCTICO CON RESULTADOS INTERACTIVOS
+        // 1. FONDO: MAPA TÁCTICO
         TacticalMapBackground(
             isSearching = isSearching,
             searchFinished = searchFinished,
             results = searchResults,
-            onProviderClick = { selectedProviderOnRadar = it } // Evento de interacción
+            onProviderClick = { selectedProviderOnRadar = it }
         )
 
-        // 2. HUD SUPERIOR: UBICACIÓN Y ALERTA CONTEXTUAL
+        // 2. HUD SUPERIOR: SOLO ALERTA CONTEXTUAL (Direcciones ahora en Be Tools)
         Column(modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp).statusBarsPadding().padding(horizontal = 16.dp)) {
-            val cardGradientBrush = Brush.verticalGradient(listOf(Color.White.copy(0.15f), Color.White.copy(0.03f)))
-
-            LocationSelector(
-                user = userState,
-                currentLocation = currentLocationState,
-                onRefresh = {
-                    currentLocationState = LocationOption.Gps("Actualizando GPS...", "")
-                    // RE-BÚSQUEDA AUTOMÁTICA AL CAMBIAR UBICACIÓN
-                    if (isSearching || searchFinished) onStartSearch(selectedCategory, mockUserLat, mockUserLon)
-                },
-                onLocationSelected = {
-                    currentLocationState = it
-                    // RE-BÚSQUEDA AUTOMÁTICA AL CAMBIAR UBICACIÓN
-                    if (isSearching || searchFinished) onStartSearch(selectedCategory, mockUserLat, mockUserLon)
-                },
-                brush = cardGradientBrush
-            )
-
-            // ALERTA DE CLIMA / NOCHE
             AnimatedVisibility(
                 visible = showContextAlert && (isNightTime || isRaining),
                 enter = expandVertically(animationSpec = spring(stiffness = Spring.StiffnessLow)) + fadeIn(),
@@ -205,12 +191,12 @@ fun FastScreenContent(
             }
         }
 
-        // 3. CAPA PUBLICITARIA (POPUP DURANTE BÚSQUEDA)
+        // 3. CAPA PUBLICITARIA
         if (isSearching) {
             GoogleAdPopup()
         }
 
-        // 4. POPUP DE INTERACCIÓN DEL RADAR (ESTRELLA DE LA PANTALLA)
+        // 4. POPUP DE INTERACCIÓN DEL RADAR
         AnimatedVisibility(
             visible = selectedProviderOnRadar != null,
             enter = scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
@@ -222,38 +208,22 @@ fun FastScreenContent(
                     data = providerData,
                     onClose = { selectedProviderOnRadar = null },
                     onChatClick = {
-                        val providerId = providerData.provider.id
+                        val providerId = providerData.service.id
                         selectedProviderOnRadar = null
-                        // Bloque try-catch para evitar crash de navegación si se interrumpe el contexto
-                        try {
-                            navController.navigate("chat/$providerId") {
-                                launchSingleTop = true
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+                        navController.navigate("chat/$providerId") { launchSingleTop = true }
                     },
                     onProfileClick = {
-                        val providerId = providerData.provider.id
+                        val providerId = providerData.service.id
                         selectedProviderOnRadar = null
-                        try {
-                            navController.navigate("perfil_prestador/$providerId") {
-                                launchSingleTop = true
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
+                        navController.navigate("perfil_prestador/$providerId") { launchSingleTop = true }
                     }
                 )
             }
         }
 
-        // 5. BOTTOM SHEET (RESULTADOS O INICIO DE BÚSQUEDA)
-        Box(
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp).navigationBarsPadding()
-        ) {
+        // 5. BOTTOM PANEL (CONFIG O RESULTADOS) - ELEVADO POR ARRIBA DEL HUD
+        Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottomPadding).padding(bottom = 16.dp)) {
             if (searchFinished) {
-                // MUESTRA RESULTADOS DE LA BÚSQUEDA (Colapsable)
                 FastResultsPanel(
                     results = searchResults,
                     selectedCategory = selectedCategory,
@@ -264,29 +234,23 @@ fun FastScreenContent(
                         selectedProviderOnRadar = null
                     },
                     onChatClick = { providerId ->
-                        try {
-                            navController.navigate("chat/$providerId") { launchSingleTop = true }
-                        } catch (e: Exception) { e.printStackTrace() }
+                        navController.navigate("chat/$providerId") { launchSingleTop = true }
                     },
                     onNavigateToNormalSearch = { catName ->
-                        try {
-                            navController.navigate("result_busqueda/${Uri.encode(catName)}") { launchSingleTop = true }
-                        } catch (e: Exception) { e.printStackTrace() }
+                        navController.navigate("result_busqueda/${Uri.encode(catName)}") { launchSingleTop = true }
                     }
                 )
             } else if (!isSearching) {
-                // MUESTRA PANEL DE CONFIGURACIÓN DE EMERGENCIA
                 FastConfigBottomSheet(
                     selectedCategory = selectedCategory,
                     topCategories = topCategories,
                     onCategorySelect = { selectedCategory = it },
                     onOpenManualSearch = { showManualSearchSheet = true },
-                    onStartSearch = { onStartSearch(selectedCategory, mockUserLat, mockUserLon) }
+                    onStartSearch = { onStartSearch(selectedCategory, userLat, userLon) }
                 )
             }
         }
 
-        // 6. MODAL DE BÚSQUEDA MANUAL DE CATEGORÍAS
         if (showManualSearchSheet) {
             ManualCategorySearchSheet(
                 allCategories = allCategories,
@@ -329,11 +293,15 @@ fun ContextualWarningBanner(
                 }
                 if (isRaining) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("🌧️ Clima Adverso ($weatherDesc): Es posible que las reparaciones externas se vean demoradas o deban ser reprogramadas por seguridad.", color = Color.LightGray, fontSize = 11.sp, lineHeight = 16.sp)
+                    Text("🌧️ Clima Adverso ($weatherDesc): Es posible que las reparaciones externas se vean demoradas.", color = Color.LightGray, fontSize = 11.sp, lineHeight = 16.sp)
                 }
             }
-            IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp).offset(x = 8.dp, y = (-8).dp)) {
-                Icon(Icons.Default.Close, null, tint = Color.Gray)
+            MaverickTacticalButton(
+                onClick = onDismiss,
+                size = 28.dp,
+                modifier = Modifier.offset(x = 8.dp, y = (-8).dp)
+            ) {
+                Icon(Icons.Default.Close, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -343,10 +311,8 @@ fun ContextualWarningBanner(
 fun GoogleAdPopup() {
     Dialog(onDismissRequest = { }, properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-
-            // Texto Tranquilizador
             Text(
-                text = "Relájate y mira estas ofertas mientras nosotros buscamos al mejor profesional para ti ☕",
+                text = "Relájate y mira estas ofertas mientras buscamos al mejor profesional para ti ☕",
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
@@ -355,40 +321,25 @@ fun GoogleAdPopup() {
                 modifier = Modifier.padding(bottom = 20.dp, start = 8.dp, end = 8.dp)
             )
 
-            // Tarjeta de Anuncio
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = Color(0xFFF7F7F7),
                 modifier = Modifier.fillMaxWidth(0.95f)
             ) {
                 Column {
-                    Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
-                        AsyncImage(
-                            model = "https://picsum.photos/seed/ad/600/300",
-                            contentDescription = "Ad",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        Surface(color = Color(0xFFFFC107), shape = RoundedCornerShape(bottomEnd = 12.dp)) {
-                            Text("Anuncio", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.Black, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
-                        }
-                        Surface(color = Color.Black.copy(0.7f), shape = RoundedCornerShape(8.dp), modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
-                                Icon(Icons.Default.Info, null, tint = Color.White, modifier = Modifier.size(10.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Google Ads", color = Color.White, fontSize = 8.sp)
-                            }
-                        }
-                    }
+                    AsyncImage(
+                        model = "https://picsum.photos/seed/ad/600/300",
+                        contentDescription = "Ad",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxWidth().height(160.dp)
+                    )
                     Column(modifier = Modifier.padding(20.dp)) {
                         Text("YouTube Premium", fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color.Black)
-                        Text("Disfruta de música y videos sin interrupciones publicitarias. Prueba 1 mes gratis.", fontSize = 12.sp, color = Color.DarkGray, modifier = Modifier.padding(top = 4.dp))
+                        Text("Prueba 1 mes gratis.", fontSize = 12.sp, color = Color.DarkGray, modifier = Modifier.padding(top = 4.dp))
                         Spacer(Modifier.height(16.dp))
-                        Button(onClick = { /* Abre Link */ }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1967D2))) {
+                        Button(onClick = { }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1967D2))) {
                             Text("OBTENER OFERTA", fontWeight = FontWeight.Bold)
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Text("Procesando radar en segundo plano...", color = Color.Gray, fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -418,7 +369,6 @@ fun TacticalMapBackground(
             drawLine(gridColor, Offset(0f, y.toFloat()), Offset(size.width, y.toFloat()), 1f)
         }
     }) {
-        // Centro del Radar
         Box(modifier = Modifier.align(Alignment.Center).offset(y = (-50).dp)) {
 
             if (isSearching) {
@@ -426,15 +376,11 @@ fun TacticalMapBackground(
                 RadarPulse(delay = 1000)
                 RadarPulse(delay = 2000)
             } else if (searchFinished) {
-                // Anillos estáticos
                 Box(modifier = Modifier.size(150.dp).border(1.dp, Color(0xFF22D3EE).copy(0.2f), CircleShape).align(Alignment.Center))
                 Box(modifier = Modifier.size(280.dp).border(1.dp, Color(0xFF22D3EE).copy(0.1f), CircleShape).align(Alignment.Center))
 
-                // Pintar Prestadores Interactivos
                 results.forEachIndexed { index, data ->
-                    // Distribuir en círculo (angulos) y radio según la distancia
                     val angle = (index * (360 / results.size.coerceAtLeast(1))) * (Math.PI / 180)
-                    // Radio base 70, escala con distancia (max ~140 para no salirse de pantalla)
                     val radius = 70f + (data.distanceKm * 8).toFloat().coerceAtMost(70f)
                     val offsetX = (cos(angle) * radius).dp
                     val offsetY = (sin(angle) * radius).dp
@@ -448,17 +394,17 @@ fun TacticalMapBackground(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { onProviderClick(data) }
-                            .zIndex(10f) // Asegura que atrape clicks sobre el radar
+                            .zIndex(10f)
                     ) {
                         Surface(
                             shape = CircleShape,
                             border = BorderStroke(2.dp, Color(0xFF00FFC2)),
-                            modifier = Modifier.size(54.dp), // Avatar más grande y visible
+                            modifier = Modifier.size(54.dp),
                             shadowElevation = 10.dp
                         ) {
                             AsyncImage(
-                                model = data.provider.photoUrl,
-                                contentDescription = "Avatar ${data.provider.displayName}",
+                                model = data.service.photoUrl,
+                                contentDescription = "Avatar ${data.service.title}",
                                 contentScale = ContentScale.Crop,
                                 fallback = rememberVectorPainter(Icons.Default.Person)
                             )
@@ -481,7 +427,6 @@ fun TacticalMapBackground(
                 }
             }
 
-            // Centro: Ubicación del Cliente
             Surface(
                 modifier = Modifier.size(40.dp).align(Alignment.Center),
                 shape = CircleShape,
@@ -496,7 +441,7 @@ fun TacticalMapBackground(
 }
 
 // ==========================================================================================
-// --- POPUP INTERACTIVO DEL RADAR (DARK GRADIENT) ---
+// --- POPUP INTERACTIVO DEL RADAR ---
 // ==========================================================================================
 
 @Composable
@@ -506,7 +451,6 @@ fun InteractiveRadarPopup(
     onChatClick: () -> Unit,
     onProfileClick: () -> Unit
 ) {
-    // Fondo invisible que captura clics afuera para cerrar
     Box(
         modifier = Modifier.fillMaxSize().clickable(
             interactionSource = remember { MutableInteractionSource() },
@@ -514,14 +458,13 @@ fun InteractiveRadarPopup(
         ) { onClose() },
         contentAlignment = Alignment.Center
     ) {
-        // Tarjeta con Gradiente Oscuro estilo Maverick
         Surface(
             modifier = Modifier.width(300.dp).clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
-            ) { /* Evita que clicks internos cierren el modal */ },
+            ) { },
             shape = RoundedCornerShape(32.dp),
-            color = Color.Transparent, // Dejamos el fondo transparente para que se vea el Box inferior
+            color = Color.Transparent,
             border = BorderStroke(1.5.dp, Color(0xFF22D3EE).copy(alpha = 0.5f)),
             shadowElevation = 24.dp
         ) {
@@ -529,25 +472,26 @@ fun InteractiveRadarPopup(
                 .fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color(0xFF1A1F26), Color(0xFF05070A))))
             ) {
-                // Brillo interno sutil cyan
                 Box(modifier = Modifier.matchParentSize().blur(20.dp).background(Color(0xFF22D3EE).copy(alpha = 0.05f)))
 
                 Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    // Header (X + Distancia)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Surface(color = Color(0xFF10B981).copy(0.2f), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, Color(0xFF10B981).copy(0.5f))) {
                             Text("A ${data.estimatedMinutes} min", color = Color(0xFF10B981), fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
                         }
-                        IconButton(onClick = onClose, modifier = Modifier.size(24.dp).background(Color.White.copy(0.1f), CircleShape)) {
+                        MaverickTacticalButton(
+                            onClick = onClose,
+                            size = 24.dp,
+                            accentColor = Color.White.copy(alpha = 0.3f)
+                        ) {
                             Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(14.dp))
                         }
                     }
 
                     Spacer(Modifier.height(16.dp))
 
-                    // Avatar central
                     AsyncImage(
-                        model = data.provider.photoUrl,
+                        model = data.service.photoUrl,
                         contentDescription = null,
                         modifier = Modifier.size(80.dp).clip(CircleShape).border(2.dp, Color.White.copy(0.2f), CircleShape),
                         contentScale = ContentScale.Crop,
@@ -556,25 +500,23 @@ fun InteractiveRadarPopup(
 
                     Spacer(Modifier.height(16.dp))
 
-                    // Info del prestador
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(data.provider.displayName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
-                        if (data.provider.isVerified) {
+                        Text(data.service.title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                        if (data.service.isVerified) {
                             Spacer(Modifier.width(6.dp))
                             Icon(Icons.Filled.Verified, null, tint = Color(0xFF9B51E0), modifier = Modifier.size(18.dp))
                         }
                     }
-                    Text(data.provider.companies.firstOrNull()?.name ?: "Profesional Independiente", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    Text(data.service.subtitle ?: "Profesional Independiente", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Medium)
 
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                         Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text(data.provider.rating.toString(), color = Color.White, fontWeight = FontWeight.Bold)
+                        Text("%.1f".format(data.service.rating), color = Color.White, fontWeight = FontWeight.Bold)
                     }
 
                     Spacer(Modifier.height(24.dp))
 
-                    // Botones de Acción Táctica
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             onClick = onProfileClick,
@@ -621,12 +563,11 @@ fun FastResultsPanel(
             .fillMaxWidth(0.95f)
             .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)),
         shape = RoundedCornerShape(32.dp),
-        color = Color(0xFF111827).copy(alpha = 0.95f), // Ligeramente transparente para no tapar todo el mapa
+        color = Color(0xFF111827).copy(alpha = 0.95f),
         border = BorderStroke(1.dp, Color.White.copy(0.1f)),
         shadowElevation = 24.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            // Cabecera clickeable que controla la expansión
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -645,20 +586,23 @@ fun FastResultsPanel(
                     Column {
                         Text("RESULTADOS FAST", color = Color(0xFF10B981), fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                         Text("${results.size} prestadores en alerta", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        // Feedback visual de expansión
                         Text(if (isExpanded) "Ocultar lista" else "Toca para ver lista", color = Color(0xFF22D3EE), fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp, null, tint = Color.Gray, modifier = Modifier.padding(end = 16.dp))
-                        IconButton(onClick = onReset, modifier = Modifier.background(Color.White.copy(0.1f), CircleShape)) {
-                            Icon(Icons.Default.Close, null, tint = Color.White)
+                        
+                        MaverickTacticalButton(
+                            onClick = onReset,
+                            size = 36.dp,
+                            accentColor = Color.White.copy(alpha = 0.2f)
+                        ) {
+                            Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
             }
 
-            // Contenido Expandido
             if (isExpanded) {
                 HorizontalDivider(color = Color.White.copy(0.05f))
 
@@ -671,7 +615,6 @@ fun FastResultsPanel(
                         Icon(Icons.Default.WarningAmber, null, tint = Color(0xFFFACC15), modifier = Modifier.size(64.dp))
                         Spacer(Modifier.height(16.dp))
                         Text("No hay unidades de emergencia", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                        Text("Ningún prestador de '${selectedCategory?.name ?: "esta categoría"}' cumple con los requisitos de urgencia en este momento.", color = Color.Gray, textAlign = TextAlign.Center, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
 
                         Spacer(Modifier.height(32.dp))
 
@@ -688,19 +631,18 @@ fun FastResultsPanel(
                     }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.fillMaxHeight(0.6f), // Limita altura
+                        modifier = Modifier.fillMaxHeight(0.6f),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(results) { item ->
                             Box {
-                                PrestadorCard(
-                                    provider = item.provider,
-                                    onClick = { onChatClick(item.provider.id) },
-                                    onChat = { onChatClick(item.provider.id) },
-                                    showPreviews = false
+                                PrestadorCardV3(
+                                    provider = item.service,
+                                    onClick = { onChatClick(item.service.id) },
+                                    onChatClick = { onChatClick(item.service.id) },
+                                    modifier = Modifier.fillMaxWidth()
                                 )
-                                // Superponemos la distancia
                                 Surface(
                                     color = Color(0xFF05070A).copy(0.9f),
                                     shape = RoundedCornerShape(bottomStart = 16.dp, topEnd = 16.dp),
@@ -772,15 +714,15 @@ fun FastConfigBottomSheet(
                 } else {
                     topCategories
                 }
-
                 items(displayList) { cat ->
                     val isSelected = cat.name == selectedCategory?.name
+                    val catColor = Color(CategoryVisuals.getColorFor(cat.superCategory))
                     Surface(
                         onClick = { onCategorySelect(cat) },
                         modifier = Modifier.size(width = 80.dp, height = 90.dp),
                         shape = RoundedCornerShape(20.dp),
-                        color = if (isSelected) Color(cat.color).copy(alpha = 0.2f) else Color.White.copy(0.03f),
-                        border = BorderStroke(1.dp, if (isSelected) Color(cat.color) else Color.White.copy(0.1f))
+                        color = if (isSelected) catColor.copy(alpha = 0.2f) else Color.White.copy(0.03f),
+                        border = BorderStroke(1.dp, if (isSelected) catColor else Color.White.copy(0.1f))
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text(cat.icon, fontSize = 28.sp)
@@ -815,9 +757,9 @@ fun ManualCategorySearchSheet(
     onCategorySelected: (CategoryEntity) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-
-    val prefixMatches = remember(searchQuery, allCategories) { allCategories.filter { it.name.startsWith(searchQuery, ignoreCase = true) } }
-    val approximateMatches = remember(searchQuery, allCategories) { allCategories.filter { it.name.contains(searchQuery, ignoreCase = true) && !it.name.startsWith(searchQuery, ignoreCase = true) } }
+    val filtered = remember(searchQuery, allCategories) {
+        allCategories.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -827,13 +769,18 @@ fun ManualCategorySearchSheet(
         Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             Text("Selecciona una Categoría", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(bottom = 16.dp))
 
-            /**
-            GeminiTopSearchBar(
-                searchQuery = searchQuery,
-                onSearchQueryChange = { searchQuery = it },
-                placeholderText = "Escribe el oficio o servicio..."
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Escribe el oficio...") },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = Color(0xFF22D3EE)
+                )
             )
-            **/
 
             Spacer(Modifier.height(16.dp))
 
@@ -842,109 +789,10 @@ fun ManualCategorySearchSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (prefixMatches.isEmpty() && approximateMatches.isEmpty() && searchQuery.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) { Text("No se encontraron resultados", modifier = Modifier.fillMaxWidth().padding(32.dp), textAlign = TextAlign.Center, color = Color.Gray) }
-                } else if (searchQuery.isEmpty()) {
-                    items(allCategories) { category ->
-                        CompactCategoryCard(item = category, onClick = { onCategorySelected(category) })
-                    }
-                } else {
-                    if (prefixMatches.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) { Text("Coincidencia Exacta", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF22D3EE), modifier = Modifier.padding(bottom = 8.dp)) }
-                        items(prefixMatches) { category -> CompactCategoryCard(item = category, onClick = { onCategorySelected(category) }) }
-                    }
-                    if (approximateMatches.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) { Text("Resultados relacionados", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF22D3EE), modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) }
-                        items(approximateMatches) { category -> CompactCategoryCard(item = category, onClick = { onCategorySelected(category) }) }
-                    }
+                items(filtered) { category ->
+                    CompactCategoryCard(item = category, onClick = { onCategorySelected(category) })
                 }
             }
         }
-    }
-}
-
-// ==========================================================================================
-// --- PREVIEWS ---
-// ==========================================================================================
-
-@RequiresApi(Build.VERSION_CODES.O)
-@Preview(showBackground = true, backgroundColor = 0xFF05070A)
-@Composable
-fun FastScreenPreview() {
-    val sampleUser = UserEntity(
-        id = "user123",
-        email = "test@example.com",
-        displayName = "Juan Pérez",
-        name = "Juan",
-        lastName = "Pérez",
-        phoneNumber = "123456789",
-        //matricula = null,
-        //titulo = null,
-        photoUrl = null,
-        bannerImageUrl = null,
-        hasCompanyProfile = false,
-        isSubscribed = false,
-        isVerified = true,
-        isOnline = true,
-        //isFavorite = false,
-        rating = 4.5f,
-        createdAt = System.currentTimeMillis()
-    )
-
-    val sampleCategories = listOf(
-        CategoryEntity(name = "Electricidad", icon = "⚡", color = 0xFFFFF59D, superCategory = "Hogar", imageUrl = null, isNew = false, isNewPrestador = false, isAd = false),
-        CategoryEntity(name = "Plomería", icon = "🪠", color = 0xFFBCAAA4, superCategory = "Hogar", imageUrl = null, isNew = false, isNewPrestador = false, isAd = false),
-        CategoryEntity(name = "Fletes", icon = "🚛", color = 0xFFB0BEC5, superCategory = "Transporte", imageUrl = null, isNew = false, isNewPrestador = false, isAd = false),
-        CategoryEntity(name = "Cerrajería", icon = "🔑", color = 0xFFE0E0E0, superCategory = "Hogar", imageUrl = null, isNew = false, isNewPrestador = false, isAd = false)
-    )
-
-    val sampleProvider = Provider(
-        uid = "1001",
-        email = "MAVERICKINFORMATICA@maverick.com",
-        displayName = "Maverick Informática",
-        name = "Maximiliano",
-        lastName = "Nanterne",
-        phoneNumber = "381-1234567",
-        matricula = "MP-9922",
-        titulo = "Ingeniero de Software",
-        cuilCuit = "20-30405060-7",
-        address = null,
-        isSubscribed = true,
-        isVerified = true,
-        isOnline = true,
-        isFavorite = true,
-        rating = 5.0f,
-        createdAt = System.currentTimeMillis(),
-        hasCompanyProfile = false,
-        photoUrl = "https://picsum.photos/seed/maverick/200/200",
-        bannerImageUrl = null
-    )
-
-    val sampleSearchResults = listOf(
-        ProviderWithDistance(
-            provider = sampleProvider,
-            distanceKm = 1.2,
-            estimatedMinutes = 5
-        ),
-        ProviderWithDistance(
-            provider = sampleProvider.copy(uid = "1002", displayName = "Sosa Plomería"),
-            distanceKm = 2.5,
-            estimatedMinutes = 10
-        )
-    )
-
-    MyApplicationTheme {
-        FastScreenContent(
-            navController = rememberNavController(),
-            userState = sampleUser,
-            allProviders = emptyList(),
-            allCategories = sampleCategories,
-            weatherDescription = "Lluvia ligera",
-            isSearching = false,
-            searchFinished = true,
-            searchResults = sampleSearchResults,
-            onStartSearch = { _, _, _ -> },
-            onResetSearch = { }
-        )
     }
 }

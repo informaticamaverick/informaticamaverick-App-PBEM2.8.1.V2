@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.client
 
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -7,11 +8,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -38,10 +43,21 @@ import com.example.myapplication.data.local.BudgetEntity
 import com.example.myapplication.data.local.CategoryEntity
 import com.example.myapplication.data.local.TenderEntity
 import com.example.myapplication.presentation.components.*
+import com.example.myapplication.presentation.components.Utilidades.*
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlin.collections.emptyList
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.myapplication.data.local.BudgetStatus
+import com.example.myapplication.presentation.components.BeSmallActionModel
+import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.google.firebase.firestore.FirebaseFirestore
 
+import com.example.myapplication.presentation.client.CategoryVisuals
 // =================================================================================
 // --- CONSTANTES DE DISEÑO MACO ---
 // =================================================================================
@@ -52,7 +68,7 @@ private val MaverickPurple = Color(0xFF9B51E0)
 private val StatusFinished = Color(0xFF34D399)
 
 enum class BudgetTabMode {
-    LICITACIONES, DIRECTOS 
+    LICITACIONES, DIRECTOS
 }
 
 @Composable
@@ -60,6 +76,7 @@ fun PresupuestosScreen(
     viewModel: BudgetViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
     beBrainViewModel: BeBrainViewModel = hiltViewModel(), 
+    beInteractionViewModel: BeInteractionViewModel = hiltViewModel(),
     onChatClick: (String) -> Unit = {},
     onBack: () -> Unit,
     bottomPadding: PaddingValues = PaddingValues(0.dp)
@@ -68,19 +85,21 @@ fun PresupuestosScreen(
     val tenders by viewModel.filteredTenders.collectAsStateWithLifecycle()
     val directBudgets by viewModel.filteredDirectBudgets.collectAsStateWithLifecycle()
     val overlayBudgets by viewModel.filteredOverlayBudgets.collectAsStateWithLifecycle()
-    
-    val categories by categoryViewModel.categories.collectAsStateWithLifecycle()
+    val hasMatches by viewModel.hasMatches.collectAsStateWithLifecycle()
+
+    val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
+
     val activeFilters by beBrainViewModel.activeFilters.collectAsStateWithLifecycle()
     val dynamicCategories by beBrainViewModel.dynamicCategories.collectAsStateWithLifecycle()
     val availableFilters by beBrainViewModel.availableFilters.collectAsStateWithLifecycle()
     val availableSortOptions by beBrainViewModel.availableSortOptions.collectAsStateWithLifecycle()
-    
+
     // 🔥 Delegación de Estados de UI
     val isSearchActive by beBrainViewModel.isSearchActive.collectAsStateWithLifecycle()
     val searchQuery by beBrainViewModel.searchQuery.collectAsStateWithLifecycle()
     val isMultiSelectionActive by viewModel.isMultiSelectionActive.collectAsStateWithLifecycle()
     val selectedItemIds by viewModel.selectedIds.collectAsStateWithLifecycle()
-    
+
     // 🔥 Acciones Inyectadas y Datos Raw para Be
     val budgetActions by viewModel.beActions.collectAsStateWithLifecycle()
     val allTenders by viewModel.allTenders.collectAsStateWithLifecycle()
@@ -93,9 +112,14 @@ fun PresupuestosScreen(
     var deleteContextMessage by remember { mutableStateOf("") }
     var onConfirmDeleteAction by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    // Sincronización de Búsqueda (Fase 3)
-    LaunchedEffect(searchQuery) {
+    // ==========================================================
+    // --- SECCIÓN: SINCRONIZACIÓN DE BÚSQUEDA Y ASISTENTE (Be) ---
+    // ==========================================================
+    LaunchedEffect(searchQuery, hasMatches) {
         viewModel.setSearchQuery(searchQuery)
+        // Informamos al lóbulo frontal (InteractionViewModel) sobre el estado de la búsqueda
+        // para que pueda disparar respuestas conversacionales si no hay resultados.
+        beInteractionViewModel.processSearchQuery(searchQuery, hasMatches)
     }
 
     // 🔥 Sincronización de Filtros (Fase 3)
@@ -107,7 +131,7 @@ fun PresupuestosScreen(
     LaunchedEffect(allTenders, allBudgets, categories) {
         beBrainViewModel.updateTenders(allTenders)
         beBrainViewModel.updateBudgets(allBudgets)
-        beBrainViewModel.updateAllCategories(categories)
+        beBrainViewModel.hydrateCategories(categories)
     }
 
     // 🔥 Sincronización de Multiselección (Fase 3 - Habilita herramientas de Be)
@@ -127,7 +151,7 @@ fun PresupuestosScreen(
     // Capturar Eventos y Delegar (Fase 3)
     val hudContext by viewModel.currentHUDContext.collectAsStateWithLifecycle()
     val currentSelectedIds by rememberUpdatedState(selectedItemIds)
-    
+
     // Calculamos qué IDs están actualmente visibles para la acción "Seleccionar Todo"
     val currentVisibleIds = remember(hudContext, tenders, directBudgets, overlayBudgets) {
         when (hudContext) {
@@ -195,7 +219,7 @@ fun PresupuestosScreen(
         onFilterToggle = { beBrainViewModel.toggleFilter(it) },
         onClearFilters = { beBrainViewModel.clearSpecificFilters(listOf("filter_", "cat_")) },
         onClearSort = { beBrainViewModel.clearSpecificFilters(listOf("sort_", "view_")) },
-        onSetContext = { 
+        onSetContext = {
             beBrainViewModel.setHUDContext(it)
             viewModel.setContext(it)
         },
@@ -217,7 +241,7 @@ fun PresupuestosScreen(
         onToggleItemSelection = { viewModel.toggleSelection(it) },
         onSelectAllItems = { ids -> viewModel.selectAll(ids) },
         onToggleMultiSelection = { viewModel.updateMultiSelection(!isMultiSelectionActive) },
-        beBrainViewModel = beBrainViewModel,
+        beBrainActionEvent = beBrainViewModel.actionEvent,
         onBeLongClick = { beBrainViewModel.onBeLongClick() },
         tenderForAnalytics = tenderForAnalytics,
         tenderForDetails = tenderForDetails,
@@ -227,6 +251,11 @@ fun PresupuestosScreen(
         deleteContextMessage = deleteContextMessage,
         onConfirmDeleteAction = onConfirmDeleteAction,
         onDismissDeleteDialog = { showDeleteConfirmDialog = false },
+        onRequestDeleteConfirmation = { message, action ->
+            deleteContextMessage = message
+            onConfirmDeleteAction = action
+            showDeleteConfirmDialog = true
+        },
         onAnalyticsRequest = { tender, budgets -> tenderForAnalytics = tender to budgets },
         onUpdateTenderStatus = { tenderId, newStatus -> viewModel.updateTenderStatus(tenderId, newStatus) },
         onTenderSelected = { viewModel.setSelectedTenderId(it) }
@@ -264,7 +293,7 @@ fun PresupuestosScreenContent(
     onToggleItemSelection: (String) -> Unit = {},
     onSelectAllItems: (List<String>) -> Unit = {},
     bottomPadding: PaddingValues,
-    beBrainViewModel: BeBrainViewModel,
+    beBrainActionEvent: SharedFlow<String>,
     onToggleMultiSelection: () -> Unit = {},
     onBeLongClick: () -> Unit = {},
     tenderForAnalytics: Pair<TenderEntity, List<BudgetEntity>>?,
@@ -275,6 +304,7 @@ fun PresupuestosScreenContent(
     deleteContextMessage: String,
     onConfirmDeleteAction: (() -> Unit)?,
     onDismissDeleteDialog: () -> Unit,
+    onRequestDeleteConfirmation: (String, () -> Unit) -> Unit,
     onAnalyticsRequest: (TenderEntity, List<BudgetEntity>) -> Unit,
     onUpdateTenderStatus: (String, String) -> Unit,
     onTenderSelected: (String?) -> Unit = {}
@@ -282,6 +312,17 @@ fun PresupuestosScreenContent(
     val pagerState = rememberPagerState(pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
     var currentTab by remember { mutableStateOf(BudgetTabMode.LICITACIONES) }
+    
+    val tenderListState = rememberLazyListState()
+    val directListState = rememberLazyGridState()
+
+    // Volver arriba cuando cambian los datos o filtros
+    LaunchedEffect(tenders) {
+        if (tenders.isNotEmpty()) tenderListState.animateScrollToItem(0)
+    }
+    LaunchedEffect(directBudgets) {
+        if (directBudgets.isNotEmpty()) directListState.animateScrollToItem(0)
+    }
 
     LaunchedEffect(pagerState.currentPage) {
         currentTab = if (pagerState.currentPage == 0) BudgetTabMode.LICITACIONES else BudgetTabMode.DIRECTOS
@@ -292,83 +333,146 @@ fun PresupuestosScreenContent(
     var budgetForA4Preview by remember { mutableStateOf<BudgetEntity?>(null) }
     var providerProfileToShow by remember { mutableStateOf<BudgetEntity?>(null) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    MaverickBackgroundStrix {
         Scaffold(
-            containerColor = DarkBackground,
+            containerColor = Color.Transparent,
             topBar = {
-                Column {
-                    TopAppBar(
-                        title = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("💼", fontSize = 20.sp)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Administrador de Presupuestos", fontWeight = FontWeight.Black, color = Color.White, fontSize = 17.sp)
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
-                    )
-                    DividerPremium()
-                }
+                // Dejamos el topBar vacío para manejar la cabecera dentro del flujo del Column
+                // Esto asegura que el Spacer y el MoldeBarraMenu se posicionen correctamente debajo.
             }
         ) { padding ->
             Column(modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)) {
-
-                AnimatedBudgetHeaderTabs(
-                    currentTab = currentTab,
-                    onTabSelected = {
-                        currentTab = it
-                        coroutineScope.launch { pagerState.animateScrollToPage(if(it == BudgetTabMode.LICITACIONES) 0 else 1) }
+                .padding(bottom = padding.calculateBottomPadding())) {
+                
+                // ==========================================================
+                // --- SECCIÓN: CABECERA DINÁMICA CON NAVEGACIÓN TÉCNICA ---
+                // ==========================================================
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize() // Animamos el cambio de altura suavemente
+                ) {
+                    Column {
+                        // La cabecera refleja el estado activo
+                        BarraCabezera(
+                            title = if (currentTab == BudgetTabMode.LICITACIONES) "LICITACIONES" else "PRESUPUESTOS",
+                            subtitle = if (currentTab == BudgetTabMode.LICITACIONES) "Gestión de Concursos" else "Solicitudes Directas",
+                            emoji = if (currentTab == BudgetTabMode.LICITACIONES) "⚖️" else "📩",
+                            onBack = onBack,
+                            onInfoClick = { /* Acción de información */ },
+                            accentColor = MaverickBlue
+                        )
                     }
-                )
+
+                    // BURBUJA DE NAVEGACIÓN (Estilo Perfil + Indicadores Técnicos)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .statusBarsPadding()
+                            .padding(bottom = 28.dp, end = 105.dp) // Posicionamiento quirúrgico
+                    ) {
+                        AnimatedContent(
+                            targetState = currentTab,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(300, easing = LinearOutSlowInEasing)) + 
+                                 scaleIn(initialScale = 0.8f, animationSpec = tween(300))).togetherWith(
+                                 fadeOut(animationSpec = tween(200)) + 
+                                 scaleOut(targetScale = 0.8f, animationSpec = tween(200))
+                                )
+                            },
+                            label = "BubbleNavAnim"
+                        ) { targetTab ->
+                            BudgetBubbleTab(
+                                icon = if (targetTab == BudgetTabMode.LICITACIONES) "📩" else "⚖️",
+                                isToRight = targetTab == BudgetTabMode.LICITACIONES,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(if (targetTab == BudgetTabMode.LICITACIONES) 1 else 0)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // --- ESPACIADOR DE AIRE ---
+                // Ahora sí separa la cabecera de la barra de menú
+                Spacer(modifier = Modifier.height(18.dp))
 
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.weight(1f)
                 ) { page ->
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(end = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            SimpleStatsHeader(
-                                label = if (page == 0) "LICITACIONES" else "DIRECTOS",
-                                count = if (page == 0) tenders.size else directBudgets.size,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                    // --- INTEGRACIÓN DE MoldeBarraMenu PARA FILTROS Y ESTADÍSTICAS ---
+                    MoldeBarraMenu(
+                        itemCount = if (page == 0) tenders.size else directBudgets.size,
+                        labelCountMain = if (page == 0) "LICITACIONES" else "DIRECTOS",
+                        labelCountSub = "Encontramos estos",
+                        showSubscribedOnly = false, // No aplica directamente aquí pero mantenemos interfaz
+                        onToggleSubscribed = { /* No implementado en este contexto */ },
+                        sortByProximity = activeFilters.any { it.startsWith("sort_") },
+                        onToggleProximity = { onClearSort() },
+                        isBentoView = false,
+                        onToggleView = { /* Vista fija en esta pantalla */ },
+                        activeRefinements = activeFilters,
+                        refinementOptions = refinementFilters,
+                        sortOptions = sortOptions, // PASAMOS LAS OPCIONES DE ORDENAMIENTO
+                        onToggleRefinement = onFilterToggle,
+                        onClearRefinements = onClearFilters,
+                        onClearSort = onClearSort,
+                        showSuscritos = false, // Ocultar filtros irrelevantes en Presupuestos
+                        showCercania = false,  // Ocultar filtros irrelevantes en Presupuestos
+                        showVista = false,     // Ocultar filtros irrelevantes en Presupuestos
+                        modifier = Modifier.fillMaxSize(),
+                        // ==========================================================
+                        // --- SECCIÓN: ACCIONES PERSONALIZADAS (SIN ENGRANAJE) ---
+                        // --- Se quita el engranaje y se exponen los botones a la izquierda del filtro ---
+                        // ==========================================================
+                        customActions = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                // --- BOTONES DE ORDENAMIENTO (EXTRAÍDOS DEL POPUP) ---
+                                sortOptions.forEach { item ->
+                                    val isSelected = activeFilters.contains(item.id)
+                                    // Implementación táctica con forma personalizada (CutCorner)
+                                    MaverickTacticalButton(
+                                        isActive = isSelected,
+                                        accentColor = item.color,
+                                        onClick = { onFilterToggle(item.id) }
+                                    ) {
+                                        Text(text = item.emoji, fontSize = 16.sp)
+                                    }
+                                    Spacer(Modifier.width(6.dp))
+                                }
+
+                                if (sortOptions.isNotEmpty()) {
+                                    M3VerticalDivider(
+                                        modifier = Modifier.height(24.dp).padding(horizontal = 4.dp),
+                                        color = Color.White.copy(alpha = 0.15f)
+                                    )
+                                }
+
+                                // --- BOTÓN DE FILTRO (MANTENIDO) ---
                                 MenuFiltros(
                                     activeFilters = activeFilters,
-                                    dynamicCategories = dynamicCategories,
+                                    dynamicCategories = emptyList(),
                                     refinementFilters = refinementFilters,
                                     onAction = onFilterToggle,
                                     onApply = {},
                                     onClearFilters = onClearFilters
                                 )
-                                Spacer(Modifier.width(8.dp))
-                                Box(modifier = Modifier.width(1.dp).height(20.dp).background(Color.White.copy(alpha = 0.15f)))
-                                Spacer(Modifier.width(8.dp))
-
-                                MenuOrdenamiento(
-                                    activeFilters = activeFilters,
-                                    sortOptions = sortOptions,
-                                    onAction = onFilterToggle,
-                                    onApply = {},
-                                    onClearFilters = onClearSort
-                                )
                             }
                         }
-                        DividerPremium()
-
+                    ) {
+                        // CONTENIDO DEL PANEL (Lista o Grilla según la página)
                         if (page == 0) {
-                            LazyColumn(contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 100.dp)) {
+                            LazyColumn(
+                                state = tenderListState,
+                                contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 100.dp)
+                            ) {
                                 items(tenders, key = { it.tenderId }) { tender ->
                                     val budgetsFlow = remember(tender.tenderId) { getBudgetsForTender(tender.tenderId) }
                                     val budgets by budgetsFlow.collectAsStateWithLifecycle(emptyList())
@@ -376,19 +480,27 @@ fun PresupuestosScreenContent(
                                     val isSelected = selectedItemIds.contains(tender.tenderId)
                                     val categoryInfo = categories.find { it.name.equals(tender.category, ignoreCase = true) }
 
+                                    // --- ENRIQUECIMIENTO TÁCTICO: Color de Supercategoría y Foto de Adjudicado ---
+                                    val superColor = Color(CategoryVisuals.getColorFor(categoryInfo?.superCategory))
+                                    val awardedPhoto = budgets.find { it.budgetId == tender.awardedBudgetId }?.providerPhotoUrl
+
                                     Box(modifier = Modifier.fillMaxWidth()) {
                                         LicitacionFolderPremium(
                                             title = tender.title,
                                             tenderId = tender.tenderId,
                                             status = tender.status,
-                                            startDate = tender.dateTimestamp,
+                                            startDate = tender.startDate,
                                             endDate = tender.endDate,
                                             budgetCount = budgets.size,
                                             unreadCount = unreadCount,
                                             isSelected = isSelected,
+                                            awardedProviderName = tender.awardedProviderName,
+                                            awardedBudgetId = tender.awardedBudgetId,
+                                            awardedProviderPhotoUrl = awardedPhoto,
                                             category = tender.category,
                                             categoryIcon = categoryInfo?.icon ?: "📋",
-                                            categoryColor = categoryInfo?.color?.let { Color(it) } ?: Color.Gray,
+                                            categoryColor = Color(CategoryVisuals.getColorFor(tender.category)),
+                                            supercategoryColor = superColor,
                                             onClick = {
                                                 if (isMultiSelectionActive) {
                                                     onToggleItemSelection(tender.tenderId)
@@ -412,6 +524,7 @@ fun PresupuestosScreenContent(
                         } else {
                             // Fase 4: Unificación de Grillas
                             BudgetGridContent(
+                                state = directListState,
                                 budgets = directBudgets,
                                 isMultiSelectionActive = isMultiSelectionActive,
                                 selectedItemIds = selectedItemIds,
@@ -439,12 +552,11 @@ fun PresupuestosScreenContent(
             onClose = {
                 selectedTenderForSheet = null
                 onTenderSelected(null)
-                //onSetContext(if (currentTab == BudgetTabMode.LICITACIONES) HUDContext.BUDGETS_TENDERS else HUDContext.BUDGETS_DIRECT)
                 onSetContext(HUDContext.BUDGETS_TENDERS)
-                      },
-            beBrainViewModel = beBrainViewModel,
+            },
+            beBrainActionEvent = beBrainActionEvent,
             onSetContext = { nuevoContexto ->
-                onSetContext(nuevoContexto) // 🔥 Conectamos con el especialista
+                onSetContext(nuevoContexto)
             },
             getBudgetsForTender = getBudgetsForTender,
             activeFilters = activeFilters,
@@ -471,7 +583,8 @@ fun PresupuestosScreenContent(
             onAnalyticsClick = onAnalyticsRequest,
             onDeleteBudgets = onDeleteBudgets,
             onMarkAsReadMulti = { ids -> ids.forEach { id -> onMarkAsRead(id) } },
-            showDeleteConfirmDialog = { _, _ -> }
+            showDeleteConfirmDialog = onRequestDeleteConfirmation,
+            isAssistantActive = isSearchActive
         )
 
         if (showDeleteConfirmDialog) {
@@ -606,7 +719,7 @@ fun AnimatedBudgetHeaderTabs(
     val dirOffset by animateDpAsState(targetValue = dirTargetCenter, label = "dirX")
 
     Box(
-        modifier = Modifier.fillMaxWidth().height(95.dp).background(DarkBackground).zIndex(10f),
+        modifier = Modifier.fillMaxWidth().height(95.dp).background(MaverickColors.ROG_Dark_Bg).zIndex(10f),
         contentAlignment = Alignment.CenterStart
     ) {
         TabItemMaverick(
@@ -648,11 +761,7 @@ fun TabItemMaverick(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.wrapContentSize(unbounded = true).clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
+            modifier = Modifier.wrapContentSize(unbounded = true).shakeClick { onClick() }
         ) {
             if (isActive && isLicitacion) {
                 Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 16.dp)) {
@@ -679,5 +788,125 @@ fun IconCircleMaverick(icon: String, isActive: Boolean, size: Dp) {
         contentAlignment = Alignment.Center
     ) {
         Text(text = icon, fontSize = (size.value * 0.45f).sp, modifier = Modifier.alpha(if (isActive) 1f else 0.3f))
+    }
+}
+
+// =================================================================================
+// --- NUEVOS COMPONENTES DE NAVEGACIÓN EN CABECERA ---
+// =================================================================================
+
+/**
+ * Burbuja de navegación minimalista para alternar entre secciones.
+ * Incluye flechas indicadoras de dirección (estilo dinámico) y animaciones.
+ * Diseño "Vívido": Fondo sólido semi-transparente y bordes definidos.
+ */
+@Composable
+fun BudgetBubbleTab(
+    icon: String,
+    isToRight: Boolean, // Controla la dirección de la flecha indicadora
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .shakeClick { onClick() }
+            .background(Color.Black.copy(alpha = 0.75f), CircleShape) // Fondo sólido Cyber
+            .border(1.5.dp, Color.White.copy(alpha = 0.2f), CircleShape) // Borde técnico nítido
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        // Flecha a la izquierda: Indica retorno a Licitaciones
+        if (!isToRight) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Ir a Licitaciones",
+                tint = MaverickBlue,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+
+        // Icono de la sección destino
+        Text(
+            text = icon,
+            fontSize = 18.sp,
+            modifier = Modifier.padding(bottom = 1.dp)
+        )
+
+        // Flecha a la derecha: Indica avance a Presupuestos Directos
+        if (isToRight) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "Ir a Directos",
+                tint = MaverickBlue,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF05070A)
+@Composable
+fun PresupuestosScreenPreview() {
+    MyApplicationTheme {
+        val sampleCategories = listOf(
+            CategoryEntity(name = "Informatica", icon = "💻", superCategory = "Tecnología", isNew = false, isNewPrestador = false, isAd = false),
+            CategoryEntity(name = "Plomería", icon = "🪠", superCategory = "Hogar", isNew = false, isNewPrestador = false, isAd = false)
+        )
+        val sampleTenders = listOf(
+            TenderEntity("t1", "Reparación de Notebook", "u1", "La pantalla parpadea", "Informatica", "ABIERTA"),
+            TenderEntity("t2", "Instalación de Grifería", "u1", "Cambiar juego de baño", "Plomería", "CERRADA")
+        )
+        val sampleBudgets = listOf(
+            BudgetEntity("b1", "u1", "p1", "t1", "Maximiliano Nanterne", "Maverick Tech", "https://picsum.photos/seed/maverick/200/200", grandTotal = 1500.0, status = BudgetStatus.PENDIENTE),
+            BudgetEntity("b2", "u1", "p2", "t1", "Juan Perez", "Soporte Ya", null, grandTotal = 1200.0, status = BudgetStatus.PENDIENTE)
+        )
+
+        PresupuestosScreenContent(
+            tenders = sampleTenders,
+            directBudgets = emptyList(),
+            categories = sampleCategories,
+            activeFilters = emptySet(),
+            dynamicCategories = emptyList(),
+            refinementFilters = emptyList(),
+            sortOptions = emptyList(),
+            onFilterToggle = {},
+            onClearFilters = {},
+            onClearSort = {},
+            onSetContext = {},
+            getBudgetsForTender = { MutableStateFlow(sampleBudgets) },
+            onChatClick = {},
+            onBack = {},
+            onAcceptBudget = {},
+            onRejectBudget = {},
+            onDeleteTenders = {},
+            onDeleteBudgets = {},
+            onMarkAsRead = {},
+            onClearSelect = {},
+            isSearchActive = false,
+            searchQuery = "",
+            onCloseBeAssistant = {},
+            isMultiSelectionActive = false,
+            selectedItemIds = emptySet(),
+            onToggleItemSelection = {},
+            onSelectAllItems = {},
+            bottomPadding = PaddingValues(0.dp),
+            beBrainActionEvent = remember { MutableSharedFlow<String>() },
+            onToggleMultiSelection = {},
+            onBeLongClick = {},
+            tenderForAnalytics = null,
+            tenderForDetails = null,
+            onCloseAnalytics = {},
+            onCloseTenderDetails = {},
+            showDeleteConfirmDialog = false,
+            deleteContextMessage = "",
+            onConfirmDeleteAction = {},
+            onDismissDeleteDialog = {},
+            onRequestDeleteConfirmation = { _, _ -> },
+            onAnalyticsRequest = { _, _ -> },
+            onUpdateTenderStatus = { _, _ -> },
+            onTenderSelected = {}
+        )
     }
 }

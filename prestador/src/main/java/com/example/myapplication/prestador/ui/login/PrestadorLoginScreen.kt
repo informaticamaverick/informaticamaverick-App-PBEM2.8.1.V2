@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.prestador.ui.theme.PrestadorOrange
 import com.example.myapplication.prestador.ui.theme.PrestadorOrangeDark
+import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import androidx.hilt.navigation.compose.hiltViewModel
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -46,6 +47,7 @@ import com.example.myapplication.prestador.R
 @Composable
 fun PrestadorLoginScreen(
     onLoginSuccess: (hasProfile: Boolean) -> Unit,
+    onNavigateToRegister: () -> Unit,
     viewModel: PrestadorLoginViewModel = hiltViewModel()
 ) {
     var email by remember { mutableStateOf("") }
@@ -56,6 +58,7 @@ fun PrestadorLoginScreen(
     var showForgotPasswordDialog by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val colors = getPrestadorColors()
     
     // Configurar Google Sign-In
     val gso = remember {
@@ -80,17 +83,24 @@ fun PrestadorLoginScreen(
                 account.idToken?.let { idToken ->
                     viewModel.handleGoogleSignInResult(idToken)
                 } ?: run {
-                    // Si el idToken es null
-                    errorMessage = "No se pudo obtener el token de Google. Verifica la configuración de Firebase."
-                    isLoading = false
+                    // Si el idToken es null (SHA-1 no registrado en Firebase Console)
+                    errorMessage = "No se pudo obtener el token de Google. Verifica que el SHA-1 esté registrado en Firebase Console."
+                    viewModel.resetLoginState()
                 }
             } catch (e: ApiException) {
-                errorMessage = "Error al iniciar sesión con Google: ${e.message}"
-                isLoading = false
+                val detalle = when (e.statusCode) {
+                    10 -> "Error de configuración (código 10): registra el SHA-1 del certificado en Firebase Console."
+                    7  -> "Sin conexión a internet (código 7)."
+                    12500 -> "Inicio de sesión fallido (código 12500). Verifica google-services.json."
+                    12501 -> null // usuario canceló, no mostramos error
+                    else -> "Error Google (código ${e.statusCode}): ${e.message}"
+                }
+                errorMessage = detalle
+                viewModel.resetLoginState()
             }
         } else {
-            // Si el usuario cancela el login
-            isLoading = false
+            // El usuario canceló la pantalla de selección de cuenta
+            viewModel.resetLoginState()
         }
     }
 
@@ -193,7 +203,7 @@ fun PrestadorLoginScreen(
             text = "PBEM Prestador",
             fontSize = 32.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White
+            color = colors.textPrimary
         )
         
         Spacer(modifier = Modifier.height(48.dp))
@@ -204,7 +214,7 @@ fun PrestadorLoginScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 0.dp),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Column(
@@ -217,7 +227,7 @@ fun PrestadorLoginScreen(
                     text = "Ingresa a tu cuenta",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1E293B)
+                    color = colors.textPrimary
                 )
                 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -226,12 +236,12 @@ fun PrestadorLoginScreen(
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
-            placeholder = { Text("Correo electrónico", color = Color.Gray) },
+            placeholder = { Text("Correo electrónico", color = colors.textSecondary) },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Email,
                     contentDescription = "Email",
-                    tint = Color.Gray
+                    tint = colors.textSecondary
                 )
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -240,13 +250,13 @@ fun PrestadorLoginScreen(
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFFF8FAFC),
-                unfocusedContainerColor = Color(0xFFF8FAFC),
-                focusedBorderColor = PrestadorOrange,
-                unfocusedBorderColor = Color(0xFFE2E8F0),
-                focusedTextColor = Color(0xFF1E293B),
-                unfocusedTextColor = Color(0xFF1E293B),
-                cursorColor = PrestadorOrange
+                focusedContainerColor = colors.surfaceElevated,
+                unfocusedContainerColor = colors.surfaceElevated,
+                focusedBorderColor = colors.primaryOrange,
+                unfocusedBorderColor = colors.border,
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary,
+                cursorColor = colors.primaryOrange
             ),
             shape = RoundedCornerShape(12.dp)
         )
@@ -255,12 +265,12 @@ fun PrestadorLoginScreen(
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            placeholder = { Text("Contraseña", color = Color.Gray) },
+            placeholder = { Text("Contraseña", color = colors.textSecondary) },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Lock,
                     contentDescription = "Password",
-                    tint = Color.Gray
+                    tint = colors.textSecondary
                 )
             },
             trailingIcon = {
@@ -270,7 +280,7 @@ fun PrestadorLoginScreen(
                             id = if (passwordVisible) R.drawable.ic_eye_open else R.drawable.ic_eye_closed
                         ),
                         contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña",
-                        tint = if (passwordVisible) PrestadorOrange else Color.Gray
+                        tint = if (passwordVisible) colors.primaryOrange else colors.textSecondary
                     )
                 }
             },
@@ -284,13 +294,13 @@ fun PrestadorLoginScreen(
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color(0xFFF8FAFC),
-                unfocusedContainerColor = Color(0xFFF8FAFC),
-                focusedBorderColor = PrestadorOrange,
-                unfocusedBorderColor = Color(0xFFE2E8F0),
-                focusedTextColor = Color(0xFF1E293B),
-                unfocusedTextColor = Color(0xFF1E293B),
-                cursorColor = PrestadorOrange
+                focusedContainerColor = colors.surfaceElevated,
+                unfocusedContainerColor = colors.surfaceElevated,
+                focusedBorderColor = colors.primaryOrange,
+                unfocusedBorderColor = colors.border,
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary,
+                cursorColor = colors.primaryOrange
             ),
             shape = RoundedCornerShape(12.dp)
         )
@@ -321,7 +331,7 @@ fun PrestadorLoginScreen(
                 .fillMaxWidth()
                 .height(56.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = PrestadorOrange
+                containerColor = colors.primaryOrange
             ),
             enabled = !isLoading
         ) {
@@ -349,7 +359,7 @@ fun PrestadorLoginScreen(
             TextButton(onClick = { showForgotPasswordDialog = true }) {
                 Text(
                     text = "¿Olvidaste tu contraseña?",
-                    color = PrestadorOrange,
+                    color = colors.primaryOrange,
                     fontSize = 14.sp
                 )
             }
@@ -366,17 +376,17 @@ fun PrestadorLoginScreen(
         ) {
             HorizontalDivider(
                 modifier = Modifier.weight(1f),
-                color = Color.Gray.copy(alpha = 0.3f)
+                color = colors.divider
             )
             Text(
                 text = " o ",
-                color = Color.Gray,
+                color = colors.textSecondary,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
             HorizontalDivider(
                 modifier = Modifier.weight(1f),
-                color = Color.Gray.copy(alpha = 0.3f)
+                color = colors.divider
             )
         }
         
@@ -391,7 +401,7 @@ fun PrestadorLoginScreen(
                 .height(50.dp),
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = Color.White
+                containerColor = colors.surfaceColor
             ),
             enabled = !isLoading
         ) {
@@ -408,14 +418,35 @@ fun PrestadorLoginScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = "Continuar con Google",
-                    color = Color(0xFF1E293B),
+                    color = colors.textPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
         }
-                
-                Spacer(modifier = Modifier.height(16.dp))
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "¿No tienes cuenta?",
+                color = colors.textSecondary,
+                fontSize = 14.sp
+            )
+            TextButton(onClick = onNavigateToRegister) {
+                Text(
+                    text = "Registrate sin Google",
+                    color = colors.primaryOrange,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -459,7 +490,7 @@ fun PrestadorLoginScreen(
                     Text(
                         text = "💡 Revisa también la carpeta de SPAM si no lo encuentras.",
                         fontSize = 12.sp,
-                        color = Color.Gray
+                        color = colors.textSecondary
                     )
                 }
             },
@@ -472,7 +503,7 @@ fun PrestadorLoginScreen(
                 ) {
                     Text(
                         "Entendido",
-                        color = PrestadorOrange,
+                        color = colors.primaryOrange,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -488,6 +519,7 @@ fun ForgotPasswordDialog(
     onSendEmail: (String) -> Unit
 ) {
     var email by remember { mutableStateOf("") }
+    val colors = getPrestadorColors()
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -501,7 +533,7 @@ fun ForgotPasswordDialog(
                 Text(
                     text = "Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.",
                     fontSize = 14.sp,
-                    color = Color.Gray
+                    color = colors.textSecondary
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -519,8 +551,8 @@ fun ForgotPasswordDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrestadorOrange,
-                        focusedLabelColor = PrestadorOrange
+                        focusedBorderColor = colors.primaryOrange,
+                        focusedLabelColor = colors.primaryOrange
                     )
                 )
             }
@@ -535,14 +567,14 @@ fun ForgotPasswordDialog(
             ) {
                 Text(
                     "Enviar",
-                    color = PrestadorOrange,
+                    color = colors.primaryOrange,
                     fontWeight = FontWeight.Bold
                 )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancelar", color = Color.Gray)
+                Text("Cancelar", color = colors.textSecondary)
             }
         }
     )

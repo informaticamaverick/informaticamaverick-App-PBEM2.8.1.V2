@@ -70,6 +70,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.foundation)
+    implementation(libs.androidx.compose.foundation.layout)
+    implementation(libs.generativeai)
 
 
     testImplementation(libs.junit)
@@ -124,7 +126,9 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.database)
     implementation(libs.firebase.storage)
+    implementation("com.google.firebase:firebase-appcheck-playintegrity:19.0.2")
     
     // Retrofit para clima (Gson)
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")

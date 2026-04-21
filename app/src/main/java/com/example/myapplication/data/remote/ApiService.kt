@@ -1,3 +1,4 @@
+/**
 package com.example.myapplication.data.remote
 
 import com.example.myapplication.data.model.LoginResponse
@@ -10,3 +11,4 @@ interface ApiService {
     @POST("auth/login")
     suspend fun login(@Body request: LoginResquest): Response<LoginResponse>
 }
+**/

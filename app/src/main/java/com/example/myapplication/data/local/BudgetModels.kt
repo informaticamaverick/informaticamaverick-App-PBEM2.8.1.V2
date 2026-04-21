@@ -25,6 +25,7 @@ data class TenderEntity(
     val cancellationDate: Long? = null, // Fecha en la que se canceló
     val awardedProviderId: String? = null, // ID del prestador adjudicado
     val awardedProviderName: String? = null, // Nombre del prestador adjudicado
+    val awardedBudgetId: String? = null,    // ID del presupuesto adjudicado
 
     // --- CLÁUSULAS Y REQUISITOS (Premium) ---
     val requiresVisit: Boolean = false,

@@ -7,7 +7,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.example.myapplication.data.model.fake.CategorySampleDataFalso
+import com.example.myapplication.data.local.SembradoServiciosInicia
 import com.example.myapplication.data.model.fake.PrestadorSampleDataFalso
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
         MessageEntity::class,    // Tabla de Mensajes (Historial de Chat)
         CalendarEventEntity::class // Tabla de Eventos del Calendario (NUEVO)
     ],
-    version = 17, // 🔥 [CORREGIDO] Incrementado a 17 para forzar recreación por cambio de schema en TenderEntity
+    version = 26, // 🔥 [INCREMENTADO] Carga de nuevas categorías con descripciones y limpieza de colores
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -84,20 +84,16 @@ abstract class AppDatabase : RoomDatabase() {
 
 
                     // ===================================================
-                    // 1. CARGA DE CATEGORÍAS
+                    // 1. CARGA DE CATEGORÍAS (Sembrado Inicial)
                     // ===================================================
-                    val categoryEntities = CategorySampleDataFalso.categories.map { item ->
+                    val categoryEntities = SembradoServiciosInicia.categories.map { item ->
                         CategoryEntity(
                             name = item.name,
                             icon = item.icon,
-                            color = item.color.toArgb().toLong(),
                             superCategory = item.superCategory,
-
-                            // 🔥 AÑADE ESTA LÍNEA:
                             superCategoryIcon = item.superCategoryIcon,
-
+                            description = item.description, // [NUEVO] Mapeo del detalle descriptivo
                             providerIds = item.providerIds,
-                            imageUrl = item.imageUrl,
                             isNew = item.isNew,
                             isNewPrestador = item.isNewPrestador,
                             isAd = item.isAd

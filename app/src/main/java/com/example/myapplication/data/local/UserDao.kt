@@ -44,6 +44,13 @@ interface UserDao {
     fun getUser(): Flow<UserEntity?>
 
     /**
+     * Obtiene el perfil del usuario actual una sola vez (suspend).
+     * Útil para verificaciones puntuales en el repositorio.
+     */
+    @Query("SELECT * FROM user_profile LIMIT 1")
+    suspend fun getUserOnce(): UserEntity?
+
+    /**
      * Borra todos los datos de la tabla de usuarios.
      *
      * Esta función es útil para operaciones como 'cerrar sesión', donde se debe limpiar

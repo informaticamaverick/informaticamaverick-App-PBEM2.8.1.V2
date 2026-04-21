@@ -3,6 +3,7 @@ package com.example.myapplication.presentation.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -326,6 +327,8 @@ fun LicitacionFolderPremium(
     category: String,
     categoryIcon: String = "📋",
     categoryColor: Color = Color.Gray,
+    // --- NUEVO: Color de la Supercategoría (Usado para Pestaña y Borde) ---
+    supercategoryColor: Color = Color.Gray,
     tenderId: String,
     status: String,
     startDate: Long,
@@ -333,26 +336,40 @@ fun LicitacionFolderPremium(
     budgetCount: Int,
     unreadCount: Int,
     isSelected: Boolean,
+    awardedProviderName: String? = null,
+    awardedBudgetId: String? = null,
+    // --- NUEVO: URL de la imagen del proveedor adjudicado ---
+    awardedProviderPhotoUrl: String? = null,
     onLongClick: () -> Unit = {},
     onClick: () -> Unit
 ) {
-    val remainingDays = TimeUnit.MILLISECONDS.toDays(endDate - System.currentTimeMillis()).coerceAtLeast(0)
-    val df = SimpleDateFormat("dd MMM", Locale.getDefault())
-    val borderColor = if (isSelected) MaverickBlue else categoryColor.copy(alpha = 0.3f)
+    // --- LÓGICA DE TIEMPO Y AUTO-CIERRE ---
+    val now = System.currentTimeMillis()
+    val isExpired = now > endDate && endDate != 0L
+    val effectiveStatus = if (isExpired && (status == "ABIERTA" || status == "ACTIVO")) "CERRADA" else status
+    
+    val remainingDays = if (endDate > now) {
+        TimeUnit.MILLISECONDS.toDays(endDate - now)
+    } else 0
+    
+    val df = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    
+    // --- 1. LÓGICA DE COLOR: SE USA SUPERCATEGORÍA PARA EL BORDE ---
+    val borderColor = if (isSelected) MaverickBlue else supercategoryColor.copy(alpha = 0.3f)
 
     Box(modifier = Modifier
         .fillMaxWidth()
-        .padding(top = 28.dp, start = 12.dp, end = 12.dp, bottom = 8.dp)
+        .padding(top = 28.dp, start = 4.dp, end = 4.dp, bottom = 8.dp)
     ) {
-        // --- 1. PESTAÑA DEL FOLDER (Categoría) ---
+        // --- 1. PESTAÑA DEL FOLDER (Categoría - Usa Color de Supercategoría) ---
         Surface(
             modifier = Modifier
                 .offset(y = (-28).dp)
                 .width(160.dp)
                 .height(28.dp)
                 .zIndex(1f),
-            color = categoryColor.copy(alpha = 0.15f),
-            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 14.dp),
+            color = supercategoryColor.copy(alpha = 0.6f),
+            shape = RoundedCornerShape(topStart = 6.dp, topEnd = 10.dp),
             border = BorderStroke(1.dp, borderColor.copy(alpha = 0.4f))
         ) {
             Row(
@@ -365,7 +382,8 @@ fun LicitacionFolderPremium(
                     category.uppercase(),
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Black,
-                    color = categoryColor,
+                    // --- COLOR DEL TEXTO: Usa Supercategoría ---
+                    color = supercategoryColor,
                     letterSpacing = 0.5.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -373,37 +391,33 @@ fun LicitacionFolderPremium(
             }
         }
 
-        // --- 2. CONTADOR DE MENSAJES NUEVOS (Top Right) ---
+        // --- 2. CONTADOR DE MENSAJES NUEVOS (Badge Rectangular) ---
         if (unreadCount > 0) {
-            Row(
+            Surface(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(y = (-10).dp, x = (-8).dp)
-                    .zIndex(10f)
-                    .background(NeonCyber, RoundedCornerShape(50))
-                    .border(2.dp, DarkBackground, RoundedCornerShape(50))
-                    .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .offset(x = 155.dp, y = (-28).dp)
+                    .zIndex(10f),
+                color = NeonCyber,
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, DarkBackground)
             ) {
-                Text(
-                    "NUEVOS",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Black,
-                    color = DarkBackground,
-                    letterSpacing = 0.5.sp
-                )
-                Spacer(Modifier.width(6.dp))
-                Box(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .background(DarkBackground, RoundedCornerShape(50)),
-                    contentAlignment = Alignment.Center
+                Column(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         "$unreadCount",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Black,
-                        color = NeonCyber
+                        color = DarkBackground,
+                        lineHeight = 11.sp
+                    )
+                    Text(
+                        "NUEVO",
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = DarkBackground,
+                        lineHeight = 8.sp
                     )
                 }
             }
@@ -418,112 +432,215 @@ fun LicitacionFolderPremium(
                     onLongClick = onLongClick
                 ),
             color = CardSurface,
-            shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp, bottomStart = 28.dp),
+            shape = RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp, bottomStart = 8.dp),
             border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
             shadowElevation = if (isSelected) 12.dp else 4.dp
         ) {
-            Column(Modifier.padding(20.dp)) {
-                // Título e ID
-                Column(modifier = Modifier.fillMaxWidth().padding(end = 40.dp)) {
-                    Text(
-                        text = title,
-                        color = Color.White,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 18.sp,
-                        lineHeight = 22.sp
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "#${tenderId.takeLast(8).uppercase()}",
-                        color = MaverickBlue.copy(alpha = 0.6f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                }
-
-                // --- 4. DIVIDER CON ESTADO SUPERPUESTO ---
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 20.dp),
-                    contentAlignment = Alignment.CenterEnd
-                ) {
-                    HorizontalDivider(color = Color.White.copy(0.4f))
-                    // El estado aparece a la derecha "rompiendo" el divider
-                    Box(modifier = Modifier.background(CardSurface).padding(start = 12.dp)) {
-                        StatusPillPremium(status)
-                    }
-                }
-
-                // Fechas y Presupuestos
+            Column(Modifier.padding(10.dp)) {
+                
+                // --- FILA SUPERIOR: CAJA 1 (Info) y CAJA 2 (Estado/Presupuestos) ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    // Lado Izquierdo: Datos temporales
-                    Column(modifier = Modifier.weight(1f)) {
-                        DateInfoRow(Icons.Default.Event, "INICIO:", df.format(Date(startDate)))
+                    // --- CAJA 1: NOMBRE E ID ---
+                    Column(verticalArrangement = Arrangement.spacedBy((-10).dp),
+                        modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp))
+
+                    {
+                        Text(
+                            text = "NOMBRE",
+                            color = Color.Gray,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = title,
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 18.sp,
+                            lineHeight = 20.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        
+                        Spacer(Modifier.height(30.dp))
+                        
+                        Text(
+                            text = "CODIGO",
+                            color = Color.Gray,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "#${tenderId.takeLast(8).uppercase()}",
+                            color = MaverickBlue.copy(alpha = 0.8f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
+
+                    // --- CAJA 2: ESTADO, DÍAS Y PRESUPUESTOS ---
+                    Column(horizontalAlignment = Alignment.Start) {
+                        StatusPillPremium(effectiveStatus)
+                        
                         Spacer(Modifier.height(4.dp))
-                        DateInfoRow(Icons.Default.EventAvailable, "CIERRE:", df.format(Date(endDate)))
-
-                        Spacer(Modifier.height(12.dp))
-
+                        
+                        // Días restantes con Emoji ⏳
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Schedule,
-                                contentDescription = null,
-                                tint = if (remainingDays < 3 && remainingDays > 0) StatusWarning else MaverickBlue,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(Modifier.width(6.dp))
+                            Text("⏳", fontSize = 10.sp)
+                            Spacer(Modifier.width(4.dp))
                             Text(
-                                if (remainingDays > 0) "Quedan $remainingDays días" else "Finalizado",
-                                fontSize = 11.sp,
+                                text = if (remainingDays > 0) "Quedan $remainingDays días" else "Finalizado",
+                                fontSize = 10.sp,
                                 color = if (remainingDays < 3 && remainingDays > 0) StatusWarning else MaverickBlue,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 0.5.sp
                             )
                         }
-                    }
 
-                    // Lado Derecho: Presupuestos Recibidos (Estilo Modular)
-                    Surface(
-                        color = Color.Black.copy(0.2f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(0.05f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Spacer(Modifier.height(4.dp))
+
+                        // Caja de Presupuestos Recibidos (Formato Modular)
+                        Surface(
+                            color = Color.Black.copy(0.3f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(0.05f))
                         ) {
-                            Column(horizontalAlignment = Alignment.End) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("PRESUPUESTOS", fontSize = 6.sp, fontWeight = FontWeight.Bold, color = Color.Gray, lineHeight = 8.sp)
+                                    Text("RECIBIDOS", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.White, lineHeight = 9.sp)
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Box(modifier = Modifier.width(1.dp).height(18.dp).background(Color.White.copy(0.1f)))
+                                Spacer(Modifier.width(8.dp))
                                 Text(
-                                    "PRESUPUESTOS",
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Gray,
-                                    lineHeight = 9.sp
-                                )
-                                Text(
-                                    "RECIBIDOS",
-                                    fontSize = 10.sp,
+                                    text = budgetCount.toString(),
+                                    fontSize = 18.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = Color.White,
-                                    lineHeight = 11.sp
+                                    color = MaverickBlue
                                 )
                             }
-                            Spacer(Modifier.width(12.dp))
-                            // Línea vertical separadora
-                            Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.White.copy(0.1f)))
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = budgetCount.toString(),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Black,
-                                color = MaverickBlue
+                        }
+                    }
+                }
+
+                // --- DIVIDER HORIZONTAL ---
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 6.dp).fillMaxWidth(),
+                    color = Color.White.copy(0.15f),
+                    thickness = 0.5.dp
+                )
+
+                // --- SECCIÓN INFERIOR DINÁMICA: ADJUDICACIÓN O FECHAS ---
+                if (effectiveStatus == "ADJUDICADA" && awardedProviderName != null) {
+                    // MODO ADJUDICADA: Imagen/Icono + Nombre + Presupuesto
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+
+                        // --- IMAGEN DEL PROVEEDOR (Centrado a la izquierda del nombre) ---
+                        if (awardedProviderPhotoUrl != null) {
+                            AsyncImage(
+                                model = awardedProviderPhotoUrl,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .border(1.dp, StatusActive.copy(alpha = 0.5f), CircleShape),
+                                contentScale = ContentScale.Crop
                             )
+                            Spacer(Modifier.width(8.dp))
+                        }
+
+                        //Spacer(Modifier.width(8.dp))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                //Text = "", fontSize = 10.sp,
+                                text = "🏆 ADJUDICADO A:",
+                                fontSize = 7.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = awardedProviderName.uppercase(),
+                                fontSize = 11.sp,
+                                color = StatusActive,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Box(modifier = Modifier.width(1.dp).height(20.dp).background(Color.White.copy(0.1f)))
+                        Spacer(Modifier.width(12.dp))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "PRESUPUESTO",
+                                fontSize = 7.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "#${awardedBudgetId?.takeLast(4)?.uppercase() ?: "----"}",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                } else if (effectiveStatus == "CERRADA" && awardedProviderName == null) {
+                    // MODO CERRADA SIN ADJUDICAR
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "SIN ADJUDICAR",
+                            color = StatusWarning,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp
+                        )
+                    }
+                } else {
+                    // MODO NORMAL: FECHAS CON EMOJIS
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Fecha Inicio 📅
+                        Column {
+                          Row {
+                                Text("📅", fontSize = 10.sp)
+                                Text("FECHA INICIO", fontSize = 7.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                            }
+                            Text(df.format(Date(startDate)), fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                           // }
+                        }
+
+                        // Fecha Cierre 🏁
+                        Column(verticalArrangement = Arrangement.Center) {
+                        Row() {
+                            // Column(horizontalAlignment = Alignment.End) {
+                            Text("🏁", fontSize = 10.sp)
+                            Text(
+                                "FECHA CIERRE",
+                                fontSize = 7.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                                Text(df.format(Date(endDate)), fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -561,7 +678,7 @@ fun StatusPillPremium(status: String) {
         border = BorderStroke(1.dp, finalColor.copy(0.2f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Indicador de punto de color
@@ -611,12 +728,14 @@ fun TarjetaPresupuestoPremiumPreview() {
 @Composable
 fun LicitacionFolderPremiumPreview() {
     MyApplicationTheme {
-        Box(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // Caso 1: Licitación Abierta
             LicitacionFolderPremium(
                 title = "Reparación de Aire Acondicionado",
                 category = "Climatización",
                 categoryIcon = "❄️",
                 categoryColor = Color(0xFF38BDF8),
+                supercategoryColor = Color(0xFF0EA5E9), // Ejemplo Supercategoría
                 tenderId = "T-AB-1-ABCD",
                 status = "ABIERTA",
                 startDate = System.currentTimeMillis(),
@@ -624,6 +743,26 @@ fun LicitacionFolderPremiumPreview() {
                 budgetCount = 5,
                 unreadCount = 2,
                 isSelected = false,
+                onClick = {}
+            )
+
+            // Caso 2: Licitación Adjudicada
+            LicitacionFolderPremium(
+                title = "Mantenimiento Preventivo IT",
+                category = "Informática",
+                categoryIcon = "💻",
+                categoryColor = MaverickBlue,
+                supercategoryColor = MaverickPurple, // Ejemplo Supercategoría
+                tenderId = "T-AD-2-EFGH",
+                status = "ADJUDICADA",
+                startDate = System.currentTimeMillis() - 86400000 * 10,
+                endDate = System.currentTimeMillis() - 86400000 * 2,
+                budgetCount = 12,
+                unreadCount = 0,
+                isSelected = false,
+                awardedProviderName = "Maverick Tech S.A.",
+                awardedBudgetId = "BUD-9999",
+                awardedProviderPhotoUrl = "https://picsum.photos/seed/provider/200/200", // Foto de prueba
                 onClick = {}
             )
         }

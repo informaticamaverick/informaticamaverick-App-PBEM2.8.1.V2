@@ -16,8 +16,16 @@ class TokenManager @Inject constructor(
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
 
-    // 2. Abrimos el archivo encriptado (Corregido aquí)
-    private val sharedPreferences = EncryptedSharedPreferences.create(
+    // 2. Abrimos el archivo encriptado
+    private val sharedPreferences = try {
+        createEncryptedSharedPreferences()
+    } catch (e: Exception) {
+        // Si falla (por ejemplo, por cambio de llaves en el Keystore), borramos y reintentamos
+        context.deleteSharedPreferences("secure_prefs")
+        createEncryptedSharedPreferences()
+    }
+
+    private fun createEncryptedSharedPreferences() = EncryptedSharedPreferences.create(
         context,
         "secure_prefs",
         masterKey,
@@ -36,4 +44,13 @@ class TokenManager @Inject constructor(
     fun clearSession() {
         sharedPreferences.edit().clear().apply()
     }
-} // <--- Asegúrate de que esta llave cierre la clase TokenManager
+
+    // --- LÓGICA DE PRIMERA VEZ ---
+    fun isFirstTime(): Boolean {
+        return sharedPreferences.getBoolean("is_first_time", true)
+    }
+
+    fun setFirstTimeCompleted() {
+        sharedPreferences.edit().putBoolean("is_first_time", false).apply()
+    }
+}

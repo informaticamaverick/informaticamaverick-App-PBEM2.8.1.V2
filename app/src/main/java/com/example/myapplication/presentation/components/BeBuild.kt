@@ -5,36 +5,64 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Brush.Companion.verticalGradient
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import com.example.myapplication.data.local.UserEntity
+import com.example.myapplication.data.model.AddressClient
+import com.example.myapplication.data.model.BranchClient
+import com.example.myapplication.data.model.CompanyClient
+import com.example.myapplication.presentation.components.Utilidades.*
+import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoBorderBrush
+import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoDarkGlassBackground
+import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoGlassBrush
 import com.example.myapplication.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Representa una herramienta individual del Asistente Be.
- */
+// ==================================================================================
+// --- MODELOS DE DATOS ---
+// ==================================================================================
 data class BeSmallActionModel(
     val id: String,
     val icon: ImageVector,
@@ -47,73 +75,192 @@ data class BeSmallActionModel(
     val onClick: () -> Unit = {}
 )
 
+// ==================================================================================
+// --- SECCIÓN: MODELO DE DATOS PARA UBICACIÓN (ENRIQUECIDO V3) ---
+// ==================================================================================
+data class AddressInfo(
+    val id: String,
+    val companyOrUserName: String,
+    val branchName: String,
+    val streetAndNumber: String,
+    val locality: String,
+    val province: String = "",
+    val country: String = "",
+    val postalCode: String,
+    val isCompany: Boolean,
+    val lat: Double,
+    val lng: Double
+)
+
+// ==================================================================================
+// --- COMPONENTES DE LA BARRA DE ACCIONES ---
+// ==================================================================================
+
 @Composable
-fun BeSmallActionsBuilder(
+fun BeActionsBar(
     isVisible: Boolean,
     actions: List<BeSmallActionModel>,
     shouldShowBottomBar: Boolean = true,
-    toolboxKey: String = "default" // 🔥 USADO PARA AJUSTES CONTEXTUALES
+    toolboxKey: String = "default",
+    showOnlyDefault: Boolean = false,
+    leadingContent: @Composable (() -> Unit)? = null,
+    isToolbarStable: Boolean = true // 🔥 AHORA SE RECIBE DEL COREÓGRAFO (BeAssistantViewModel)
 ) {
-    val visibleActions = actions.filter { it.isVisible }
-    val isProfileContext = toolboxKey.startsWith("profile")
-    
-    // --- AJUSTE DE ALTURA Y PADDING SEGÚN CONTEXTO (PERFIL) ---
-    val toolboxHeight = if (isProfileContext) 110.dp else if (shouldShowBottomBar) 135.dp else 170.dp
-    val sidePadding = if (isProfileContext) 0.dp else 20.dp
+    val filteredActions = remember(actions, showOnlyDefault) {
+        actions.filter { it.isVisible && it.isDefault == showOnlyDefault }
+    }
 
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
-        // --- 1. FONDO OSCURO ---
+    // 🔥 MODIFICACIÓN: La barra es visible si hay acciones o contenido
+    val actuallyVisible = isVisible && (filteredActions.isNotEmpty() || leadingContent != null)
+    val isProfileContext = toolboxKey.startsWith("profile")
+
+    // ==================================================================================
+    // --- SECCIÓN: CONFIGURACIÓN VISUAL DE LA BARRA DINÁMICA (HUD V6.1) ---
+    // ==================================================================================
+    // Altura ajustada para los iconos (80dp)
+    val toolboxHeight = 80.dp 
+    val sidePadding = if (isProfileContext) 12.dp else 16.dp
+    val spacing = if (showOnlyDefault) 5.dp else 8.dp
+
+    val sharedSpring = spring<IntOffset>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    )
+
+    // 🔥 ANIMACIÓN DE ENTRADA DESDE ABAJO (Sincronizada con el Coreógrafo)
+    val offsetY by animateIntOffsetAsState(
+        targetValue = if (isToolbarStable) IntOffset(0, 0) else IntOffset(0, 100),
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "ToolbarStableOffset"
+    )
+
+    Box(modifier = Modifier
+        .fillMaxWidth()
+        .padding(bottom = 0.dp) // 🔥 CAMBIADO A 0.DP PARA AJUSTE PERFECTO CON NAV BAR
+        .offset { offsetY } // 🔥 SE APLICA EL OFFSET DE ESTABILIDAD
+        .zIndex(0.5f), contentAlignment = Alignment.BottomEnd) {
+
+        // ==================================================================================
+        // --- SECCIÓN: BARRA DE HERRAMIENTAS DINÁMICA (ESTILO DRAWER DERECHO) ---
+        // El fondo ahora pasa por detrás del asistente y llega hasta el borde derecho.
+        // Las puntas son menos redondeadas (20dp).
+        // Reemplaza al scrim de fondo completo anterior.
+        // ==================================================================================
         AnimatedVisibility(
-            visible = isVisible && visibleActions.isNotEmpty(),
-            enter = fadeIn(animationSpec = tween(400)) + slideInVertically(initialOffsetY = { it }),
-            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(targetOffsetY = { it })
+            visible = actuallyVisible,
+            enter = slideInHorizontally(initialOffsetX = { it }, animationSpec = sharedSpring) + fadeIn(tween(400)),
+            exit = slideOutHorizontally(targetOffsetX = { it }, animationSpec = sharedSpring) + fadeOut(tween(300))
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .height(toolboxHeight)
-                    .graphicsLayer { if (!shouldShowBottomBar && !isProfileContext) translationY = 30f }
-                    .blur(15.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.98f), Color.Black, Color.Black)
-                        )
+                    // SE ELIMINA EL PADDING END AQUÍ PARA QUE EL FONDO LLEGUE AL BORDE (Pasando por detrás de Be)
+                    .animateContentSize(
+                        animationSpec = spring(stiffness = Spring.StiffnessLow),
+                        alignment = Alignment.CenterEnd // 📌 Anclamos el crecimiento al lado derecho
                     )
-            )
-        }
+                    // ==================================================================================
+                    // --- SECCIÓN: FONDO CON CORTES DE ESQUINA (10DP) ---
+                    // ==================================================================================
+                    .background(
+                        brush = verticalGradient(listOf(Color.Black.copy(alpha = 0.95f), Color.Black, Color.Black)),
+                        shape = CutCornerShape(topStart = 10.dp, bottomStart = 10.dp)
+                    )
+                    // ==================================================================================
+                    // --- SECCIÓN: BARRA SIN CONTENEDOR (SÓLO ICONOS FLOTANTES) ---
+                    // Se elimina el fondo y los bordes para que los iconos aparezcan sin contenedor,
+                    // según lo solicitado ("solamente tenga los iconos sin ningún tipo de círculo o contenedor").
+                    // ==================================================================================
+                    .pointerInput(Unit) {
+                        detectTapGestures { /* BLOQUEO */ }
+                    }
+            ) {
+                AnimatedContent(
+                    targetState = toolboxKey,
+                    transitionSpec = {
+                        (slideInHorizontally(tween(400)) { it } + fadeIn(tween(400)))
+                            .togetherWith(slideOutHorizontally(tween(300)) { it } + fadeOut(tween(300)))
+                    },
+                    contentAlignment = Alignment.CenterEnd, // 📌 Mantiene el contenido pegado a la derecha durante la transición
+                    label = "BeActionsAnimation"
+                ) { targetKey ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .wrapContentWidth(),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        // --- SECCIÓN: CONTENIDO DE HERRAMIENTAS (LazyRow) ---
+                        LazyRow(
+                            modifier = Modifier
+                                .wrapContentWidth()
+                                .fillMaxHeight()
+                                .padding(top = 1.dp, end = 80.dp) // Reducimos el end para que encaje mejor
+                                .clipToBounds(),
+                            contentPadding = PaddingValues(start = 2.dp, end = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(spacing, Alignment.End),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
 
-        // --- 2. CONTENEDOR CON ANIMACIÓN DE CAMBIO DE CONTENIDO ---
-        AnimatedVisibility(
-            visible = isVisible && visibleActions.isNotEmpty(),
-            enter = slideInVertically(initialOffsetY = { it }, animationSpec = spring(dampingRatio = 0.65f)) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-        ) {
-            AnimatedContent(
-                targetState = toolboxKey,
-                transitionSpec = {
-                    (slideInVertically(tween(500)) { it } + fadeIn(tween(500)))
-                        .togetherWith(slideOutVertically(tween(400)) { it } + fadeOut(tween(400)))
-                },
-                label = "ToolboxChangeAnimation"
-            ) { _ ->
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp)
-                        .then(if (!shouldShowBottomBar) Modifier.navigationBarsPadding() else Modifier),
-                    contentPadding = PaddingValues(horizontal = sidePadding), // 🔥 APLICAMOS PADDING DINÁMICO
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.Start),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    items(visibleActions, key = { it.id }) { action ->
-                        Box(modifier = Modifier.animateItem()) {
-                            SmallActionButton(action)
+                            if (leadingContent != null) {
+                                item(key = "leading_tool") {
+                                    Box(modifier = Modifier.animateItem()) {
+                                        AnimatedVisibility(
+                                            visible = true,
+                                            enter = if (isToolbarStable) slideInVertically { it } + fadeIn() else fadeIn(),
+                                            exit = slideOutVertically { it } + fadeOut()
+                                        ) {
+                                            leadingContent()
+                                        }
+                                    }
+                                }
+                            }
+
+                            items(filteredActions, key = { it.id }) { action ->
+                                Box(modifier = Modifier.animateItem()) {
+                                    AnimatedVisibility(
+                                        visible = true,
+                                        enter = if (isToolbarStable) slideInVertically { it } + fadeIn() else fadeIn(),
+                                        exit = slideOutVertically { it } + fadeOut()
+                                    ) {
+                                        if (action.id.startsWith("divider_v")) {
+                                            PremiumVerticalDivider(modifier = Modifier.padding(horizontal = 2.dp), height = 36.dp)
+                                        } else {
+                                            BeSmallActionButton(
+                                                label = action.label,
+                                                onClick = action.onClick,
+                                                icon = if (action.emoji == null) action.icon else null,
+                                                emoji = action.emoji,
+                                                isSelected = action.isSelected,
+                                                tint = action.tint,
+                                                modifier = Modifier.width(52.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
                         }
                     }
                 }
             }
         }
     }
+}
+
+
+
+
+@Composable
+fun BeSmallActionsBuilder(
+    isVisible: Boolean,
+    actions: List<BeSmallActionModel>,
+    shouldShowBottomBar: Boolean = true,
+    toolboxKey: String = "default",
+    leadingContent: @Composable (() -> Unit)? = null,
+    isToolbarStable: Boolean = true
+) {
+    BeActionsBar(isVisible = isVisible, actions = actions, shouldShowBottomBar = shouldShowBottomBar, toolboxKey = toolboxKey, showOnlyDefault = false, leadingContent = leadingContent, isToolbarStable = isToolbarStable)
 }
 
 @Composable
@@ -121,139 +268,27 @@ fun BeDefaultActionsBand(
     isVisible: Boolean,
     actions: List<BeSmallActionModel>,
     shouldShowBottomBar: Boolean = true,
-    toolboxKey: String = "default" 
+    toolboxKey: String = "default",
+    leadingContent: @Composable (() -> Unit)? = null,
+    isToolbarStable: Boolean = true
 ) {
-    val defaultActions = actions.filter { it.isDefault && it.isVisible }
-    val isProfileContext = toolboxKey.startsWith("profile")
-    
-    // --- AJUSTE DE ALTURA Y PADDING SEGÚN CONTEXTO (PERFIL) ---
-    val toolboxHeight = if (isProfileContext) 110.dp else if (shouldShowBottomBar) 135.dp else 170.dp
-    val sidePadding = if (isProfileContext) 0.dp else 20.dp
-
-    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
-        // --- 1. FONDO ---
-        AnimatedVisibility(
-            visible = isVisible && defaultActions.isNotEmpty(),
-            enter = fadeIn(tween(400)) + slideInVertically(initialOffsetY = { it }),
-            exit = fadeOut(tween(300)) + slideOutVertically(targetOffsetY = { it })
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(toolboxHeight)
-                    .graphicsLayer { if (!shouldShowBottomBar && !isProfileContext) translationY = 30f }
-                    .blur(15.dp)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.98f), Color.Black, Color.Black)
-                        )
-                    )
-            )
-        }
-
-        // --- 2. ICONOS CON ANIMACIÓN DE CAMBIO ---
-        AnimatedVisibility(
-            visible = isVisible && defaultActions.isNotEmpty(),
-            enter = slideInVertically(initialOffsetY = { it }, animationSpec = spring(dampingRatio = 0.65f)) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-        ) {
-            AnimatedContent(
-                targetState = toolboxKey,
-                transitionSpec = {
-                    (slideInVertically(tween(500)) { it } + fadeIn(tween(500)))
-                        .togetherWith(slideOutVertically(tween(400)) { it } + fadeOut(tween(400)))
-                },
-                label = "DefaultActionsChangeAnimation"
-            ) { _ ->
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp)
-                        .then(if (!shouldShowBottomBar) Modifier.navigationBarsPadding() else Modifier),
-                    contentPadding = PaddingValues(horizontal = sidePadding), // 🔥 APLICAMOS PADDING DINÁMICO
-                    horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.Start),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    items(defaultActions, key = { it.id }) { action ->
-                        Box(modifier = Modifier.animateItem()) {
-                            SmallActionButton(action)
-                        }
-                    }
-                }
-            }
-        }
-    }
+    BeActionsBar(isVisible = isVisible, actions = actions, shouldShowBottomBar = shouldShowBottomBar, toolboxKey = toolboxKey, showOnlyDefault = true, leadingContent = leadingContent, isToolbarStable = isToolbarStable)
 }
 
-@Composable
-fun SmallActionButton(action: BeSmallActionModel) {
-    if (action.id.startsWith("divider_v")) {
-        Box(modifier = Modifier.width(12.dp).height(46.dp), contentAlignment = Alignment.Center) {
-            Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.2f)))
-        }
-        return
-    }
 
-    val scope = rememberCoroutineScope()
-    val rotation = remember { Animatable(0f) }
-    val scale by animateFloatAsState(
-        targetValue = if (action.isSelected) 1.2f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "Scale"
-    )
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(46.dp)) {
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .scale(scale)
-                .graphicsLayer { rotationZ = rotation.value }
-                .shadow(if (action.isSelected) 10.dp else 0.dp, RoundedCornerShape(12.dp), spotColor = Color(0xFF22D3EE))
-                .clip(RoundedCornerShape(12.dp))
-                .background(if (action.isSelected) Color(0xFF22D3EE).copy(alpha = 0.25f) else Color(0xFF1A1F26))
-                .border(1.dp, (if (action.isSelected) Color(0xFF22D3EE) else Color.White).copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                .clickable {
-                    scope.launch {
-                        rotation.animateTo(15f, tween(50))
-                        rotation.animateTo(-15f, tween(50))
-                        rotation.animateTo(0f, tween(50))
-                        action.onClick()
-                    }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            if (action.emoji != null) {
-                Text(text = action.emoji, fontSize = 22.sp)
-            } else {
-                Icon(
-                    imageVector = action.icon,
-                    contentDescription = action.label,
-                    tint = if (action.isSelected) Color(0xFF22D3EE) else action.tint,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = action.label,
-            color = if(action.isSelected) Color(0xFF22D3EE) else Color.White.copy(alpha = 0.8f),
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF05070A)
+@Preview(showBackground = true)
 @Composable
 fun BeSmallActionsBuilderPreview() {
     val sampleActions = listOf(
-        BeSmallActionModel("4", Icons.Default.Share, "Compartir", emoji = "📤") {},
+        BeSmallActionModel("4", Icons.Default.Share, "Compartir", emoji = "📤", isDefault = true) {},
         BeSmallActionModel("5", Icons.Default.Delete, "Borrar", emoji = "🗑️", tint = Color.Red) {}
     )
     MyApplicationTheme {
-        Box(modifier = Modifier.fillMaxWidth().height(200.dp).padding(16.dp), contentAlignment = Alignment.BottomStart) {
-            BeSmallActionsBuilder(isVisible = true, actions = sampleActions)
+        Box(modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+            .padding(16.dp), contentAlignment = Alignment.BottomStart) {
+            BeActionsBar(isVisible = true, actions = sampleActions)
         }
     }
 }

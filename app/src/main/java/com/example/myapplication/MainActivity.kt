@@ -21,11 +21,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.myapplication.presentation.auth.StartupScreen
 //import com.example.myapplication.presentation.admin.AdminInitScreen
 // Se importa la navegación del cliente y se le da un alias para evitar conflictos.
 import com.example.myapplication.presentation.client.AppNavigation as ClientAppNavigation
 import com.example.myapplication.presentation.auth.LoginScreen
-import com.example.myapplication.presentation.profile.CompleteProfileScreen
+// import com.example.myapplication.presentation.profile.CompleteProfileScreen // DEPRECATED MAVERICK V5
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -51,13 +52,14 @@ class MainActivity : ComponentActivity() {
 
 /**
  * RootNavigation maneja la navegación principal de la aplicación.
- * Decide si mostrar la pantalla de login, la de completar perfil o la navegación principal del cliente.
+ * Decide si mostrar la pantalla de startup, login, completar perfil o la navegación principal del cliente.
  */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun RootNavigation() {
     val navController = rememberNavController()
-    val startDestination = "login"
+    // SECCIÓN B: La ruta inicial ahora es "startup" para la Experiencia Premium
+    val startDestination = "startup"
 
     NavHost(
         navController = navController,
@@ -87,62 +89,60 @@ fun RootNavigation() {
             ) + fadeOut(animationSpec = tween(300))
         }
     ) {
-        // 1. PANTALLA DE LOGIN
-        composable("login") {
-            LoginScreen(
-                onLoginSuccess = { hasProfile, userName ->
-                    if (hasProfile) {
-                        // Si el usuario tiene perfil, navega a la pantalla principal del cliente.
-                        navController.navigate("main_screen") {
-                            popUpTo("login") { inclusive = true }
-                        }
-                    } else {
-                        // Si no, navega a la pantalla para completar el perfil.
-                        navController.navigate("complete_profile/$userName") {
-                            popUpTo("login") { inclusive = true }
-                        }
+        // ======================================================================================
+        // 0. PANTALLA DE STARTUP (PRE-CARGA INTELIGENTE)
+        // ======================================================================================
+        composable("startup") {
+            StartupScreen(
+                onNavigateToLogin = {
+                    navController.navigate("login") {
+                        popUpTo("startup") { inclusive = true }
+                    }
+                },
+                onNavigateToMain = {
+                    navController.navigate("main_screen") {
+                        popUpTo("startup") { inclusive = true }
+                    }
+                },
+                onNavigateToProfileEdit = {
+                    // Si el perfil está incompleto, vamos directamente al perfil en modo edición
+                    navController.navigate("main_screen?target=profile") {
+                        popUpTo("startup") { inclusive = true }
                     }
                 }
             )
         }
 
-        // 2. COMPLETAR PERFIL (Primer uso)
+        // ======================================================================================
+        // 1. PANTALLA DE LOGIN
+        // ======================================================================================
+        composable("login") {
+            LoginScreen(
+                onLoginSuccess = { targetRoute ->
+                    // El LoginViewModel ahora decide si ir a Home o Perfil
+                    val finalRoute = if (targetRoute == "perfil_cliente_edit") "main_screen?target=profile" else "main_screen"
+                    navController.navigate(finalRoute) {
+                        popUpTo("login") { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // ======================================================================================
+        // 2. PANTALLA PRINCIPAL (Contiene Home, Perfil, Chat, etc.)
+        // ======================================================================================
         composable(
-            route = "complete_profile/{userName}",
+            route = "main_screen?target={target}",
             arguments = listOf(
-                navArgument("userName") {
+                navArgument("target") {
                     type = NavType.StringType
-                    defaultValue = "Usuario"
+                    nullable = true
+                    defaultValue = null
                 }
             )
         ) { backStackEntry ->
-            val userName = backStackEntry.arguments?.getString("userName") ?: "Usuario"
-
-            CompleteProfileScreen(
-                userName = userName,
-                onProfileComplete = {
-                    // Cuando se completa el perfil, navega a la pantalla principal.
-                    navController.navigate("main_screen") {
-                        popUpTo("complete_profile/$userName") { inclusive = true }
-                    }
-                }
-            )
+            val target = backStackEntry.arguments?.getString("target")
+            ClientAppNavigation(initialTarget = target)
         }
-
-        // 3. PANTALLA PRINCIPAL (Contiene Home, Perfil, Chat, etc.)
-        // Aquí es donde vive ClientAppNavigation, que YA INCLUYE el PerfilUsuarioScreen correctamente configurado.
-        composable("main_screen") {
-            ClientAppNavigation()
-        }
-
-       /** // 4. PANTALLA ADMIN (Opcional)
-        composable("admin_init") {
-            AdminInitScreen(
-                onBack = {
-                    navController.popBackStack()
-                }
-            )
-        }
-       **/
     }
 }

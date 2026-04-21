@@ -29,10 +29,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+//import com.example.myapplication.utils.ChatIdHelper
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -44,9 +46,14 @@ import com.example.myapplication.data.model.Provider
 import com.example.myapplication.data.model.CompanyProvider
 import com.example.myapplication.data.model.AddressProvider
 import com.example.myapplication.presentation.components.*
+import com.example.myapplication.presentation.util.ChatIdHelper
 import com.example.myapplication.ui.theme.AppColors
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.example.myapplication.ui.theme.getThemeColors
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -62,6 +69,7 @@ fun ChatListView(
     providersList: List<Provider>,
     allCategories: List<CategoryEntity>,
     unreadCounts: Map<String, Int> = emptyMap(),
+    lastMessages: Map<String, com.example.myapplication.data.local.ChatLastMessage> = emptyMap(),
     currentUserId: String = "",
     onChatClick: (String) -> Unit,
     onBack: () -> Unit,
@@ -87,7 +95,15 @@ fun ChatListView(
 
     // --- NUEVO: ESTADO DE CARGA INTELIGENTE ---
     var minimumWaitDone by remember { mutableStateOf(false) }
-    
+
+    // --- 🏗️ SECCIÓN: LÓGICA DE ANIMACIÓN DE CABECERA (SCROLL) ---
+    val collapseFraction by remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f
+            else (listState.firstVisibleItemScrollOffset.toFloat() / 250f).coerceIn(0f, 1f)
+        }
+    }
+
     LaunchedEffect(Unit) {
         delay(1500) // Tiempo mínimo de animación premium
         minimumWaitDone = true
@@ -100,21 +116,21 @@ fun ChatListView(
             listState.animateScrollToItem(0)
         }
     }
-/**
+    /**
     // 🔥 LÓGICA DE CATEGORÍAS CONTEXTUALES ACTUALIZADA
     val dynamicCategoriesForPanel = remember(providersList) {
-        val extractedCategories = providersList.flatMap { it.categories }.distinct()
-        extractedCategories.map { catName ->
-            ControlItem(
-                label = catName,
-                icon = null,
-                emoji = getChatCategoryEmoji(catName),
-                color = getChatCategoryColor(catName),
-                id = "cat_${catName.lowercase()}"
-            )
-        }
+    val extractedCategories = providersList.flatMap { it.categories }.distinct()
+    extractedCategories.map { catName ->
+    ControlItem(
+    label = catName,
+    icon = null,
+    emoji = getChatCategoryEmoji(catName),
+    color = getChatCategoryColor(catName),
+    id = "cat_${catName.lowercase()}"
+    )
     }
-**/
+    }
+     **/
     // --- LÓGICA DE FILTRADO Y ORDENAMIENTO (ACTUALIZADA) ---
     val filteredProviders = remember(providersList, activeFilters, searchQuery, sortByUnread, unreadCounts) {
         val selectedCats = activeFilters.filter { it.startsWith("cat_") }.map { it.removePrefix("cat_").lowercase() }
@@ -127,7 +143,7 @@ fun ChatListView(
 
         if (sortByUnread) {
             baseList.sortedWith(compareByDescending<Provider> { provider ->
-                val chatId = "chat_${currentUserId}_${provider.id}"
+                val chatId = ChatIdHelper.generateChat(currentUserId, provider.id)
                 unreadCounts[chatId] ?: 0
             }.thenByDescending { it.createdAt })
         } else {
@@ -146,84 +162,33 @@ fun ChatListView(
             containerColor = Color.Transparent,
             topBar = {
                 if (!isSearchActive) {
-                    TopAppBar(
-                        title = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Message,
-                                    contentDescription = null,
-                                    tint = Color(0xFF2197F5),
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        "Conversaciones",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Black,
-                                        color = appColors.textPrimaryColor
-                                    )
-
-                                    val totalUnread = unreadCounts.values.sum()
-                                    if (totalUnread > 0) {
-                                        Spacer(modifier = Modifier.width(12.dp))
-
-                                        Text(
-                                            text = "Mensajes sin leer:",
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF10B981),
-                                            fontWeight = FontWeight.Bold
-                                        )
-
-                                        Spacer(modifier = Modifier.width(6.dp))
-
-                                        Surface(
-                                            onClick = { sortByUnread = !sortByUnread },
-                                            color = if (sortByUnread) Color(0xFF10B981) else Color(0xFF10B981).copy(alpha = 0.15f),
-                                            shape = RoundedCornerShape(12.dp),
-                                            border = if (sortByUnread) null else BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.5f)),
-                                            modifier = Modifier.animateContentSize()
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = totalUnread.toString(),
-                                                    fontSize = 12.sp,
-                                                    color = if (sortByUnread) Color.White else Color(0xFF10B981),
-                                                    fontWeight = FontWeight.Black
-                                                )
-                                                if (sortByUnread) {
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Icon(
-                                                        Icons.Default.FilterList,
-                                                        null,
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(14.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = appColors.textPrimaryColor) }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = appColors.surfaceColor.copy(alpha = 0.95f))
+                    val totalUnread = unreadCounts.values.sum()
+                    // ==========================================================================================
+                    // --- 🏗️ SECCIÓN: CABECERA DINÁMICA MAVERICK (REEMPLAZO DE TOPAPPBAR) ---
+                    // ==========================================================================================
+                    BarraCabezera(
+                        title = "Mensajes",
+                        subtitle = if (totalUnread > 0) "$totalUnread mensajes sin leer" else "Bandeja de Entrada",
+                        emoji = "💬",
+                        onBack = onBack,
+                        onInfoClick = { sortByUnread = !sortByUnread }, // Mantenemos lógica de ordenamiento táctico
+                        collapseFraction = collapseFraction,
+                        accentColor = Color(0xFF2197F5)
                     )
                 }
             }
-        ) { paddingValues ->
+        )
+{ paddingValues ->
+            val safePadding = PaddingValues(
+                start = paddingValues.calculateStartPadding(LocalLayoutDirection.current).coerceAtLeast(0.dp),
+                top = paddingValues.calculateTopPadding().coerceAtLeast(0.dp),
+                end = paddingValues.calculateEndPadding(LocalLayoutDirection.current).coerceAtLeast(0.dp),
+                bottom = paddingValues.calculateBottomPadding().coerceAtLeast(0.dp)
+            )
+
             if (showLoadingScreen) {
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
+                    modifier = Modifier.fillMaxSize().padding(safePadding),
                     contentAlignment = Alignment.Center
                 ) {
                     // Reemplazamos por el nuevo componente inmersivo de Be
@@ -235,7 +200,7 @@ fun ChatListView(
             } else if (filteredProviders.isEmpty()) {
 
                 Box(
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
+                    modifier = Modifier.fillMaxSize().padding(safePadding),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -255,19 +220,26 @@ fun ChatListView(
             } else {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().padding(paddingValues),
+                    modifier = Modifier.fillMaxSize().padding(safePadding),
                     contentPadding = PaddingValues(bottom = 120.dp)
                 ) {
                     items(filteredProviders, key = { it.id }) { provider ->
-                        val chatId = "chat_${currentUserId}_${provider.id}"
+                        val chatId = ChatIdHelper.generateChat(currentUserId, provider.id)
                         val unreadCount = unreadCounts[chatId] ?: 0
                         val isSelected = selectedChatIds.contains(provider.id)
 
+
+                        val chatLastMsg = lastMessages[chatId]
                         ChatListItem(
                             provider = provider,
                             unreadCount = unreadCount,
+                            lastMessage = chatLastMsg?.lastMessage,
+                            lastTimestamp = chatLastMsg?.lastTimestamp,
+                            isSentByMe = chatLastMsg?.lastSenderId == currentUserId,
                             isSelected = isSelected,
                             isMultiSelectMode = multiSelectEnabled,
+                            chatId = chatId,
+                            providerId = provider.id,
                             onClick = {
                                 if (multiSelectEnabled) {
                                     if (isSelected) selectedChatIds.remove(provider.id) else selectedChatIds.add(
@@ -308,26 +280,63 @@ fun ChatListView(
 fun ChatListItem(
     provider: Provider,
     unreadCount: Int,
+    lastMessage: String? = null,
+    lastTimestamp: Long? = null,
+    isSentByMe: Boolean = false,
     isSelected: Boolean,
     isMultiSelectMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onAvatarClick: () -> Unit
+    onAvatarClick: () -> Unit,
+    chatId: String = "",
+    providerId: String = ""
 ) {
     val defaultBackground = Brush.verticalGradient(listOf(Color(0xFF1A1F26), Color(0xFF05070A)))
     val selectedBackground = Brush.verticalGradient(listOf(Color(0xFF2197F5).copy(alpha = 0.2f), Color(0xFF05070A)))
     val fallbackAvatar = rememberVectorPainter(Icons.Default.Person)
     val mainCompany = provider.companies.firstOrNull()
 
+    val isProviderTyping by produceState(initialValue = false, chatId, providerId) {
+        if (chatId.isEmpty() || providerId.isEmpty()) return@produceState
+        val ref = FirebaseDatabase.getInstance().reference
+            .child("chats").child(chatId).child("typing").child(providerId)
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                value = snapshot.getValue(Boolean::class.java) ?: false
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                value = false
+            }
+        }
+        ref.addValueEventListener(listener)
+        awaitDispose { ref.removeEventListener(listener) }
+
+    }
+
+    val isProviderOnline by produceState(initialValue = false, provider.id) {
+        val ref = FirebaseDatabase.getInstance().reference
+            .child("users").child(provider.id).child("online")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) { value = snapshot.getValue(Boolean::class.java) ?: false }
+            override fun onCancelled(error: DatabaseError) { value = false }
+        }
+        ref.addValueEventListener(listener)
+        awaitDispose { ref.removeEventListener(listener) }
+    }
+
     Box(modifier = Modifier.fillMaxWidth().background(if (isSelected) selectedBackground else defaultBackground).combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(contentAlignment = Alignment.BottomEnd) {
-                AsyncImage(model = provider.photoUrl, contentDescription = null, fallback = fallbackAvatar, modifier = Modifier.size(56.dp).clip(CircleShape).border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape).clickable { onAvatarClick() }, contentScale = ContentScale.Crop)
+                ProviderPhoto(
+                    photoData = provider.photoUrl,
+                    modifier = Modifier.size(56.dp).clip(CircleShape).border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape).clickable { onAvatarClick() }
+                )
                 if (isMultiSelectMode) {
                     Box(modifier = Modifier.offset(x = 4.dp, y = 4.dp).size(20.dp).background(if (isSelected) Color(0xFF2197F5) else Color.Transparent, CircleShape).border(2.dp, Color(0xFF05070A), CircleShape), contentAlignment = Alignment.Center) {
                         if (isSelected) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
                     }
-                } else if (provider.isOnline) {
+                } else if (isProviderOnline) {
                     Box(modifier = Modifier.offset(x = (-2).dp, y = (-2).dp).size(14.dp).background(Color(0xFF00E676), CircleShape).border(2.dp, Color(0xFF05070A), CircleShape))
                 }
             }
@@ -337,7 +346,7 @@ fun ChatListItem(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text(text = provider.displayName, color = Color.White, fontSize = 16.sp, fontWeight = if (unreadCount > 0) FontWeight.Black else FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(text = formatDateShortChat(provider.createdAt), color = if (unreadCount > 0) Color(0xFF10B981) else Color.Gray, fontSize = 11.sp)
+                    Text(text = formatDateShortChat(lastTimestamp ?: provider.createdAt), color = if (unreadCount > 0) Color(0xFF10B981) else Color.Gray, fontSize = 11.sp)
                 }
 
                 if (mainCompany != null && mainCompany.name.isNotEmpty()) {
@@ -348,7 +357,18 @@ fun ChatListItem(
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     val categoryText = provider.categories.firstOrNull() ?: "Servicios"
-                    Text(text = if (unreadCount > 0) "¡El presupuesto ha sido enviado!" else "Chat de $categoryText", color = if (unreadCount > 0) Color.LightGray else Color.Gray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (isProviderTyping) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Chat, contentDescription = null, tint = Color(0xFF00E676), modifier = Modifier.size(12.dp))
+                            Text("escribiendo...", color = Color(0xFF00E676), fontSize = 12.sp, maxLines = 1)
+                        }
+                    } else {
+                        Text(text = lastMessage ?: "Chat de $categoryText", color = if (unreadCount > 0) Color.LightGray else Color.Gray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    }
 
                     if (unreadCount > 0) {
                         Surface(color = Color(0xFF10B981), shape = CircleShape, modifier = Modifier.defaultMinSize(minWidth = 20.dp).padding(start = 6.dp)) {
@@ -425,3 +445,4 @@ fun ChatListViewPreview() {
         )
     }
 }
+

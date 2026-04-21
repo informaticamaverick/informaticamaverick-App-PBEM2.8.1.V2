@@ -27,6 +27,7 @@ data class MessageEntity(
     // - LOCATION: Puede tener una descripción o dirección formateada.
     // - VISIT/BUDGET: Puede tener un resumen.
     val content: String,
+    val imageUrl: String? = null, // 🔥 [NUEVO] Ruta local de la imagen para evitar Base64 constante
     val latitude: Double? = null,
     val longitude: Double? = null,
     val locationAddress: String? = null,
@@ -36,16 +37,18 @@ data class MessageEntity(
     // 🔥 Campos de apoyo para mostrar info rápida sin consultar otra tabla (opcional pero útil)
     val appointmentDate: String? = null,
     val appointmentTime: String? = null,
+    val appointmentStatus: String? = null, // PENDING, ACCEPTED, REJECTED
 
     // --- METADATOS ---
     val timestamp: Long = System.currentTimeMillis(),
 
     // Estado del mensaje: SENT (Enviado), READ (Leído), ERROR
     val status: String = "SENT",
-    
+
     // 🔥 [NUEVO] Campo para saber si el mensaje fue leído por el usuario actual.
     // Por defecto, un mensaje nuevo llega como "no leído".
     val isRead: Boolean = false,
 
     val isSynced: Boolean = false
 )
+

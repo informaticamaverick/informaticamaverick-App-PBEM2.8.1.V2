@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -61,13 +62,14 @@ fun CrearLicScreen(
     beViewModel: BeBrainViewModel = hiltViewModel() // 🔥 Agregamos el Cerebro de Be
 ) {
     val userState by profileViewModel.userState.collectAsState()
-    val allCategories by categoryViewModel.categories.collectAsState()
+    //val allCategories by categoryViewModel.categories.collectAsState()
+    val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
 
     CrearLicContent(
         onBack = onBack,
         onSuccess = onSuccess,
         userState = userState,
-        allCategories = allCategories,
+        allCategories = categories,
         beViewModel = beViewModel, // 🔥 Pasamos el cerebro al contenido
         onCreateTender = { title, description, category, startDate, endDate, requiresVisit, requiresPayment, requiresGuarantee, requiresDoc, location, images ->
             budgetViewModel.createTender(
@@ -263,9 +265,18 @@ fun CrearLicUIContent(
             }
         }
     ) { paddingValues ->
+        val layoutDirection = LocalLayoutDirection.current
+        val safePadding = remember(paddingValues, layoutDirection) {
+            PaddingValues(
+                start = paddingValues.calculateStartPadding(layoutDirection).coerceAtLeast(0.dp),
+                top = paddingValues.calculateTopPadding().coerceAtLeast(0.dp),
+                end = paddingValues.calculateEndPadding(layoutDirection).coerceAtLeast(0.dp),
+                bottom = paddingValues.calculateBottomPadding().coerceAtLeast(0.dp)
+            )
+        }
         Column(
             modifier = Modifier
-                .padding(paddingValues)
+                .padding(safePadding)
                 .fillMaxSize()
                 //.padding(horizontal = 14.dp)
                 .verticalScroll(rememberScrollState())
@@ -996,9 +1007,8 @@ fun CrearLicScreenPreview() {
             CategoryEntity(
                 name = "Electricidad",
                 icon = "⚡",
-                color = 0xFFFAD2E1,
+                //color = 0xFFFAD2E1,
                 superCategory = "Hogar",
-                imageUrl = null,
                 isNew = false,
                 isNewPrestador = false,
                 isAd = false
@@ -1006,9 +1016,8 @@ fun CrearLicScreenPreview() {
             CategoryEntity(
                 name = "Plomería",
                 icon = "🪠",
-                color = 0xFFD4A5A5,
+               // color = 0xFFD4A5A5,
                 superCategory = "Hogar",
-                imageUrl = null,
                 isNew = false,
                 isNewPrestador = false,
                 isAd = false

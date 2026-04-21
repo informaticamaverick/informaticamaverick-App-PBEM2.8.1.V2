@@ -49,6 +49,10 @@ data class ProfileUiState(
     val rating: Float = 0f,
     val favoriteProviderIds: List<String> = emptyList(),
 
+    // --- GEOLOCALIZACIÓN ---
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+
     // --- ESTADOS DE CONTROL DE UI ---
     val isLoading: Boolean = false,
     val error: String? = null,

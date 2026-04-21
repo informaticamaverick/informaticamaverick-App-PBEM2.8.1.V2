@@ -20,10 +20,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -35,7 +39,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -58,7 +61,7 @@ import kotlinx.coroutines.launch
 
 // --- CONSTANTES DE ESTILO LOCALES ---
 val GeminiAccentLocal = Color(0xFFA78BFA)
-val BentoDarkGlassBackgroundLocal = Color(0xFF12121A).copy(alpha = 0.65f)
+// BentoDarkGlassBackgroundLocal eliminado por no usarse
 
 // -- MODELO PARA ANIMACIÓN DE ÓVALO --
 data class ActiveProfileInfo(
@@ -76,6 +79,8 @@ sealed class EditMode {
     data class PersonalAddress(val address: AddressClient?) : EditMode()
     data class Company(val company: CompanyClient) : EditMode()
     data class Branch(val company: CompanyClient, val branch: BranchClient?) : EditMode()
+    data class Email(val initialValue: String, val index: Int?) : EditMode()
+    data class Phone(val initialValue: String, val index: Int?) : EditMode()
 }
 
 
@@ -116,6 +121,19 @@ fun PerfilUsuarioScreen(
         beViewModel.setCustomActions(hydratedActions)
     }
 
+    // --- GESTIÓN DE SNACKBAR PARA FEEDBACK ---
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(uiState.successMessage, uiState.error) {
+        uiState.successMessage?.let {
+            snackbarHostState.showSnackbar(it, duration = SnackbarDuration.Short)
+            viewModel.clearMessages()
+        }
+        uiState.error?.let {
+            snackbarHostState.showSnackbar(it, duration = SnackbarDuration.Long)
+            viewModel.clearMessages()
+        }
+    }
+
     LaunchedEffect(Unit) {
         beViewModel.actionEvent.collect { actionId ->
             when (actionId) {
@@ -151,10 +169,17 @@ fun PerfilUsuarioScreen(
             CircularProgressIndicator(color = Color(0xFF007AFF))
         }
     } else {
+        // =================================================================================
+        // --- SECCIÓN: RENDERIZADO DE CONTENIDO PRINCIPAL ---
+        // =================================================================================
         PerfilUsuarioContent(
             user = currentUser,
             isEditMode = uiState.isEditMode,
             uiState = uiState,
+            // [MODIFICADO] Pull-to-Refresh Inteligente:
+            // Solo sincroniza con Firebase si el flag 'isSynced' es falso en el ViewModel.
+            // Si está sincronizado, simplemente refresca la vista local ahorrando datos/lecturas.
+            onRefresh = { viewModel.refreshData(forceRemote = false) },
             onNavigateBack = onNavigateBack,
             onLogout = { viewModel.logout(); onLogout() },
             onEditRequest = { editMode = it },
@@ -169,7 +194,10 @@ fun PerfilUsuarioScreen(
             onBioChange = { viewModel.onBioChange(it) },
             onUpdatePersonalAddresses = { viewModel.updatePersonalAddresses(it) },
             onUpdateCompanies = { viewModel.updateCompanies(it) },
-            onRequestDelete = requestDelete
+            onUpdateEmails = { viewModel.updateAdditionalEmails(it) },
+            onUpdatePhones = { viewModel.updateAdditionalPhones(it) },
+            onRequestDelete = requestDelete,
+            snackbarHostState = snackbarHostState
         )
     }
 
@@ -293,19 +321,50 @@ fun PerfilUsuarioScreen(
                         onClose = { editMode = EditMode.None }
                     )
                 }
+                is EditMode.Email -> {
+                    EditSingleContactSheetContent(
+                        initialValue = mode.initialValue,
+                        title = if (mode.index == null) "Nuevo Email" else "Editar Email",
+                        emoji = "📧",
+                        label = "Correo Electrónico",
+                        onSave = { updated ->
+                            val current = uiState.additionalEmails.toMutableList()
+                            if (mode.index != null) current[mode.index] = updated else current.add(updated)
+                            viewModel.updateAdditionalEmails(current)
+                            editMode = EditMode.None
+                        },
+                        onClose = { editMode = EditMode.None }
+                    )
+                }
+                is EditMode.Phone -> {
+                    EditSingleContactSheetContent(
+                        initialValue = mode.initialValue,
+                        title = if (mode.index == null) "Nuevo Teléfono" else "Editar Teléfono",
+                        emoji = "📱",
+                        label = "Número de Teléfono",
+                        onSave = { updated ->
+                            val current = uiState.additionalPhones.toMutableList()
+                            if (mode.index != null) current[mode.index] = updated else current.add(updated)
+                            viewModel.updateAdditionalPhones(current)
+                            editMode = EditMode.None
+                        },
+                        onClose = { editMode = EditMode.None }
+                    )
+                }
                 else -> {}
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun PerfilUsuarioContent(
     user: UserEntity,
     isEditMode: Boolean,
     uiState: ProfileUiState,
+    onRefresh: () -> Unit, // [NUEVO] Callback para actualización forzada
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
     onEditRequest: (EditMode) -> Unit,
@@ -320,21 +379,33 @@ fun PerfilUsuarioContent(
     onBioChange: (String) -> Unit,
     onUpdatePersonalAddresses: (List<AddressClient>) -> Unit,
     onUpdateCompanies: (List<CompanyClient>) -> Unit,
-    onRequestDelete: (String, String, () -> Unit) -> Unit
+    onUpdateEmails: (List<String>) -> Unit,
+    onUpdatePhones: (List<String>) -> Unit,
+    onRequestDelete: (String, String, () -> Unit) -> Unit,
+    snackbarHostState: SnackbarHostState
 ) {
     val scrollState = rememberScrollState()
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
 
-    val companiesList = if (isEditMode) uiState.companies else user.companies
+    val companiesList = uiState.companies
     val totalPages = 1 + companiesList.size
     val pagerState = rememberPagerState(pageCount = { totalPages })
     val coroutineScope = rememberCoroutineScope()
 
-    val userPhoto = if (isEditMode) uiState.photoUrl else user.photoUrl
+    val userPhoto = uiState.photoUrl
+
+    // Sincronización de UI post-guardado
+    LaunchedEffect(uiState.isEditMode) {
+        if (!uiState.isEditMode) {
+            if (pagerState.currentPage >= totalPages) {
+                coroutineScope.launch { pagerState.animateScrollToPage(0) }
+            }
+        }
+    }
 
     // Información del perfil activo para el Header
-    val currentActiveInfo = remember(pagerState.currentPage, companiesList, user, uiState.displayName, userPhoto) {
+    val currentActiveInfo = remember(pagerState.currentPage, companiesList, uiState.displayName, userPhoto) {
         if (pagerState.currentPage > 0 && pagerState.currentPage <= companiesList.size) {
             val company = companiesList[pagerState.currentPage - 1]
             ActiveProfileInfo(
@@ -347,8 +418,8 @@ fun PerfilUsuarioContent(
             ActiveProfileInfo(
                 id = 0,
                 photo = userPhoto,
-                title = if (isEditMode) uiState.displayName.ifEmpty { "${uiState.name} ${uiState.lastName}" } else user.fullName,
-                subtitle = if (isEditMode) uiState.email else user.email
+                title = uiState.displayName.ifEmpty { "${uiState.name} ${uiState.lastName}" },
+                subtitle = uiState.email
             )
         }
     }
@@ -371,7 +442,7 @@ fun PerfilUsuarioContent(
     val currentBannerUrl = if (pagerState.currentPage > 0 && pagerState.currentPage <= companiesList.size) {
         companiesList[pagerState.currentPage - 1].bannerImageUrl
     } else {
-        if (isEditMode) uiState.coverPhotoUrl else user.bannerImageUrl
+        uiState.coverPhotoUrl
     }
 
     // Dimensiones dinámicas para el Header colapsable
@@ -379,205 +450,238 @@ fun PerfilUsuarioContent(
     val headerMinHeight = 140.dp
     val density = LocalDensity.current
     val maxScroll = with(density) { (headerMaxHeight - headerMinHeight).toPx() }
-    val collapseFraction = (scrollState.value.toFloat() / maxScroll).coerceIn(0f, 1f)
+    
+    // [CORRECCIÓN] Uso de derivedStateOf para optimizar lecturas de scrollState que cambia frecuentemente
+    val collapseFraction by remember {
+        derivedStateOf { (scrollState.value.toFloat() / maxScroll).coerceIn(0f, 1f) }
+    }
 
     val headerHeight by animateDpAsState(targetValue = headerMaxHeight - (headerMaxHeight - headerMinHeight) * collapseFraction)
     val avatarSize by animateDpAsState(targetValue = 90.dp - (35.dp * collapseFraction))
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0F))) {
+    val pullToRefreshState = rememberPullToRefreshState() // [CORRECCIÓN] Estado para PullToRefresh
 
-        // --- CONTENIDO SCROLLABLE ---
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-        ) {
-            Spacer(modifier = Modifier.height(headerMaxHeight))
-
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = screenHeight),
-                verticalAlignment = Alignment.Top
-            ) { page ->
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    if (page == 0) PersonalM3Section(
-                        user = user,
-                        isEditMode = isEditMode,
-                        uiState = uiState,
-                        onEditRequest = onEditRequest,
-                        onDisplayNameChange = onDisplayNameChange,
-                        onNameChange = onNameChange,
-                        onLastNameChange = onLastNameChange,
-                        onPhoneNumberChange = onPhoneNumberChange,
-                        onBioChange = onBioChange,
-                        onUpdatePersonalAddresses = onUpdatePersonalAddresses,
-                        onRequestDelete = onRequestDelete
-                    )
-                    else if (page <= companiesList.size) BusinessM3Section(
-                        company = companiesList[page - 1],
-                        isEditMode = isEditMode,
-                        uiState = uiState,
-                        onEditRequest = onEditRequest,
-                        onUpdateCompanies = onUpdateCompanies,
-                        onRequestDelete = onRequestDelete
-                    )
-                }
-            }
-
-            if (!isEditMode) {
-                Spacer(modifier = Modifier.height(24.dp))
-                BentoActionButtonLocal(
-                    text = "Cerrar Sesión",
-                    emoji = "🚪",
-                    color = Color(0xFFEF4444),
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    onClick = onLogout
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = Color.Transparent
+    ) { paddingValues ->
+        // --- SECCIÓN: PULL TO REFRESH (Estilo Instagram) ---
+        // Envuelve todo el contenido para permitir la actualización al deslizar hacia abajo
+        PullToRefreshBox(
+            state = pullToRefreshState,
+            isRefreshing = uiState.isLoading,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize().padding(paddingValues),
+            // Indicador de carga estilizado para el tema oscuro
+            indicator = {
+                PullToRefreshDefaults.Indicator(
+                    state = pullToRefreshState,
+                    isRefreshing = uiState.isLoading,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    containerColor = Color(0xFF1A1A24),
+                    color = GeminiAccentLocal
                 )
             }
-            Spacer(modifier = Modifier.height(100.dp))
-        }
-
-        // --- HEADER DINÁMICO ---
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(headerHeight)
-                .zIndex(10f)
         ) {
-            AsyncImage(
-                model = currentBannerUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(enabled = isEditMode) {
-                        if (pagerState.currentPage == 0) onEditUserBanner()
-                        else onEditCompanyBanner(companiesList[pagerState.currentPage - 1].id)
-                    },
-                error = painterResource(id = R.drawable.ic_launcher_background)
-            )
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0F))) {
 
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.8f))
-                        )
-                    )
-            )
-
-            // Icono Eliminar Empresa en Banner
-            if (isEditMode && pagerState.currentPage > 0 && pagerState.currentPage <= companiesList.size) {
-                val currentComp = companiesList[pagerState.currentPage - 1]
-                IconButton(
-                    onClick = {
-                        onRequestDelete("Eliminar Empresa", "¿Deseas eliminar '${currentComp.name}' y todas sus sucursales?") {
-                            val newList = uiState.companies.filter { it.id != currentComp.id }
-                            onUpdateCompanies(newList)
-                            coroutineScope.launch { pagerState.animateScrollToPage(0) }
-                        }
-                    },
+                // --- CONTENIDO SCROLLABLE ---
+                Column(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 45.dp, end = 12.dp)
-                        .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                        .fillMaxSize()
+                        .verticalScroll(scrollState)
                 ) {
-                    Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.8f))
-                }
-            }
+                    Spacer(modifier = Modifier.height(headerMaxHeight))
 
-            // --- CONTENIDO DEL HEADER (ORGANIZADO VERTICALMENTE) ---
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp)
-            ) {
-                // 1. INFO PERFIL ACTIVO
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(avatarSize)
-                            .shadow(12.dp, CircleShape)
-                            .clip(CircleShape)
-                            .border(2.5.dp, Color.White, CircleShape)
-                            .background(Color.Black.copy(alpha = 0.5f))
-                            .clickable(enabled = isEditMode) {
-                                if (pagerState.currentPage == 0) onEditUserAvatar()
-                                else onEditCompanyAvatar(companiesList[pagerState.currentPage - 1].id)
-                            }
-                    ) {
-                        AsyncImage(
-                            model = currentActiveInfo.photo,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                            error = painterResource(id = R.drawable.ic_launcher_foreground)
-                        )
-                    }
-
-                    Spacer(Modifier.width(16.dp))
-
-                    Column {
-                        Text(
-                            text = currentActiveInfo.title,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = currentActiveInfo.subtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                // 2. BURBUJAS DE PERFILES
-                AnimatedVisibility(
-                    visible = collapseFraction < 0.5f,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(end = 20.dp, top = 16.dp)
-                ) {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        items(displayBubbles, key = { it.first }) { item ->
-                            BubbleItem(
-                                photoUrl = item.second,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(item.first)
-                                    }
-                                },
-                                modifier = Modifier.size(42.dp).animateItem()
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = screenHeight),
+                        verticalAlignment = Alignment.Top
+                    ) { page ->
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            if (page == 0) PersonalM3Section(
+                                user = user,
+                                isEditMode = isEditMode,
+                                uiState = uiState,
+                                onEditRequest = onEditRequest,
+                                onDisplayNameChange = onDisplayNameChange,
+                                onNameChange = onNameChange,
+                                onLastNameChange = onLastNameChange,
+                                onPhoneNumberChange = onPhoneNumberChange,
+                                onBioChange = onBioChange,
+                                onUpdatePersonalAddresses = onUpdatePersonalAddresses,
+                                onUpdateEmails = onUpdateEmails,
+                                onUpdatePhones = onUpdatePhones,
+                                onRequestDelete = onRequestDelete
+                            )
+                            else if (page <= companiesList.size) BusinessM3Section(
+                                company = companiesList[page - 1],
+                                isEditMode = isEditMode,
+                                uiState = uiState,
+                                onEditRequest = onEditRequest,
+                                onUpdateCompanies = onUpdateCompanies,
+                                onRequestDelete = onRequestDelete
                             )
                         }
                     }
-                }
-            }
 
-            IconButton(
-                onClick = onNavigateBack,
-                modifier = Modifier.padding(top = 45.dp, start = 12.dp)
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+                    if (!isEditMode) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        BentoActionButtonLocal(
+                            text = "Cerrar Sesión",
+                            emoji = "🚪",
+                            color = Color(0xFFEF4444),
+                            modifier = Modifier.padding(horizontal = 24.dp),
+                            onClick = onLogout
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(100.dp))
+                }
+
+                // --- HEADER DINÁMICO ---
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(headerHeight)
+                        .zIndex(10f)
+                ) {
+                    AsyncImage(
+                        model = currentBannerUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(enabled = isEditMode) {
+                                if (pagerState.currentPage == 0) onEditUserBanner()
+                                else onEditCompanyBanner(companiesList[pagerState.currentPage - 1].id)
+                            },
+                        error = painterResource(id = R.drawable.ic_launcher_background)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.8f))
+                                )
+                            )
+                    )
+
+                    // Icono Eliminar Empresa en Banner
+                    if (isEditMode && pagerState.currentPage > 0 && pagerState.currentPage <= companiesList.size) {
+                        val currentComp = companiesList[pagerState.currentPage - 1]
+                        IconButton(
+                            onClick = {
+                                onRequestDelete("Eliminar Empresa", "¿Deseas eliminar '${currentComp.name}' y todas sus sucursales?") {
+                                    val newList = uiState.companies.filter { it.id != currentComp.id }
+                                    onUpdateCompanies(newList)
+                                    coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                }
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 45.dp, end = 12.dp)
+                                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                        ) {
+                            Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.8f))
+                        }
+                    }
+
+                    // --- CONTENIDO DEL HEADER (ORGANIZADO VERTICALMENTE) ---
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .padding(bottom = 24.dp)
+                    ) {
+                        // 1. INFO PERFIL ACTIVO
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 20.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(avatarSize)
+                                    .shadow(12.dp, CircleShape)
+                                    .clip(CircleShape)
+                                    .border(2.5.dp, Color.White, CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .clickable(enabled = isEditMode) {
+                                        if (pagerState.currentPage == 0) onEditUserAvatar()
+                                        else onEditCompanyAvatar(companiesList[pagerState.currentPage - 1].id)
+                                    }
+                            ) {
+                                AsyncImage(
+                                    model = currentActiveInfo.photo,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                    error = painterResource(id = R.drawable.ic_launcher_foreground)
+                                )
+                            }
+
+                            Spacer(Modifier.width(16.dp))
+
+                            Column {
+                                Text(
+                                    text = currentActiveInfo.title,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = currentActiveInfo.subtitle,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        // 2. BURBUJAS DE PERFILES
+                        AnimatedVisibility(
+                            visible = collapseFraction < 0.5f,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically(),
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(end = 20.dp, top = 16.dp)
+                        ) {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                items(displayBubbles, key = { it.first }) { item ->
+                                    BubbleItem(
+                                        photoUrl = item.second,
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                pagerState.animateScrollToPage(item.first)
+                                            }
+                                        },
+                                        modifier = Modifier.size(42.dp).animateItem()
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.padding(top = 45.dp, start = 12.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+                    }
+                }
             }
         }
     }
 }
+
 
 @Composable
 fun BubbleItem(photoUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -614,6 +718,8 @@ fun PersonalM3Section(
     onPhoneNumberChange: (String) -> Unit,
     onBioChange: (String) -> Unit,
     onUpdatePersonalAddresses: (List<AddressClient>) -> Unit,
+    onUpdateEmails: (List<String>) -> Unit,
+    onUpdatePhones: (List<String>) -> Unit,
     onRequestDelete: (String, String, () -> Unit) -> Unit
 ) {
     val context = LocalContext.current
@@ -646,11 +752,11 @@ fun PersonalM3Section(
                     onValueChange = onLastNameChange
                 )
                 
-                // Emails Section
+                // --- SECCIÓN DE EMAILS ---
                 val primaryEmail = if (isEditMode) uiState.email else user.email
                 ProfileDataFieldItem(
                     emoji = "📧", 
-                    label = "CORREO ELECTRÓNICO", 
+                    label = "CORREO ELECTRÓNICO (PRINCIPAL)", 
                     value = primaryEmail,
                     isEditMode = isEditMode,
                     onValueChange = {},
@@ -658,20 +764,91 @@ fun PersonalM3Section(
                     isGoogleAccount = primaryEmail.endsWith("@gmail.com") || primaryEmail.endsWith("@google.com"),
                     trailingIcon = if (isEditMode) {
                         {
-                            IconButton(onClick = { /* Acción para agregar email secundario */ }) {
+                            IconButton(onClick = { onEditRequest(EditMode.Email("", null)) }) {
                                 Icon(Icons.Default.Add, null, tint = GeminiAccentLocal)
                             }
                         }
                     } else null
                 )
 
+                // Emails adicionales
+                val additionalEmails = if (isEditMode) uiState.additionalEmails else user.additionalEmails
+                additionalEmails.forEachIndexed { index, email ->
+                    ProfileDataFieldItem(
+                        emoji = "📧",
+                        label = "EMAIL ADICIONAL",
+                        value = email,
+                        isEditMode = isEditMode,
+                        onValueChange = { /* No se usa aquí, abrimos el sheet */ },
+                        readOnly = true,
+                        trailingIcon = if (isEditMode) {
+                            {
+                                Row {
+                                    IconButton(onClick = { onEditRequest(EditMode.Email(email, index)) }) {
+                                        Icon(Icons.Default.Edit, null, tint = GeminiAccentLocal, modifier = Modifier.size(18.dp))
+                                    }
+                                    IconButton(onClick = {
+                                        onRequestDelete("Eliminar Email", "¿Deseas eliminar este correo electrónico?") {
+                                            val newList = uiState.additionalEmails.toMutableList()
+                                            newList.removeAt(index)
+                                            onUpdateEmails(newList)
+                                        }
+                                    }) {
+                                        Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        } else null
+                    )
+                }
+
+                // --- SECCIÓN DE TELÉFONOS ---
                 ProfileDataFieldItem(
                     emoji = "📱", 
-                    label = "TELÉFONO", 
+                    label = "TELÉFONO (PRINCIPAL)", 
                     value = if (isEditMode) uiState.phoneNumber else user.phoneNumber,
                     isEditMode = isEditMode,
-                    onValueChange = onPhoneNumberChange
+                    onValueChange = onPhoneNumberChange,
+                    trailingIcon = if (isEditMode) {
+                        {
+                            IconButton(onClick = { onEditRequest(EditMode.Phone("", null)) }) {
+                                Icon(Icons.Default.Add, null, tint = GeminiAccentLocal)
+                            }
+                        }
+                    } else null
                 )
+
+                // Teléfonos adicionales
+                val additionalPhones = if (isEditMode) uiState.additionalPhones else user.additionalPhones
+                additionalPhones.forEachIndexed { index, phone ->
+                    ProfileDataFieldItem(
+                        emoji = "📱",
+                        label = "TELÉFONO ADICIONAL",
+                        value = phone,
+                        isEditMode = isEditMode,
+                        onValueChange = { /* No se usa aquí, abrimos el sheet */ },
+                        readOnly = true,
+                        trailingIcon = if (isEditMode) {
+                            {
+                                Row {
+                                    IconButton(onClick = { onEditRequest(EditMode.Phone(phone, index)) }) {
+                                        Icon(Icons.Default.Edit, null, tint = GeminiAccentLocal, modifier = Modifier.size(18.dp))
+                                    }
+                                    IconButton(onClick = {
+                                        onRequestDelete("Eliminar Teléfono", "¿Deseas eliminar este número de teléfono?") {
+                                            val newList = uiState.additionalPhones.toMutableList()
+                                            newList.removeAt(index)
+                                            onUpdatePhones(newList)
+                                        }
+                                    }) {
+                                        Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        } else null
+                    )
+                }
+
                 ProfileDataFieldItem(
                     emoji = "📝", 
                     label = "BIOGRAFÍA", 
@@ -701,7 +878,8 @@ fun PersonalM3Section(
                 val addresses = if (isEditMode) uiState.personalAddresses else user.personalAddresses
                 if (addresses.isNotEmpty()) {
                     addresses.forEach { addr ->
-                        AddressDisplayCardLocal(
+                        // --- [MODIFICADO] Usando nueva tarjeta estilo Maps Android 16 ---
+                        MapsStyleAddressCardLocal(
                             address = addr,
                             isEditMode = isEditMode,
                             onEdit = { onEditRequest(EditMode.PersonalAddress(addr)) },
@@ -712,7 +890,7 @@ fun PersonalM3Section(
                                     onUpdatePersonalAddresses(current)
                                 }
                             },
-                            onClick = {
+                            onMapsClick = {
                                 try {
                                     val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(addr.fullString())}")
                                     val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
@@ -900,32 +1078,21 @@ fun BusinessM3Section(
                             
                             Spacer(modifier = Modifier.height(12.dp))
                             
-                            // Dirección Clickable
-                            Surface(
-                                onClick = {
-                                    if (isEditMode) {
-                                        onEditRequest(EditMode.BranchAddress(company, branch, branch.address))
-                                    } else {
-                                        try {
-                                            val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(branch.address.fullString())}")
-                                            val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                                            context.startActivity(mapIntent)
-                                        } catch (e: Exception) {}
-                                    }
+                            // --- [MODIFICADO] Usando nueva tarjeta estilo Maps Android 16 para sucursales ---
+                            MapsStyleAddressCardLocal(
+                                address = branch.address,
+                                isEditMode = isEditMode,
+                                onEdit = { onEditRequest(EditMode.BranchAddress(company, branch, branch.address)) },
+                                onDelete = {}, // No se usa borrar individual desde aquí
+                                onMapsClick = {
+                                    try {
+                                        val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(branch.address.fullString())}")
+                                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                                        context.startActivity(mapIntent)
+                                    } catch (e: Exception) {}
                                 },
-                                shape = RoundedCornerShape(12.dp),
-                                color = Color.Black.copy(alpha = 0.3f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("📍", fontSize = 18.sp)
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(branch.address.fullString().ifEmpty { "Añadir dirección" }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color.White)
-                                        Text(if(isEditMode) "Toca para editar" else "Abrir mapas", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-                                    }
-                                }
-                            }
+                                hideDelete = true
+                            )
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = Color.White.copy(alpha = 0.05f))
 
@@ -1048,16 +1215,21 @@ fun ProfileDataFieldItem(
 
     Row(modifier = Modifier.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.05f)), contentAlignment = Alignment.Center) {
-            Text(emoji, fontSize = 18.sp)
+            if (isGoogleAccount) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_google_logo),
+                    contentDescription = null,
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Text(emoji, fontSize = 18.sp)
+            }
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
-                if (isGoogleAccount) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(painter = painterResource(R.drawable.ic_google_logo), contentDescription = "Google Account", tint = Color.Unspecified, modifier = Modifier.size(12.dp))
-                }
             }
             if (isEditMode && !readOnly) {
                 BasicTextField(
@@ -1086,41 +1258,129 @@ fun ProfileDataFieldItem(
     }
 }
 
+/**
+ * [NUEVO] Tarjeta de Dirección estilo Google Maps para Perfil Usuario (Android 16 Concept)
+ */
 @Composable
-fun AddressDisplayCardLocal(
+fun MapsStyleAddressCardLocal(
     address: AddressClient,
     isEditMode: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onClick: () -> Unit
+    onMapsClick: () -> Unit,
+    hideDelete: Boolean = false
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
+    val rotation by animateFloatAsState(if (isExpanded) 180f else 0f)
+
     Surface(
-        onClick = if (isEditMode) onEdit else onClick,
-        shape = RoundedCornerShape(12.dp),
+        onClick = if (isEditMode) onEdit else { {} },
         color = Color.Black.copy(alpha = 0.3f),
-        modifier = Modifier.fillMaxWidth()
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().animateContentSize()
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            val emoji = address.label.split(" ").firstOrNull()?.let { 
-                if (it.isNotEmpty() && it[0].isSurrogate()) it else "📍" 
-            } ?: "📍"
-            Text(emoji, fontSize = 24.sp)
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                if (address.label.isNotBlank()) {
-                    Text(address.label.uppercase(), style = MaterialTheme.typography.labelSmall, color = GeminiAccentLocal, fontWeight = FontWeight.Bold)
-                } else {
-                    Text("DIRECCIÓN", style = MaterialTheme.typography.labelSmall, color = GeminiAccentLocal, fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val emoji = address.label.split(" ").firstOrNull()?.let { 
+                    if (it.isNotEmpty() && it[0].isSurrogate()) it else "📍" 
+                } ?: "📍"
+                
+                Box(
+                    modifier = Modifier.size(44.dp).clip(CircleShape).background(GeminiAccentLocal.copy(0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(emoji, fontSize = 22.sp)
                 }
-                Text(address.fullString(), fontWeight = FontWeight.Bold, color = Color.White)
-                Text(if(isEditMode) "Toca para editar" else "Toca para abrir en Google Maps", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                
+                Spacer(Modifier.width(14.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    if (address.label.isNotBlank()) {
+                        Text(address.label.uppercase(), style = MaterialTheme.typography.labelSmall, color = GeminiAccentLocal, fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        text = "${address.calle} ${address.numero}",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        text = address.localidad,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
+                }
+
+                if (isEditMode && !hideDelete) {
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                    }
+                } else {
+                    IconButton(onClick = { isExpanded = !isExpanded }) {
+                        Icon(
+                            imageVector = Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            tint = Color.Gray,
+                            modifier = Modifier.rotate(rotation)
+                        )
+                    }
+                }
             }
-            if (isEditMode) {
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.6f))
+
+            if (isExpanded && !isEditMode) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = Color.White.copy(0.05f))
+                Spacer(Modifier.height(16.dp))
+                
+                DetailRowLocal("País", address.pais.ifEmpty { "Argentina" })
+                DetailRowLocal("Ciudad", address.localidad)
+                DetailRowLocal("Provincia", address.provincia)
+                DetailRowLocal("Cód. Postal", address.codigoPostal)
+                
+                // [CORRECCIÓN] Se eliminan checks nulos en Double (siempre son true)
+                // Se verifica que no sean el valor por defecto si se desea filtrar
+                if (address.latitude != 0.0 || address.longitude != 0.0) {
+                    Spacer(Modifier.height(12.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().background(Color.White.copy(0.03f), RoundedCornerShape(8.dp)).padding(10.dp)
+                    ) {
+                        Column {
+                            Text("COORDENADAS GPS", fontSize = 9.sp, fontWeight = FontWeight.Black, color = GeminiAccentLocal, letterSpacing = 1.sp)
+                            Text(
+                                text = "LAT: ${address.latitude} | LON: ${address.longitude}",
+                                fontSize = 11.sp,
+                                color = Color.White.copy(0.6f),
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onMapsClick,
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(0.05f)),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(0.1f))
+                ) {
+                    Icon(Icons.Default.Map, null, modifier = Modifier.size(16.dp), tint = Color.White)
+                    Spacer(Modifier.width(8.dp))
+                    Text("ABRIR EN MAPS", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DetailRowLocal(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, fontSize = 12.sp, color = Color.Gray)
+        Text(value, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -1211,6 +1471,7 @@ fun PerfilUsuarioScreenPreview() {
             user = sampleUser,
             isEditMode = sampleUiState.isEditMode,
             uiState = sampleUiState,
+            onRefresh = {},
             onNavigateBack = {},
             onLogout = {},
             onEditRequest = {},
@@ -1225,7 +1486,10 @@ fun PerfilUsuarioScreenPreview() {
             onBioChange = {},
             onUpdatePersonalAddresses = {},
             onUpdateCompanies = {},
-            onRequestDelete = { _, _, _ -> }
+            onUpdateEmails = {},
+            onUpdatePhones = {},
+            onRequestDelete = { _, _, _ -> },
+            snackbarHostState = SnackbarHostState()
         )
     }
 }

@@ -11,6 +11,10 @@ import com.example.myapplication.data.local.UserDao
 import com.example.myapplication.data.repository.CategoryRepository
 import com.example.myapplication.data.repository.ChatRepository
 import com.example.myapplication.data.repository.ProviderRepository
+import com.example.myapplication.presentation.util.NotificationHelper
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,13 +26,21 @@ import kotlinx.coroutines.SupervisorJob
 import javax.inject.Singleton
 
 /**
- * MÓDULO DE INYECCIÓN DE DEPENDENCIAS (AppModule)
- * * Este archivo le dice a Hilt cómo crear las instancias de la base de datos y los DAOs.
- * [CORREGIDO] Se actualizó provideChatRepository para incluir BudgetDao.
+ * ==========================================================
+ * SECCIÓN 1: MÓDULO DE INYECCIÓN DE DEPENDENCIAS (AppModule)
+ * ==========================================================
+ * Este archivo gestiona la creación y provisión de dependencias
+ * de la base de datos local (Room) y los repositorios de la app.
+ * 
+ * Estrategia: Zero Cost (Sin Firebase Storage, uso de RTDB para Base64).
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+
+    // ----------------------------------------------------------
+    // SECCIÓN 2: PROVEEDORES DE BASE DE DATOS Y DAOs
+    // ----------------------------------------------------------
 
     @Provides
     @Singleton
@@ -36,8 +48,6 @@ object AppModule {
         val dbScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         return AppDatabase.getDatabase(context, dbScope)
     }
-
-    // --- PROVEEDORES DE DAOs ---
 
     @Provides
     @Singleton
@@ -55,7 +65,6 @@ object AppModule {
     @Singleton
     fun provideChatDao(db: AppDatabase): ChatDao = db.chatDao()
 
-    // 🔥 AGREGUÉ @Singleton AQUÍ PARA MEJOR RENDIMIENTO
     @Provides
     @Singleton
     fun provideBudgetDao(database: AppDatabase): BudgetDao {
@@ -63,36 +72,61 @@ object AppModule {
     }
 
     @Provides
+    @Singleton
     fun provideCalendarDao(database: AppDatabase): CalendarDao {
         return database.calendarDao()
     }
 
-    // --- PROVEEDORES DE REPOSITORIOS ---
+    // ----------------------------------------------------------
+    // SECCIÓN 3: PROVEEDORES DE REPOSITORIOS Y UTILIDADES
+    // ----------------------------------------------------------
 
     @Provides
     @Singleton
-    fun provideProviderRepository(dao: ProviderDao): ProviderRepository {
-        return ProviderRepository(dao)
+    fun provideProviderRepository(dao: ProviderDao, firestore: FirebaseFirestore): ProviderRepository {
+        return ProviderRepository(dao, firestore)
     }
 
     @Provides
     @Singleton
-    fun provideCategoryRepository(dao: CategoryDao): CategoryRepository {
-        return CategoryRepository(dao)
+    fun provideCategoryRepository(
+        dao: CategoryDao,
+        firestore: FirebaseFirestore,
+        @ApplicationContext context: Context
+    ): CategoryRepository {
+        return CategoryRepository(dao, firestore, context)
     }
 
-    // 🔥🔥 AQUÍ ESTABA EL ERROR 🔥🔥
-    // Ahora le pedimos a Hilt que nos traiga AMBOS Daos
+    @Provides
+    @Singleton
+    fun provideNotificationHelper(@ApplicationContext context: Context): NotificationHelper {
+        return NotificationHelper(context)
+    }
+
+    /**
+     * Provee la instancia de ChatRepository.
+     * [ACTUALIZADO] Se eliminó FirebaseStorage para cumplir con la estrategia "Zero Cost".
+     * Se sincronizó con los parámetros requeridos por el constructor del repositorio.
+     */
     @Provides
     @Singleton
     fun provideChatRepository(
         chatDao: ChatDao,
-        budgetDao: BudgetDao // <--- NUEVO PARÁMETRO
+        budgetDao: BudgetDao,
+        firestore: FirebaseFirestore,
+        database: FirebaseDatabase,
+        auth: FirebaseAuth,
+        @ApplicationContext context: Context,
+        notificationHelper: NotificationHelper
     ): ChatRepository {
-        // Y se los pasamos al constructor del repositorio
-        return ChatRepository(chatDao, budgetDao)
+        return ChatRepository(
+            chatDao = chatDao,
+            budgetDao = budgetDao,
+            firestore = firestore,
+            database = database,
+            auth = auth,
+            context = context,
+            notificationHelper = notificationHelper
+        )
     }
-
-
 }
-

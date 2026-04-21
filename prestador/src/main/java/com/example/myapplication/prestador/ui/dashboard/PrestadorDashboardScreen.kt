@@ -1,10 +1,10 @@
 package com.example.myapplication.prestador.ui.dashboard
 
-import android.provider.CalendarContract
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Modifier
@@ -25,36 +26,93 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.prestador.ui.chat.PrestadorChatScreen
 import com.example.myapplication.prestador.ui.calendar.PrestadorCalendarScreen
+import com.example.myapplication.prestador.ui.presupuesto.PresupuestosScreen
+import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import com.example.myapplication.prestador.viewmodel.NotificacionesViewModel
+import com.example.myapplication.prestador.ui.notifications.NotificacionesScreen
+import com.example.myapplication.prestador.viewmodel.ChatViewModel
+
 
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun PreviewDashboard() {
-    MaterialTheme {
-        PrestadorDashboardScreen(
-            onNavigateToEditProfile = {},
-            onNavigateToServiceConfig = {},
-            onLogout = {}
-        )
-    }
+    // Preview sin ViewModel (no es posible testearlo con Hilt)
+    // MaterialTheme {
+    //     PrestadorDashboardScreen(...)
+    // }
 }
 
 @Composable
 fun PrestadorDashboardScreen(
     onNavigateToEditProfile: () -> Unit = {},
     onNavigateToServiceConfig: () -> Unit = {},
-    onLogout: () -> Unit = {}, // Nuevo parametro
-    onNavigateToPresupuesto: () -> Unit = {}
+    onLogout: () -> Unit = {},
+    onNavigateToPresupuesto: () -> Unit = {},
+    onNavigateToPresupuestoCita: (appointmentId: String) -> Unit = {},
+    onNavigateToPresupuestos: () -> Unit = {},
+    onNavigateToPromotion: () -> Unit = {},
+    onNavigateToPromotionList: () -> Unit = {},
+    onNavigateToThemeDemo: () -> Unit = {},
+  //  fastSimulationViewModel: com.example.myapplication.prestador.viewmodel.FastSimulationViewModel = hiltViewModel(),
+    notificacionesViewModel: NotificacionesViewModel = hiltViewModel(),
+    chatViewModel: ChatViewModel = hiltViewModel(),
+    onNavigateToClientePerfil: (clientId: String) -> Unit = {},
 ) {
-    var selectedTab by remember { mutableStateOf(2) } // Inicia en Home (2)
+    val colors = getPrestadorColors()
+    var selectedTab by rememberSaveable { mutableStateOf(2) }
     var isInConversation by remember { mutableStateOf(false) }
+    var targetChatUserId by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    var triggerCalendarCreate by remember { mutableStateOf(false) }
+    val isProfessional = false // TODO: Obtener de perfil real
+    val unreadCount by notificacionesViewModel.unreadCount.collectAsState()
+    val unreadMessageCount by chatViewModel.totalUnreadCount.collectAsState()
 
     Scaffold(
+        floatingActionButton = {
+            if (!isInConversation && selectedTab in listOf(1, 2)) {
+                FloatingActionButton(
+                    onClick = {
+                        if (selectedTab == 2) onNavigateToPromotion()
+                        else if (selectedTab == 1) triggerCalendarCreate = true
+                    },
+                    containerColor = colors.primaryOrange,
+                    contentColor = Color.White,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 6.dp,
+                        pressedElevation = 12.dp
+                    ),
+                    modifier = Modifier.padding(bottom = 16.dp)
+                ) {
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        transitionSpec = {
+                            (scaleIn(animationSpec = tween(200)) + fadeIn(animationSpec = tween(200))) togetherWith
+                            (scaleOut(animationSpec = tween(200)) + fadeOut(animationSpec = tween(200)))
+                        },
+                        label = "fab_icon"
+                    ) { tab ->
+                        Icon(
+                            imageVector = if (tab == 2) Icons.Filled.Campaign else Icons.Filled.Add,
+                            contentDescription = if (tab == 2) "Crear promoción" else "Nueva cita",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
+        },
         bottomBar = {
             // Ocultar barra de navegación cuando se está en una conversación individual
             if (!(selectedTab == 3 && isInConversation)) {
                 PrestadorBottomNavigationBar(
                     selectedTab = selectedTab,
+                    isProfessional = isProfessional,
+                    unreadCount = unreadCount,
+                    unreadMessageCount = unreadMessageCount,
                     onTabSelected = { selectedTab = it }
                 )
             }
@@ -64,7 +122,7 @@ fun PrestadorDashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(Color(0xFFFFF8F3))
+                .background(colors.backgroundColor)
         ) {
             // Animación suave al cambiar de tab
             AnimatedContent(
@@ -79,21 +137,98 @@ fun PrestadorDashboardScreen(
             ) { currentTab ->
                 // Contenido según el tab seleccionado
                 when (currentTab) {
-                    0 -> PresupuestoContent()
+                    0 -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            PresupuestoContent(
+                                onNavigateToPresupuesto = onNavigateToPresupuesto,
+                                onBackToHome = { selectedTab = 2 }
+                            )
+                        } else {
+                            PresupuestoNotSupportedContent(onBackToHome = { selectedTab = 2 })
+                        }
+                    }
                     1 -> PrestadorCalendarScreen(
-                        onBack = { selectedTab = 2 }
+                        onBack = { selectedTab = 2 },
+                        onNavigateToPresupuesto = onNavigateToPresupuestoCita,
+                        triggerCreateDialog = triggerCalendarCreate,
+                        onCreateDialogHandled = { triggerCalendarCreate = false },
+                        onNavigateToClientePerfil = onNavigateToClientePerfil,
+                        onNavigateToChat = { clientId, clientName, newDate, newTime, existingAppointmentId ->
+                            println("🔥 DASHBOARD: onNavigateToChat recibido")
+                            println("🔥 ClientId: $clientId, Nombre: $clientName")
+                            println("🔥 Nueva Fecha: $newDate, Nueva Hora: $newTime")
+                            println("🔥 AppointmentId: $existingAppointmentId")
+                            
+                            // 🎯 USAR NUEVO MANAGER INMUTABLE
+                            com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager.updateAppointmentProposal(
+                                clientId = clientId,
+                                appointmentId = existingAppointmentId,
+                                newDate = newDate,
+                                newTime = newTime
+                            )
+                            println("🔥 Mensaje actualizado a PENDING con nueva fecha/hora")
+
+                            // Configurar qué chat abrir PRIMERO
+                            targetChatUserId = clientId
+                            println("🔥 targetChatUserId configurado: $targetChatUserId")
+                            
+                            // Delay para asegurar que el estado se actualiza antes de navegar
+                            coroutineScope.launch {
+                                delay(100) // Esperar 100ms
+                                // Cambiar al tab de chat
+                                selectedTab = 3
+                                println("🔥 Tab cambiado a: $selectedTab (chat)")
+                            }
+                        },
+
                     )
                     2 -> InicioContent(
                         onNavigateToEditProfile = onNavigateToEditProfile,
                         onNavigateToServiceConfig = onNavigateToServiceConfig,
-                        onLogout = onLogout
+                        onLogout = onLogout,
+                        onNavigateToPromotionList = onNavigateToPromotionList,
+                        onNavigateToThemeDemo = onNavigateToThemeDemo,
+                        onNavigateToCalendar = { selectedTab = 1 },
+                        onNavigateToPresupuesto = onNavigateToPresupuesto,
+                        onNavigateToPresupuestos = onNavigateToPresupuestos,
+                        onNavigateToChat = { clientId ->
+                            targetChatUserId = clientId
+                            selectedTab = 3
+                        }
                     )
-                    3 -> PrestadorChatScreen(
-                        onBack = { selectedTab = 2 },
-                        onInConversationChange = { isInConversation = it },
-                        onNavigateToPresupuesto = onNavigateToPresupuesto
+                    3 -> {
+                        println("🔥 DASHBOARD: Renderizando tab de chat")
+                        println("🔥 targetChatUserId actual: $targetChatUserId")
+                        
+                        // Efecto para manejar la navegación al chat específico
+                        LaunchedEffect(targetChatUserId) {
+                            if (targetChatUserId != null) {
+                                println("🔥 LaunchedEffect: targetChatUserId = $targetChatUserId")
+                                // Esperar un frame para que el chat se renderice
+                                kotlinx.coroutines.delay(100)
+                            }
+                        }
+                        
+                        PrestadorChatScreen(
+                            onBack = {
+                                selectedTab = 2
+                                targetChatUserId = null
+                            },
+                            onInConversationChange = { isInConversation = it },
+                            onNavigateToClientePerfil = onNavigateToClientePerfil,
+                            onNavigateToPresupuesto = onNavigateToPresupuesto,
+                            initialChatUserId = targetChatUserId
+                        )
+                    }
+                    4 -> NotificacionesScreen(
+                        onNavigateBack = { selectedTab = 2 },
+                        onAccion = { route ->
+                            if (route.startsWith("open_chat/")) {
+                                targetChatUserId = route.removePrefix("open_chat/")
+                                selectedTab = 3
+                            }
+                        }
                     )
-                    4 -> NotificacionesContent()
                 }
             }
         }
@@ -103,8 +238,12 @@ fun PrestadorDashboardScreen(
 @Composable
 fun PrestadorBottomNavigationBar(
     selectedTab: Int,
+    isProfessional: Boolean,
+    unreadCount: Int,
+    unreadMessageCount: Int = 0,
     onTabSelected: (Int) -> Unit
 ) {
+    val colors = getPrestadorColors()
     // Animación para el botón central
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -118,13 +257,15 @@ fun PrestadorBottomNavigationBar(
     )
 
     BottomAppBar(
-        modifier = Modifier.height(70.dp),
-        containerColor = Color.White,
+        modifier = Modifier
+            .navigationBarsPadding(), // AÑADIDO: Respeta el espacio de gestos
+        containerColor = colors.surfaceColor,
         tonalElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(70.dp) // Altura del contenido
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
@@ -132,7 +273,7 @@ fun PrestadorBottomNavigationBar(
             // Presupuesto (Extremo izquierdo)
             BottomNavItem(
                 icon = Icons.Default.Edit,
-                label = "Presupuesto",
+                label = if (isProfessional) "Consulta" else "Presupuesto",
                 isSelected = selectedTab == 0,
                 onClick = { onTabSelected(0) }
             )
@@ -155,9 +296,9 @@ fun PrestadorBottomNavigationBar(
                 FloatingActionButton(
                     onClick = { onTabSelected(2) },
                     containerColor = if (selectedTab == 2) {
-                        Color(0xFFFF6B35) // Naranja intenso
+                        colors.primaryOrange // Naranja intenso
                     } else {
-                        Color(0xFFFF9F66) // Naranja medio
+                        colors.primaryOrange.copy(alpha = 0.7f) // Naranja medio
                     },
                     elevation = FloatingActionButtonDefaults.elevation(
                         defaultElevation = 6.dp,
@@ -180,8 +321,8 @@ fun PrestadorBottomNavigationBar(
                 label = "Chat",
                 isSelected = selectedTab == 3,
                 onClick = { onTabSelected(3) },
-                showBadge = true,
-                badgeCount = 3
+                showBadge = unreadMessageCount > 0,
+                badgeCount = unreadMessageCount
             )
 
             // Notificaciones (Extremo derecha)
@@ -190,8 +331,8 @@ fun PrestadorBottomNavigationBar(
                 label = "Alertas",
                 isSelected = selectedTab == 4,
                 onClick = { onTabSelected(4) },
-                showBadge = true,
-                badgeCount = 5
+                showBadge = unreadCount > 0,
+                badgeCount = unreadCount
             )
         }
     }
@@ -206,8 +347,9 @@ fun RowScope.BottomNavItem(
     showBadge: Boolean = false,
     badgeCount: Int = 0
 ) {
-    val selectedColor = Color(0xFFFF6B35) // Naranja
-    val unselectedColor = Color(0xFF9CA3AF) // Gris
+    val colors = getPrestadorColors()
+    val selectedColor = colors.primaryOrange // Naranja
+    val unselectedColor = colors.textSecondary // Gris
 
     Box(
         modifier = Modifier.weight(1f),
@@ -215,13 +357,15 @@ fun RowScope.BottomNavItem(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 4.dp)
+            verticalArrangement = Arrangement.Top, // Cambio: alineación superior
+            modifier = Modifier
+                .padding(top = 4.dp, bottom = 2.dp) // Menos padding
         ) {
             BadgedBox(
                 badge = {
                     if (showBadge && badgeCount > 0) {
                         Badge(
-                            containerColor = Color(0xFFFF6B35), // Rojo
+                            containerColor = colors.primaryOrange,
                             contentColor = Color.White
                         ) {
                             Text(
@@ -235,22 +379,25 @@ fun RowScope.BottomNavItem(
             ) {
                 IconButton(
                     onClick = onClick,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(36.dp) // Más compacto
                 ) {
                     Icon(
                         imageVector = icon,
                         contentDescription = label,
                         tint = if (isSelected) selectedColor else unselectedColor,
-                        modifier = Modifier.size(26.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
+            
+            Spacer(modifier = Modifier.height(0.dp)) // Sin espacio extra
 
             Text(
                 text = label,
-                fontSize = 11.sp,
+                fontSize = 10.sp, // Más pequeño
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) selectedColor else unselectedColor
+                color = if (isSelected) selectedColor else unselectedColor,
+                maxLines = 1
             )
         }
     }
@@ -258,8 +405,26 @@ fun RowScope.BottomNavItem(
 
 // ==================== CONTENIDO DE CADA TAB ====================
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun PresupuestoContent() {
+fun PresupuestoContent(
+    onNavigateToPresupuesto: () -> Unit = {},
+    onBackToHome: () -> Unit = {}
+) {
+    // Mostrar directamente la lista de presupuestos sin TopBar
+    PresupuestosScreen(
+        onBack = onBackToHome, // Regresar al tab de Inicio
+        onCrearNuevo = onNavigateToPresupuesto, // Navegar a crear presupuesto
+        onVerDetalle = { presupuesto ->
+            // TODO: Navegar a detalle
+        },
+        showTopBar = false // Ocultar TopBar porque ya está en el dashboard
+    )
+}
+
+@Composable
+private fun PresupuestoNotSupportedContent(onBackToHome: () -> Unit) {
+    val colors = getPrestadorColors()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -267,245 +432,36 @@ fun PresupuestoContent() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFFF6B35),
-                            Color(0xFFFF9F66)
-                        )
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(60.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = colors.textSecondary,
+            modifier = Modifier.size(48.dp)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Presupuesto",
-            fontSize = 28.sp,
+            text = "Presupuestos no disponible en este Android",
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFFF6B35)
+            color = colors.textPrimary
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "Gestiona tus cotizaciones",
-            fontSize = 16.sp,
-            color = Color(0xFF6B7280)
+            text = "Requiere Android 8.0 (API 26) o superior.",
+            fontSize = 14.sp,
+            color = colors.textSecondary
         )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedButton(onClick = onBackToHome) {
+            Text("Volver")
+        }
     }
 }
 
-@Composable
-fun InicioContent(
-    onNavigateToEditProfile: () -> Unit = {},
-    onNavigateToServiceConfig: () -> Unit = {},
-    onLogout: () -> Unit = {}
-) {
-    var showMenu by remember { mutableStateOf(false) }
-    
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFFFF8F3))
-    ) {
-        // Header naranja con avatar y menú
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFFF6B35),
-                            Color(0xFFFF9F66)
-                        )
-                    ),
-                    shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
-                )
-                .padding(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 48.dp)
-        ) {
-            Column {
-                // Fila superior: Avatar + Nombre a la izquierda
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Nombre y estado (IZQUIERDA)
-                    Column(
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Text(
-                            text = "Hola, Prestador", // TODO: Obtener nombre del usuario
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(Color(0xFF10B981), shape = CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Disponible para Fast",
-                                fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.9f)
-                            )
-                        }
-                    }
-                    
-                    // Avatar a la derecha
-                    Box {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .background(
-                                    Color.White.copy(alpha = 0.3f),
-                                    shape = CircleShape
-                                )
-                                .border(2.dp, Color.White.copy(alpha = 0.5f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            IconButton(
-                                onClick = { showMenu = !showMenu }
-                            ) {
-                                Text(
-                                    text = "P", // TODO: Obtener inicial del usuario
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                        
-                        // Menú desplegable
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false },
-                            modifier = Modifier.background(Color.White)
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Person,
-                                            contentDescription = null,
-                                            tint = Color(0xFFFF6B35),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = "Editar Perfil",
-                                            fontSize = 14.sp,
-                                            color = Color(0xFF1E293B)
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    onNavigateToEditProfile()
-                                }
-                            )
-                            
-                            HorizontalDivider(color = Color(0xFFE2E8F0))
-                            
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Settings,
-                                            contentDescription = null,
-                                            tint = Color(0xFFFF6B35),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = "Configurar Servicio",
-                                            fontSize = 14.sp,
-                                            color = Color(0xFF1E293B)
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    onNavigateToServiceConfig()
-                                }
-                            )
-                            
-                            HorizontalDivider(color = Color(0xFFE2E8F0))
-                            
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.ExitToApp,
-                                            contentDescription = null,
-                                            tint = Color(0xFFEF4444),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = "Cerrar Sesión",
-                                            fontSize = 14.sp,
-                                            color = Color(0xFFEF4444)
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    showMenu = false
-                                    onLogout() //Llamar al callback
-                                    // TODO: Cerrar sesión
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Contenido del dashboard (temporal)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Contenido del Dashboard",
-                fontSize = 16.sp,
-                color = Color(0xFF6B7280)
-            )
-        }
-    }
-}
 
 @Composable
 fun CalendarioContent() {
+    val colors = getPrestadorColors()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -519,8 +475,8 @@ fun CalendarioContent() {
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFFFF6B35),
-                            Color(0xFFFF9F66)
+                            colors.primaryOrange,
+                            colors.primaryOrange.copy(alpha = 0.7f)
                         )
                     ),
                     shape = RoundedCornerShape(24.dp)
@@ -541,7 +497,7 @@ fun CalendarioContent() {
             text = "Calendario",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFFF6B35)
+            color = colors.primaryOrange
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -549,13 +505,14 @@ fun CalendarioContent() {
         Text(
             text = "Gestiona tus citas y horarios",
             fontSize = 16.sp,
-            color = Color(0xFF6B7280)
+            color = colors.textSecondary
         )
     }
 }
 
 @Composable
-fun ChatContent() {
+fun ChatContent(unreadMessagesCount: Int = 0) {
+    val colors = getPrestadorColors()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -569,8 +526,8 @@ fun ChatContent() {
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFFFF6B35),
-                            Color(0xFFFF9F66)
+                            colors.primaryOrange,
+                            colors.primaryOrange.copy(alpha = 0.7f)
                         )
                     ),
                     shape = RoundedCornerShape(24.dp)
@@ -591,7 +548,7 @@ fun ChatContent() {
             text = "Chat",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFFF6B35)
+            color = colors.primaryOrange
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -599,7 +556,7 @@ fun ChatContent() {
         Text(
             text = "Conversa con tus clientes",
             fontSize = 16.sp,
-            color = Color(0xFF6B7280)
+            color = colors.textSecondary
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -607,7 +564,7 @@ fun ChatContent() {
         // Badge de mensajes pendientes
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = Color(0xFFEF4444).copy(alpha = 0.1f),
+            color = colors.error.copy(alpha = 0.1f),
             modifier = Modifier.padding(horizontal = 32.dp)
         ) {
             Row(
@@ -617,15 +574,15 @@ fun ChatContent() {
                 Icon(
                     imageVector = Icons.Default.Email,
                     contentDescription = null,
-                    tint = Color(0xFFEF4444),
+                    tint = colors.error,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "Tienes 3 mensajes sin leer",
+                    text = if (unreadMessagesCount > 0) "Tienes $unreadMessagesCount mensajes(s) sin leer" else "No tienes mensajes sin leer",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFFEF4444)
+                    color = colors.error
                 )
             }
         }
@@ -634,6 +591,7 @@ fun ChatContent() {
 
 @Composable
 fun NotificacionesContent() {
+    val colors = getPrestadorColors()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -647,8 +605,8 @@ fun NotificacionesContent() {
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFFFF6B35),
-                            Color(0xFFFF9F66)
+                            colors.primaryOrange,
+                            colors.primaryOrange.copy(alpha = 0.7f)
                         )
                     ),
                     shape = RoundedCornerShape(24.dp)
@@ -669,7 +627,7 @@ fun NotificacionesContent() {
             text = "Notificaciones",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFFF6B35)
+            color = colors.primaryOrange
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -677,7 +635,7 @@ fun NotificacionesContent() {
         Text(
             text = "Mantente al día con alertas importantes",
             fontSize = 16.sp,
-            color = Color(0xFF6B7280)
+            color = colors.textSecondary
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -685,7 +643,7 @@ fun NotificacionesContent() {
         // Badge de notificaciones pendientes
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = Color(0xFFFF6B35).copy(alpha = 0.1f),
+            color = colors.primaryOrange.copy(alpha = 0.1f),
             modifier = Modifier.padding(horizontal = 32.dp)
         ) {
             Row(
@@ -695,7 +653,7 @@ fun NotificacionesContent() {
                 Icon(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,
-                    tint = Color(0xFFFF6B35),
+                    tint = colors.primaryOrange,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -703,7 +661,7 @@ fun NotificacionesContent() {
                     text = "Tienes 5 notificaciones nuevas",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFFFF6B35)
+                    color = colors.primaryOrange
                 )
             }
         }

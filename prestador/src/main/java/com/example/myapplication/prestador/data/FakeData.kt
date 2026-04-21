@@ -1,3 +1,5 @@
+
+/**
 package com.example.myapplication.prestador.data
 
 import androidx.compose.runtime.mutableStateListOf
@@ -32,6 +34,7 @@ data class PPrestadorProfileFalso(
     val companyName: String? = null,
     val address: String,
     val email: String,
+    val phone: String = "",
     val doesHomeVisits: Boolean,
     val hasPhysicalLocation: Boolean,
     val works24h: Boolean,
@@ -57,6 +60,7 @@ object PPrestadorSampleDataFalso {
             companyName = "Maverick Informatica",
             address = "B. Matienzo 1339",
             email = "informaticamaverick@gmail.com",
+            phone = "",
             doesHomeVisits = true,
             hasPhysicalLocation = true,
             works24h = false,
@@ -71,3 +75,4 @@ object PPrestadorSampleDataFalso {
         return pprestadores.find { it.id == id }
     }
 }
+**/

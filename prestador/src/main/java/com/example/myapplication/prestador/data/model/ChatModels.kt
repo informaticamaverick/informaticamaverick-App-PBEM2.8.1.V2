@@ -3,20 +3,6 @@ package com.example.myapplication.prestador.data.model
 import androidx.compose.ui.graphics.Color
 
 /**
- * Representa un mensaje individual en el chat
- */
-data class Message(
-    val id: Long,
-    val text: String,
-    val isFromMe: Boolean,  // true = yo envié, false = el cliente
-    val time: String,        // Formato: "10:05"
-    val imageUri: String? = null,  // URI de la imagen (opcional)
-    val type: String = "text",  // "text", "appointment", "image"
-    val appointmentId: String? = null,  // ID de la cita en Firebase (si es appointment)
-    val appointmentStatus: String = "pending"  // "pending", "confirmed", "cancelled"
-)
-
-/**
  * Representa una conversación/chat en la lista
  */
 data class ChatConversation(

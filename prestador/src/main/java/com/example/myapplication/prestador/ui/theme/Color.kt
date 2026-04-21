@@ -37,3 +37,14 @@ val ChipText = Color(0xFFC2410C)         // Texto naranja oscuro
 val GradientStart = Color(0xFFFB923C)    // Naranja medio
 val GradientEnd = Color(0xFFFBBF24)      // Amarillo-naranja
 
+// Colores de fondo y texto - MODO OSCURO
+val BackgroundDark = Color(0xFF0F172A)   // Fondo oscuro principal
+val SurfaceDark = Color(0xFF1E293B)      // Surface oscuro (cards, inputs)
+val SurfaceDarkElevated = Color(0xFF334155) // Surface elevado
+val BorderDark = Color(0xFF475569)       // Bordes en modo oscuro
+val TextPrimaryLight = Color(0xFFF1F5F9) // Texto principal claro
+val TextSecondaryLight = Color(0xFF94A3B8) // Texto secundario claro
+val DividerDark = Color(0xFF334155)      // Divisor oscuro
+val ChipBackgroundDark = Color(0xFF7C2D12) // Fondo chip oscuro
+val ChipTextDark = Color(0xFFFED7AA)     // Texto chip oscuro
+

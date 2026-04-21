@@ -55,6 +55,10 @@ class BudgetViewModel @Inject constructor(
     private val _currentHUDContext = MutableStateFlow(HUDContext.BUDGETS)
     val currentHUDContext = _currentHUDContext.asStateFlow()
 
+    // --- ESTADO DE COINCIDENCIAS PARA EL ASISTENTE (Be) ---
+    private val _hasMatches = MutableStateFlow(true)
+    val hasMatches = _hasMatches.asStateFlow()
+
     private val _selectedTenderId = MutableStateFlow<String?>(null)
     fun setSelectedTenderId(id: String?) { 
         _selectedTenderId.value = id 
@@ -68,6 +72,38 @@ class BudgetViewModel @Inject constructor(
         _currentHUDContext.value = context
     }
 
+    // ==========================================================
+    // 2. DATOS FILTRADOS Y ORDENADOS
+    // ==========================================================
+    val allBudgets: StateFlow<List<BudgetEntity>> = repository.allBudgets 
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allTenders: StateFlow<List<TenderEntity>> = repository.allTenders
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    init {
+        checkExpiredTenders()
+    }
+
+    /**
+     * Revisa periódicamente o al iniciar si hay licitaciones cuya fecha de cierre ya pasó
+     * y las marca como CERRADAS en la base de datos.
+     */
+    private fun checkExpiredTenders() {
+        viewModelScope.launch {
+            allTenders.collectLatest { tenders ->
+                val now = System.currentTimeMillis()
+                tenders.filter { 
+                    (it.status == "ABIERTA" || it.status == "ACTIVO") && 
+                    it.endDate > 0 && 
+                    now > it.endDate 
+                }.forEach { expired ->
+                    updateTenderStatus(expired.tenderId, "CERRADA")
+                }
+            }
+        }
+    }
+
     /**
      * Resetea filtros, búsqueda y multiselección de esta pantalla específica
      */
@@ -79,25 +115,16 @@ class BudgetViewModel @Inject constructor(
         _activeFiltersFromBe.value = emptySet()
     }
 
-
-    // ==========================================================
-    // 2. DATOS FILTRADOS Y ORDENADOS
-    // ==========================================================
-    val allBudgets: StateFlow<List<BudgetEntity>> = repository.allBudgets 
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val allTenders: StateFlow<List<TenderEntity>> = repository.allTenders
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
     val filteredTenders: StateFlow<List<TenderEntity>> = combine(
         allTenders,
         _searchQueryFromBe,
         _activeFiltersFromBe,
-        allBudgets 
-    ) { tenders, query, activeFilters, allBudgetsList ->
+        allBudgets,
+        _currentHUDContext
+    ) { tenders, query, activeFilters, allBudgetsList, context ->
         var list = if (query.isNotEmpty()) {
             val normalized = query.prepareForSearch()
-            tenders.filter { it.title.prepareForSearch().wordStartsWith(normalized) }
+            tenders.filter { it.title.wordStartsWithSmart(normalized) }
         } else {
             tenders
         }
@@ -140,30 +167,91 @@ class BudgetViewModel @Inject constructor(
 
         if (activeFilters.contains("sort_alpha")) list = list.sortedBy { it.title }
         if (activeFilters.contains("sort_date")) list = list.sortedByDescending { it.dateTimestamp }
-        list
+        
+        // ==========================================================
+        // --- SECCIÓN: LÓGICA DE FALLBACK Y NOTIFICACIÓN A BE ---
+        // ==========================================================
+        if (query.isNotEmpty() && list.isEmpty()) {
+            // Si no hay coincidencias, avisamos al asistente y mostramos fallback
+            if (context == HUDContext.BUDGETS_TENDERS) _hasMatches.value = false
+            tenders.sortedByDescending { it.dateTimestamp }
+        } else {
+            // Si hay coincidencias o no hay búsqueda, reseteamos el estado
+            if (context == HUDContext.BUDGETS_TENDERS) _hasMatches.value = true
+            list
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val filteredDirectBudgets: StateFlow<List<BudgetEntity>> = combine(
         repository.directBudgets,
         _searchQueryFromBe,
-        _activeFiltersFromBe
-    ) { budgets, query, activeFilters ->
-        applyBudgetFilters(budgets, query, activeFilters)
+        _activeFiltersFromBe,
+        _currentHUDContext
+    ) { budgets, query, activeFilters, context ->
+        val list = applyBudgetFilters(budgets, query, activeFilters)
+
+        // ==========================================================
+        // --- SECCIÓN: LÓGICA DE FALLBACK Y NOTIFICACIÓN A BE ---
+        // ==========================================================
+        if (query.isNotEmpty() && list.isEmpty()) {
+            if (context == HUDContext.BUDGETS_DIRECT || context == HUDContext.BUDGETS) _hasMatches.value = false
+            budgets.sortedWith(budgetComparator()) // Fallback: Lista completa
+        } else {
+            if (context == HUDContext.BUDGETS_DIRECT || context == HUDContext.BUDGETS) _hasMatches.value = true
+            list
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val filteredOverlayBudgets: StateFlow<List<BudgetEntity>> = _selectedTenderId
         .flatMapLatest { id ->
-            if (id == null) flowOf(emptyList())
-            else repository.getBudgetsForTender(id).combine(combine(_searchQueryFromBe, _activeFiltersFromBe) { q, f -> q to f }) { budgets, params ->
-                applyBudgetFilters(budgets, params.first, params.second)
+            if (id == null) {
+                _hasMatches.value = true
+                flowOf(emptyList())
+            } else {
+                repository.getBudgetsForTender(id).combine(
+                    combine(_searchQueryFromBe, _activeFiltersFromBe, _currentHUDContext) { q, f, c -> Triple(q, f, c) }
+                ) { budgets, params ->
+                    val (query, filters, context) = params
+                    val list = applyBudgetFilters(budgets, query, filters)
+                    
+                    // ==========================================================
+                    // --- SECCIÓN: LÓGICA DE FALLBACK Y NOTIFICACIÓN A BE ---
+                    // ==========================================================
+                    if (query.isNotEmpty() && list.isEmpty()) {
+                        if (context == HUDContext.TENDER_DETAILS) _hasMatches.value = false
+                        budgets.sortedWith(budgetComparator()) // Fallback: Lista completa
+                    } else {
+                        if (context == HUDContext.TENDER_DETAILS) _hasMatches.value = true
+                        list
+                    }
+                }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun getFilteredBudgetsForTender(tenderId: String): StateFlow<List<BudgetEntity>> {
-        return combine(repository.getBudgetsForTender(tenderId), _searchQueryFromBe, _activeFiltersFromBe) { budgets, query, activeFilters ->
-            applyBudgetFilters(budgets, query, activeFilters)
+        return combine(
+            repository.getBudgetsForTender(tenderId), 
+            _searchQueryFromBe, 
+            _activeFiltersFromBe,
+            _currentHUDContext
+        ) { budgets, query, activeFilters, context ->
+            val list = applyBudgetFilters(budgets, query, activeFilters)
+
+            // Implementamos fallback también para las vistas individuales si hay búsqueda
+            if (query.isNotEmpty() && list.isEmpty()) {
+                // Solo actualizamos hasMatches si es la licitación que se está viendo en detalle
+                if (context == HUDContext.TENDER_DETAILS && _selectedTenderId.value == tenderId) {
+                    _hasMatches.value = false
+                }
+                budgets.sortedWith(budgetComparator())
+            } else {
+                if (context == HUDContext.TENDER_DETAILS && _selectedTenderId.value == tenderId) {
+                    _hasMatches.value = true
+                }
+                list
+            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     }
 
@@ -171,10 +259,10 @@ class BudgetViewModel @Inject constructor(
         var list = if (query.isNotEmpty()) {
             val normalized = query.prepareForSearch()
             budgets.filter { 
-                it.providerName.prepareForSearch().wordStartsWith(normalized) || 
-                (it.providerCompanyName?.prepareForSearch()?.wordStartsWith(normalized) ?: false) || 
+                it.providerName.wordStartsWithSmart(normalized) || 
+                (it.providerCompanyName?.wordStartsWithSmart(normalized) ?: false) || 
                 it.grandTotal.toString().startsWith(normalized) || 
-                it.budgetId.prepareForSearch().wordStartsWith(normalized)
+                it.budgetId.wordStartsWithSmart(normalized)
             }
         } else {
             budgets
@@ -253,9 +341,13 @@ class BudgetViewModel @Inject constructor(
                             emoji = "⚖️",
                             isDefault = true
                         ) {
-                            // triggerAction se maneja en el LaunchedEffect de la Screen
                         }
                     )
+                    actions.add(BeSmallActionModel("divider_v_1", Icons.Default.VerticalAlignBottom, "Divider") { })
+                    actions.add(BeSmallActionModel("select_all", Icons.Default.SelectAll, "Todos", emoji = "✅") { })
+                    actions.add(BeSmallActionModel("mark_as_read", Icons.Default.DoneAll, "Leídos", emoji = "📖") { })
+                    actions.add(BeSmallActionModel("divider_v_3", Icons.Default.VerticalAlignBottom, "Divider") { })
+                    actions.add(BeSmallActionModel("delete_multi", Icons.Default.Delete, "Eliminar", tint = Color.Red) { })
                 }
                 else -> {}
             }
@@ -384,7 +476,25 @@ class BudgetViewModel @Inject constructor(
 
     fun acceptBudget(budget: BudgetEntity) {
         viewModelScope.launch {
+            // 1. Aceptar el presupuesto
             repository.updateBudgetStatus(budget.budgetId, BudgetStatus.ACEPTADO)
+            
+            // 2. Si el presupuesto pertenece a una licitación, adjudicarla
+            budget.tenderId?.let { tId ->
+                val tender = allTenders.value.find { it.tenderId == tId }
+                tender?.let {
+                    val updatedTender = it.copy(
+                        status = "ADJUDICADA",
+                        isActive = false,
+                        awardedProviderId = budget.providerId,
+                        awardedProviderName = budget.providerCompanyName ?: budget.providerName,
+                        awardedBudgetId = budget.budgetId
+                    )
+                    repository.createNewTender(updatedTender)
+                }
+            }
+
+            // 3. Enviar mensaje de notificación
             sendDecisionMessage(budget, "✅ ¡Hola! He ACEPTADO el presupuesto #${budget.budgetId.takeLast(4)}...")
         }
     }
@@ -449,24 +559,28 @@ class BudgetViewModel @Inject constructor(
     }
 }
 // Extensiones para la búsqueda inteligente, compartidas con otros ViewModels.
-private val REGEX_UNACCENT = "\\p{InCombiningDiacriticalMarks}+".toRegex()
-fun String.prepareForSearch(): String {
-    val temp = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
-    return REGEX_UNACCENT.replace(temp, "").lowercase().trim()
+private fun String.removeAccents(): String {
+    val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
+    return "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalized, "")
 }
-fun String.wordStartsWith(query: String): Boolean {
+
+private fun String.prepareForSearch(): String = this.removeAccents().lowercase().trim()
+
+private fun String.wordStartsWithSmart(query: String): Boolean {
     if (query.isEmpty()) return false
-    val normalizedText = this.prepareForSearch()
-    return normalizedText.split(" ").any { it.startsWith(query) }
+    val normQuery = query.prepareForSearch()
+    // Split por espacios y paréntesis para permitir búsquedas precisas (ej: "(Maverick)")
+    return this.prepareForSearch().split(" ", "(", ")").any { it.startsWith(normQuery) }
 }
 
 fun String.matchesSmart(query: String): Boolean {
     if (query.isEmpty()) return false
-    val normalizedText = this.prepareForSearch()
-    val queryWords = query.prepareForSearch().split(" ").filter { it.isNotEmpty() }
-    val textWords = normalizedText.split(" ").filter { it.isNotEmpty() }
+    val normQuery = query.prepareForSearch()
+    val textWords = this.prepareForSearch().split(" ", "(", ")").filter { it.isNotEmpty() }
+    val queryWords = normQuery.split(" ", "(", ")").filter { it.isNotEmpty() }
+
     return queryWords.all { qw ->
         textWords.any { tw -> tw.startsWith(qw) }
     }
 }
-fun CategoryEntity.matches(normalizedQuery: String): Boolean = this.name.prepareForSearch().wordStartsWith(normalizedQuery)
+fun CategoryEntity.matches(normalizedQuery: String): Boolean = this.name.wordStartsWithSmart(normalizedQuery)

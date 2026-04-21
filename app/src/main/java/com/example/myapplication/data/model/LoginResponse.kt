@@ -1,3 +1,4 @@
+/**
 package com.example.myapplication.data.model
 
 import kotlinx.serialization.Serializable
@@ -8,3 +9,4 @@ data class LoginResponse(
     val userId: String,
     val name: String,
 )
+ **/

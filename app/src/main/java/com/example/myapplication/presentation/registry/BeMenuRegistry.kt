@@ -17,7 +17,10 @@ import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MarkChatUnread
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.SortByAlpha
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Verified
@@ -36,6 +39,9 @@ object BeMenuRegistry {
     val SORT_UNREAD = ControlItem("No Leídos", Icons.AutoMirrored.Filled.Message, "📩", Color(0xFFEF4444), "sort_unread")
     val SORT_PLAZO = ControlItem("Plazo", Icons.Default.HourglassBottom, "⏳", Color(0xFF22D3EE), "sort_plazo")
     val SORT_PRICE = ControlItem("Precio", Icons.Default.AttachMoney, "💰", Color(0xFF10B981), "sort_price")
+    val SORT_DISTANCE = ControlItem("Cercanía", Icons.Default.NearMe, "📍", Color(0xFF22D3EE), "sort_distance")
+    val SORT_RATING = ControlItem("Rating", Icons.Default.Star, "⭐", Color(0xFFFACC15), "sort_rating")
+    val SORT_HOT = ControlItem("Fuego", null, "🔥", Color(0xFFE11D48), "sort_hot")
     val VIEW_COMPACT = ControlItem("Compacta", Icons.Default.ViewStream, "📱", Color(0xFFF59E0B), "view_compact")
 
     // --- FILTROS ---

@@ -14,13 +14,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.ui.theme.PrestadorOrange
+import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import kotlinx.coroutines.delay
 
 @Composable
 fun PrestadorSuccessScreen(
     onNavigateToDashboard: () -> Unit
 ) {
+    val colors = getPrestadorColors()
+    
     // Animación de escala del check
     val infiniteTransition = rememberInfiniteTransition(label = "bounceAnimation")
     val scale by infiniteTransition.animateFloat(
@@ -55,7 +57,7 @@ fun PrestadorSuccessScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(PrestadorOrange)
+            .background(colors.primaryOrange)
     ) {
         // --- FONDO DECORATIVO SUTIL ---
         
@@ -129,7 +131,7 @@ fun PrestadorSuccessScreen(
                 text = "¡Bienvenido!",
                 fontSize = 36.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = colors.textPrimary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             
@@ -138,7 +140,7 @@ fun PrestadorSuccessScreen(
                 text = "Ingresando a tu cuenta...",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.9f)
+                color = colors.textSecondary
             )
             
             Spacer(modifier = Modifier.height(48.dp))

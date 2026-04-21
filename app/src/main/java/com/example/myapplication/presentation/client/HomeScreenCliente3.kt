@@ -7,12 +7,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,7 +27,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -39,76 +47,150 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import com.example.myapplication.data.local.CategoryEntity
 import com.example.myapplication.data.local.UserEntity
-import com.example.myapplication.presentation.client.BeBrainViewModel
-import com.example.myapplication.data.model.Provider
+import com.example.myapplication.data.model.ServiceDisplayModel
 import com.example.myapplication.presentation.components.*
-import com.example.myapplication.presentation.profile.ProfileViewModel // 🔥 USAMOS EL NUEVO CEREBRO
+import com.example.myapplication.presentation.components.Utilidades.CyberMaverickSleekTitle
+import com.example.myapplication.presentation.components.Utilidades.MaverickColors
+import com.example.myapplication.presentation.profile.ProfileViewModel
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import kotlin.collections.isNotEmpty
 
 // ==================================================================================
-// --- PANTALLA PRINCIPAL ---
+// --- 🏠 SECCIÓN 1: ORQUESTADOR DE PANTALLA (INTERMEDIARIO BEBRAIN) ---
 // ==================================================================================
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreenComplete(
-    navController: NavHostController, 
-    bottomPadding: PaddingValues, 
-    profileViewModel: ProfileViewModel = hiltViewModel(), // 🔥 CAMBIADO A ProfileViewModel (CEREBRO UNIFICADO)
-    weatherViewModel: WeatherViewModel = viewModel(), 
-    providerViewModel: ProviderViewModel = hiltViewModel(), 
-    categoryViewModel: CategoryViewModel = hiltViewModel(), 
-    simulationViewModel: SimulationViewModel = hiltViewModel(), 
-    beViewModel: BeBrainViewModel = hiltViewModel() 
+    navController: NavHostController,
+    bottomPadding: PaddingValues,
+    profileViewModel: ProfileViewModel = hiltViewModel(),
+    providerViewModel: ProviderViewModel = hiltViewModel(),
+    categoryViewModel: CategoryViewModel = hiltViewModel(),
+    beViewModel: BeBrainViewModel = hiltViewModel(),
+    promoViewModel: PromoViewModel = hiltViewModel(),
+    ubicacionObrero: UbicacionClimaViewModel = hiltViewModel(),
+    interactionViewModel: BeInteractionViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val locationViewModel: LocationViewModel = viewModel(factory = LocationViewModelFactory(context))
-    
-    val providers by providerViewModel.providers.collectAsStateWithLifecycle() 
-    val favorites by providerViewModel.favorites.collectAsStateWithLifecycle() 
-    val categories by categoryViewModel.categories.collectAsStateWithLifecycle() 
-    val userState by profileViewModel.userState.collectAsStateWithLifecycle() // 🔥 Escuchando al cerebro unificado
-    val selectedLocation by beViewModel.selectedLocation.collectAsStateWithLifecycle() 
 
-    val temperature by weatherViewModel.temperature.collectAsState()
-    val weatherEmoji by weatherViewModel.weatherEmoji.collectAsState()
-    val weatherDescription by weatherViewModel.weatherDescription.collectAsState()
+    // ==================================================================================
+    // --- 🛠️ SUBSECCIÓN: TRABAJO SUCIO (COLECTA DE LOS OBREROS) ---
+    // ==================================================================================
     
-    val cityName by locationViewModel.locationName.collectAsState()
-    val latitude by locationViewModel.latitude.collectAsState()
-    val longitude by locationViewModel.longitude.collectAsState()
+    // Obrero 1: Ubicación y Clima
+    val obreroTemp by ubicacionObrero.temperature.collectAsStateWithLifecycle()
+    val obreroEmoji by ubicacionObrero.weatherEmoji.collectAsStateWithLifecycle()
+    val obreroDesc by ubicacionObrero.weatherDescription.collectAsStateWithLifecycle()
+    val obreroCity by ubicacionObrero.locationName.collectAsStateWithLifecycle()
+    val latitude by ubicacionObrero.latitude.collectAsStateWithLifecycle()
+    val longitude by ubicacionObrero.longitude.collectAsStateWithLifecycle()
+    val obreroSelectedLoc by ubicacionObrero.selectedLocation.collectAsStateWithLifecycle()
+    val obreroAddresses by ubicacionObrero.availableAddressInfos.collectAsStateWithLifecycle()
+
+    // Obrero 2: Categorías
+    val obreroSortedCats by categoryViewModel.sortedCategories.collectAsStateWithLifecycle()
+    val obreroSuperCats by categoryViewModel.superCategories.collectAsStateWithLifecycle()
+    val obreroCatFilters by categoryViewModel.activeSortFilters.collectAsStateWithLifecycle()
+    val allRawCategories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
+
+    // ==================================================================================
+    // --- 🧠 SUBSECCIÓN: SINCRONIZACIÓN OBREROS -> CEREBRO (INTERMEDIARIO) ---
+    // ==================================================================================
     
+    // Sincronización Clima/Ubicación
+    LaunchedEffect(obreroTemp, obreroEmoji, obreroDesc, obreroCity) {
+        beViewModel.syncWeather(obreroTemp, obreroEmoji, obreroDesc, obreroCity)
+    }
+    LaunchedEffect(obreroSelectedLoc) {
+        beViewModel.syncLocation(obreroSelectedLoc)
+    }
+    LaunchedEffect(obreroAddresses) {
+        beViewModel.syncAvailableAddresses(obreroAddresses)
+    }
+
+    // Sincronización Categorías
+    LaunchedEffect(obreroSortedCats, obreroSuperCats) {
+        beViewModel.syncCategories(obreroSortedCats, obreroSuperCats)
+    }
+    LaunchedEffect(obreroCatFilters) {
+        beViewModel.syncFilters(obreroCatFilters)
+    }
+    LaunchedEffect(allRawCategories) {
+        beViewModel.syncAllCategories(allRawCategories)
+    }
+
+    // 🔥 NUEVO: ESCUCHA DE ACCIONES DEL CEREBRO PARA EL OBRERO (ORQUESTACIÓN) 🔥
+    LaunchedEffect(Unit) {
+        beViewModel.actionEvent.collect { actionId ->
+            when {
+                actionId.startsWith("sort_") || actionId.startsWith("view_") -> {
+                    categoryViewModel.toggleSortFilter(actionId)
+                }
+                actionId == "clear_filters" -> {
+                    categoryViewModel.clearFilters()
+                }
+                actionId.startsWith("chat_") -> {
+                    val providerId = actionId.removePrefix("chat_")
+                    navController.navigate("chat?providerId=$providerId")
+                }
+                actionId.startsWith("talk_") -> {
+                    val index = actionId.removePrefix("talk_").toIntOrNull()
+                    if (index != null) {
+                        interactionViewModel.restoreFromHistory(index)
+                    }
+                }
+            }
+        }
+    }
+
+    // ==================================================================================
+    // --- 📊 SUBSECCIÓN: ESTADOS MAESTROS PARA LA UI (DESDE EL CEREBRO) ---
+    // ==================================================================================
+    val temperature by beViewModel.temperature.collectAsStateWithLifecycle()
+    val weatherEmoji by beViewModel.weatherEmoji.collectAsStateWithLifecycle()
+    val weatherDescription by beViewModel.weatherDescription.collectAsStateWithLifecycle()
+    val cityName by beViewModel.locationName.collectAsStateWithLifecycle()
+    val selectedLocation by beViewModel.selectedLocation.collectAsStateWithLifecycle()
+
+    // --- OTROS DATOS MAESTROS ---
+    val unifiedServices by providerViewModel.unifiedServices.collectAsStateWithLifecycle()
+    val favorites by providerViewModel.favoriteServices.collectAsStateWithLifecycle()
+    val userState by profileViewModel.userState.collectAsStateWithLifecycle()
+    
+    // --- BANNERS DINÁMICOS ---
+    val bannerItems by promoViewModel.getHomeBanners(allRawCategories, unifiedServices).collectAsStateWithLifecycle(initialValue = emptyList())
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) ||
             permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)) {
-            locationViewModel.fetchLocation()
+            ubicacionObrero.ejecutarCalculoUbicacionGps(context)
         }
     }
 
-    LaunchedEffect(userState) {
-        if (userState != null) {
-            beViewModel.updateProfile(userState)
-        }
-    }
+    LaunchedEffect(userState) { if (userState != null) beViewModel.updateProfile(userState) }
 
-    LaunchedEffect(cityName) {
-        if (selectedLocation == null && cityName.isNotEmpty()) {
-            beViewModel.updateLocation(LocationOption.Gps(address = cityName, locality = "Ubicación Actual"))
+    // --- COORDINACIÓN INICIAL GPS ---
+    LaunchedEffect(obreroCity) {
+        if (selectedLocation == null && obreroCity.isNotEmpty() && obreroCity != "Actualizando...") {
+            ubicacionObrero.updateLocation(
+                LocationOption.Gps(
+                    address = obreroCity, 
+                    locality = "Ubicación Detectada"
+                )
+            )
         }
     }
 
     LaunchedEffect(Unit) {
         val hasPermission = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (hasPermission) locationViewModel.fetchLocation()
+        if (hasPermission) ubicacionObrero.ejecutarCalculoUbicacionGps(context)
         else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
     }
-    
+
     LaunchedEffect(latitude, longitude) {
-        if (latitude != null && longitude != null) {
-            weatherViewModel.fetchWeather(lat = latitude!!, lon = longitude!!)
-        }
+        if (latitude != null && longitude != null) ubicacionObrero.fetchWeather(lat = latitude!!, lon = longitude!!)
     }
 
     HomeScreenContent(
@@ -118,19 +200,38 @@ fun HomeScreenComplete(
         weatherEmoji = weatherEmoji,
         weatherDescription = weatherDescription,
         cityName = cityName,
-        onRefreshLocation = { locationViewModel.fetchLocation() }, 
-        allProviders = providers,
-        favoriteProviders = favorites,
-        allCategories = categories,
-        onToggleFavorite = { id, isFav -> providerViewModel.toggleFavoriteStatus(id, isFav) }, 
-        onLogout = {
-            profileViewModel.logout() 
-            navController.navigate(Screen.Login.route) { popUpTo(0) } 
+        onRefreshLocation = {
+            ubicacionObrero.ejecutarCalculoUbicacionGps(context) { pais, provincia, localidad, calle, numero, cp, lat, lng ->
+                val gpsLoc = LocationOption.Gps(
+                    address = if (calle.isNotBlank()) "$calle $numero".trim() else localidad,
+                    street = calle,
+                    number = numero,
+                    locality = localidad,
+                    province = provincia,
+                    country = pais,
+                    postalCode = cp,
+                    lat = lat,
+                    lng = lng
+                )
+                ubicacionObrero.updateLocation(gpsLoc)
+                beViewModel.syncLocation(gpsLoc)
+            }
         },
-        beViewModel = beViewModel
+        bannerItems = bannerItems,
+        allCategories = allRawCategories,
+        favoriteProviders = favorites,
+        onToggleFavorite = { id, isFav -> providerViewModel.toggleFavorite(id, isFav) },
+        onLogout = { profileViewModel.logout(); navController.navigate(Screen.Login.route) { popUpTo(0) } },
+        beViewModel = beViewModel,
+        interactionViewModel = interactionViewModel,
+        categoryViewModel = categoryViewModel, // El contenido pide al obrero directamente vía eventos
+        ubicacionObrero = ubicacionObrero
     )
 }
 
+// ==================================================================================
+// --- 🏠 SECCIÓN 2: CONTENIDO REACTIVO (UI CONSUME DEL CEREBRO) ---
+// ==================================================================================
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -142,309 +243,355 @@ fun HomeScreenContent(
     weatherDescription: String,
     cityName: String,
     onRefreshLocation: () -> Unit,
-    allProviders: List<Provider>,
-    favoriteProviders: List<Provider>,
+    bannerItems: List<AccordionBanner>,
+    allCategories: List<CategoryEntity>,
+    favoriteProviders: List<ServiceDisplayModel>,
     onToggleFavorite: (String, Boolean) -> Unit,
     onLogout: () -> Unit,
-    allCategories: List<CategoryEntity>,
-    beViewModel: BeBrainViewModel
+    beViewModel: BeBrainViewModel,
+    interactionViewModel: BeInteractionViewModel,
+    categoryViewModel: CategoryViewModel,
+    ubicacionObrero: UbicacionClimaViewModel
 ) {
+    // 🔥 CONSUMO EXCLUSIVO DEL CEREBRO (Sincronizado) 🔥
     val superCategories by beViewModel.superCategories.collectAsStateWithLifecycle()
+    val sortedIndividualCategories by beViewModel.sortedCategories.collectAsStateWithLifecycle()
     val activeSortFilters by beViewModel.activeSortFilters.collectAsStateWithLifecycle()
-    val gridState = rememberLazyStaggeredGridState()
+    val isSuperCategoryView by beViewModel.isSuperCategoryView.collectAsStateWithLifecycle()
+    val searchResults by beViewModel.searchResults.collectAsStateWithLifecycle()
+
+    val searchReaction by interactionViewModel.currentReaction.collectAsStateWithLifecycle()
+    val availableSorts by beViewModel.availableSortOptions.collectAsStateWithLifecycle()
+    val availableFilters by beViewModel.availableFilters.collectAsStateWithLifecycle()
+    val dynamicCategories by beViewModel.dynamicCategories.collectAsStateWithLifecycle()
+
+    val unifiedServices by beViewModel.allProvidersRaw.collectAsStateWithLifecycle()
+    // Sincronizar InteractionViewModel con los datos del Cerebro
+    LaunchedEffect(availableSorts, availableFilters, dynamicCategories, searchResults, unifiedServices) {
+        interactionViewModel.syncResources(
+            filters = availableFilters,
+            sorts = availableSorts,
+            categories = dynamicCategories,
+            results = searchResults,
+            chats = unifiedServices
+        )
+    }
+
+    val showWeatherDetails by beViewModel.showWeatherDetails.collectAsStateWithLifecycle()
+    val showFavoritesPanel by beViewModel.showFavoritesPanel.collectAsStateWithLifecycle()
+    val isSearchActive by beViewModel.isSearchActive.collectAsStateWithLifecycle()
+    val searchQuery by beViewModel.searchQuery.collectAsStateWithLifecycle()
+
+    // 🔥 SINCRONIZACIÓN DE DIRECCIONES PARA EL POPUP 🔥
+    val availableAddresses by ubicacionObrero.availableAddressInfos.collectAsStateWithLifecycle()
+
+    val gridState = rememberLazyGridState() // Usamos LazyGridState compatible
     val individualGridState = rememberLazyGridState()
-    val isScrolling by remember {
-        derivedStateOf { gridState.isScrollInProgress || individualGridState.isScrollInProgress }
+    val listState = rememberLazyListState() // Para la lista de resultados expandidos
+    val isScrolling by remember { derivedStateOf { gridState.isScrollInProgress || individualGridState.isScrollInProgress || listState.isScrollInProgress } }
+
+    LaunchedEffect(activeSortFilters, isSuperCategoryView, isSearchActive, searchQuery) {
+        // --- REPOSICIONAMIENTO AUTOMÁTICO ---
+        // Siempre posicionamos arriba al cambiar la búsqueda o resultados
+        listState.animateScrollToItem(0)
+        gridState.animateScrollToItem(0)
+        individualGridState.animateScrollToItem(0)
     }
 
-    LaunchedEffect(allCategories, activeSortFilters) {
-        beViewModel.updateSuperCategories(allCategories)
-    }
-    
-    var showWeatherDetails by remember { mutableStateOf(false) }
-    var showFavorites by remember { mutableStateOf(false) }
-    var refreshTrigger by remember { mutableStateOf(0) }
-    var isSuperCategoryView by remember { mutableStateOf(true) }
-
-    val bannerItems = remember(allCategories, allProviders, refreshTrigger) {
-        generateEnrichedBannerItems(allCategories, allProviders)
+    // Sincronización de la búsqueda de Be hacia el Obrero de Categorías e InteractionViewModel
+    val hasMatches by categoryViewModel.hasMatches.collectAsStateWithLifecycle()
+    LaunchedEffect(searchQuery, searchResults, hasMatches) {
+        categoryViewModel.updateSearchQuery(searchQuery)
+        interactionViewModel.processSearchQuery(searchQuery, hasMatches)
+        interactionViewModel.updateResults(searchResults, HUDContext.HOME)
     }
 
-    LaunchedEffect(activeSortFilters, isSuperCategoryView) {
-        gridState.scrollToItem(0)
-        individualGridState.scrollToItem(0)
-    }
-
-    Scaffold(containerColor = Color(0xFF0A0E14),
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()
-            .padding(bottom = paddingValues.calculateBottomPadding())
+    Scaffold(containerColor = MaverickColors.StealthGray) { paddingValues ->
+        // [SECCIÓN: FONDO DE PANTALLA] - Se utiliza Stealth Gray como base sólida
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = paddingValues.calculateBottomPadding().coerceAtLeast(0.dp))
         ) {
+
             Column(modifier = Modifier.fillMaxSize()) {
-                Spacer(modifier = Modifier.height(145.dp))
-                if (bannerItems.isNotEmpty()) {
-                    PremiumLensCarousel(
-                        items = bannerItems,
-                        isPaused = isScrolling || showWeatherDetails||beViewModel.isSearchActive.collectAsState().value,
-                        onSettingsClick = { },
-                        onItemClick = { banner ->
-                            if (banner.provider != null) {
-                                navController.navigate("perfil_prestador/${banner.provider.id}")
-                            } else if (banner.originalCategory != null) {
-                                navController.navigate("result_busqueda/${banner.originalCategory.name}")
-                            }
-                        }
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Spacer(modifier = Modifier.height(150.dp))
+
+                AnimatedVisibility(
+                    visible = bannerItems.isNotEmpty() && !isSearchActive,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "EXPLORA LAS CATEGORIAS ",
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 2.sp,
-                            maxLines = 1
-                        )
-                        HorizontalDivider(modifier = Modifier.weight(1f), thickness = 0.5.dp, color = Color.White.copy(alpha = 0.9f))
-                    }
-                    MenuOrdenamiento(
-                        activeFilters = activeSortFilters,
-                        onAction = { newFilter ->
-                            if (newFilter == "view_bento") {
-                                isSuperCategoryView = true
-                            } else if (newFilter == "view_grid") {
-                                isSuperCategoryView = false
+                    Column {
+                        PremiumLensCarouselV3(
+                            items = bannerItems,
+                            isPaused = isScrolling || showWeatherDetails || isSearchActive,
+                            onItemClick = { banner ->
+                                if (banner.service != null) navController.navigate("perfil_prestador/${banner.service.id}")
+                                else if (banner.originalCategory != null) navController.navigate("result_busqueda/${banner.originalCategory.name}")
                             }
-                            beViewModel.updateSortFilters(if (newFilter.isEmpty()) emptySet() else setOf(newFilter))
-                        },
-                        onApply = { },
-                        onClearFilters = {
-                            beViewModel.updateSortFilters(emptySet())
-                            isSuperCategoryView = true 
-                        },
-                        showNombre = true,
-                        showViewModes = true
-                    )
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
 
-                if (isSuperCategoryView) {
-                    LazyVerticalStaggeredGrid(
-                        columns = StaggeredGridCells.Fixed(2),
-                        state = gridState, 
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            top = 8.dp,
-                            start = 8.dp,
-                            end = 8.dp,
-                            bottom = 180.dp
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalItemSpacing = 12.dp
-                    ) {
-                        items(
-                            items = superCategories,
-                            key = { it.title },
-                            contentType = { "super_category_card" }
-                        ) { superCat ->
-                            BentoSuperCategoryCard(
-                                superCategory = superCat,
-                                emoji = superCat.icon, 
-                                height = 180.dp,       
-                                onClick = { beViewModel.selectSuperCategory(superCat) }
-                            )
-                        }
-                    }
+                // ==================================================================================
+                // --- 🛠️ SECCIÓN: EXPLORAR SERVICIOS (CONTENIDO DENTRO DE MOLDEBARRAMENU) ---
+                // ==================================================================================
+                MoldeBarraMenu(
+                    labelCountMain = "BUSCA Y EXPLORA SERVICIOS!",
+                    labelCountSub = "",
+                    showCountBox = false, // Ocultamos la caja de conteo para el Home
+                    modifier = Modifier.fillMaxWidth().weight(1f), // Ocupa todo el ancho y el resto del alto
+                    customActions = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // --- 🔘 SECCIÓN: BOTONES CON LABELS ---
 
-                } else {
-                    val sortedIndividual = remember(allCategories, activeSortFilters) {
-                        when {
-                            activeSortFilters.contains("sort_nombre_asc") -> allCategories.sortedBy { it.name }
-                            activeSortFilters.contains("sort_nombre_desc") -> allCategories.sortedByDescending { it.name }
-                            else -> allCategories
+                            // 1. Favoritos (Con emoji de fuego pegado al texto)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                BotonMasUsados(
+                                    isActive = activeSortFilters.contains("sort_hot"), 
+                                    onClick = { beViewModel.triggerAction("sort_hot") }
+                                )
+                                /**
+                                Spacer(modifier = Modifier.height(0.2.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                   // Text("🔥", fontSize = 10.sp)
+                                    Text(
+                                        text = "Fav",
+                                        color = Color.White.copy(alpha = 0.9f), 
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                **/
+                            }
+
+                            // 2. Ordenar AZ
+                            val alphaState = when {
+                                activeSortFilters.contains("sort_nombre_asc") -> "asc"
+                                activeSortFilters.contains("sort_nombre_desc") -> "desc"
+                                else -> "none"
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                BotonAlfabetico(
+                                    orderState = alphaState,
+                                    onStateChange = { newState ->
+                                        val filterId = when (newState) {
+                                            "asc" -> "sort_nombre_asc"
+                                            "desc" -> "sort_nombre_desc"
+                                            else -> if (alphaState == "asc") "sort_nombre_asc" else "sort_nombre_desc"
+                                        }
+                                        beViewModel.triggerAction(filterId)
+                                    }
+                                )
+                                                                      /**
+                                )
+                                Spacer(modifier = Modifier.height(0.2.dp))
+                                Text(
+                                    text = "AZ",
+                                    color = Color.White.copy(alpha = 0.9f), 
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                **/
+                            }
+
+                            // 3. Compacto
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                BotonVista(
+                                    isBentoView = isSuperCategoryView, 
+                                    isActive = !isSuperCategoryView, 
+                                    onToggleView = { beViewModel.triggerAction(if (isSuperCategoryView) "view_grid" else "view_bento") }
+                                )
+                                /**
+                                Spacer(modifier = Modifier.height(0.2.dp))
+                                Text(
+                                    text = "Comp",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                **/
+                            }
                         }
                     }
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        state = individualGridState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentPadding = PaddingValues(
-                            top = 8.dp,
-                            start = 8.dp,
-                            end = 8.dp,
-                            bottom = 180.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(  
-                            items = sortedIndividual,
-                            key = { it.name }, 
-                            contentType = { "single_cat" }
-                        ) { category ->
-                            CompactCategoryCard(item = category, onClick = { navController.navigate("result_busqueda/${category.name}") })
+                )
+{
+                    // --- CONTENIDO DE CATEGORÍAS (AHORA DENTRO DEL MOLDE) ---
+                    if (isSuperCategoryView) {
+                        if (isSearchActive && searchQuery.isNotEmpty()) {
+                            // --- ESTADO BÚSQUEDA: Lista (LazyColumn) con tarjetas expandidas de ancho completo ---
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(top = 2.dp, start = 4.dp, end = 4.dp, bottom = 120.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                items(items = superCategories, key = { it.title }) { superCat ->
+                                    ExpandedBentoSuperCategoryCard(
+                                        superCategory = superCat,
+                                        onCategoryClick = { category -> navController.navigate("result_busqueda/${category.name}") },
+                                        onToggleCategoryFavorite = { category -> categoryViewModel.toggleCategoryFavorite(category) }
+                                    )
+                                }
+                            }
+                        } else {
+                            // --- ESTADO NORMAL: Grid (LazyVerticalGrid) con 2 por fila ---
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                state = gridState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(top = 2.dp, start = 2.dp, end = 2.dp, bottom = 120.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(items = superCategories, key = { it.title }) { superCat ->
+                                    BentoSuperCategoryCard(
+                                        superCategory = superCat, 
+                                        emoji = superCat.icon, 
+                                        height = 145.dp,
+                                        onClick = { beViewModel.selectSuperCategory(superCat) },
+                                        onToggleFavorite = { categoryViewModel.toggleSuperCategoryFavorite(superCat.title) }
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        // --- VISTA COMPACTA (INDIVIDUAL) ---
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            state = individualGridState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(top = 2.dp, start = 4.dp, end = 4.dp, bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(items = sortedIndividualCategories, key = { it.name }) { category ->
+                                CompactCategoryCard(
+                                    item = category, 
+                                    onClick = { navController.navigate("result_busqueda/${category.name}") },
+                                    onToggleFavorite = { categoryViewModel.toggleCategoryFavorite(category) }
+                                )
+                            }
                         }
                     }
                 }
             }
-            Box(modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .zIndex(10f)) {
-                Box(modifier = Modifier
-                    .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.65f)))
-                Box(modifier = Modifier.statusBarsPadding()) {
-                    var currentLocationState by remember {
-                        mutableStateOf<LocationOption>(LocationOption.Gps(address = cityName, locality = "Ubicación Actual"))
-                    }
-                    
-                    LaunchedEffect(cityName) {
-                        if (cityName.isNotEmpty()) {
-                            val newLoc = LocationOption.Gps(address = cityName, locality = "Ubicación Actual")
-                            currentLocationState = newLoc
-                            beViewModel.updateLocation(newLoc) 
+
+            Box(modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().zIndex(10f)) {
+                val currentLoc by beViewModel.selectedLocation.collectAsStateWithLifecycle()
+                TopHeaderSection(
+                    navController = navController,
+                    user = userState,
+                    temperature = temperature,
+                    weatherEmoji = weatherEmoji,
+                    weatherDescription = weatherDescription,
+                    cityName = cityName,
+                    currentLocationState = currentLoc ?: LocationOption.Gps(
+                        address = cityName,
+                        locality = "Ubicación Actual"
+                    ),
+                    onWeatherClick = { beViewModel.toggleWeatherDetails() },
+                    onRefreshLocation = { onRefreshLocation() },
+                    onLocationSelected = { loc ->
+                        // 1. Informamos al Obrero para que actualice su estado interno
+                        ubicacionObrero.updateLocation(loc)
+                        
+                        // 2. Extraemos el ID del objeto LocationOption (Personal/Business) para activar la dirección real
+                        val targetId = when (loc) {
+                            is LocationOption.Personal -> loc.id
+                            is LocationOption.Business -> loc.id
+                            is LocationOption.Gps -> "gps_current"
+                        }
+                        
+                        if (targetId.isNotEmpty()) {
+                            // 3. Activamos la dirección en el Obrero y el Cerebro
+                            ubicacionObrero.selectAddress(targetId)
+                            beViewModel.selectAddress(targetId)
+                        }
+                    },
+                    onLogout = onLogout,
+                    beViewModel = beViewModel,
+                    interactionViewModel = interactionViewModel,
+                    onResultClick = { result ->
+                        when (result) {
+                            is CategoryEntity -> navController.navigate("result_busqueda/${result.name}")
+                            // is SuperCategory -> beViewModel.selectSuperCategory(result)
                         }
                     }
-                    TopHeaderSection(
-                        navController = navController, 
-                        user = userState, 
-                        temperature = temperature, 
-                        weatherEmoji = weatherEmoji,
-                        weatherDescription = weatherDescription, 
-                        cityName = cityName, 
-                        currentLocationState = currentLocationState,
-                        onWeatherClick = { showWeatherDetails = !showWeatherDetails },
-                        onRefreshLocation = {
-                            currentLocationState = LocationOption.Gps(address = "Actualizando...", locality = "")
-                            onRefreshLocation()
-                        },
-                        onLocationSelected = { nuevaSeleccion -> 
-                            currentLocationState = nuevaSeleccion
-                            beViewModel.updateLocation(nuevaSeleccion) 
-                        },
-                        onLogout = onLogout,
-                        beViewModel = beViewModel 
-                    )
-                }
+                )
             }
+
             if (showWeatherDetails) {
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(15f)
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .clickable { showWeatherDetails = false })
+                Box(modifier = Modifier.fillMaxSize().zIndex(15f).background(Color.Black.copy(alpha = 0.5f)).clickable { beViewModel.setWeatherDetailsVisible(false) })
             }
             AnimatedVisibility(
-                visible = showWeatherDetails, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 60.dp)
-                    .zIndex(20f)
-            ) {
-                WeatherExpandedCard(temperature = temperature, weatherEmoji = weatherEmoji, weatherDescription = weatherDescription, cityName = cityName, forecastDays = emptyList())
+                visible = showWeatherDetails, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 60.dp).zIndex(20f)
+            ) { WeatherExpandedCard(temperature, weatherEmoji, weatherDescription, cityName, emptyList()) }
+
+            if (showFavoritesPanel) {
+                Box(modifier = Modifier.fillMaxSize().zIndex(11f).background(Color.Black.copy(alpha = 0.65f)).clickable(null, null) { beViewModel.setFavoritesPanelVisible(false) })
             }
-            if (showFavorites) {
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(11f)
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) {
-                        showFavorites = false
-                    })
+            AnimatedVisibility(visible = showFavoritesPanel, enter = slideInHorizontally { it }, exit = slideOutHorizontally { it }, modifier = Modifier.align(Alignment.CenterEnd).zIndex(12f)) {
+                FavoritesPanel(navController, favoriteProviders, { beViewModel.setFavoritesPanelVisible(false) }, onToggleFavorite)
             }
-            AnimatedVisibility(visible = showFavorites, enter = slideInHorizontally(initialOffsetX = { it }), exit = slideOutHorizontally(targetOffsetX = { it }), modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .zIndex(12f)) {
-                FavoritesPanel(navController = navController, favorites = favoriteProviders, onClose = { showFavorites = false }, onToggleFavorite = onToggleFavorite)
-            }
-            
+
             SuperCategoryDetailsPanel(
-                beViewModel = beViewModel,
-                onCategoryClick = { categoryName ->
-                    navController.navigate("result_busqueda/$categoryName")
-                }
+                beViewModel = beViewModel, 
+                categoryViewModel = categoryViewModel,
+                onCategoryClick = { categoryName -> navController.navigate("result_busqueda/$categoryName") }
             )
         }
     }
 }
 
+// --- SECCIÓN: PANEL DE FAVORITOS (UNIFICADO) ---
+// ==================================================================================
 @Composable
-fun FavoritesPanel(navController: NavHostController, favorites: List<Provider>, onClose: () -> Unit, onToggleFavorite: (String, Boolean) -> Unit) {
-    Surface(modifier = Modifier
-        .fillMaxHeight()
-        .width(320.dp), color = Color(0xFF0A0E14), tonalElevation = 16.dp, shape = RoundedCornerShape(topStart = 32.dp, bottomStart = 32.dp)) {
+fun FavoritesPanel(
+    navController: NavHostController, 
+    favorites: List<ServiceDisplayModel>, 
+    onClose: () -> Unit, 
+    onToggleFavorite: (String, Boolean) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxHeight().width(320.dp), 
+        color = MaverickColors.StealthGray, // Sincronizado con el fondo de la Home
+        tonalElevation = 16.dp, 
+        shape = RoundedCornerShape(topStart = 32.dp, bottomStart = 32.dp)
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-                .statusBarsPadding(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier.fillMaxWidth().padding(20.dp).statusBarsPadding(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Mis Favoritos", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
                 IconButton(onClick = onClose, modifier = Modifier.background(Color.White.copy(0.1f), CircleShape)) { Icon(Icons.Default.Close, null, tint = Color.White) }
             }
             HorizontalDivider(color = Color.White.copy(0.1f))
-            LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (favorites.isEmpty()) {
-                    item { Text("No tienes favoritos guardados.", modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp), color = Color.Gray, textAlign = TextAlign.Center) }
+                    item { Text("No tienes favoritos guardados.", modifier = Modifier.fillMaxWidth().padding(32.dp), color = Color.Gray, textAlign = TextAlign.Center) }
                 } else {
-                    items(items = favorites, key = { it.id }) { provider ->
-                        PrestadorCard(provider = provider, onClick = { navController.navigate("perfil_prestador/${provider.id}") }, onToggleFavorite = { id, isFav -> onToggleFavorite(id, isFav) }, showPreviews = false, viewMode = "Compacta", onChat = { navController.navigate("chat/${provider.id}") })
+                    items(items = favorites, key = { it.id }) { service ->
+                        PrestadorCardV3(
+                            provider = service,
+                            isCompact = false,
+                            onClick = {
+                                onClose()
+                                navController.navigate("perfil_prestador/${service.id}")
+                            },
+                            onChatClick = {
+                                onClose()
+                                navController.navigate("chat?providerId=${service.id}")
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }
         }
-    }
-}
-
- fun generateEnrichedBannerItems(categories: List<CategoryEntity>, providers: List<Provider>): List<AccordionBanner> {
-    val bannerList = mutableListOf<AccordionBanner>()
-    categories.filter { it.isNew }.take(5).forEach { cat ->
-        bannerList.add(AccordionBanner(
-            id = "cat_${cat.name}", title = cat.name, subtitle = "🚀 EXPLORA LO NUEVO", icon = cat.icon, color = Color(0xFF2197F5), type = BannerType.NEW_CATEGORY, originalCategory = cat
-        ))
-    }
-    providers.filter { it.isSubscribed }.take(5).forEach { provider ->
-        bannerList.add(AccordionBanner(
-            id = "promo_${provider.uid}", title = "Oferta Especial", subtitle = "Servicio destacado de ${provider.displayName}", icon = "🔥", color = Color(0xFFE91E63), type = BannerType.PROMO, discount = (15..45).random(), provider = provider
-        ))
-    }
-    bannerList.add(AccordionBanner(
-        id = "ad_google_phantom", title = "Anuncio Patrocinado", subtitle = "Descubre más en Google Ads", icon = "🌐", color = Color.DarkGray, type = BannerType.GOOGLE_AD
-    ))
-    return bannerList.shuffled() 
-}
-
-@RequiresApi(Build.VERSION_CODES.O)
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun HomeScreenCompletePreview() {
-    MyApplicationTheme {
-        HomeScreenContent(
-            navController = rememberNavController(),
-            userState = null,
-            temperature = "25°C",
-            weatherEmoji = "☀️",
-            weatherDescription = "Despejado",
-            cityName = "Buenos Aires",
-            onRefreshLocation = {},
-            allProviders = emptyList(),
-            favoriteProviders = emptyList(),
-            allCategories = emptyList(),
-            onToggleFavorite = { _, _ -> },
-            onLogout = {},
-            beViewModel = viewModel()
-        )
     }
 }
