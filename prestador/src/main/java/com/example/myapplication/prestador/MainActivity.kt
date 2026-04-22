@@ -11,16 +11,19 @@ import androidx.navigation.compose.rememberNavController
 import com.example.myapplication.prestador.data.migration.FirestoreMigration
 import com.example.myapplication.prestador.ui.navigation.PrestadorNavGraph
 import com.example.myapplication.prestador.ui.theme.PrestadorTheme
-//// import com.example.myapplication.prestador.viewmodel.ChatSimulationViewModel
+import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.ProfileState
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
- //   private val chatSimulationViewModel: ChatSimulationViewModel by viewModels()
+    private val editProfileViewModel: EditProfileViewModel by viewModels()
+
 
     private fun presenceRef() = com.google.firebase.auth.FirebaseAuth.getInstance()
         .currentUser?.uid?.let {
@@ -58,7 +61,21 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-  //      println("MainActivity: ChatSimulationViewModel creado (${chatSimulationViewModel.hashCode()})")
+        //      println("MainActivity: ChatSimulationViewModel creado (${chatSimulationViewModel.hashCode()})")
+
+        // 🔥 [NUEVO] Sincronización proactiva de Topics al iniciar la App
+        lifecycleScope.launch {
+            editProfileViewModel.profileState.collectLatest { state ->
+                if (state is ProfileState.Success) {
+                    val provider = state.provider
+                    editProfileViewModel.syncTopics(
+                        cp = provider.address?.codigoPostal ?: provider.codigoPostal,
+                        categories = provider.categories,
+                        isSubscribed = provider.isSubscribed
+                    )
+                }
+            }
+        }
 
         setContent {
             PrestadorTheme {

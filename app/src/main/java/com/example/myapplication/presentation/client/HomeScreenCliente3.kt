@@ -7,10 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -62,7 +59,6 @@ import kotlin.collections.isNotEmpty
 @Composable
 fun HomeScreenComplete(
     navController: NavHostController,
-    bottomPadding: PaddingValues,
     profileViewModel: ProfileViewModel = hiltViewModel(),
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
@@ -84,8 +80,6 @@ fun HomeScreenComplete(
     val obreroCity by ubicacionObrero.locationName.collectAsStateWithLifecycle()
     val latitude by ubicacionObrero.latitude.collectAsStateWithLifecycle()
     val longitude by ubicacionObrero.longitude.collectAsStateWithLifecycle()
-    val obreroSelectedLoc by ubicacionObrero.selectedLocation.collectAsStateWithLifecycle()
-    val obreroAddresses by ubicacionObrero.availableAddressInfos.collectAsStateWithLifecycle()
 
     // Obrero 2: Categorías
     val obreroSortedCats by categoryViewModel.sortedCategories.collectAsStateWithLifecycle()
@@ -100,12 +94,6 @@ fun HomeScreenComplete(
     // Sincronización Clima/Ubicación
     LaunchedEffect(obreroTemp, obreroEmoji, obreroDesc, obreroCity) {
         beViewModel.syncWeather(obreroTemp, obreroEmoji, obreroDesc, obreroCity)
-    }
-    LaunchedEffect(obreroSelectedLoc) {
-        beViewModel.syncLocation(obreroSelectedLoc)
-    }
-    LaunchedEffect(obreroAddresses) {
-        beViewModel.syncAvailableAddresses(obreroAddresses)
     }
 
     // Sincronización Categorías
@@ -150,7 +138,6 @@ fun HomeScreenComplete(
     val weatherEmoji by beViewModel.weatherEmoji.collectAsStateWithLifecycle()
     val weatherDescription by beViewModel.weatherDescription.collectAsStateWithLifecycle()
     val cityName by beViewModel.locationName.collectAsStateWithLifecycle()
-    val selectedLocation by beViewModel.selectedLocation.collectAsStateWithLifecycle()
 
     // --- OTROS DATOS MAESTROS ---
     val unifiedServices by providerViewModel.unifiedServices.collectAsStateWithLifecycle()
@@ -171,22 +158,33 @@ fun HomeScreenComplete(
 
     LaunchedEffect(userState) { if (userState != null) beViewModel.updateProfile(userState) }
 
-    // --- COORDINACIÓN INICIAL GPS ---
-    LaunchedEffect(obreroCity) {
-        if (selectedLocation == null && obreroCity.isNotEmpty() && obreroCity != "Actualizando...") {
-            ubicacionObrero.updateLocation(
-                LocationOption.Gps(
-                    address = obreroCity, 
-                    locality = "Ubicación Detectada"
-                )
-            )
-        }
-    }
-
     LaunchedEffect(Unit) {
         val hasPermission = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (hasPermission) ubicacionObrero.ejecutarCalculoUbicacionGps(context)
-        else locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        if (hasPermission) {
+            // 🔥 GPS INTELIGENTE (HUD V7): 
+            // Solo disparamos la detección inicial si el usuario NO tiene nada seleccionado aún.
+            // Esto evita que la ubicación se "resetee" al volver al Inicio.
+            if (beViewModel.selectedAddressId.value == null) {
+                ubicacionObrero.ejecutarCalculoUbicacionGps(context) { pais, prov, loc, calle, num, cp, lat, lng ->
+                    val gpsLoc = AddressInfo(
+                        id = "gps_current",
+                        companyOrUserName = "Mi Ubicación",
+                        branchName = "GPS Tracker",
+                        streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else loc,
+                        locality = loc,
+                        province = prov,
+                        country = pais,
+                        postalCode = cp,
+                        lat = lat,
+                        lng = lng,
+                        isCompany = false
+                    )
+                    beViewModel.updateAddressFromGps(gpsLoc)
+                }
+            }
+        } else {
+            locationPermissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
     }
 
     LaunchedEffect(latitude, longitude) {
@@ -202,30 +200,28 @@ fun HomeScreenComplete(
         cityName = cityName,
         onRefreshLocation = {
             ubicacionObrero.ejecutarCalculoUbicacionGps(context) { pais, provincia, localidad, calle, numero, cp, lat, lng ->
-                val gpsLoc = LocationOption.Gps(
-                    address = if (calle.isNotBlank()) "$calle $numero".trim() else localidad,
-                    street = calle,
-                    number = numero,
+                val gpsLoc = AddressInfo(
+                    id = "gps_current",
+                    companyOrUserName = "Mi Ubicación",
+                    branchName = "GPS Tracker",
+                    streetAndNumber = if (calle.isNotBlank()) "$calle $numero".trim() else localidad,
                     locality = localidad,
                     province = provincia,
                     country = pais,
                     postalCode = cp,
                     lat = lat,
-                    lng = lng
+                    lng = lng,
+                    isCompany = false
                 )
-                ubicacionObrero.updateLocation(gpsLoc)
-                beViewModel.syncLocation(gpsLoc)
+                beViewModel.updateAddressFromGps(gpsLoc)
             }
         },
         bannerItems = bannerItems,
-        allCategories = allRawCategories,
         favoriteProviders = favorites,
-        onToggleFavorite = { id, isFav -> providerViewModel.toggleFavorite(id, isFav) },
         onLogout = { profileViewModel.logout(); navController.navigate(Screen.Login.route) { popUpTo(0) } },
         beViewModel = beViewModel,
         interactionViewModel = interactionViewModel,
-        categoryViewModel = categoryViewModel, // El contenido pide al obrero directamente vía eventos
-        ubicacionObrero = ubicacionObrero
+        categoryViewModel = categoryViewModel // El contenido pide al obrero directamente vía eventos
     )
 }
 
@@ -244,14 +240,11 @@ fun HomeScreenContent(
     cityName: String,
     onRefreshLocation: () -> Unit,
     bannerItems: List<AccordionBanner>,
-    allCategories: List<CategoryEntity>,
     favoriteProviders: List<ServiceDisplayModel>,
-    onToggleFavorite: (String, Boolean) -> Unit,
     onLogout: () -> Unit,
     beViewModel: BeBrainViewModel,
     interactionViewModel: BeInteractionViewModel,
-    categoryViewModel: CategoryViewModel,
-    ubicacionObrero: UbicacionClimaViewModel
+    categoryViewModel: CategoryViewModel
 ) {
     // 🔥 CONSUMO EXCLUSIVO DEL CEREBRO (Sincronizado) 🔥
     val superCategories by beViewModel.superCategories.collectAsStateWithLifecycle()
@@ -260,7 +253,6 @@ fun HomeScreenContent(
     val isSuperCategoryView by beViewModel.isSuperCategoryView.collectAsStateWithLifecycle()
     val searchResults by beViewModel.searchResults.collectAsStateWithLifecycle()
 
-    val searchReaction by interactionViewModel.currentReaction.collectAsStateWithLifecycle()
     val availableSorts by beViewModel.availableSortOptions.collectAsStateWithLifecycle()
     val availableFilters by beViewModel.availableFilters.collectAsStateWithLifecycle()
     val dynamicCategories by beViewModel.dynamicCategories.collectAsStateWithLifecycle()
@@ -281,9 +273,6 @@ fun HomeScreenContent(
     val showFavoritesPanel by beViewModel.showFavoritesPanel.collectAsStateWithLifecycle()
     val isSearchActive by beViewModel.isSearchActive.collectAsStateWithLifecycle()
     val searchQuery by beViewModel.searchQuery.collectAsStateWithLifecycle()
-
-    // 🔥 SINCRONIZACIÓN DE DIRECCIONES PARA EL POPUP 🔥
-    val availableAddresses by ubicacionObrero.availableAddressInfos.collectAsStateWithLifecycle()
 
     val gridState = rememberLazyGridState() // Usamos LazyGridState compatible
     val individualGridState = rememberLazyGridState()
@@ -498,10 +487,7 @@ fun HomeScreenContent(
                     onWeatherClick = { beViewModel.toggleWeatherDetails() },
                     onRefreshLocation = { onRefreshLocation() },
                     onLocationSelected = { loc ->
-                        // 1. Informamos al Obrero para que actualice su estado interno
-                        ubicacionObrero.updateLocation(loc)
-                        
-                        // 2. Extraemos el ID del objeto LocationOption (Personal/Business) para activar la dirección real
+                        // Extraemos el ID del objeto LocationOption (Personal/Business) para activar la dirección real
                         val targetId = when (loc) {
                             is LocationOption.Personal -> loc.id
                             is LocationOption.Business -> loc.id
@@ -509,8 +495,7 @@ fun HomeScreenContent(
                         }
                         
                         if (targetId.isNotEmpty()) {
-                            // 3. Activamos la dirección en el Obrero y el Cerebro
-                            ubicacionObrero.selectAddress(targetId)
+                            // Activamos la dirección en el Cerebro (Fuente de Verdad Única)
                             beViewModel.selectAddress(targetId)
                         }
                     },
@@ -538,7 +523,7 @@ fun HomeScreenContent(
                 Box(modifier = Modifier.fillMaxSize().zIndex(11f).background(Color.Black.copy(alpha = 0.65f)).clickable(null, null) { beViewModel.setFavoritesPanelVisible(false) })
             }
             AnimatedVisibility(visible = showFavoritesPanel, enter = slideInHorizontally { it }, exit = slideOutHorizontally { it }, modifier = Modifier.align(Alignment.CenterEnd).zIndex(12f)) {
-                FavoritesPanel(navController, favoriteProviders, { beViewModel.setFavoritesPanelVisible(false) }, onToggleFavorite)
+                FavoritesPanel(navController, favoriteProviders, { beViewModel.setFavoritesPanelVisible(false) })
             }
 
             SuperCategoryDetailsPanel(
@@ -556,8 +541,7 @@ fun HomeScreenContent(
 fun FavoritesPanel(
     navController: NavHostController, 
     favorites: List<ServiceDisplayModel>, 
-    onClose: () -> Unit, 
-    onToggleFavorite: (String, Boolean) -> Unit
+    onClose: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxHeight().width(320.dp), 

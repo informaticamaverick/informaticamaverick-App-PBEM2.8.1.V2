@@ -52,6 +52,7 @@ import com.example.myapplication.presentation.components.PrestadorCardV3
 import com.example.myapplication.presentation.components.MoldeBarraMenu
 import com.example.myapplication.presentation.components.LocationPopup
 import com.example.myapplication.presentation.components.AddressInfo
+import com.example.myapplication.presentation.components.toLocationOption
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import com.example.myapplication.presentation.components.BarraCabezera
 import com.example.myapplication.presentation.components.FavoritePinBadge
@@ -81,37 +82,6 @@ fun ResultBusquedaCategoriaScreen(
     // --- 🛠️ SUBSECCIÓN: SINCRONIZACIÓN OBREROS -> CEREBRO (INTERMEDIARIO) ---
     // ==================================================================================
     val userState by beViewModel.userState.collectAsStateWithLifecycle()
-    val availableAddressInfos by ubicacionViewModel.availableAddressInfos.collectAsStateWithLifecycle()
-    val activeAddressFromObrero by ubicacionViewModel.activeAddress.collectAsStateWithLifecycle()
-
-    // 🔥 Sincronizamos el Perfil del Cerebro al Obrero de Ubicación para procesar direcciones
-    LaunchedEffect(userState) {
-        ubicacionViewModel.updateAddressList(userState)
-    }
-
-    // 🔥 Sincronizamos las direcciones procesadas del Obrero al Cerebro
-    LaunchedEffect(availableAddressInfos) {
-        beViewModel.syncAvailableAddresses(availableAddressInfos)
-    }
-
-    // ==================================================================================
-    // --- 📍 SECCIÓN: SINCRONIZACIÓN DE UBICACIÓN (OBRERO -> CEREBRO) ---
-    // ==================================================================================
-    // Sincronizamos la ubicación ACTIVA del Obrero al Cerebro para actualizar el estado global.
-    // Esto asegura que los proveedores se carguen correctamente para la ubicación seleccionada.
-    LaunchedEffect(activeAddressFromObrero) {
-        activeAddressFromObrero?.let { addr ->
-            // 1. Sincronizamos el objeto LocationOption para clima y visualización
-            beViewModel.syncLocation(addr.toLocationOption()) 
-            
-            // 2. 🔥 Sincronizamos el estado de la dirección activa en el Cerebro para mantener coherencia global
-            if (addr.id == "gps_current") {
-                beViewModel.updateAddressFromGps(addr)
-            } else {
-                beViewModel.selectAddress(addr.id)
-            }
-        }
-    }
 
     // 🔥 Sincronizamos los proveedores del Obrero al Cerebro (Puente)
     val unifiedServices by providerViewModel.unifiedServices.collectAsStateWithLifecycle()
@@ -231,8 +201,8 @@ fun ResultBusquedaCategoriaScreen(
         availableAddresses = availableAddressInfosBrain,
         user = userState,
         onAddressSelected = { addr ->
-            // Actualizamos en el Obrero que a su vez sincroniza con el Cerebro
-            ubicacionViewModel.selectAddress(addr.id)
+            // Actualizamos en el Cerebro, que es la fuente de verdad única
+            beViewModel.selectAddress(addr.id)
         },
         // ✅ CORRECCIÓN: El botón de GPS ahora notifica al Cerebro para actualizar el contexto
         onUpdateGps = { beViewModel.triggerAction("refresh_gps") },
@@ -247,7 +217,20 @@ fun ResultBusquedaCategoriaScreen(
             when (actionId) {
                 "refresh_gps" -> {
                     // El Cerebro ordena al Obrero de Ubicación ejecutar el cálculo
-                    ubicacionViewModel.ejecutarCalculoUbicacionGps(context)
+                    ubicacionViewModel.ejecutarCalculoUbicacionGps(context) { _, _, loc, calle, num, cp, lat, lng ->
+                        val freshGpsAddress = AddressInfo(
+                            id = "gps_current",
+                            companyOrUserName = "Mi Ubicación",
+                            branchName = "GPS Tracker",
+                            streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else "Ubicación detectada",
+                            locality = loc,
+                            postalCode = cp,
+                            isCompany = false,
+                            lat = lat,
+                            lng = lng
+                        )
+                        beViewModel.updateAddressFromGps(freshGpsAddress)
+                    }
                 }
             }
         }
@@ -452,7 +435,7 @@ fun ResultBusquedaCategoriaContent(
             // Componente Selector Flotante (Posicionado abajo a la izquierda, junto al asistente)
             // ==================================================================================
             // --- 📏 AJUSTE: ANCHO Y ALTO PERSONALIZADO PARA RESULTADOS DE BÚSQUEDA ---
-            // Se ajusta el ancho a 220dp y el alto a 72dp para coincidir con el asistente.
+            // Se ajusta el ancho a 220dp y el alto a 85dp para coincidir con el asistente.
             // ==================================================================================
             Box(
                 modifier = Modifier
@@ -480,32 +463,6 @@ fun ResultBusquedaCategoriaContent(
 //=============================================================================
 // --- 📍 SECCIÓN: COMPONENTES DE UBICACIÓN FLOTANTE (ADAPTACIÓN V5) ---
 // ==================================================================================
-
-/** Extension para compatibilidad con el Popup original */
-private fun AddressInfo.toLocationOption(): LocationOption {
-    return if (this.id == "gps_current") {
-        LocationOption.Gps(
-            address = this.streetAndNumber,
-            locality = this.locality,
-            lat = this.lat,
-            lng = this.lng
-        )
-    } else if (this.isCompany) {
-        LocationOption.Business(
-            companyName = this.companyOrUserName,
-            branchName = this.branchName,
-            address = this.streetAndNumber,
-            number = "",
-            locality = this.locality
-        )
-    } else {
-        LocationOption.Personal(
-            address = this.streetAndNumber,
-            number = "",
-            locality = this.locality
-        )
-    }
-}
 
 @Composable
 fun ResultBusquedaLocationTool(
@@ -635,8 +592,15 @@ fun ResultBusquedaLocationTool(
                             onClose = { closeWithAnimation() },
                             onRefresh = { onUpdateGps(); closeWithAnimation() },
                             onLocationSelected = { loc ->
-                                // Buscamos la dirección que coincida con la opción seleccionada
-                                val matched = availableAddresses.find { it.toLocationOption() == loc }
+                                // 🔥 CORRECCIÓN: Extraemos el ID del objeto seleccionado en el popup
+                                val targetId = when (loc) {
+                                    is LocationOption.Gps -> "gps_current"
+                                    is LocationOption.Personal -> loc.id
+                                    is LocationOption.Business -> loc.id
+                                }
+                                
+                                // Buscamos la dirección en el listado local usando el ID (Fuente de Verdad)
+                                val matched = availableAddresses.find { it.id == targetId }
                                 matched?.let { onAddressSelected(it) }
                                 closeWithAnimation()
                             },

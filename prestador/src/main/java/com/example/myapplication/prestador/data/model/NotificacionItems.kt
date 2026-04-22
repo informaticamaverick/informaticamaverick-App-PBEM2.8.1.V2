@@ -16,5 +16,6 @@ enum class TipoNotificacion(val label: String,
     CITA("Citas", "📅"),
     PRESUPUESTO("Presupuestos", "📋"),
     SOLICITUD("Solicitudes", "⚡"),
+    LICITACION("Licitación", "📄"), // 🔥 NUEVO: Filtro para licitaciones
     SISTEMA("Sistema", "🖥️")
 }

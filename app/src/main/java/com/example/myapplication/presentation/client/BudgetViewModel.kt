@@ -11,15 +11,22 @@ import com.example.myapplication.data.local.*
 import com.example.myapplication.data.model.MessageType
 import com.example.myapplication.data.repository.BudgetRepository
 import com.example.myapplication.data.repository.ChatRepository
+import com.example.myapplication.data.repository.UserRepository
 import com.example.myapplication.presentation.components.BeSmallActionModel
 import com.google.firebase.auth.FirebaseAuth
+import android.content.Context
+import android.net.Uri
+import android.util.Log
+import com.example.myapplication.util.ImageUtils
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.util.Locale
-import java.util.UUID
 import javax.inject.Inject
 
 data class AnalyticsState(
@@ -35,7 +42,9 @@ data class AnalyticsState(
 class BudgetViewModel @Inject constructor(
     private val repository: BudgetRepository,
     private val chatRepository: ChatRepository,
-    private val auth: FirebaseAuth
+    private val userRepository: UserRepository, // 🔥 Inyectamos UserRepository para datos del cliente
+    private val auth: FirebaseAuth,
+    @ApplicationContext private val context: Context // 🔥 Inyección de Context para ImageUtils
 ) : ViewModel() {
 
     // ==========================================================
@@ -378,6 +387,10 @@ class BudgetViewModel @Inject constructor(
     }
 
     // --- Lógica de Negocio ---
+    /**
+     * ── SECCIÓN: CREACIÓN DE LICITACIÓN (Firebase Sync) ──────────────────────────────────
+     * Este método procesa imágenes, datos del usuario/empresa y sincroniza con Firestore.
+     */
     fun createTender(
         title: String,
         description: String,
@@ -394,14 +407,73 @@ class BudgetViewModel @Inject constructor(
         viewModelScope.launch {
             val currentUserId = auth.currentUser?.uid ?: "user_demo_66"
 
-            val (addr, num, loc, type) = when (location) {
-                is LocationOption.Personal -> listOf(location.address, location.number, location.locality, "PERSONAL")
-                is LocationOption.Business -> listOf(location.address, location.number, location.locality, "BUSINESS")
-                else -> listOf(null, null, null, null)
+            // 1. PROCESAMIENTO DE UBICACIÓN Y DATOS DEL EMISOR
+            val currentUser = userRepository.userProfile.firstOrNull()
+            
+            val addr = when (location) {
+                is LocationOption.Personal -> location.address
+                is LocationOption.Business -> location.address
+                is LocationOption.Gps -> location.address
+                else -> null
+            }
+            val num = when (location) {
+                is LocationOption.Personal -> location.number
+                is LocationOption.Business -> location.number
+                is LocationOption.Gps -> location.number
+                else -> null
+            }
+            val loc = when (location) {
+                is LocationOption.Personal -> location.locality
+                is LocationOption.Business -> location.locality
+                is LocationOption.Gps -> location.locality
+                else -> null
+            }
+            val cp = when (location) {
+                is LocationOption.Personal -> location.postalCode
+                is LocationOption.Business -> location.postalCode
+                is LocationOption.Gps -> location.postalCode
+                else -> null
+            }
+            val type = when (location) {
+                is LocationOption.Personal -> "PERSONAL"
+                is LocationOption.Business -> "BUSINESS"
+                is LocationOption.Gps -> "GPS"
+                else -> null
             }
 
+            // Datos de la Empresa / Cliente
+            val compName = if (location is LocationOption.Business) location.companyName else null
+            val branchName = if (location is LocationOption.Business) location.branchName else null
+            val clientDisplayName = if (location is LocationOption.Business) {
+                location.companyName
+            } else {
+                "${currentUser?.name ?: ""} ${currentUser?.lastName ?: ""}".trim().ifEmpty { currentUser?.displayName }
+            }
+
+            // 2. PROCESAMIENTO DE IMÁGENES (Compresión WebP y Storage)
+            val uploadedUrls = mutableListOf<String>()
+            val tenderId = UUID.randomUUID().toString().take(8).uppercase()
+
+            imageUrls.forEachIndexed { index, uriString ->
+                val uri = Uri.parse(uriString)
+                // Comprimimos usando ImageUtils
+                val compressedBytes = ImageUtils.compressImageToWebP(context, uri)
+                compressedBytes?.let {
+                    val url = repository.uploadTenderImage(tenderId, index, it)
+                    url?.let { uploadedUrls.add(it) }
+                }
+            }
+
+            // 3. GENERACIÓN DE MATCH KEY Y EXPIRACIÓN (Costo Cero)
+            // Topic: tender_{cp}_{categoria}
+            val matchKey = if (cp != null) "tender_${cp.replace(" ", "")}_${category.replace(" ", "_")}" else null
+            
+            // Expiración: fecha de fin + 1 día de gracia
+            val expiresAt = if (endDate > 0) endDate + TimeUnit.DAYS.toMillis(1) else null
+
+            // 4. CREACIÓN DE LA ENTIDAD COMPLETA
             val newTender = TenderEntity(
-                tenderId = UUID.randomUUID().toString(),
+                tenderId = tenderId,
                 clientId = currentUserId,
                 title = title,
                 description = description,
@@ -412,19 +484,38 @@ class BudgetViewModel @Inject constructor(
                 requiresPaymentMethod = requiresPaymentMethod,
                 requiresWorkGuarantee = requiresWorkGuarantee,
                 requiresProviderDoc = requiresProviderDoc,
-                locationAddress = addr as? String,
-                locationNumber = num as? String,
-                locationLocality = loc as? String,
-                locationType = type as? String,
-                imageUrls = imageUrls,
+                locationAddress = addr,
+                locationNumber = num,
+                locationLocality = loc,
+                locationPostalCode = cp,
+                locationType = type,
+                clientDisplayName = clientDisplayName,
+                companyName = compName,
+                branchName = branchName,
+                imageUrls = uploadedUrls,
+                matchKey = matchKey,
+                expiresAt = expiresAt,
                 isActive = true
             )
+
+            // 5. PERSISTENCIA Y SINCRONIZACIÓN
             repository.createNewTender(newTender)
+            
+            // 6. ENVÍO DE NOTIFICACIÓN AL TOPIC (Costo Cero)
+            matchKey?.let { topic ->
+                repository.sendTopicNotification(
+                    topic = topic,
+                    title = "🚀 Nueva Licitación: $category",
+                    body = "Se busca: $title en tu zona ($cp). ¡Postúlate ahora!",
+                    tenderId = tenderId
+                )
+            }
         }
     }
 
     /**
-     * Actualiza el estado de una licitación.
+     * ── SECCIÓN: GESTIÓN DE ESTADOS (Limpieza de Nube) ──────────────────────────────────
+     * Actualiza el estado local y elimina de Firestore si la licitación no está más activa.
      */
     fun updateTenderStatus(tenderId: String, newStatus: String) {
         viewModelScope.launch {
@@ -438,7 +529,14 @@ class BudgetViewModel @Inject constructor(
                         else -> false
                     }
                 )
+                
+                // Actualizamos localmente (Room)
                 repository.createNewTender(updated)
+
+                // Limpieza de Firestore (Costo Cero)
+                if (newStatus == "ADJUDICADA" || newStatus == "CANCELADA" || newStatus == "CERRADA") {
+                    repository.removeFromCloud(tenderId)
+                }
             }
         }
     }

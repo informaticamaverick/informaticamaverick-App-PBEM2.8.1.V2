@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
         MessageEntity::class,    // Tabla de Mensajes (Historial de Chat)
         CalendarEventEntity::class // Tabla de Eventos del Calendario (NUEVO)
     ],
-    version = 26, // 🔥 [INCREMENTADO] Carga de nuevas categorías con descripciones y limpieza de colores
+    version = 27, // 🔥 [INCREMENTADO] Se agregaron campos de CP y Sincronización a TenderEntity
     exportSchema = false
 )
 @TypeConverters(Converters::class)

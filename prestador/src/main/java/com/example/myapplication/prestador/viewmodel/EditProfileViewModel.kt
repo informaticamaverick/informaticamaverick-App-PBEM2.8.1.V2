@@ -17,19 +17,17 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Source
+import com.google.firebase.messaging.FirebaseMessaging
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.update
+import android.net.Uri
+import android.util.Log
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
-import android.net.Uri
 import com.example.myapplication.prestador.data.model.AddressProvider
 import com.example.myapplication.prestador.data.model.BranchProvider
 import com.example.myapplication.prestador.data.model.CompanyProvider
@@ -484,6 +482,13 @@ class EditProfileViewModel @Inject constructor(
                 // Asegurar que el registro padre exista antes de cualquier operación dependiente
                 providerRepository.saveProvider(updatedProvider)
                 
+                // 🔥 [NUEVO] Sincronización de Topics de FCM (Costo Cero)
+                syncTopics(
+                    cp = (codigoPostal ?: updatedProvider.address?.codigoPostal)?.ifBlank { null },
+                    categories = updatedProvider.categories,
+                    isSubscribed = updatedProvider.isSubscribed
+                )
+                
                 // Actualizar en Firebase
                 val updateData = hashMapOf<String, Any>("updatedAt" to System.currentTimeMillis())
                 if (name != null) updateData["perfil.nombre"] = name
@@ -784,6 +789,46 @@ class EditProfileViewModel @Inject constructor(
         viewModelScope.launch {
             providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
             _profileState.value = ProfileState.Success(updatedProvider)
+        }
+    }
+
+    /**
+     * ── SECCIÓN: NOTIFICACIONES POR TEMA (FCM Topics) ─────────────────────────────────────────
+     * Suscribe al prestador a los temas de licitaciones según su CP y Rubros.
+     * Solo si es usuario Premium (isSubscribed).
+     */
+    fun syncTopics(cp: String?, categories: List<String>, isSubscribed: Boolean) {
+        if (cp.isNullOrBlank() || categories.isEmpty()) {
+            Log.w("FCM_TOPIC", "No se puede sincronizar topics: CP o Categorías vacíos. CP: $cp, Cats: $categories")
+            return
+        }
+
+        val fcm = FirebaseMessaging.getInstance()
+        val cleanCp = cp.replace(" ", "").uppercase()
+
+        Log.d("FCM_TOPIC", "Iniciando sincronización para CP: $cleanCp (Premium: $isSubscribed)")
+
+        categories.forEach { cat ->
+            val cleanCat = cat.replace(" ", "_").lowercase()
+            val topicName = "tender_${cleanCp}_$cleanCat"
+
+            if (isSubscribed) {
+                fcm.subscribeToTopic(topicName)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            Log.i("FCM_TOPIC", "✅ Suscrito con éxito a: $topicName")
+                        } else {
+                            Log.e("FCM_TOPIC", "❌ Error al suscribirse a $topicName: ${task.exception?.message}")
+                        }
+                    }
+            } else {
+                fcm.unsubscribeFromTopic(topicName)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            Log.i("FCM_TOPIC", "📴 Desuscrito de: $topicName")
+                        }
+                    }
+            }
         }
     }
 }

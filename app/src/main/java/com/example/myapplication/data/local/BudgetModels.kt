@@ -37,7 +37,17 @@ data class TenderEntity(
     val locationAddress: String? = null,
     val locationNumber: String? = null,
     val locationLocality: String? = null,
-    val locationType: String? = null, // PERSONAL o BUSINESS
+    val locationPostalCode: String? = null, // 🔥 [NUEVO] Código Postal para filtrado por Topic
+    val locationType: String? = null,       // PERSONAL o BUSINESS
+
+    // --- DATOS DEL EMISOR (CLIENTE / EMPRESA) ---
+    val clientDisplayName: String? = null,  // Nombre completo o Razón Social
+    val companyName: String? = null,        // Si es empresa, el nombre de la misma
+    val branchName: String? = null,         // Si es sucursal, el nombre de la sucursal
+
+    // --- FIREBASE SYNC & LIFECYCLE ---
+    val expiresAt: Long? = null,            // Fecha de expiración para TTL en Firestore
+    val matchKey: String? = null,           // "CP_CATEGORIA" para suscripciones eficientes
 
     // --- MULTIMEDIA ---
     val imageUrls: List<String> = emptyList()

@@ -32,6 +32,7 @@ interface ChatDao {
     fun getTotalUnreadCount(myUserId: String): Flow<Int>
 
     // Obtener un mapa de chatId -> cantidad de no leídos
+    // [DEBUG] Corregido: Solo contar mensajes donde el usuario es receptor y no es el autor (aunque receiverId ya filtra eso habitualmente)
     @Query("SELECT chatId, COUNT(*) as count FROM messages WHERE receiverId = :myUserId AND isRead = 0 GROUP BY chatId")
     fun getUnreadCountsPerChat(myUserId: String): Flow<List<ChatUnreadCount>>
 

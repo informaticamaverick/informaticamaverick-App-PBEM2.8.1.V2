@@ -83,12 +83,14 @@ fun ChatScreen(
             )
         }
 
+        /* [MOVIDO A BEBRAINVIEWMODEL]
         DisposableEffect(currentUserId) {
             chatRepository.startGlobalListening(currentUserId)
             onDispose {
                 chatRepository.stopGlobalListening()
             }
         }
+        */
 
         // 🔥 [CORRECCIÓN] OBTENER CONTEOS DE NO LEÍDOS
         val unreadCountsList by chatRepository.getUnreadCountsPerChat(currentUserId)
@@ -101,16 +103,16 @@ fun ChatScreen(
         val lastMessageList by chatRepository.getLastMessagePerChat(currentUserId)
             .collectAsStateWithLifecycle(initialValue = emptyList())
         val lastMessageMap = remember(lastMessageList) {
-            lastMessageList.associate { it.chatId to it }
+            lastMessageList.associateBy { it.chatId }
         }
 
-        // 4. LÓGICA DE VISTAS
+        // 4. LÓGICA DE VISTAS (MODERNIZADA)
         if (activeChatId == null) {
             // VISTA A: BANDEJA DE ENTRADA
             val activeChatIds by chatRepository.getActiveChatIds(currentUserId)
                 .collectAsStateWithLifecycle(initialValue = emptyList())
 
-            // 🔥 [CORRECCIÓN] ORDENAR POR RECIENCIA (Room ya los trae ordenados por MAX(timestamp))
+            // 🔥 [CORRECCIÓN] ORDENAR POR RECIENCIA
             val myChats = remember(allProviders, activeChatIds) {
                 activeChatIds.mapNotNull { id ->
                     allProviders.find { it.uid == id }
@@ -120,7 +122,7 @@ fun ChatScreen(
             ChatListView(
                 providersList = myChats,
                 allCategories = emptyList(),
-                unreadCounts = unreadMap, // 🔥 Pasamos el mapa de no leídos
+                unreadCounts = unreadMap,
                 lastMessages = lastMessageMap,
                 currentUserId = currentUserId,
                 onChatClick = { selectedId -> activeChatId = selectedId },

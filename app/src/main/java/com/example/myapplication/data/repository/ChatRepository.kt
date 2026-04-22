@@ -97,9 +97,16 @@ class ChatRepository @Inject constructor(
                     val msgId =
                         snapshot.child("messageId").getValue(String::class.java) ?: snapshot.key
                         ?: return
+                    
+                    val isReadInServer = snapshot.child("isRead").getValue(Boolean::class.java) ?: false
+                    
                     scope.launch {
-                        if (chatDao.messageExists(msgId)) return@launch
+                        if (chatDao.messageExists(msgId)) {
+                            chatDao.updateMessageIsRead(msgId, isReadInServer)
+                            return@launch
+                        }
                         val rawType = snapshot.child("type").getValue(String::class.java) ?: "TEXT"
+                        // ... (rest of code logic remains same but using isReadInServer)
                         val type = try {
                             if (rawType == "APPOINTMENT") MessageType.VISIT
                             else MessageType.valueOf(rawType)
@@ -275,7 +282,7 @@ class ChatRepository @Inject constructor(
                             appointmentStatus = appointmentStatus,
                             timestamp = snapshot.child("timestamp").getValue(Long::class.java)
                                 ?: System.currentTimeMillis(),
-                            isRead = false,
+                            isRead = isReadInServer,
                             isSynced = true
                         )
                         chatDao.insertMessage(entity)
@@ -331,7 +338,10 @@ class ChatRepository @Inject constructor(
     //Listener global notificaciones en todos los chats
     private val globalListeners = mutableListOf<Pair<DatabaseReference, ChildEventListener>>()
 
+    private var syncStartTime = System.currentTimeMillis()
+
     fun startGlobalListening(myUserId: String) {
+        syncStartTime = System.currentTimeMillis()
         stopGlobalListening()
         scope.launch {
             try {
@@ -347,8 +357,17 @@ class ChatRepository @Inject constructor(
                             val senderId = snapshot.child("senderId").getValue(String::class.java) ?: return
                             if (senderId == myUserId) return
                             val msgId = snapshot.child("messageId").getValue(String::class.java) ?: snapshot.key ?: return
+                            
+                            val isReadInServer = snapshot.child("isRead").getValue(Boolean::class.java) ?: false
+                            val msgTimestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis()
+
                             scope.launch {
-                                if (chatDao.messageExists(msgId)) return@launch
+                                if (chatDao.messageExists(msgId)) {
+                                    // Si ya existe pero el estado de lectura cambió en el servidor (ej: sincronización entre dispositivos)
+                                    chatDao.updateMessageIsRead(msgId, isReadInServer)
+                                    return@launch
+                                }
+                                
                                 val rawType = snapshot.child("type").getValue(String::class.java) ?: "TEXT"
                                 val type = runCatching { MessageType.valueOf(rawType) }.getOrElse { MessageType.TEXT }
                                 val rawContent = snapshot.child("content").getValue(String::class.java)
@@ -388,28 +407,47 @@ class ChatRepository @Inject constructor(
                                     appointmentStatus = appointmentStatus,
                                     appointmentDate = snapshot.child("appointmentDate").getValue(String::class.java),
                                     appointmentTime = snapshot.child("appointmentTime").getValue(String::class.java),
-                                    timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis(),
-                                    isRead = false,
+                                    timestamp = msgTimestamp,
+                                    isRead = isReadInServer,
                                     isSynced = true
                                 )
                                 chatDao.insertMessage(entity)
-                                val senderName = try {
-                                    val provDoc = firestore.collection("providers").document(senderId).get().await()
-                                    val perfil = provDoc.get("perfil") as? Map<*, *>
-                                    (perfil?.get("nombre") as? String)
-                                        ?: provDoc.getString("nombre")
-                                        ?: senderId
-                                } catch (e: Exception) { senderId }
-                                notificationHelper.showChatNotification(
-                                    senderId = senderId,
-                                    senderName = senderName,
-                                    msgType = rawType,
-                                    appointmentStatus = appointmentStatus,
-                                    appointmentTitle = snapshot.child("appointmentTitle").getValue(String::class.java)
-                                )
+                                
+                                // Solo notificar si es un mensaje REALMENTE nuevo (posterior al inicio de la app)
+                                if (msgTimestamp > syncStartTime && !isReadInServer) {
+                                    val senderName = try {
+                                        val provDoc = firestore.collection("providers").document(senderId).get().await()
+                                        val perfil = provDoc.get("perfil") as? Map<*, *>
+                                        (perfil?.get("nombre") as? String)
+                                            ?: provDoc.getString("nombre")
+                                            ?: senderId
+                                    } catch (e: Exception) { senderId }
+                                    
+                                    notificationHelper.showChatNotification(
+                                        senderId = senderId,
+                                        senderName = senderName,
+                                        msgType = rawType,
+                                        appointmentStatus = appointmentStatus,
+                                        appointmentTitle = snapshot.child("appointmentTitle").getValue(String::class.java)
+                                    )
+                                    Log.d("ChatRepository", "Notificación global enviada para: $msgId en chat: $chatId")
+                                }
                             }
                         }
-                        override fun onChildChanged(snapshot: DataSnapshot, previousKey: String?) {}
+                        override fun onChildChanged(snapshot: DataSnapshot, previousKey: String?) {
+                            val msgId = snapshot.child("messageId").getValue(String::class.java) ?: snapshot.key ?: return
+                            val isReadNow = snapshot.child("isRead").getValue(Boolean::class.java) ?: false
+                            val appointmentStatus = snapshot.child("appointmentStatus").getValue(String::class.java)
+                            
+                            scope.launch {
+                                if (chatDao.messageExists(msgId)) {
+                                    chatDao.updateMessageIsRead(msgId, isReadNow)
+                                    if (appointmentStatus != null) {
+                                        chatDao.updateAppointmentStatus(msgId, appointmentStatus)
+                                    }
+                                }
+                            }
+                        }
                         override fun onChildRemoved(snapshot: DataSnapshot) {}
                         override fun onChildMoved(snapshot: DataSnapshot, previousKey: String?) {}
                         override fun onCancelled(error: DatabaseError) {}
@@ -497,7 +535,7 @@ class ChatRepository @Inject constructor(
                 "messageId" to message.id,
                 "chatId" to message.chatId,
                 "senderId" to message.senderId,
-                "receicerId" to message.receiverId,
+                "receiverId" to message.receiverId,
                 "type" to message.type.name,
                 "content" to rtdbContent,
                 "text" to if (message.type == MessageType.IMAGE) "[Imagen]" else message.content,
@@ -507,11 +545,11 @@ class ChatRepository @Inject constructor(
                 "latitude" to message.latitude,
                 "longitude" to message.longitude,
                 "locationAddress" to message.locationAddress,
-                "durationsSeconds" to message.durationSeconds,
+                "durationSeconds" to message.durationSeconds,
                 "relatedId" to message.relatedId
             )
             if (message.type == MessageType.VISIT) {
-                msgData["appointmentStatus"] = "PENDIGN"
+                msgData["appointmentStatus"] = "PENDING"
             }
             database.reference
                 .child("chats").child(message.chatId)

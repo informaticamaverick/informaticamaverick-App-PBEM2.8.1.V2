@@ -53,7 +53,9 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Date
+import java.util.Locale
+//import com.example.myapplication.client.presentation.components.MoldeBarraMenu
 
 /**
  * Pantalla de lista de chats con búsqueda y filtros avanzados
@@ -258,7 +260,7 @@ fun ChatListScreen(
                     onShowLockDialog = onShowLockDialog
                 )
             }
-            
+
             // Lista de conversaciones
             if (!isSearchActive && sortedConversations.isEmpty()) {
                 // Estado vacío

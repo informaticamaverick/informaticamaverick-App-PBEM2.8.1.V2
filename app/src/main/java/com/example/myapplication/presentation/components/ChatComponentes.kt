@@ -12,18 +12,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -41,38 +37,28 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.test.isOn
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.room.util.TableInfo
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
-import com.example.myapplication.R
 import com.example.myapplication.data.local.MessageEntity
 import com.example.myapplication.data.model.MessageType
 import com.example.myapplication.ui.theme.AppColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import okhttp3.internal.concurrent.TaskRunner
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
 
@@ -630,13 +616,23 @@ fun MessageBubble(
     message: MessageEntity,
     appColors: AppColors,
     currentUserId: String = "currentUser",
-    onBudgetClick: (String) -> Unit = {}
+    onBudgetClick: (String) -> Unit = {},
+    onImageClick: () -> Unit = {}
 ) {
     val isFromMe = message.senderId ==
             currentUserId
     val context = LocalContext.current
 
     when (message.type) {
+
+        MessageType.IMAGE -> {
+            ImageMessageBubble(
+                message = message,
+                appColors = appColors,
+                currentUserId = currentUserId,
+                onImageClick = onImageClick
+            )
+        }
 
         MessageType.LOCATION -> {
             val lat = message.latitude
@@ -1003,5 +999,183 @@ fun ProviderPhoto(
         error = placeholder,
         placeholder = placeholder
     )
+}
+
+// ==========================================================================================
+// --- SECCIÓN: BURBUJAS DE IMAGEN Y VISORES (CIRO COSTO STORAGE) ---
+// ==========================================================================================
+
+/**
+ * Burbuja de mensaje para imágenes.
+ * Soporta carga desde ruta local (imageUrl), Base64 (content) o URL.
+ */
+@Composable
+fun ImageMessageBubble(
+    message: MessageEntity,
+    appColors: AppColors,
+    currentUserId: String = "currentUser",
+    onImageClick: () -> Unit = {}
+) {
+    val isFromMe = message.senderId == currentUserId
+    val alignment = if (isFromMe) Alignment.End else Alignment.Start
+
+    // Soporta Local Path (imageUrl), Base64 puro (content) o URL remota (http/https)
+    val model = remember(message.content, message.imageUrl) {
+        val path = message.imageUrl
+        when {
+            // 1. Prioridad: Ruta local (ya sea guardada al enviar o al recibir)
+            !path.isNullOrBlank() -> {
+                if (path.startsWith("/") || path.startsWith("file://")) {
+                    if (path.startsWith("/")) "file://$path" else path
+                } else path
+            }
+            // 2. Fallback: URL remota
+            message.content.startsWith("http") -> message.content
+            // 3. Fallback: Base64 (si no es el placeholder "[Imagen]")
+            message.content.isNotEmpty() && message.content != "[Imagen]" -> {
+                try {
+                    android.util.Base64.decode(message.content, android.util.Base64.NO_WRAP)
+                } catch (e: Exception) { null }
+            }
+            else -> null
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp),
+        horizontalAlignment = alignment
+    ) {
+        if (model != null) {
+            AsyncImage(
+                model = model,
+                contentDescription = "Imagen",
+                modifier = Modifier
+                    .widthIn(max = 240.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .clickable { onImageClick() },
+                contentScale = ContentScale.FillWidth
+            )
+        } else {
+            Surface(
+                color = appColors.surfaceColor,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.BrokenImage, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                    Text(
+                        text = "Imagen no disponible",
+                        color = appColors.textSecondaryColor,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+        
+        // Timestamp y ticks
+        Row(
+            modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                fontSize = 10.sp,
+                color = appColors.textSecondaryColor
+            )
+            if (isFromMe) {
+                val isRead = message.isRead || message.status == "READ"
+                val isDelivered = message.status == "DELIVERED" || isRead
+                val tickColor = if (isRead) Color(0xFF53BDEB) else appColors.textSecondaryColor.copy(alpha = 0.5f)
+                
+                Icon(
+                    imageVector = if (isDelivered) Icons.Default.DoneAll else Icons.Default.Done,
+                    contentDescription = null,
+                    tint = tickColor,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Diálogo de pantalla completa para visualizar imágenes con Zoom.
+ * Optimizado para leer archivos locales o Base64.
+ */
+@Composable
+fun ImageZoomDialog(
+    message: MessageEntity,
+    onDismiss: () -> Unit
+) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 6f)
+        offset += panChange
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        ) {
+            val model = remember(message.content, message.imageUrl) {
+                val path = message.imageUrl
+                when {
+                    !path.isNullOrBlank() -> if (path.startsWith("/")) "file://$path" else path
+                    message.content.startsWith("http") -> message.content
+                    message.content.isNotEmpty() && message.content != "[Imagen]" -> {
+                        try {
+                            android.util.Base64.decode(message.content, android.util.Base64.NO_WRAP)
+                        } catch (e: Exception) { null }
+                    }
+                    else -> null
+                }
+            }
+
+            if (model != null) {
+                AsyncImage(
+                    model = model,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offset.x,
+                            translationY = offset.y
+                        )
+                        .transformable(transformableState),
+                    contentScale = ContentScale.Fit
+                )
+            }
+            
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = Color.White)
+            }
+        }
+    }
 }
 

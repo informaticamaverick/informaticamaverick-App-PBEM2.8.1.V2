@@ -31,19 +31,19 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import java.util.Calendar
-
-import com.example.myapplication.presentation.client.CategoryVisuals
+import com.example.myapplication.presentation.components.toLocationOption
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flatMapLatest
 import com.example.myapplication.data.repository.AuthRepository
 import com.example.myapplication.data.local.TokenManager
+import com.example.myapplication.data.repository.ChatRepository
+import com.example.myapplication.data.repository.BudgetRepository
+import com.example.myapplication.data.repository.CalendarRepository
+import com.example.myapplication.data.local.ChatUnreadCount
 
 // ==========================================================================================
 // --- SECCIÓN: ENUMS Y MODELOS DE APOYO (DOMINIO DEL CEREBRO) ---
@@ -68,76 +68,117 @@ enum class InitialNavTarget {
  * 
  * Este ViewModel NO realiza cálculos pesados, solo sincroniza y expone datos procesados.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class BeBrainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
-    private val tokenManager: TokenManager
+    private val tokenManager: TokenManager,
+    private val chatRepository: ChatRepository,
+    private val budgetRepository: BudgetRepository,
+    private val calendarRepository: CalendarRepository
 ) : ViewModel() {
 
     // ======================================================================================
-    // --- 1. ESTADO DE NAVEGACIÓN Y AUTH (DECISIONES ESTRATÉGICAS) ---
+    // --- CHAT Y NOTIFICACIONES GLOBALES ---
     // ======================================================================================
-    private val _initialNavTarget = MutableStateFlow(InitialNavTarget.CHECKING)
-    val initialNavTarget: StateFlow<InitialNavTarget> = _initialNavTarget.asStateFlow()
+    val totalUnreadCount: StateFlow<Int> = userRepository.userProfile
+        .flatMapLatest { user: UserEntity? ->
+            if (user != null) chatRepository.getTotalUnreadCount(user.id)
+            else kotlinx.coroutines.flow.flowOf(0)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    private val _targetUserName = MutableStateFlow("Usuario")
-    val targetUserName: StateFlow<String> = _targetUserName.asStateFlow()
+    /** 🔥 ESTADO DEL PERFIL DE USUARIO (OBSERVADO DIRECTAMENTE DESDE EL REPOSITORIO) 🔥 */
+    val userState: StateFlow<UserEntity?> = userRepository.userProfile
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    private val _isFirstTime = MutableStateFlow(tokenManager.isFirstTime())
-    val isFirstTime: StateFlow<Boolean> = _isFirstTime.asStateFlow()
+    val hasChatNotifications: StateFlow<Boolean> = totalUnreadCount
+        .map { it > 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    fun completeFirstTime() {
-        tokenManager.setFirstTimeCompleted()
-        _isFirstTime.value = false
+    val hasBudgetNotifications: StateFlow<Boolean> = budgetRepository.allBudgets
+        .map { list: List<BudgetEntity> -> list.any { it.status.name == "PENDIENTE" && !it.isRead } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val hasCalendarNotifications: StateFlow<Boolean> = calendarRepository.allEvents
+        .map { list: List<com.example.myapplication.data.local.CalendarEventEntity> -> list.any { it.status.name == "PENDIENTE" } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val hasPromoNotifications: StateFlow<Boolean> = kotlinx.coroutines.flow.flowOf(false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val unreadCountsMap: StateFlow<Map<String, Int>> = userRepository.userProfile
+        .flatMapLatest { user: UserEntity? ->
+            if (user != null) chatRepository.getUnreadCountsPerChat(user.id)
+            else kotlinx.coroutines.flow.flowOf(emptyList<ChatUnreadCount>())
+        }
+        .map { list: List<ChatUnreadCount> -> list.associate { it.chatId to it.count } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    private fun startGlobalChatSync(userId: String) {
+        chatRepository.startGlobalListening(userId)
+        chatRepository.setUserOnline(userId, true)
     }
 
-    fun performInitialAuthCheck() {
-        viewModelScope.launch {
-            val user = authRepository.getCurrentUser()
-            if (user == null) {
-                _initialNavTarget.value = InitialNavTarget.LOGIN
-            } else {
-                _targetUserName.value = user.displayName ?: "Usuario"
+    private fun stopGlobalChatSync() {
+        chatRepository.stopGlobalListening()
+    }
 
-                // --- LÓGICA MAVERICK V5: Única fuente de verdad en AuthRepository ---
-                // Verificamos el estado real del perfil en Firestore (direcciones y CP)
-                val status = authRepository.checkProfileStatus(user.uid)
-                val profileExists = status.first
-                val hasZipCode = status.second
-
-                if (profileExists) {
-                    if (hasZipCode) {
-                        _initialNavTarget.value = InitialNavTarget.MAIN_SCREEN
-                    } else {
-                        // Si no tiene CP, debe ir a completar perfil
-                        _initialNavTarget.value = InitialNavTarget.PROFILE_EDIT
-                    }
-                } else {
-                    // Usuario nuevo: a editar perfil
-                    _initialNavTarget.value = InitialNavTarget.PROFILE_EDIT
-                }
-            }
+    override fun onCleared() {
+        super.onCleared()
+        stopGlobalChatSync()
+        val user = authRepository.getCurrentUser()
+        if (user != null) {
+            chatRepository.setUserOnline(user.uid, false)
         }
     }
 
     // ======================================================================================
-    // --- 2. SINCRONIZACIÓN DE DATOS (EL CEREBRO MUESTRA LO QUE EL OBRERO CALCULA) ---
+    // --- 1. ESTADO DE NAVEGACIÓN Y AUTH (DECISIONES ESTRATÉGICAS) ---
     // ======================================================================================
-
-    // --- ESTADO DEL USUARIO (Single Source of Truth de UserRepository) ---
-    val userState: StateFlow<UserEntity?> = userRepository.userProfile
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
-
     private val _favoriteProvidersRaw = MutableStateFlow<List<Provider>>(emptyList())
     private val _allBudgetsRaw = MutableStateFlow<List<BudgetEntity>>(emptyList())
     private val _allTendersRaw = MutableStateFlow<List<TenderEntity>>(emptyList())
     private val _allProvidersRaw = MutableStateFlow<List<ServiceDisplayModel>>(emptyList())
     val allProvidersRaw: StateFlow<List<ServiceDisplayModel>> = _allProvidersRaw.asStateFlow()
+
+    private val _initialNavTarget = MutableStateFlow(InitialNavTarget.CHECKING)
+    val initialNavTarget: StateFlow<InitialNavTarget> = _initialNavTarget.asStateFlow()
+
+    private val _isFirstTime = MutableStateFlow(tokenManager.isFirstTime())
+    val isFirstTime: StateFlow<Boolean> = _isFirstTime.asStateFlow()
+
+    val targetUserName: StateFlow<String> = userState
+        .map { it?.displayName ?: "Usuario Maverick" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Usuario Maverick")
+
+    /**
+     * ESTRATEGIA: Verificación inicial de sesión y perfil.
+     */
+    fun performInitialAuthCheck() {
+        viewModelScope.launch {
+            delay(2000) // Tiempo para que Be "despierte"
+            val currentUser = authRepository.getCurrentUser()
+            
+            if (currentUser == null) {
+                _initialNavTarget.value = InitialNavTarget.LOGIN
+            } else {
+                // Verificamos si tiene perfil en Firestore para decidir si va a Main o ProfileEdit
+                val profile = authRepository.getFullUserProfile(currentUser.uid)
+                if (profile == null) {
+                    _initialNavTarget.value = InitialNavTarget.PROFILE_EDIT
+                } else {
+                    _initialNavTarget.value = InitialNavTarget.MAIN_SCREEN
+                }
+            }
+        }
+    }
+
+    fun completeFirstTime() {
+        tokenManager.setFirstTimeCompleted()
+        _isFirstTime.value = false
+    }
 
     // ======================================================================================
     // --- 2. GESTIÓN DE CATEGORÍAS Y ORDENAMIENTO ---
@@ -158,9 +199,6 @@ class BeBrainViewModel @Inject constructor(
     val selectedSuperCategory: StateFlow<SuperCategory?> = _selectedSuperCategory.asStateFlow()
 
     // --- ESTADO DE UBICACIÓN Y CLIMA (SINCRONIZADO DESDE UBICACIONCLIMAVIEWMODEL) ---
-    private val _selectedLocation = MutableStateFlow<LocationOption?>(null)
-    val selectedLocation: StateFlow<LocationOption?> = _selectedLocation.asStateFlow()
-
     private val _temperature = MutableStateFlow("--°C")
     val temperature: StateFlow<String> = _temperature.asStateFlow()
 
@@ -221,11 +259,6 @@ class BeBrainViewModel @Inject constructor(
         _locationName.value = city
     }
 
-    /** Sincroniza la ubicación seleccionada */
-    fun syncLocation(location: LocationOption?) {
-        _selectedLocation.value = location
-    }
-
     fun updateProfile(user: UserEntity?) { 
         // Ya no es necesario actualizar manualmente ya que observamos el Repositorio directamente
     }
@@ -248,6 +281,10 @@ class BeBrainViewModel @Inject constructor(
     private val _isBottomBarVisible = MutableStateFlow(true)
     val isBottomBarVisible: StateFlow<Boolean> = _isBottomBarVisible.asStateFlow()
 
+    // Flag para saber si la barra fue ocultada manualmente por una pantalla (ej: Chat)
+    // y no por el sistema de búsqueda de Be.
+    private val _isBottomBarForcedHidden = MutableStateFlow(false)
+
     private val _isResultadoVisible = MutableStateFlow(false)
     val isResultadoVisible: StateFlow<Boolean> = _isResultadoVisible.asStateFlow()
 
@@ -261,7 +298,11 @@ class BeBrainViewModel @Inject constructor(
     fun setWeatherDetailsVisible(visible: Boolean) { _showWeatherDetails.value = visible }
     fun toggleFavoritesPanel() { _showFavoritesPanel.value = !_showFavoritesPanel.value }
     fun setFavoritesPanelVisible(visible: Boolean) { _showFavoritesPanel.value = visible }
-    fun setBottomBarVisible(visible: Boolean) { _isBottomBarVisible.value = visible }
+    fun setBottomBarVisible(visible: Boolean) { 
+        _isBottomBarVisible.value = visible 
+        // Si se oculta desde una pantalla, marcamos el flag para que Be no la restaure al "despertar"
+        _isBottomBarForcedHidden.value = !visible
+    }
     fun setResultadoVisible(visible: Boolean) { if (visible && !_isUIBlocked.value) _isResultadoVisible.value = visible }
     fun setUIBlocked(blocked: Boolean) { _isUIBlocked.value = blocked; if (blocked && _isSearchActive.value) _isResultadoVisible.value = false }
     fun openKeyboard() { _requestKeyboard.value = true }
@@ -342,37 +383,86 @@ class BeBrainViewModel @Inject constructor(
 
     // Guardamos el ID de la dirección seleccionada o un objeto especial para GPS
     private val _selectedAddressId = MutableStateFlow<String?>(null)
+    val selectedAddressId: StateFlow<String?> = _selectedAddressId.asStateFlow()
+
     private val _gpsAddressOverride = MutableStateFlow<AddressInfo?>(null)
 
     // ======================================================================================
-    // --- MAPEADO DE DIRECCIONES (SINCRONIZADO DESDE EL OBRERO) ---
+    // --- MAPEADO DE DIRECCIONES (Ssingle Source of Truth) ---
     // ======================================================================================
     
-    private val _availableAddressInfos = MutableStateFlow<List<AddressInfo>>(emptyList())
-    val availableAddressInfos: StateFlow<List<AddressInfo>> = _availableAddressInfos.asStateFlow()
-
     /**
-     * Sincroniza las direcciones ya procesadas por el Obrero (UbicacionClimaViewModel).
-     * El Cerebro solo las almacena para dárselas a la UI.
+     * TRABAJO SUCIO (Mapeo): Derivamos la lista de direcciones directamente del estado del usuario.
+     * Esto asegura disponibilidad instantánea y coherencia global sin depender de sincronizaciones externas.
      */
-    fun syncAvailableAddresses(list: List<AddressInfo>) {
-        _availableAddressInfos.value = list
-    }
+    val availableAddressInfos: StateFlow<List<AddressInfo>> = userState.map { user ->
+        if (user == null) return@map emptyList<AddressInfo>()
+        val list = mutableListOf<AddressInfo>()
+        
+        // 1. Mapeo de Direcciones Personales
+        user.personalAddresses.forEach { addr ->
+            list.add(AddressInfo(
+                id = addr.id,
+                companyOrUserName = user.displayName,
+                branchName = addr.label.ifEmpty { "Mi Ubicación" },
+                streetAndNumber = "${addr.calle} ${addr.numero}",
+                locality = addr.localidad,
+                province = addr.provincia,
+                country = "Argentina", 
+                postalCode = addr.codigoPostal,
+                isCompany = false,
+                lat = addr.latitude,
+                lng = addr.longitude
+            ))
+        }
+        
+        // 2. Mapeo de Direcciones de Empresas y sus Sucursales
+        user.companies.forEach { company ->
+            company.branches.forEach { branch ->
+                list.add(AddressInfo(
+                    id = branch.id,
+                    companyOrUserName = company.name,
+                    branchName = branch.name,
+                    streetAndNumber = "${branch.address.calle} ${branch.address.numero}",
+                    locality = branch.address.localidad,
+                    province = branch.address.provincia,
+                    country = "Argentina",
+                    postalCode = branch.address.codigoPostal,
+                    isCompany = true,
+                    lat = branch.address.latitude,
+                    lng = branch.address.longitude
+                ))
+            }
+        }
+        list
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * Obtiene la dirección activa combinando la selección del usuario con los datos cargados.
+     * FUENTE DE VERDAD ÚNICA: Dirección Activa (Modelo de Datos)
+     * Combina la selección del usuario con los datos derivados del perfil o GPS.
      */
     val activeAddress: StateFlow<AddressInfo?> = combine(
-        _selectedAddressId, _gpsAddressOverride, _availableAddressInfos
+        _selectedAddressId, _gpsAddressOverride, availableAddressInfos
     ) { selectedId, gpsOverride, allAddresses ->
-        if (gpsOverride != null && selectedId == "gps_current") return@combine gpsOverride
-        allAddresses.find { it.id == selectedId } ?: allAddresses.firstOrNull()
+        // Prioridad 1: Override de GPS Activo
+        if (selectedId == "gps_current" && gpsOverride != null) return@combine gpsOverride
+        
+        // Prioridad 2: Selección del Usuario en la lista persistente
+        val found = allAddresses.find { it.id == selectedId }
+        if (found != null) return@combine found
+        
+        // Prioridad 3: Fallback a la primera dirección del perfil (Default)
+        allAddresses.firstOrNull()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    fun setShowLocationTool(visible: Boolean) {
-        _showLocationTool.value = visible
-        updateActionsForContext(_currentContext.value)
-    }
+    /**
+     * FUENTE DE VERDAD ÚNICA (VISUAL): LocationOption
+     * Derivado directamente de activeAddress para asegurar que la UI (Header/Popups) 
+     * siempre muestre lo mismo que los filtros de búsqueda.
+     */
+    val selectedLocation: StateFlow<LocationOption?> = activeAddress.map { info ->
+        info?.toLocationOption()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /** Selecciona una dirección específica del listado */
     fun selectAddress(addressId: String) {
@@ -384,6 +474,11 @@ class BeBrainViewModel @Inject constructor(
     fun updateAddressFromGps(address: AddressInfo) {
         _gpsAddressOverride.value = address
         _selectedAddressId.value = "gps_current"
+    }
+
+    /** Método legacy para compatibilidad durante transición, pronto a deprecado */
+    fun syncAvailableAddresses(list: List<AddressInfo>) {
+        // Ya no hace nada, usamos availableAddressInfos derivado
     }
 
     private val _toolboxKey = MutableStateFlow("home_default")
@@ -581,7 +676,37 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     // --- BE ASSISTANT GESTOS ---
     // ======================================================================================
-    fun onBeClick() { if (_isBeDormido.value) _isBeDormido.value = false else setSearchActive(!_isSearchActive.value) }
+    
+    /**
+     * TOQUE SIMPLE EN BE:
+     * - Si está dormido: Despierta parcialmente (se muestra completo).
+     * - Si está despierto: Activa el modo búsqueda.
+     */
+    fun onBeClick() { 
+        if (_isBeDormido.value) {
+            _isBeDormido.value = false 
+            // Podríamos agregar un efecto de sonido o vibración aquí
+        } else {
+            setSearchActive(!_isSearchActive.value) 
+        }
+    }
+
+    /**
+     * DOBLE TOQUE EN BE:
+     * - Si está dormido: Despierta y vuelve a su posición original (0,0).
+     * - Si está despierto: Entra en modo hibernación (Mitad oculto, transparente).
+     */
+    fun onBeDoubleClick() { 
+        if (_isBeDormido.value) {
+            _isBeDormido.value = false
+            // Disparamos el trigger para que BeAssistantViewModel resetee la posición a casa
+            _resetBePositionTrigger.value += 1 
+        } else {
+            _isBeDormido.value = true
+            cerrarBeAssistantCompleto()
+        }
+    }
+
     fun setSearchActive(active: Boolean) {
         if (active) {
             _isSearchActive.value = true; _showBeTools.value = false; _beState.value = BeState.IDLE; openKeyboard()
@@ -597,8 +722,10 @@ class BeBrainViewModel @Inject constructor(
         _isSearchActive.value = false; _searchQuery.value = ""; _isResultadoVisible.value = false
         
         // --- SECCIÓN: RESTAURACIÓN DINÁMICA DE BARRAS ---
-        // En HUD V5, permitimos que la barra sea visible incluso en el contexto de CHAT (Lista)
-        _isBottomBarVisible.value = true
+        // Restauramos la barra solo si no hay una pantalla (como el chat) que haya pedido ocultarla.
+        if (!_isBottomBarForcedHidden.value) {
+            _isBottomBarVisible.value = true
+        }
         
         _showBeTools.value = false; _isMultiSelectionActive.value = false; _selectedItemIds.value = emptySet()
         _beState.value = BeState.IDLE; closeKeyboard()
@@ -629,7 +756,6 @@ class BeBrainViewModel @Inject constructor(
         updateToolboxKey()
     }
 
-    fun onBeDoubleClick() { _isBeDormido.value = !_isBeDormido.value; if (_isBeDormido.value) cerrarBeAssistantCompleto() }
     fun setBeState(state: BeState) { _beState.value = state }
     fun nextTip() { if (_currentTipIndex.value < _beMessages.value.size - 1) _currentTipIndex.value++ }
     fun prevTip() { if (_currentTipIndex.value > 0) _currentTipIndex.value-- }
@@ -660,8 +786,8 @@ class BeBrainViewModel @Inject constructor(
             
             // --- SECCIÓN: CONTROL DE VISIBILIDAD POR CONTEXTO ---
             // En HUD V5, permitimos que la barra sea visible por defecto. 
-            // La pantalla de Chat gestionará su propia visibilidad interna (Lista vs Conversación) 
-            // a través de setBottomBarVisible.
+            // Reseteamos el flag de ocultación forzada al cambiar de pantalla.
+            _isBottomBarForcedHidden.value = false
             _isBottomBarVisible.value = true
 
             // 🔥 RESET: Cerramos búsqueda al cambiar de pantalla para evitar desincronización
@@ -702,7 +828,7 @@ class BeBrainViewModel @Inject constructor(
             }
         } else if (context == HUDContext.SEARCH_RESULTS || context == HUDContext.FAST) {
             // 🔥 BOTÓN PARA ACTIVAR LA HERRAMIENTA EN EL MENÚ 🔥
-            actions.add(BeSmallActionModel("location_tool", Icons.Default.LocationOn, "Ubicación", emoji = "📍", isDefault = true) { setShowLocationTool(!_showLocationTool.value) })
+            // actions.add(BeSmallActionModel("location_tool", Icons.Default.LocationOn, "Ubicación", emoji = "📍", isDefault = true) { setShowLocationTool(!_showLocationTool.value) })
             actions.add(BeSmallActionModel("share", Icons.Default.Share, "Compartir", emoji = "📤") { })
         } else actions.addAll(_customActions.value)
         _currentActions.value = actions

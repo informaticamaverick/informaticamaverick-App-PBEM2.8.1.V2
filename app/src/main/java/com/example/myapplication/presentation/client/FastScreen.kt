@@ -76,26 +76,33 @@ fun FastScreen(
     profileViewModel: ProfileViewModel = hiltViewModel(),
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
+    beViewModel: BeBrainViewModel = hiltViewModel(),
     // 🔥 LÓGICA MIGRADA AL OBRERO UNIFICADO
     ubicacionObrero: UbicacionClimaViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val userState by profileViewModel.userState.collectAsStateWithLifecycle()
+    val userState by beViewModel.userState.collectAsStateWithLifecycle()
 
     // --- SECCIÓN: DATOS DE PROVEEDORES (CEREBRO) ---
     val unifiedServices by providerViewModel.unifiedServices.collectAsStateWithLifecycle()
-    //val allCategories by categoryViewModel.categories.collectAsStateWithLifecycle()
     val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
 
-    // --- SECCIÓN: CONEXIÓN AL OBRERO (UBICACIÓN, CLIMA Y LÓGICA FAST) ---
-    val weatherDesc by ubicacionObrero.weatherDescription.collectAsStateWithLifecycle()
-    val userLat by ubicacionObrero.latitude.collectAsStateWithLifecycle()
-    val userLon by ubicacionObrero.longitude.collectAsStateWithLifecycle()
+    // --- SECCIÓN: CONEXIÓN AL CEREBRO (FUENTE DE VERDAD UBICACIÓN) ---
+    val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
+    val availableAddresses by beViewModel.availableAddressInfos.collectAsStateWithLifecycle()
+    val weatherDesc by beViewModel.weatherDescription.collectAsStateWithLifecycle()
     
     // Estados de búsqueda Fast ahora en el Obrero
     val isSearching by ubicacionObrero.isSearchingFast.collectAsStateWithLifecycle()
     val searchFinished by ubicacionObrero.searchFinishedFast.collectAsStateWithLifecycle()
     val searchResults by ubicacionObrero.searchResultsFast.collectAsStateWithLifecycle()
+
+    // Efecto de limpieza/reinicio al cambiar ubicación
+    LaunchedEffect(activeAddress) {
+        if (isSearching || searchFinished) {
+            ubicacionObrero.resetBusquedaFast()
+        }
+    }
 
     FastScreenContent(
         navController = navController,
@@ -104,23 +111,54 @@ fun FastScreen(
         allServices = unifiedServices,
         allCategories = categories,
         weatherDescription = weatherDesc,
-        userLat = userLat ?: -26.8310,
-        userLon = userLon ?: -65.2045,
+        userLat = activeAddress?.lat ?: -26.8310,
+        userLon = activeAddress?.lng ?: -65.2045,
         isSearching = isSearching,
         searchFinished = searchFinished,
         searchResults = searchResults,
         onStartSearch = { category, lat, lon ->
             ubicacionObrero.ejecutarBusquedaEmergenciaFast(category, unifiedServices, lat, lon)
         },
-        onResetSearch = { ubicacionObrero.resetBusquedaFast() }
+        onResetSearch = { ubicacionObrero.resetBusquedaFast() },
+        // --- PROPS DE UBICACIÓN ---
+        activeAddress = activeAddress,
+        availableAddresses = availableAddresses,
+        onAddressSelected = { addr -> beViewModel.selectAddress(addr.id) },
+        onUpdateGps = { beViewModel.triggerAction("refresh_gps") },
+        beViewModel = beViewModel
     )
+
+    // ==================================================================================
+    // --- 🧠 ESCUCHA DE ACCIONES DEL CEREBRO (ORQUESTACIÓN) ---
+    // ==================================================================================
+    LaunchedEffect(Unit) {
+        beViewModel.actionEvent.collect { actionId ->
+            when (actionId) {
+                "refresh_gps" -> {
+                    ubicacionObrero.ejecutarCalculoUbicacionGps(context) { _, _, loc, calle, num, cp, lat, lng ->
+                        val freshGpsAddress = AddressInfo(
+                            id = "gps_current",
+                            companyOrUserName = "Mi Ubicación",
+                            branchName = "GPS Tracker",
+                            streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else "Ubicación detectada",
+                            locality = loc,
+                            postalCode = cp,
+                            isCompany = false,
+                            lat = lat,
+                            lng = lng
+                        )
+                        beViewModel.updateAddressFromGps(freshGpsAddress)
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ==========================================================================================
 // --- PANTALLA FAST (STATELESS - UI LIMPIA SIN CABECERA DE DIRECCIÓN) ---
 // ==========================================================================================
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FastScreenContent(
     navController: NavHostController,
@@ -135,12 +173,31 @@ fun FastScreenContent(
     searchFinished: Boolean,
     searchResults: List<ProviderWithDistance>,
     onStartSearch: (CategoryEntity?, Double, Double) -> Unit,
-    onResetSearch: () -> Unit
+    onResetSearch: () -> Unit,
+    // --- NUEVAS PROPS PARA EL FLOATING TOOL ---
+    activeAddress: AddressInfo?,
+    availableAddresses: List<AddressInfo>,
+    onAddressSelected: (AddressInfo) -> Unit,
+    onUpdateGps: () -> Unit,
+    beViewModel: BeBrainViewModel
 ) {
     var showManualSearchSheet by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<CategoryEntity?>(null) }
     var selectedProviderOnRadar by remember { mutableStateOf<ProviderWithDistance?>(null) }
     var isBottomSheetExpanded by remember { mutableStateOf(false) }
+
+    // --- ESTADO: VISIBILIDAD DE LA TARJETA DE UBICACIÓN ---
+    var isLocationCardVisible by remember { mutableStateOf(true) }
+    var isLocationExpanded by remember { mutableStateOf(false) }
+
+    // Escuchar el evento de la lupa desde el BeBrainViewModel (Igual que en ResultBusqueda)
+    LaunchedEffect(Unit) {
+        beViewModel.actionEvent.collect { actionId ->
+            if (actionId == "toggle_location_card") {
+                isLocationCardVisible = !isLocationCardVisible
+            }
+        }
+    }
 
     // --- LÓGICA CONTEXTUAL ---
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -259,6 +316,46 @@ fun FastScreenContent(
                     selectedCategory = it
                     showManualSearchSheet = false
                 }
+            )
+        }
+
+        // ==================================================================================
+        // --- 📍 NUEVO: FLOATING LOCATION TOOL (POSICIONADO EN LA PARTE SUPERIOR) ---
+        // ==================================================================================
+        
+        // Scrim local para cuando está expandido
+        AnimatedVisibility(
+            visible = isLocationExpanded,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable { isLocationExpanded = false }
+            )
+        }
+
+        // Componente Selector Flotante (Posicionado arriba a la izquierda para visibilidad táctica)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(start = 16.dp, top = 80.dp) // Debajo de las alertas contextuales
+                .width(220.dp) 
+                .height(85.dp) 
+        ) {
+            ResultBusquedaLocationTool(
+                activeAddress = activeAddress,
+                availableAddresses = availableAddresses,
+                user = userState,
+                onAddressSelected = onAddressSelected,
+                onUpdateGps = onUpdateGps,
+                isExpanded = isLocationExpanded,
+                onToggleExpand = { isLocationExpanded = it },
+                isVisible = isLocationCardVisible
             )
         }
     }

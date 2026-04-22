@@ -93,32 +93,14 @@ data class ProviderWithDistance(
 class UbicacionClimaViewModel @Inject constructor() : ViewModel() {
 
     // ======================================================================================
-    // --- 1. ESTADOS DE PROCESAMIENTO Y SELECCIÓN CENTRALIZADA ---
+    // --- 1. ESTADOS DE PROCESAMIENTO ---
     // ======================================================================================
     private val _isCargando = MutableStateFlow(false)
     val isCargando = _isCargando.asStateFlow()
 
-    private val _selectedLocation = MutableStateFlow<LocationOption?>(null)
-    val selectedLocation: StateFlow<LocationOption?> = _selectedLocation.asStateFlow()
-
-    // --- Gestión de IDs de dirección y overrides de GPS ---
-    private val _selectedAddressId = MutableStateFlow<String?>(null)
-    private val _gpsAddressOverride = MutableStateFlow<AddressInfo?>(null)
-    
-    /** Lista de direcciones procesadas y formateadas para la UI */
+    // --- Lista de direcciones procesadas y formateadas para la UI ---
     private val _userAddressesRaw = MutableStateFlow<List<AddressInfo>>(emptyList())
     val availableAddressInfos: StateFlow<List<AddressInfo>> = _userAddressesRaw.asStateFlow()
-
-    /** 
-     * DIRECCIÓN ACTIVA: La fuente de verdad que combina GPS y selecciones manuales.
-     * Es lo que la UI consume para mostrar "Donde estoy ahora".
-     */
-    val activeAddress: StateFlow<AddressInfo?> = combine(
-        _selectedAddressId, _gpsAddressOverride, _userAddressesRaw
-    ) { selectedId, gpsOverride, allAddresses ->
-        if (gpsOverride != null && selectedId == "gps_current") return@combine gpsOverride
-        allAddresses.find { it.id == selectedId } ?: allAddresses.firstOrNull()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /** 
      * TRABAJO SUCIO: Mapea el UserEntity a una lista de AddressInfo enriquecida.
@@ -169,62 +151,10 @@ class UbicacionClimaViewModel @Inject constructor() : ViewModel() {
         _userAddressesRaw.value = list
     }
 
-    /** Helper para convertir AddressInfo (UI/Storage) a LocationOption (Estado Activo) */
-    fun AddressInfo.toLocationOption(): LocationOption {
-        return if (this.isCompany) {
-            val parts = this.streetAndNumber.split(" ")
-            val num = parts.lastOrNull() ?: ""
-            val street = parts.dropLast(1).joinToString(" ")
-            LocationOption.Business(
-                companyName = this.companyOrUserName,
-                branchName = this.branchName,
-                address = street,
-                number = num,
-                locality = this.locality,
-                province = this.province,
-                country = this.country,
-                postalCode = this.postalCode,
-                id = this.id
-            )
-        } else {
-            val parts = this.streetAndNumber.split(" ")
-            val num = parts.lastOrNull() ?: ""
-            val street = parts.dropLast(1).joinToString(" ")
-            LocationOption.Personal(
-                address = street,
-                number = num,
-                locality = this.locality,
-                province = this.province,
-                country = this.country,
-                postalCode = this.postalCode,
-                id = this.id
-            )
-        }
-    }
-
-    /** Selecciona una dirección específica de la lista por su ID */
-    fun selectAddress(addressId: String) {
-        _selectedAddressId.value = addressId
-        _gpsAddressOverride.value = null 
-    }
-
-    /** Actualiza la ubicación con datos frescos obtenidos directamente del sensor GPS */
-    fun updateAddressFromGps(address: AddressInfo) {
-        _gpsAddressOverride.value = address
-        _selectedAddressId.value = "gps_current"
-    }
-
-    fun updateLocation(location: LocationOption?) {
-        _selectedLocation.value = location
-    }
-
     // ======================================================================================
     // --- 2. TRABAJO SUCIO: COORDENADAS A DIRECCIÓN (REVERSE GEOCODING) ---
     // ======================================================================================
 
-    /**
-     * Obtiene la ubicación real del sensor GPS y la traduce a una dirección completa y desglosada.
-     */
     @SuppressLint("MissingPermission")
     fun ejecutarCalculoUbicacionGps(
         context: Context, 
@@ -251,22 +181,6 @@ class UbicacionClimaViewModel @Inject constructor() : ViewModel() {
                     obtenerDireccionDesdeCoordenadas(context, location.latitude, location.longitude) { pais, prov, loc, calle, num, cp, lat, lng ->
                         _locationName.value = if (calle.isNotBlank()) "$calle $num".trim() else loc
                         
-                        // 🔥 ACTUALIZAMOS EL OVERRIDE EN EL OBRERO PARA QUE EL CEREBRO LO VEA 🔥
-                        val freshGpsAddress = AddressInfo(
-                            id = "gps_current",
-                            companyOrUserName = "Mi Ubicación",
-                            branchName = "GPS Tracker",
-                            streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else "Ubicación detectada",
-                            locality = loc,
-                            province = prov,
-                            country = pais,
-                            postalCode = cp,
-                            isCompany = false,
-                            lat = lat,
-                            lng = lng
-                        )
-                        updateAddressFromGps(freshGpsAddress)
-
                         onResultado(pais, prov, loc, calle, num, cp, lat, lng)
                     }
                 }

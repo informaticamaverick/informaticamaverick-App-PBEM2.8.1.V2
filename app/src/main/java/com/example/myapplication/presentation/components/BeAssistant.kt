@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -50,14 +49,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-//import androidx.compose.ui.graphics.drawscope.StrokeCap
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
@@ -71,10 +67,9 @@ import androidx.compose.ui.window.Popup
 import com.example.myapplication.presentation.components.Utilidades.CyberColorsV3
 import com.example.myapplication.presentation.components.Utilidades.MenuCP
 import com.example.myapplication.presentation.components.Utilidades.CyberTypography
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors//.BentoDarkGlassBackground
+import com.example.myapplication.presentation.components.Utilidades.MaverickColors
 import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoDarkGlassBackground
 import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoGlassBrush
-//import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoGlassBrush
 import com.example.myapplication.presentation.registry.BeDictionary
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.delay
@@ -124,55 +119,48 @@ fun BeAssistantSearchFab(
     isMultiSelectionActive: Boolean = false, 
     shouldShowBottomBar: Boolean = true, 
     toolboxKey: String = "default", 
-    // 🔥 NUEVOS ESTADOS CENTRALIZADOS (HUB)
+    // NUEVOS ESTADOS CENTRALIZADOS (HUB)
     state: BeState = BeState.IDLE,
     currentTipIndex: Int = 0,
-    // 🔥 ESTADOS PARA LA HERRAMIENTA DE UBICACIÓN
+    // ESTADOS PARA LA HERRAMIENTA DE UBICACIÓN
     isLocationExpanded: Boolean = false, // Indica si la tarjeta de ubicación está expandida
     onToggleLocationExpand: (Boolean) -> Unit = {}, // Callback para cerrar al tocar fuera
     locationToolContent: @Composable (() -> Unit)? = null,
     // Callbacks de acción
     onSearchQueryChange: (String) -> Unit = {},
-    onSearchStateChange: (Boolean) -> Unit = {},
-    onSearchSubmitted: () -> Unit = {}, // 🔥 Callback para Easter Egg
+    onSearchSubmitted: () -> Unit = {}, // Callback para Easter Egg
     onBubbleActionClick: () -> Unit = {},
     onToggleSearch: () -> Unit = {},
     onToggleActions: () -> Unit = {},
-    onToggleSearchLongClick: () -> Unit = {}, // 🔥 Callback opcional
     onToggleSleep: () -> Unit = {},
     onNextTip: () -> Unit = {},
     onPrevTip: () -> Unit = {},
     onSetState: (BeState) -> Unit = {},
     resetTrigger: Int = 0,
-    // 🔥 NUEVO: Reacción de búsqueda desde BeInteractionViewModel
+    // NUEVO: Reacción de búsqueda desde BeInteractionViewModel
     searchReaction: BeSearchReaction? = null,
     onReactionActionClick: (String) -> Unit = {},
     onReactionResultClick: (Any) -> Unit = {},
     onReactionCloseClick: () -> Unit = {},
-    // 🔥 NUEVO: Callback para el menú de opciones
+    // NUEVO: Callback para el menú de opciones
     onMenuOptionClick: (String) -> Unit = {},
     searchMenuOptions: List<ControlItem> = emptyList(),
     selectedOptionIds: Set<String> = emptySet(),
-    // 🔥 NUEVOS: Silenciado de burbuja y aviso de mensaje
+    // NUEVOS: Silenciado de burbuja y aviso de mensaje
     isBubbleMuted: Boolean = false,
     hasNewMessage: Boolean = false,
     onToggleBubbleMute: () -> Unit = {},
-    // 🔥 PADDING DINÁMICO (Para resting position sobre Nav Bar)
+    // PADDING DINÁMICO (Para resting position sobre Nav Bar)
     beBottomPadding: Dp = 0.dp,
-    // 🔥 PARÁMETROS DE COREÓGRAFO (BeAssistantViewModel)
+    // PARÁMETROS DE COREÓGRAFO (BeAssistantViewModel)
     offsetX: Float = 0f,
     offsetY: Float = 0f,
     isDragging: Boolean = false,
-    pupilX: Float = 0f,
-    pupilY: Float = 0f,
-    isBlinking: Boolean = false,
-    isToolbarStable: Boolean = true, // 🔥 AGREGADO AQUÍ
+    isToolbarStable: Boolean = true,
     onUpdatePosition: (Float, Float) -> Unit = { _, _ -> },
     onSetDragging: (Boolean) -> Unit = {}
 ) {
 
-
-// --- COORDENADAS DE ARRASTRE PERSISTENTES -----------------------------------------------------------------
     // 🔥 PADDING DINÁMICO ANIMADO (Para sincronización con Nav Bar)
     val animatedBeBottomPadding by animateDpAsState(
         targetValue = beBottomPadding,
@@ -180,13 +168,20 @@ fun BeAssistantSearchFab(
         label = "BeBottomPaddingAnimation"
     )
 
-    val isDraggedToLeft = if (isSearchActive) false else offsetX < -120f
+    // --- SECCIÓN: HIBERNACIÓN ESTILO WHATSAPP ---
+    // Si está dormido, se desplaza hacia la derecha para mostrar solo la mitad (24dp de 48dp)
+    val hibernationXOffset by animateDpAsState(
+        targetValue = if (isDormido) 24.dp else 0.dp,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow),
+        label = "HibernationXOffset"
+    )
+
+    // TAMAÑO DEL ASISTENTE: Aumentado a 72dp cuando está despierto para feedback visual
+    val assistantSize by animateDpAsState(targetValue = if (isDormido) 48.dp else 72.dp, label = "AssistantSize")
     
-    // TAMAÑO DEL ASISTENTE: Modifica el valor de 64.dp para hacerlo más grande de manera proporcional
-    val assistantSize by animateDpAsState(targetValue = if (isDormido) 48.dp else 64.dp, label = "AssistantSize")
-    
-    val alpha by animateFloatAsState(if (isDormido) 0.5f else 1f, label = "AlphaDormido")
-// --- TECLADO Y BÚSQUEDA --------------------------------------------------------------------------------------
+    val alpha by animateFloatAsState(if (isDormido) 0.4f else 1f, label = "AlphaDormido") // Más transparente en hibernación
+
+    // --- TECLADO Y BÚSQUEDA --------------------------------------------------------------------------------------
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -235,42 +230,50 @@ fun BeAssistantSearchFab(
         animationSpec = tween(durationMillis = 500),
         label = "FloatMultiplier"
     )
-    
+
     val wiggleRotation by infiniteTransition.animateFloat(
-        initialValue = -12f, 
-        targetValue = 12f, 
+        initialValue = -12f,
+        targetValue = 12f,
         animationSpec = infiniteRepeatable(
-            animation = tween(300, easing = LinearEasing), // Ralentizado de 150 a 300ms
+            animation = tween(300, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
-        ), 
+        ),
         label = "wiggle"
     )
-    
+
     // 🔥 EFECTO DE SACUDIDA (Badges)
     val shakeRotation by infiniteTransition.animateFloat(
         initialValue = -8f,
         targetValue = 8f,
         animationSpec = infiniteRepeatable(
-            animation = tween(200, easing = LinearEasing), // Ralentizado de 100 a 200ms
+            animation = tween(200, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "shake"
     )
 
     val badgeScale by animateFloatAsState(
-        targetValue = if (state == BeState.NOTIFICATION_READY || (state == BeState.TALKING && contextMessages.getOrNull(currentTipIndex)?.icon == "❤️")) 1f else 0f, 
+        targetValue = if (state == BeState.NOTIFICATION_READY || (state == BeState.TALKING && contextMessages.getOrNull(currentTipIndex)?.icon == "❤️")) 1f else 0f,
         label = "badge_scale"
     )
-    
+
     val floatingAuraAlpha by infiniteTransition.animateFloat(
         initialValue = 0.1f, 
-        targetValue = 0.4f, // Reducido de 0.6f a 0.4f
+        targetValue = 0.4f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500), // Ralentizado de 1000 a 1500ms
+            animation = tween(1500),
             repeatMode = RepeatMode.Reverse
         ), 
         label = "aura"
     )
+
+    // Multiplicador para anular la flotación y el aura en hibernación
+    val hibernationMultiplier by animateFloatAsState(
+        targetValue = if (isDormido) 0f else 1f,
+        animationSpec = tween(500),
+        label = "HibernationMultiplier"
+    )
+
     // Vuelo de Be
     val flyUpPx by animateFloatAsState(targetValue = if (isSearchActive) -offsetY else 0f, animationSpec = spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessLow), label = "fly_up")
     val flySidePx by animateFloatAsState(targetValue = if (isSearchActive) -offsetX else 0f, animationSpec = spring(dampingRatio = 0.4f, stiffness = Spring.StiffnessLow), label = "fly_side")
@@ -282,13 +285,8 @@ fun BeAssistantSearchFab(
         while (true) {
             when (state) {
                 BeState.IDLE -> { targetPupilX = (-2..2).random().toFloat(); targetPupilY = (-3..3).random().toFloat(); delay((2000..4000).random().toLong()) }
-                // ==========================================================================================
-                // --- SECCIÓN: LÓGICA DE MIRADA HACIA LA NOTIFICACIÓN (IZQUIERDA) ---
-                // ==========================================================================================
-                // Se cambia targetPupilX a -2.5f para que Be mire hacia la izquierda cuando aparece el badge.
                 BeState.NOTIFICATION_READY -> { targetPupilX = -2.5f; targetPupilY = -3f; delay(1500); targetPupilX = 0f; targetPupilY = 0f; delay(1000) }
                 BeState.TALKING -> {
-                    // --- SECCIÓN: MIRADA ESPECIAL PARA SONROJO ---
                     if (contextMessages.getOrNull(currentTipIndex)?.emotion == BeEmotion.BLUSHING) {
                         targetPupilX = 0f; targetPupilY = 4f
                     } else {
@@ -301,15 +299,21 @@ fun BeAssistantSearchFab(
     }
     val pupilX by animateFloatAsState(targetValue = targetPupilX, animationSpec = tween(400), label = "pupilX")
     val pupilY by animateFloatAsState(targetValue = targetPupilY, animationSpec = tween(400), label = "pupilY")
+    
+    // --- SECCIÓN: EFECTO DE OJOS CERRADOS EN HIBERNACIÓN ---
     var isBlinking by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { while (true) { delay((2500..7000).random().toLong()); isBlinking = true; delay(150); isBlinking = false } }
-    val eyeScaleY by animateFloatAsState(targetValue = if (isBlinking) 0.1f else 1f, tween(120), label = "blink")
+    val eyeScaleY by animateFloatAsState(
+        targetValue = if (isDormido || isBlinking) 0.1f else 1f, 
+        animationSpec = tween(120), 
+        label = "blink"
+    )
 
     // ==========================================================================================
     // --- RENDERIZADO PRINCIPAL ---
     // ==========================================================================================
     Box(
-        modifier = Modifier.fillMaxSize() 
+        modifier = modifier.fillMaxSize()
             .zIndex(if (isDragging || state == BeState.TALKING || isSearchActive || isLocationExpanded) 200f else 100f),
         contentAlignment = if (isSearchActive) Alignment.TopEnd else Alignment.BottomEnd
     ) {
@@ -322,7 +326,6 @@ fun BeAssistantSearchFab(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // 🔥 CORRECCIÓN: El Scrim solo es visible (oscurece) cuando la ubicación está expandida
                     .background(if (isLocationExpanded) Color.Black.copy(alpha = 0.45f) else Color.Transparent)
                     .then(
                         if (!isMultiSelectionActive) {
@@ -385,14 +388,12 @@ fun BeAssistantSearchFab(
         }
 
         // --- CAPA 3: BE SEARCH (MODO COMPACTO) ---
-        // Se posiciona justo debajo de la barra de búsqueda y ocupa todo el ancho.
-        // Se mueve aquí para que quede POR DEBAJO de la SearchBar y de Be en el orden del Z-Index natural de Compose
         if (isSearchActive && searchReaction != null && !isBubbleMuted) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
-                    .zIndex(150f) // Menor que la SearchBar y Be
+                    .zIndex(150f)
             ) {
                 BeSearchBubble(
                     isVisible = true,
@@ -401,14 +402,13 @@ fun BeAssistantSearchFab(
                         onReactionActionClick(id ?: searchReaction.actionId ?: "")
                     },
                     onResultClick = onReactionResultClick,
-                    onCloseClick = onReactionCloseClick // Pasamos el callback de cierre
+                    onCloseClick = onReactionCloseClick
                 )
             }
         }
 
         // ==========================================================================================
         // --- SECCIÓN 1: CAPA DE HERRAMIENTAS Y CONTROLES DE BASE ---
-        // --- Ajustamos el padding dinámico para que Be "caiga" al borde si no hay Nav Bar ---
         // ==========================================================================================
         if (!isDormido) {
             Box(
@@ -418,7 +418,6 @@ fun BeAssistantSearchFab(
                     .align(Alignment.BottomEnd),
                 contentAlignment = Alignment.CenterEnd
             ) {
-                // --- SECCIÓN: HERRAMIENTAS MODO NORMAL ---
                 val derivedToolboxKey = "${toolboxKey}_${isMultiSelectionActive}"
 
                 BeSmallActionsBuilder(
@@ -446,17 +445,12 @@ fun BeAssistantSearchFab(
                     exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(tween(300)),
                     label = "SearchControlsAnimation"
                 ) {
-                    // ==========================================================================================
-                    // --- MODO BÚSQUEDA: PANEL DE CONTROL PREMIUM (STYLE M3) ---
-                    // Rediseño con estética minimalista, botones circulares y mayor espaciado.
-                    // Los colores se ajustan a una paleta de grises y blancos para un look más sofisticado.
-                    // ==========================================================================================
                     Box(
                         modifier = Modifier
                             .height(80.dp)
                             .wrapContentWidth()
                             .background(
-                                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                                brush = Brush.verticalGradient(
                                     listOf(Color(0xFF121212).copy(alpha = 0.9f), Color(0xFF121212))
                                 ),
                                 shape = RoundedCornerShape(topStart = 32.dp, bottomStart = 32.dp)
@@ -466,7 +460,7 @@ fun BeAssistantSearchFab(
                         Row(
                             modifier = Modifier
                                 .padding(start = 32.dp, end = 20.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp), // Mayor separación entre controles
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // --- BOTÓN 1: ABRIR TECLADO (PREMIUM GREY) ---
@@ -478,9 +472,7 @@ fun BeAssistantSearchFab(
                                     .background(Color(0xFF2C2C2C))
                                     .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                                     .clickable { 
-                                        // 1. Notificar al ViewModel si es necesario
                                         onBubbleActionClick() 
-                                        // 2. Acción de UI: Forzar foco y teclado
                                         focusRequester.requestFocus()
                                         keyboardController?.show()
                                     },
@@ -497,10 +489,10 @@ fun BeAssistantSearchFab(
                             // --- BOTÓN 2: CERRAR (PREMIUM WHITE) ---
                             Box(
                                 modifier = Modifier
-                                    .size(52.dp) // Mismo tamaño exacto
+                                    .size(52.dp)
                                     .shadow(4.dp, CircleShape)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF424242)) // Gris medio
+                                    .background(Color(0xFF424242))
                                     .border(1.dp, Color.White.copy(alpha = 0.15f), CircleShape)
                                     .clickable { onToggleSearch() },
                                 contentAlignment = Alignment.Center
@@ -528,26 +520,30 @@ fun BeAssistantSearchFab(
                             .statusBarsPadding()
                             .fillMaxWidth()
                             .padding(start = 16.dp, end = 4.dp)
-                            .offset(y = (-2).dp) // Posición elevada
+                            .offset(y = (-2).dp)
                     } else Modifier
                 )
                 .padding(bottom = if (isSearchActive) 0.dp else animatedBeBottomPadding.coerceAtLeast(0.dp))
-                .offset { IntOffset((offsetX + flySidePx).roundToInt(), (offsetY + flyUpPx).roundToInt()) }
+                .offset { 
+                    IntOffset(
+                        (offsetX + flySidePx + hibernationXOffset.toPx()).roundToInt(), 
+                        (offsetY + flyUpPx).roundToInt() 
+                    ) 
+                }
                 .zIndex(300f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End
         ) {
             if (isSearchActive) {
-                // --- SECCIÓN: BARRA DE BÚSQUEDA ASUS ROG ---
                 SearchBarComponent(
                     modifier = Modifier.weight(1f),
                     query = searchQuery,
                     onQueryChange = onSearchQueryChange,
-                    onSearch = onSearchSubmitted, // 🔥 Callback para Easter Egg
+                    onSearch = onSearchSubmitted,
                     focusRequester = focusRequester,
                     onClearText = { onSearchQueryChange("") },
                     onCloseBar = {
-                        onSearchQueryChange("") // Limpiar query al cerrar desde la barra
+                        onSearchQueryChange("")
                         onToggleSearch()
                     },
                     menuOptions = searchMenuOptions,
@@ -559,17 +555,17 @@ fun BeAssistantSearchFab(
 
             Box(
                 modifier = Modifier
-                    .size(80.dp) // Aumentado de 72.dp para acomodar el nuevo tamaño del asistente
+                    .size(80.dp)
                     .pointerInput(isDormido, isSearchActive) {
                         detectTapGestures(
                             onTap = { 
-                            if (isDormido) onToggleSleep()
-                            else {
-                                if (isSearchActive) onSearchQueryChange("") // Limpiar al cerrar
-                                onSetState(BeState.IDLE)
-                                onToggleSearch()
-                            }
-                        },
+                                if (isDormido) onToggleSleep()
+                                else {
+                                    if (isSearchActive) onSearchQueryChange("")
+                                    onSetState(BeState.IDLE)
+                                    onToggleSearch()
+                                }
+                            },
                             onLongPress = { if (!isDormido && !isSearchActive) onToggleActions() },
                             onDoubleTap = { onToggleSleep() }
                         )
@@ -593,116 +589,108 @@ fun BeAssistantSearchFab(
 
                 Box(
                     modifier = Modifier
-                        .offset(y = (floatY * floatMultiplier).dp)
+                        .offset(y = (floatY * floatMultiplier * hibernationMultiplier).dp)
                         .size(assistantSize)
                         .scale(if (isDormido) 0.8f else 1f)
                         .alpha(alpha)
                         .drawBehind {
-                            // --- SECCIÓN: RESPLANDOR NEÓN (Sincronizado con Startup) ---
-                            // Movido a drawBehind para evitar recrear el pincel y objetos de dibujo
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(LocalROG_Cyan.copy(alpha = 0.2f), Color.Transparent)
-                                ),
-                                radius = size.width * 0.9f
-                            )
+                            if (hibernationMultiplier > 0.1f) {
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(LocalROG_Cyan.copy(alpha = 0.2f * hibernationMultiplier), Color.Transparent)
+                                    ),
+                                    radius = size.width * 0.9f
+                                )
+                            }
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isDormido) { Text("💤", fontSize = 18.sp) }
-                    else {
-                        if (isDragging) { 
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = 5.dp, y = 5.dp)
-                                    .size(54.dp)
-                                    .scale(1.2f)
-                                    .alpha(floatingAuraAlpha)
-                                    .background(LocalROG_Cyan, CircleShape)
-                                    .blur(8.dp)
-                            ) 
-                        }
-                        
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            this.scale(size.width / 100f, size.height / 100f, pivot = Offset.Zero) {
-                                // --- SECCIÓN: MANGO DE LA LUPA ---
-                                drawLine(Color(0xFF020408).copy(alpha = 0.6f), Offset(70f, 70f), Offset(94.5f, 94.5f), 16f, StrokeCap.Round)
-                                drawLine(Color(0xFF1E293B), Offset(70f, 70f), Offset(95f, 95f), 14f, StrokeCap.Round)
-                                drawLine(LocalROG_Cyan, Offset(73f, 73f), Offset(92f, 92f), 10f, StrokeCap.Round)
-                                drawLine(LocalROG_Cyan.copy(alpha = 0.4f), Offset(76f, 76f), Offset(89f, 89f), 6f, StrokeCap.Round)
+                    if (isDragging) { 
+                        Box(
+                            modifier = Modifier
+                                .offset(x = 5.dp, y = 5.dp)
+                                .size(54.dp)
+                                .scale(1.2f)
+                                .alpha(floatingAuraAlpha * hibernationMultiplier)
+                                .background(LocalROG_Cyan, CircleShape)
+                                .blur(8.dp)
+                        ) 
+                    }
+                    
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        this.scale(size.width / 100f, size.height / 100f, pivot = Offset.Zero) {
+                            // MANGO DE LA LUPA
+                            drawLine(Color(0xFF020408).copy(alpha = 0.6f), Offset(70f, 70f), Offset(94.5f, 94.5f), 16f, StrokeCap.Round)
+                            drawLine(Color(0xFF1E293B), Offset(70f, 70f), Offset(95f, 95f), 14f, StrokeCap.Round)
+                            drawLine(LocalROG_Cyan, Offset(73f, 73f), Offset(92f, 92f), 10f, StrokeCap.Round)
+                            drawLine(LocalROG_Cyan.copy(alpha = 0.4f), Offset(76f, 76f), Offset(89f, 89f), 6f, StrokeCap.Round)
 
-                                // --- SECCIÓN: CABEZA DE ASISTENTE (LENTE) ---
-                                // Casco Base de Be
-                                drawCircle(Color(0xFF0A0E14), 38f, Offset(50f, 50f))
+                            // CABEZA DE ASISTENTE (LENTE)
+                            drawCircle(Color(0xFF0A0E14), 38f, Offset(50f, 50f))
+                            drawCircle(
+                                color = LocalROG_Cyan,
+                                radius = 34f,
+                                center = Offset(50f, 50f),
+                                style = Stroke(width = 3.5f)
+                            )
 
-                                // Anillo Neón
-                                drawCircle(
-                                    color = LocalROG_Cyan,
-                                    radius = 34f,
-                                    center = Offset(50f, 50f),
-                                    style = Stroke(width = 3.5f)
+                            // Brillo visor
+                            drawArc(
+                                color = Color.White.copy(alpha = 0.2f),
+                                startAngle = 180f,
+                                sweepAngle = 90f,
+                                useCenter = false,
+                                style = Stroke(width = 2.5f, cap = StrokeCap.Round),
+                                topLeft = Offset(22f, 22f),
+                                size = Size(56f, 56f)
+                            )
+
+                            if (currentEmotion == BeEmotion.HAPPY) {
+                                drawPath(Path().apply { moveTo(33f, 50f); quadraticTo(40f, 38f, 47f, 50f) }, color = Color.White, style = Stroke(5f, cap = StrokeCap.Round))
+                                drawPath(Path().apply { moveTo(53f, 50f); quadraticTo(60f, 38f, 67f, 50f) }, color = Color.White, style = Stroke(5f, cap = StrokeCap.Round))
+                            } else {
+                                // Ojos
+                                drawOval(
+                                    color = Color.White,
+                                    topLeft = Offset(31f, 50f - (11f * eyeScaleY)),
+                                    size = Size(15f, 22f * eyeScaleY)
                                 )
-
-                                // Brillo visor
-                                drawArc(
-                                    color = Color.White.copy(alpha = 0.2f),
-                                    startAngle = 180f,
-                                    sweepAngle = 90f,
-                                    useCenter = false,
-                                    style = Stroke(width = 2.5f, cap = StrokeCap.Round),
-                                    topLeft = Offset(22f, 22f),
-                                    size = Size(56f, 56f)
+                                drawOval(
+                                    color = Color.White,
+                                    topLeft = Offset(54f, 50f - (11f * eyeScaleY)),
+                                    size = Size(15f, 22f * eyeScaleY)
                                 )
+                                
+                                val pupilRadius = if (currentEmotion == BeEmotion.SURPRISED) 2.5f else 4.5f
+                                drawCircle(Color(0xFF05070A), pupilRadius * eyeScaleY, Offset(38.5f + pupilX, 50f + pupilY))
+                                drawCircle(Color.White, 1.2f * eyeScaleY, Offset(39.5f + pupilX, 48.5f + pupilY))
+                                drawCircle(Color(0xFF05070A), pupilRadius * eyeScaleY, Offset(61.5f + pupilX, 50f + pupilY))
+                                drawCircle(Color.White, 1.2f * eyeScaleY, Offset(62.5f + pupilX, 48.5f + pupilY))
+                                
+                                // MEJILLAS SONROJADAS (EASTER EGG)
+                                if (currentEmotion == BeEmotion.BLUSHING) {
+                                    drawCircle(Color(0xFFFFB6C1).copy(alpha = 0.6f), 8f, Offset(35f, 65f))
+                                    drawCircle(Color(0xFFFFB6C1).copy(alpha = 0.6f), 8f, Offset(65f, 65f))
+                                }
 
-                                if (currentEmotion == BeEmotion.HAPPY) {
-                                    drawPath(Path().apply { moveTo(33f, 50f); quadraticTo(40f, 38f, 47f, 50f) }, color = Color.White, style = Stroke(5f, cap = StrokeCap.Round))
-                                    drawPath(Path().apply { moveTo(53f, 50f); quadraticTo(60f, 38f, 67f, 50f) }, color = Color.White, style = Stroke(5f, cap = StrokeCap.Round))
-                                } else {
-                                    // Ojos
-                                    drawOval(
-                                        color = Color.White,
-                                        topLeft = Offset(31f, 50f - (11f * eyeScaleY)),
-                                        size = Size(15f, 22f * eyeScaleY)
-                                    )
-                                    drawOval(
-                                        color = Color.White,
-                                        topLeft = Offset(54f, 50f - (11f * eyeScaleY)),
-                                        size = Size(15f, 22f * eyeScaleY)
-                                    )
-                                    
-                                    val pupilRadius = if (currentEmotion == BeEmotion.SURPRISED) 2.5f else 4.5f
-                                    drawCircle(Color(0xFF05070A), pupilRadius * eyeScaleY, Offset(38.5f + pupilX, 50f + pupilY))
-                                    drawCircle(Color.White, 1.2f * eyeScaleY, Offset(39.5f + pupilX, 48.5f + pupilY))
-                                    drawCircle(Color(0xFF05070A), pupilRadius * eyeScaleY, Offset(61.5f + pupilX, 50f + pupilY))
-                                    drawCircle(Color.White, 1.2f * eyeScaleY, Offset(62.5f + pupilX, 48.5f + pupilY))
-                                    
-                                    // --- SECCIÓN: MEJILLAS SONROJADAS (EASTER EGG) ---
-                                    if (currentEmotion == BeEmotion.BLUSHING) {
-                                        drawCircle(Color(0xFFFFB6C1).copy(alpha = 0.6f), 8f, Offset(35f, 65f))
-                                        drawCircle(Color(0xFFFFB6C1).copy(alpha = 0.6f), 8f, Offset(65f, 65f))
-                                    }
-
-                                    if (currentEmotion == BeEmotion.ANGRY) {
-                                        drawLine(LocalROG_Cyan, Offset(28f, 36f), Offset(46f, 42f), strokeWidth = 5f, cap = StrokeCap.Round)
-                                        drawLine(LocalROG_Cyan, Offset(72f, 36f), Offset(54f, 42f), strokeWidth = 5f, cap = StrokeCap.Round)
-                                    } else if (currentEmotion == BeEmotion.SURPRISED) {
-                                        drawArc(LocalROG_Cyan, 180f, 180f, false, Offset(32f, 32f), Size(16f, 10f), style = Stroke(3.5f, cap = StrokeCap.Round))
-                                        drawArc(LocalROG_Cyan, 180f, 180f, false, Offset(52f, 32f), Size(16f, 10f), style = Stroke(3.5f, cap = StrokeCap.Round))
-                                    }
+                                if (currentEmotion == BeEmotion.ANGRY) {
+                                    drawLine(LocalROG_Cyan, Offset(28f, 36f), Offset(46f, 42f), strokeWidth = 5f, cap = StrokeCap.Round)
+                                    drawLine(LocalROG_Cyan, Offset(72f, 36f), Offset(54f, 42f), strokeWidth = 5f, cap = StrokeCap.Round)
+                                } else if (currentEmotion == BeEmotion.SURPRISED) {
+                                    drawArc(LocalROG_Cyan, 180f, 180f, false, Offset(32f, 32f), Size(16f, 10f), style = Stroke(3.5f, cap = StrokeCap.Round))
+                                    drawArc(LocalROG_Cyan, 180f, 180f, false, Offset(52f, 32f), Size(16f, 10f), style = Stroke(3.5f, cap = StrokeCap.Round))
                                 }
                             }
                         }
                     }
                 }
 
-                // ==========================================================================================
-                // --- SECCIÓN: BADGE DE CORAZÓN (EASTER EGG) ---
-                // ==========================================================================================
+                // --- BADGE DE CORAZÓN (EASTER EGG) ---
                 if (badgeScale > 0.01f && currentMessage != null && !isSearchActive) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.TopStart) // 🔥 IZQUIERDA
-                            .offset(x = (-8).dp, y = (-16).dp) // 🔥 MÁS ALTO (Alineado con el scrim de BeBuild)
+                            .align(Alignment.TopStart)
+                            .offset(x = (-8).dp, y = (-16).dp)
                             .wrapContentSize(unbounded = true)
                             .graphicsLayer {
                                 scaleX = badgeScale
@@ -725,10 +713,7 @@ fun BeAssistantSearchFab(
                     }
                 }
 
-                // ==========================================================================================
-                // --- SECCIÓN: BURBUJA DE CONTEXTO / COMIC (MODO NORMAL) ---
-                // Solo se muestra si NO estamos en búsqueda activa.
-                // ==========================================================================================
+                // --- BURBUJA DE CONTEXTO / COMIC (MODO NORMAL) ---
                 if (!isSearchActive) {
                     BeAssistantBubble(
                         isVisible = state == BeState.TALKING && contextMessages.isNotEmpty(),
@@ -743,17 +728,14 @@ fun BeAssistantSearchFab(
                     )
                 }
 
-                // ==========================================================================================
-                // --- SECCIÓN: BADGE DE CONVERSACIÓN MAVERICK (SOBRE EL ASISTENTE) ---
-                // ==========================================================================================
+                // --- BADGE DE CONVERSACIÓN MAVERICK ---
                 if (isSearchActive) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .offset(x = (-6).dp, y = 1.dp) // Corner inferior izquierdo de Be
-                            .size(24.dp) // Más compacto
+                            .offset(x = (-6).dp, y = 1.dp)
+                            .size(24.dp)
                             .graphicsLayer {
-                                // Sacudida si hay mensaje nuevo y está silenciado
                                 rotationZ = if (hasNewMessage && isBubbleMuted) shakeRotation else 0f
                             }
                             .shadow(8.dp, CircleShape)
@@ -783,22 +765,12 @@ fun BeAssistantSearchFab(
 // --- SECCIÓN: COMPONENTES AUXILIARES ---
 // ==========================================================================================
 
-/**
- * SearchBarComponent - Estilo ASUS ROG Phone x Material 3 (ACTUALIZADO)
- * @param query Texto actual de búsqueda
- * @param onQueryChange Callback al cambiar el texto
- * @param onSearch Callback al presionar Intro
- * @param focusRequester Requester para manejar el foco del teclado
- * @param onClearText Acción para la 'X' de limpiar texto
- * @param onCloseBar Acción para la 'X' principal de cerrar la barra
- * @param onMenuClick Acción para el selector de categoría (FAB divider)
- */
 @Composable
 fun SearchBarComponent(
-    modifier: Modifier = Modifier, // 🔥 MODIFIER PRIMERO
+    modifier: Modifier = Modifier,
     query: String,
     onQueryChange: (String) -> Unit,
-    onSearch: () -> Unit = {}, // 🔥 Callback para Easter Egg
+    onSearch: () -> Unit = {},
     focusRequester: FocusRequester,
     onClearText: () -> Unit,
     onCloseBar: () -> Unit,
@@ -806,27 +778,20 @@ fun SearchBarComponent(
     menuOptions: List<ControlItem> = emptyList(),
     selectedOptionIds: Set<String> = emptySet()
 ) {
-    // --- SECCIÓN: ESTADOS LOCALES ---
     var expanded by remember { mutableStateOf(false) }
-    val keyboardController = LocalSoftwareKeyboardController.current // 🔥 CONTROLADOR TECLADO
+    val keyboardController = LocalSoftwareKeyboardController.current
 
-    // --- SECCIÓN: CONFIGURACIÓN VISUAL ---
-    // Conservamos el gradiente original del borde (Cian a Rojo)
-    val borderBrush = Brush.horizontalGradient(
-        listOf(LocalROG_Cyan, LocalROG_Red)
-    )
-
-    // CAMBIO: Forma Cyber-Cut según @Box.kt (Corte diagonal ROG)
+    val borderBrush = Brush.horizontalGradient(listOf(LocalROG_Cyan, LocalROG_Red))
     val barShape = CutCornerShape(topStart = 16.dp, bottomEnd = 16.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(54.dp) // Altura ajustada a SearchBarCyberCut
+            .height(54.dp)
             .shadow(12.dp, barShape, ambientColor = LocalROG_Cyan, spotColor = LocalROG_Red)
-            .border(1.5.dp, borderBrush, barShape) // Borde neón conservado
+            .border(1.5.dp, borderBrush, barShape)
             .clip(barShape)
-            .background(MaverickColors.ROG_Dark_Bg) // Fondo cambiado a RogDarkGray
+            .background(MaverickColors.ROG_Dark_Bg)
             .padding(start = 12.dp, end = 12.dp),
         contentAlignment = Alignment.CenterStart
     ) {
@@ -834,7 +799,6 @@ fun SearchBarComponent(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxSize()
         ) {
-            // --- SECCIÓN: SELECTOR DE CATEGORÍA CON MENÚ ---
             Box {
                 Row(
                     modifier = Modifier
@@ -852,7 +816,6 @@ fun SearchBarComponent(
                     Spacer(modifier = Modifier.width(4.dp))
                 }
 
-                // --- NUEVO MENÚ CP (ESTILO CYBERPUNK) ---
                 if (expanded) {
                     Popup(
                         onDismissRequest = { expanded = false },
@@ -865,46 +828,44 @@ fun SearchBarComponent(
                             headerColor = CyberColorsV3.ElectricCyan,
                             onDismiss = { expanded = false }
                         ) {
-                            if (menuOptions.isNotEmpty()) {
-                                menuOptions.forEach { option ->
-                                    val isSelected = selectedOptionIds.contains(option.id)
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                onMenuOptionClick(option.id)
-                                                expanded = false
-                                            }
-                                            .padding(vertical = 10.dp, horizontal = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        if (option.emoji != null) {
-                                            Text(option.emoji, fontSize = 18.sp)
-                                        } else {
-                                            Icon(
-                                                imageVector = option.icon ?: Icons.Default.Search,
-                                                contentDescription = null,
-                                                tint = option.color,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                            menuOptions.forEach { option ->
+                                val isSelected = selectedOptionIds.contains(option.id)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onMenuOptionClick(option.id)
+                                            expanded = false
                                         }
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = option.label.uppercase(),
-                                            color = if (isSelected) LocalROG_Cyan else Color.White,
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            style = CyberTypography.BodyCyber
+                                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (option.emoji != null) {
+                                        Text(option.emoji, fontSize = 18.sp)
+                                    } else {
+                                        Icon(
+                                            imageVector = option.icon ?: Icons.Default.Search,
+                                            contentDescription = null,
+                                            tint = option.color,
+                                            modifier = Modifier.size(18.dp)
                                         )
-                                        if (isSelected) {
-                                            Spacer(modifier = Modifier.weight(1f))
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Seleccionado",
-                                                tint = LocalROG_Cyan,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = option.label.uppercase(),
+                                        color = if (isSelected) LocalROG_Cyan else Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        style = CyberTypography.BodyCyber
+                                    )
+                                    if (isSelected) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Seleccionado",
+                                            tint = LocalROG_Cyan,
+                                            modifier = Modifier.size(16.dp)
+                                        )
                                     }
                                 }
                             }
@@ -920,7 +881,6 @@ fun SearchBarComponent(
                 color = Color.White.copy(alpha = 0.6f)
             )
 
-            // --- SECCIÓN: INPUT DE TEXTO (TIPOGRAFÍA CYBER) ---
             BasicTextField(
                 value = query,
                 onValueChange = onQueryChange,
@@ -933,14 +893,12 @@ fun SearchBarComponent(
                     fontWeight = FontWeight.SemiBold
                 ),
                 cursorBrush = SolidColor(LocalROG_Cyan),
-                singleLine = true, // 🔥 OBLIGATORIO PARA IME ACTION
+                singleLine = true,
                 maxLines = 1,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Search // 🔥 CAMBIA ICONO A LUPA/BUSCAR
-                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
                     onSearch = { 
-                        keyboardController?.hide() // 🔥 OCULTAR TECLADO AL BUSCAR
+                        keyboardController?.hide()
                         onSearch() 
                     }
                 ),
@@ -960,12 +918,10 @@ fun SearchBarComponent(
                 }
             )
 
-            // --- SECCIÓN: ACCIONES (LIMPIAR Y CERRAR) ---
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // X pequeña para limpiar texto
                 AnimatedVisibility(
                     visible = query.isNotEmpty(),
                     enter = fadeIn(),
@@ -983,7 +939,6 @@ fun SearchBarComponent(
                         )
                     }
                 }
-
             }
         }
     }
@@ -1025,43 +980,6 @@ fun BeAssistantSearchFabIdlePreview() {
             BeAssistantSearchFab(
                 state = BeState.IDLE,
                 contextMessages = BeDictionary.HomeMessages
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF010409)
-@Composable
-fun BeAssistantSearchFabTalkingPreview() {
-    MyApplicationTheme {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.BottomEnd
-        ) {
-            BeAssistantSearchFab(
-                state = BeState.TALKING,
-                contextMessages = BeDictionary.HomeMessages,
-                currentTipIndex = 0
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF010409)
-@Composable
-fun BeAssistantSearchFabSearchActivePreview() {
-    MyApplicationTheme {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            BeAssistantSearchFab(
-                isSearchActive = true,
-                searchQuery = "Searching with Be..."
             )
         }
     }

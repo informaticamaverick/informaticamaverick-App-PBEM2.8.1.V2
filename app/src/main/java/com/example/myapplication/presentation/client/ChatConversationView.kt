@@ -24,11 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -45,17 +43,12 @@ import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
-import com.google.firebase.database.getValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -364,7 +357,7 @@ fun ChatConversationView(
                         onClick = { message.relatedId?.let { viewModel.onBudgetClicked(it) } }
                     )
                     MessageType.AUDIO -> AudioMessageBubble(
-                        audioPath = message.content,
+                        audioPath = if (message.content == "[Audio]" && message.imageUrl != null) message.imageUrl else message.content,
                         duration = message.durationSeconds ?: 0,
                         timestamp = message.timestamp,
                         appColors = appColors,
@@ -372,19 +365,16 @@ fun ChatConversationView(
                     )
 
                     MessageType.IMAGE -> {
-                        var showViewer by remember {
-                            mutableStateOf(false) }
-                        ImageMessageBubble(
-                            content = message.content,
-                            isMe = message.senderId ==
-                                    viewModel.currentUserId,
-                            timestamp = message.timestamp,
+                        var showViewer by remember { mutableStateOf(false) }
+                        MessageBubble(
+                            message = message,
                             appColors = appColors,
+                            currentUserId = viewModel.currentUserId,
                             onImageClick = { showViewer = true }
                         )
                         if (showViewer) {
                             ImageZoomDialog(
-                                imageUrl = message.content,
+                                message = message,
                                 onDismiss = { showViewer = false }
                             )
                         }
@@ -819,91 +809,6 @@ fun EnhancedMessageBubble(
 
 data class BubbleColors(val container: Color, val content: Color)
 
-@Composable
-fun ImageMessageBubble(
-    content: String,
-    isMe: Boolean,
-    timestamp: Long,
-    appColors: AppColors,
-    onImageClick: () -> Unit = {}
-) {
-    val alignment = if (isMe) Alignment.End
-    else Alignment.Start
-
-    // Soporta Base64 puro o URL remota (http/https)
-    val model = remember(content) {
-        when {
-            content.startsWith("http") ->
-                content
-            content.startsWith("file://") ->
-                content
-            else -> try {
-
-                android.util.Base64.decode(content,
-                    android.util.Base64.NO_WRAP)
-            } catch (e: Exception) { null }
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        horizontalAlignment = alignment
-    ) {
-        if (model != null) {
-            AsyncImage(
-                model = model,
-                contentDescription = "Imagen",
-                modifier = Modifier
-                    .widthIn(max = 240.dp)
-
-
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable { onImageClick() },
-                contentScale =
-                    ContentScale.FillWidth
-            )
-        } else {
-            Surface(
-                color =
-                    appColors.surfaceColor,
-                shape =
-                    RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    text = "⚠️ No se pudo cargar la imagen",
-                    modifier =
-                        Modifier.padding(12.dp),
-                    color =
-                        appColors.textSecondaryColor,
-                    fontSize = 13.sp
-                )
-            }
-        }
-        Text(
-            text = SimpleDateFormat("HH:mm",
-                Locale.getDefault()).format(Date(timestamp)),
-            fontSize = 10.sp,
-            color =
-                appColors.textSecondaryColor,
-            modifier = Modifier.padding(top =
-                2.dp, start = 4.dp, end = 4.dp)
-        )
-    }
-}
-
-@Composable
-fun TenderSelectionDialog(
-    matchingTenders: List<com.example.myapplication.data.local.TenderEntity>,
-    providerCategories: List<String>,
-    appColors: AppColors,
-    onDismiss: () -> Unit,
-    onSelect: (com.example.myapplication.data.local.TenderEntity) -> Unit
-) {
-    // TODO: implementar lista de licitaciones para invitar al prestador
-}
-
 fun isSameDay(t1: Long, t2: Long): Boolean {
     val fmt = SimpleDateFormat("yyyyMMdd", Locale.getDefault())
     return fmt.format(Date(t1)) == fmt.format(Date(t2))
@@ -1153,68 +1058,13 @@ fun ScheduleAppointmentDialog(
     }
 }
 @Composable
-fun ImageZoomDialog(imageUrl: String,
-                    onDismiss: () -> Unit) {
-    var scale by remember { mutableStateOf(1f)
-    }
-    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
-        scale = (scale *
-                zoomChange).coerceIn(1f, 6f)
-        offset += panChange
-    }
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = onDismiss,
-        properties =
-            androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
-            )
-    ) {
-        Box(
-            contentAlignment =
-                Alignment.Center,
-            modifier =
-                Modifier.fillMaxSize().background(Color.Black)
-        ) {
-            val imageBitmap =
-                remember(imageUrl) {
-                    try {
-                        val bytes =
-                            android.util.Base64.decode(imageUrl,
-                                android.util.Base64.DEFAULT)
-                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                    } catch (e: Exception) { null
-                    }
-                }
-            if (imageBitmap != null) {
-
-                androidx.compose.foundation.Image(
-                    bitmap = imageBitmap,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize().graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y)
-
-                        .transformable(transformableState),
-                    contentScale =
-                        ContentScale.Fit
-                )
-            }
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-
-                    .background(Color.Black.copy(alpha = 0.5f),
-                        RoundedCornerShape(50))
-            ) {
-                Icon(Icons.Default.Close,
-                    contentDescription = "Cerrar", tint =
-                        Color.White)
-            }
-        }
-    }
+fun TenderSelectionDialog(
+    matchingTenders: List<com.example.myapplication.data.local.TenderEntity>,
+    providerCategories: List<String>,
+    appColors: AppColors,
+    onDismiss: () -> Unit,
+    onSelect: (com.example.myapplication.data.local.TenderEntity) -> Unit
+) {
+    // TODO: implementar lista de licitaciones para invitar al prestador
 }
 

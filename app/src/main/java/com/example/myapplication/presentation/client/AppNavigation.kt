@@ -9,7 +9,6 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -115,17 +114,10 @@ fun AppNavigation(
     val favorites by providerViewModel.favoriteServices.collectAsStateWithLifecycle()
     val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
 
-    // --- ESTADOS DEL OBRERO (UBICACIÓN Y DATOS PESADOS) ---
-    val activeAddress by ubicacionObrero.activeAddress.collectAsStateWithLifecycle()
-    
     // --- ESTADOS DEL COREÓGRAFO (BE ASSISTANT VM) ---
     val beOffsetX by beAssistantViewModel.offsetX.collectAsStateWithLifecycle()
     val beOffsetY by beAssistantViewModel.offsetY.collectAsStateWithLifecycle()
     val isBeDragging by beAssistantViewModel.isDragging.collectAsStateWithLifecycle()
-    val bePupilX by beAssistantViewModel.targetPupilX.collectAsStateWithLifecycle()
-    val bePupilY by beAssistantViewModel.targetPupilY.collectAsStateWithLifecycle()
-    val isBeBlinking by beAssistantViewModel.isBlinking.collectAsStateWithLifecycle()
-    val isToolbarStable by beAssistantViewModel.isToolbarStable.collectAsStateWithLifecycle()
     val dynamicBeBottomPadding by beAssistantViewModel.beBottomPadding.collectAsStateWithLifecycle()
 
     // 🔥 SINCRONIZACIÓN CEREBRO -> OBRERO 🔥
@@ -182,7 +174,6 @@ fun AppNavigation(
         searchReaction = searchReaction,
         searchMenuOptions = searchMenuOptions,
         selectedOptionIds = selectedOptionIds,
-        ubicacionObrero = ubicacionObrero, // Pasamos el obrero
         showBe = showBe,
         isSearchActive = isSearchActive,
         searchQuery = searchQueries, 
@@ -198,19 +189,12 @@ fun AppNavigation(
         isMultiSelectionActive = isMultiSelectionActive, 
         toolboxKey = toolboxKey, 
         showLocationTool = showLocationTool,
-        activeAddress = activeAddress,
-        user = user,
         // Estados de animación de Be
         beOffsetX = beOffsetX,
         beOffsetY = beOffsetY,
         isBeDragging = isBeDragging,
-        bePupilX = bePupilX,
-        bePupilY = bePupilY,
-        isBeBlinking = isBeBlinking,
-        isToolbarStable = isToolbarStable,
         dynamicBeBottomPadding = dynamicBeBottomPadding,
         onRouteChanged = { hudViewModel.onRouteChanged(it) },
-        onToggleFavorite = { id, isFav -> providerViewModel.toggleFavorite(id, isFav) },
         onBeClick = { hudViewModel.onBeClick() },
         onBeLongClick = { hudViewModel.onBeLongClick() },
         onBeDoubleClick = { hudViewModel.onBeDoubleClick() },
@@ -221,7 +205,6 @@ fun AppNavigation(
         onSimulateFiveDirectBudgets = { simulationViewModel.simulateFiveDirectBudgetsToChat() },
         onSimulateTenderResponses = { simulationViewModel.simulateTenderResponsesForEachActive() },
         onSimulateMassiveProviders = { cats, zip, count -> simulationViewModel.simulateMassiveProviders(cats, zip, count) },
-        onEjecutarCalculoUbicacionGps = { context, callback -> ubicacionObrero.ejecutarCalculoUbicacionGps(context, callback) },
         onMigrateCategories = { simulationViewModel.uploadCategoriesToFirestore() },
         favorites = favorites, 
         allCategories = categories
@@ -238,7 +221,6 @@ fun AppNavigationContent(
     searchReaction: BeSearchReaction?, // NUEVO
     searchMenuOptions: List<ControlItem>, // NUEVO
     selectedOptionIds: Set<String>, // NUEVO
-    ubicacionObrero: UbicacionClimaViewModel, // Recibimos el obrero
     showBe: Boolean,
     isSearchActive: Boolean,
     searchQuery: String,
@@ -256,19 +238,12 @@ fun AppNavigationContent(
     isMultiSelectionActive: Boolean, 
     toolboxKey: String, 
     showLocationTool: Boolean,
-    activeAddress: AddressInfo?,
-    user: UserEntity?,
     // Estados de animación de Be
     beOffsetX: Float,
     beOffsetY: Float,
     isBeDragging: Boolean,
-    bePupilX: Float,
-    bePupilY: Float,
-    isBeBlinking: Boolean,
-    isToolbarStable: Boolean,
     dynamicBeBottomPadding: Dp,
     onRouteChanged: (String?) -> Unit,
-    onToggleFavorite: (String, Boolean) -> Unit,
     onBeClick: () -> Unit,
     onBeLongClick: () -> Unit,
     onBeDoubleClick: () -> Unit,
@@ -276,13 +251,11 @@ fun AppNavigationContent(
     onSimulateFiveDirectBudgets: () -> Unit = {},
     onSimulateTenderResponses: () -> Unit = {},
     onSimulateMassiveProviders: (List<String>, String, Int) -> Unit = { _, _, _ -> },
-    onEjecutarCalculoUbicacionGps: (Context, (String, String, String, String, String, String, Double, Double) -> Unit) -> Unit = { _, _ -> },
     onMigrateCategories: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val context = LocalContext.current
 
     // --- SECCIÓN: REDIRECCIÓN INICIAL ---
     LaunchedEffect(initialTarget) {
@@ -347,8 +320,6 @@ fun AppNavigationContent(
         isMultiSelectionActive = isMultiSelectionActive,
         toolboxKey = toolboxKey,
         showLocationTool = showLocationTool,
-        activeAddress = activeAddress,
-        user = user,
         isLocationExpanded = isLocationExpanded,
         showFavoritesPanel = showFavoritesPanel,
         showProviderSimDialog = showProviderSimDialog,
@@ -356,10 +327,6 @@ fun AppNavigationContent(
         beOffsetX = beOffsetX,
         beOffsetY = beOffsetY,
         isBeDragging = isBeDragging,
-        bePupilX = bePupilX,
-        bePupilY = bePupilY,
-        isBeBlinking = isBeBlinking,
-        isToolbarStable = isToolbarStable,
         dynamicBeBottomPadding = dynamicBeBottomPadding,
         onUpdateBePosition = { x, y -> beAssistantViewModel.updateOffset(x, y) },
         onSetBeDragging = { beAssistantViewModel.setDragging(it) },
@@ -372,19 +339,6 @@ fun AppNavigationContent(
             beViewModel.onSearchSubmitted(beInteractionViewModel)
         },
         onToggleLocationExpand = { isLocationExpanded = it },
-        onToggleFavorite = onToggleFavorite,
-        onCloseFavorites = { beViewModel.setFavoritesPanelVisible(false) },
-        onCloseResultado = { beViewModel.setResultadoVisible(false) },
-        onCategoryClick = { cat -> beViewModel.setResultadoVisible(false); navController.navigate("result_busqueda/${Uri.encode(cat)}") },
-        onSuperCategoryClick = { beViewModel.setResultadoVisible(false) },
-        onProviderClick = { pid -> navController.navigate("perfil_prestador/$pid") },
-        onAddressSelected = { selected -> ubicacionObrero.selectAddress(selected.id); isLocationExpanded = false }, // Cambiado a Obrero
-        onUpdateGps = {
-            onEjecutarCalculoUbicacionGps(context) { _, _, loc, calle, num, cp, lat, lng ->
-                val newAddr = AddressInfo(id = "gps_current", companyOrUserName = "Ubicación Actual", branchName = "GPS", streetAndNumber = "$calle $num", locality = loc, postalCode = cp, isCompany = false, lat = lat, lng = lng)
-                ubicacionObrero.updateAddressFromGps(newAddr) // Cambiado a Obrero
-            }
-        },
         onDismissSimDialog = { beViewModel.setShowProviderSimDialog(false) },
         onConfirmSimDialog = { cats, zip, count -> beViewModel.setShowProviderSimDialog(false); onSimulateMassiveProviders(cats, zip, count) },
         onMigrateCategories = onMigrateCategories,
@@ -402,8 +356,7 @@ fun AppNavigationContent(
         beInteractionViewModel = beInteractionViewModel, // Pasamos el nuevo ViewModel
         searchReaction = searchReaction, // Pasamos la reacción
         searchMenuOptions = searchMenuOptions, // Pasamos las opciones
-        selectedOptionIds = selectedOptionIds, // Pasamos los IDs seleccionados
-        ubicacionObrero = ubicacionObrero // Pasamos el obrero
+        selectedOptionIds = selectedOptionIds // Pasamos los IDs seleccionados
     )
 }
 
@@ -429,8 +382,6 @@ fun AppNavigationStateless(
     isMultiSelectionActive: Boolean,
     toolboxKey: String,
     showLocationTool: Boolean,
-    activeAddress: AddressInfo?,
-    user: UserEntity?,
     isLocationExpanded: Boolean,
     showFavoritesPanel: Boolean,
     showProviderSimDialog: Boolean,
@@ -438,10 +389,6 @@ fun AppNavigationStateless(
     beOffsetX: Float = 0f,
     beOffsetY: Float = 0f,
     isBeDragging: Boolean = false,
-    bePupilX: Float = 0f,
-    bePupilY: Float = 0f,
-    isBeBlinking: Boolean = false,
-    isToolbarStable: Boolean = true,
     dynamicBeBottomPadding: Dp = 0.dp,
     onUpdateBePosition: (Float, Float) -> Unit = { _, _ -> },
     onSetBeDragging: (Boolean) -> Unit = {},
@@ -451,14 +398,6 @@ fun AppNavigationStateless(
     onSearchQueryChange: (String) -> Unit,
     onSearchSubmitted: () -> Unit = {},
     onToggleLocationExpand: (Boolean) -> Unit,
-    onToggleFavorite: (String, Boolean) -> Unit,
-    onCloseFavorites: () -> Unit,
-    onCloseResultado: () -> Unit,
-    onCategoryClick: (String) -> Unit,
-    onSuperCategoryClick: (SuperCategory) -> Unit,
-    onProviderClick: (String) -> Unit,
-    onAddressSelected: (AddressInfo) -> Unit,
-    onUpdateGps: () -> Unit,
     onDismissSimDialog: () -> Unit,
     onConfirmSimDialog: (List<String>, String, Int) -> Unit,
     onMigrateCategories: () -> Unit = {},
@@ -471,7 +410,6 @@ fun AppNavigationStateless(
     searchReaction: BeSearchReaction? = null, // NUEVO
     searchMenuOptions: List<ControlItem> = emptyList(), // NUEVO
     selectedOptionIds: Set<String> = emptySet(), // NUEVO
-    ubicacionObrero: UbicacionClimaViewModel? = null, // Recibimos el obrero
     navHostContent: @Composable (PaddingValues) -> Unit = { innerPadding ->
         // ==========================================================================================
         // --- 🛠️ SECCIÓN: CONFIGURACIÓN DE ANIMACIONES DE NAVEGACIÓN (MAVERICK STYLE) ---
@@ -521,7 +459,7 @@ fun AppNavigationStateless(
                     enterTransition = mainEnterTransition, 
                     exitTransition = mainExitTransition
                 ) {
-                    HomeScreenComplete(navController = navController, bottomPadding = innerPadding, beViewModel = beViewModel ?: hiltViewModel())
+                    HomeScreenComplete(navController = navController, beViewModel = beViewModel ?: hiltViewModel())
                 }
                 
                 composable(route = Screen.Chat.route, arguments = listOf(navArgument("providerId") { type = NavType.StringType; nullable = true; defaultValue = null }), enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { backStackEntry ->
@@ -633,7 +571,14 @@ fun AppNavigationStateless(
             visible = showBe,
             modifier = Modifier.zIndex(500f) 
         ) {
-            val beVerticalBias by animateFloatAsState(targetValue = if (isSearchActive) -1f else 1f, label = "v_bias")
+            val beVerticalBias by animateFloatAsState(
+                targetValue = when {
+                    isSearchActive -> -1f
+                    isDormido -> 0f // Modo hibernación: Mitad de la pantalla
+                    else -> 1f
+                }, 
+                label = "v_bias"
+            )
             
             // 🔥 DETERMINAMOS EL PADDING REAL: 
             // Si la barra de navegación no se muestra, el padding debe ser 0 para que Be "caiga" al borde.
@@ -670,9 +615,6 @@ fun AppNavigationStateless(
                     offsetX = beOffsetX,
                     offsetY = beOffsetY,
                     isDragging = isBeDragging,
-                    pupilX = bePupilX,
-                    pupilY = bePupilY,
-                    isBlinking = isBeBlinking,
                     onUpdatePosition = onUpdateBePosition,
                     onSetDragging = onSetBeDragging,
                     isBubbleMuted = isBubbleMuted,
@@ -712,9 +654,9 @@ fun AppNavigationStateless(
         }
 
         if (showFavoritesPanel) {
-            Box(modifier = Modifier.fillMaxSize().zIndex(600f).background(Color.Black.copy(alpha = 0.65f)).clickable { onCloseFavorites() })
+            Box(modifier = Modifier.fillMaxSize().zIndex(600f).background(Color.Black.copy(alpha = 0.65f)).clickable { beViewModel?.setFavoritesPanelVisible(false) })
             AnimatedVisibility(visible = showFavoritesPanel, enter = slideInHorizontally { it }, exit = slideOutHorizontally { it }, modifier = Modifier.align(Alignment.CenterEnd).zIndex(610f)) {
-                FavoritesPanel(navController, favorites, onCloseFavorites, onToggleFavorite)
+                FavoritesPanel(navController, favorites) { beViewModel?.setFavoritesPanelVisible(false) }
             }
         }
 
@@ -757,7 +699,7 @@ fun AppBottomNavigationBar(
     val bottomPadding = navigationInsets.calculateBottomPadding()
     
     // --- ESTADOS DE NOTIFICACIÓN DESDE EL CEREBRO ---
-    //val hasChatNotif by beViewModel?.hasChatNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
+    val hasChatNotif by beViewModel?.hasChatNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
     //val hasBudgetNotif by beViewModel?.hasBudgetNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
     //val hasCalendarNotif by beViewModel?.hasCalendarNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
    // val hasPromoNotif by beViewModel?.hasPromoNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
@@ -820,13 +762,13 @@ fun AppBottomNavigationBar(
                 val scope = rememberCoroutineScope()
                 
                 // --- LÓGICA DE BADGE: DETERMINAR SI ESTE TAB TIENE NOTIFICACIONES ---
-            //    val hasNotification = when (screen) {
-              //      is Screen.Chat -> hasChatNotif
-               //     is Screen.Presupuestos -> hasBudgetNotif
-               //     is Screen.Calendar -> hasCalendarNotif
-               //     is Screen.Promo -> hasPromoNotif
-                //    else -> false
-               // }
+                val hasNotification = when (screen) {
+                    is Screen.Chat -> hasChatNotif
+                    //is Screen.Presupuestos -> hasBudgetNotif
+                    //is Screen.Calendar -> hasCalendarNotif
+                    //is Screen.Promo -> hasPromoNotif
+                    else -> false
+                }
 
                 // ==========================================================================================
                 // 🛠️ SECCIÓN 3: CONFIGURACIÓN DE ANIMACIONES Y BOTONES
@@ -896,15 +838,15 @@ fun AppBottomNavigationBar(
                         }
 
                         // --- CYAN NOTIFICATION BADGE (MAVERICK HUD V5) ---
-                       // if (hasNotification) {
-                           // Box(
-                             //   modifier = Modifier
-                             //       .size(10.dp)
-                             //       .offset(x = 4.dp, y = (-4).dp)
-                            //        .background(Color(0xFF22D3EE), CircleShape) // Cyber Cyan
-                           //         .border(1.5.dp, Color.Black, CircleShape) // Contraste contra el fondo
-                         //   )
-                       // }
+                        if (hasNotification) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .offset(x = 4.dp, y = (-4).dp)
+                                    .background(Color(0xFF22D3EE), CircleShape) // Cyber Cyan
+                                    .border(1.5.dp, Color.Black, CircleShape) // Contraste contra el fondo
+                            )
+                        }
                     }
                 }
             }
@@ -951,8 +893,6 @@ fun AppNavigationPreview() {
             isMultiSelectionActive = false,
             toolboxKey = "home_default",
             showLocationTool = false,
-            activeAddress = null,
-            user = null,
             isLocationExpanded = false,
             showFavoritesPanel = false,
             showProviderSimDialog = false,
@@ -960,22 +900,13 @@ fun AppNavigationPreview() {
             onBeLongClick = {},
             onBeDoubleClick = {},
             onSearchQueryChange = {},
-            onToggleLocationExpand = {},
-            onToggleFavorite = { _, _ -> },
-            onCloseFavorites = {},
-            onCloseResultado = {},
-            onCategoryClick = {},
-            onSuperCategoryClick = {},
-            onProviderClick = {},
-            onAddressSelected = {},
-            onUpdateGps = {},
             onDismissSimDialog = {},
             onConfirmSimDialog = { _, _, _ -> },
             onSetBeState = {},
             onNextTip = {},
             onPrevTip = {},
+            onToggleLocationExpand = {},
             beViewModel = null,
-            ubicacionObrero = null,
             navHostContent = {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Home Screen Content", color = Color.White)
