@@ -104,6 +104,15 @@ class BusinessViewModel @Inject constructor(
                     companies = updatedCompanies,
                     hasCompanyProfile = true
                 )
+                //Solo sincornizar si hubo cambios reales
+                if (updatedProvider.companies == currentProvider.companies &&
+                    updatedProvider.hasCompanyProfile == currentProvider.hasCompanyProfile)
+                {
+                    _successMessage.value = "Sin cambios"
+                    return@launch
+                }
+                //Sincronizacion SSOT: Room + Firebase
+                providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
 
                 // Sincronización SSOT: Room + Firebase
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())

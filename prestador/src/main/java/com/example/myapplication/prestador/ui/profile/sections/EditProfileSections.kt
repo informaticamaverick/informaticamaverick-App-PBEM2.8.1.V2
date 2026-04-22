@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import coil.compose.AsyncImage
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.graphics.asImageBitmap
 import com.example.myapplication.prestador.data.model.ServiceType
 import com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField
@@ -237,6 +238,7 @@ fun PersonalDataSection(
     onDniCuitChange: (String) -> Unit,
     expanded: Boolean,
     onExpandChange: () -> Unit,
+    onGuarguar: (nombre: String, apellido: String, phone: String, dniCuit: String) -> Unit,
     colors: com.example.myapplication.prestador.ui.theme.PrestadorColors
 ){
     ArchiveroSection(
@@ -347,6 +349,17 @@ fun PersonalDataSection(
                 modifier = Modifier.weight(1f)
 
             )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = { onGuarguar(name, apellido, phone, dniCuit) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
+            Text("Guardar datos personales", fontSize = 13.sp)
         }
 
     }
@@ -582,14 +595,20 @@ fun EmpresaUnificadaCard(
     onTieneSucursalesChange: (Boolean) -> Unit,
     expanded: Boolean,
     onExpandChange: () -> Unit,
-    onGuardar: (nombre: String, razonSocial: String, cuit: String, provincia: String, localidad: String, codigoPostal: String, calle: String, numero: String, horario: String) -> Unit,
+    onGuardar: (nombre: String, razonSocial: String, cuit: String, provincia: String, localidad: String, codigoPostal: String, calle: String, numero: String, horario: String, categories: List<String>, photoUrl: String?, pendingPhotoUri: android.net.Uri?, lat: Double?, lng: Double?, pais: String) -> Unit,
     onEliminar: (() -> Unit)? = null,
     extraContent: (@Composable ColumnScope.() -> Unit)? = null,
     colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
     refreshTrigger: Int = 0,
     onUploadImage: (suspend (android.net.Uri) -> String?)? = null,
     onSucursalAgregada: (() -> Unit)? = null,
-) {
+    categoriesEmpresa: List<String> = emptyList(),
+    categoriasPrestador: List<String> = emptyList(),
+    onUploadCompanyImage: (suspend (android.net.Uri) -> String?)? = null,
+    latitude: Double? = null,
+    longitude: Double? = null,
+    pais: String = "Argentina",
+){
     ArchiveroSection(
         title = titulo,
         sectionId = "empresa_unificada_$titulo",
@@ -612,7 +631,17 @@ fun EmpresaUnificadaCard(
         var localCalle by remember(calle) { mutableStateOf(calle) }
         var localNumero by remember(numero) { mutableStateOf(numero) }
         var localHorario by remember(horario) { mutableStateOf(horario) }
+        //Estados lat/lng/pais para geocodificacion
+        var geocodedLat by remember(latitude) { mutableStateOf(latitude)}
+        var geocodedLng by remember(longitude) { mutableStateOf(longitude) }
+        var localPais by remember(pais) { mutableStateOf(pais) }
         var tieneSucursalesLocal by remember { mutableStateOf(tieneSucursales) }
+        var localCategories by remember(categoriesEmpresa) { mutableStateOf(categoriesEmpresa)}
+        // Uri local — NO se sube hasta que el usuario toque Guardar
+        var pendingPhotoUri by remember { mutableStateOf<android.net.Uri?>(null) }
+        val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) pendingPhotoUri = uri
+        }
         var geocodingLoading by remember { mutableStateOf(false) }
         var mostrarSugerenciasProvincia by remember { mutableStateOf(false) }
         var mostrarSugerenciasLocalidad by remember { mutableStateOf(false) }
@@ -644,6 +673,9 @@ fun EmpresaUnificadaCard(
                                 if (!addr.locality.isNullOrBlank()) localLocalidad = addr.locality!!
                                 if (!addr.adminArea.isNullOrBlank()) localProvincia = addr.adminArea!!
                                 if (!addr.postalCode.isNullOrBlank()) localCP = addr.postalCode!!
+                                if (!addr.countryName.isNullOrBlank()) localPais = addr.countryName!!
+                                geocodedLat = loc.latitude
+                                geocodedLng = loc.longitude
                             }
                         }
                     } catch (_: Exception) {
@@ -965,17 +997,65 @@ fun EmpresaUnificadaCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Botón para obtener lat/lng desde la dirección escrita
+            OutlinedButton(
+                onClick = {
+                    empresaCardScope.launch {
+                        geocodingLoading = true
+                        try {
+                            val geocoder =
+                                android.location.Geocoder(context, java.util.Locale.getDefault())
+                            val query = "$localCalle $localNumero,$localLocalidad, $localProvincia"
+                            @Suppress("DEPRECATION")
+                            val results =
+                                geocoder.getFromLocationName(query, 1)
+                            if (!results.isNullOrEmpty()) {
+                                val r = results[0]
+                                geocodedLat = r.latitude
+                                geocodedLng = r.longitude
+                                if (!r.countryName.isNullOrBlank())
+                                    localPais = r.countryName!!
+                                if (!r.postalCode.isNullOrBlank() &&
+                                    localCP.isBlank()) localCP = r.postalCode!!
+                            }
+                        } catch (_: Exception) {
+                        } finally {
+                            geocodingLoading = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                border = androidx.compose.foundation.BorderStroke(1.dp,
+                    colors.primaryOrange)
+            ) {
+                if (geocodingLoading) {
+                    CircularProgressIndicator(modifier =
+                        Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.primaryOrange)
+                } else {
+                    Icon(Icons.Default.MyLocation, contentDescription =
+                        null, tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Sincronizar coordenadas", fontSize = 13.sp, color =
+                    colors.primaryOrange)
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
             HorarioSelectorField(
                 horario = localHorario,
-                onHorarioChange = {
-                    val it = ""
-                    localHorario = it
-                }
+                onHorarioChange = { localHorario = it }
+
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+
+
+
             extraContent?.invoke(this)
             Spacer(modifier = Modifier.height(8.dp))
+
+
+
 
             // Sucursales divider
             Row(
@@ -1055,7 +1135,58 @@ fun EmpresaUnificadaCard(
             }
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Save / Cancel row
+            // Foto de empresa
+            HorizontalDivider(color = colors.border)
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Foto de empresa", fontSize = 13.sp, color = colors.textSecondary)
+                OutlinedButton(
+                    onClick = { imageLauncher.launch("image/*") },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Icon(Icons.Default.AddAPhoto, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(if (pendingPhotoUri != null) "Cambiar foto" else "Agregar foto", fontSize = 12.sp)
+                }
+            }
+            if (pendingPhotoUri != null) {
+                Text("📷 Foto seleccionada (se sube al guardar)", fontSize = 11.sp, color = Color(0xFF4CAF50))
+            }
+
+            // Categorías de empresa (solo las que el prestador ya eligió)
+            HorizontalDivider(color = colors.border)
+            Text("Categorías de la empresa", fontSize = 13.sp, color = colors.textSecondary,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+            if (categoriasPrestador.isEmpty()) {
+                Text(
+                    "Primero seleccioná categorías en la sección Categorías",
+                    fontSize = 12.sp,
+                    color = colors.textSecondary
+                )
+            } else {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    categoriasPrestador.forEach { cat ->
+                        val selected = cat in localCategories
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                localCategories = if (selected)
+                                    localCategories - cat
+                                else
+                                    localCategories + cat
+                            },
+                            label = { Text(cat, fontSize = 11.sp) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Botones Cancelar / Guardar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1073,6 +1204,7 @@ fun EmpresaUnificadaCard(
                             localCalle = calle
                             localNumero = numero
                             localHorario = horario
+                            localCategories = categoriesEmpresa
                             editando = false
                         },
                         modifier = Modifier.weight(1f),
@@ -1083,7 +1215,7 @@ fun EmpresaUnificadaCard(
                     onClick = {
                         if (localNombre.isBlank()) return@Button
                         if (cuitError.isNotEmpty()) return@Button
-                        onGuardar(localNombre, localRazon, cuitValue.text, localProvincia, localLocalidad, localCP, localCalle, localNumero, localHorario)
+                        onGuardar(localNombre, localRazon, cuitValue.text, localProvincia, localLocalidad, localCP, localCalle, localNumero, localHorario, localCategories, null, pendingPhotoUri, geocodedLat, geocodedLng, localPais)
                         editando = false
                     },
                     modifier = Modifier.weight(1f),

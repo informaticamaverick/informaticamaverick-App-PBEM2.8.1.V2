@@ -141,10 +141,15 @@ class PrestadorLoginViewModel @Inject constructor(
 
     private fun saveFcmToken(uid: String) {
         FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+            // Usar update() en lugar de set(merge) para NO crear el documento si no existe.
+            // Si el usuario nuevo aún no completó el registro, el documento no existe
+            // y set(merge) lo creaba con solo fcmToken → checkUserProfileExists retornaba true
+            // → saltaba el Register y mandaba al Dashboard.
             FirebaseFirestore.getInstance()
                 .collection("providers")
                 .document(uid)
-                .set(hashMapOf("fcmToken" to token), com.google.firebase.firestore.SetOptions.merge())
+                .update("fcmToken", token)
+                .addOnFailureListener { /* ignorar: el doc no existe aún para usuarios nuevos */ }
         }
     }
 }

@@ -177,9 +177,13 @@ fun EditProfileScreenUnified(
             atiendeVirtual = p.atiendeVirtual
             trabajaConOtros = p.trabajaConOtros
             
+            // Colecciones jerárquicas
+            val firstCompany = p.companies.firstOrNull()
+
             nombreEmpresa = p.nombreEmpresa ?: ""
             cuitEmpresa = p.cuitEmpresa ?: ""
-            direccionEmpresa = p.direccionEmpresa ?: ""
+            // direccionEmpresa se usa como "razonSocial" en EmpresaUnificadaCard
+            direccionEmpresa = firstCompany?.razonSocial ?: ""
             
             horarioLocal = p.horarioLocal ?: ""
             serviceType = ServiceType.fromString(p.serviceType)
@@ -187,8 +191,6 @@ fun EditProfileScreenUnified(
             // Ranking y Stats
             rating = p.rating.toDouble()
             
-            // Colecciones jerárquicas
-            val firstCompany = p.companies.firstOrNull()
             horarioCasaCentral = firstCompany?.branches?.firstOrNull()?.workingHours ?: ""
             tieneSucursales = (firstCompany?.branches?.size ?: 0) > 1
             
@@ -407,6 +409,14 @@ fun EditProfileScreenUnified(
                                     onDniCuitChange = { dniCuit = it },
                                     expanded = expandedSection == "personal",
                                     onExpandChange = { expandedSection = if (expandedSection == "personal") null else "personal" },
+                                    onGuarguar = { nombre, ape, tel, dni ->
+                                        viewModel.updateProfile(
+                                            name = nombre,
+                                            apellido = ape,
+                                            phone = tel,
+                                            dniCuit = dni
+                                        )
+                                    },
                                     colors = colors
                                 )
                             }
@@ -428,7 +438,10 @@ fun EditProfileScreenUnified(
                                             calle = it.calle ?: "",
                                             numero = it.numero ?: "",
                                             latitud = it.latitude,
-                                            longitud = it.longitude
+                                            longitud = it.longitude,
+                                            // Timestamps fijos para que remember(direccion) no resetee en cada recomposición
+                                            createdAt = 0L,
+                                            updatedAt = 0L
                                         )
                                     },
                                     expanded = expandedSection == "direccion",
@@ -734,37 +747,42 @@ fun EditProfileScreenUnified(
                                             onExpandChange = {
                                                 expandedSection = if (expandedSection == "empresa_0") null else "empresa_0"
                                             },
-                                            onGuardar = { nombre, razon, cuit, prov, localidad, cp, calle, numero, horario ->
+                                            onGuardar = { nombre, razon, cuit, prov, localidad, cp, calle, numero, horario, cats, _, pendingUri, lat, lng, pais ->
                                                 pendingEmpresaRefresh = true
                                                 horarioCasaCentral = horario
+                                                val existingCompany = currentProvider?.companies?.firstOrNull()
+                                                val existingBranch = existingCompany?.branches?.firstOrNull()
                                                 val address = AddressProvider(
                                                     calle = calle,
                                                     numero = numero,
                                                     localidad = localidad,
                                                     provincia = prov,
-                                                    codigoPostal = cp
+                                                    codigoPostal = cp,
+                                                    latitude = lat,
+                                                    longitude = lng,
+                                                    pais = pais
                                                 )
                                                 val branch = BranchProvider(
+                                                    id = existingBranch?.id ?: java.util.UUID.randomUUID().toString(),
                                                     name = "Casa Central",
                                                     address = address,
-                                                    workingHours = horario
+                                                    workingHours = horario,
+                                                    employees = existingBranch?.employees ?: emptyList()
                                                 )
                                                 val company = CompanyProvider(
+                                                    id = existingCompany?.id ?: java.util.UUID.randomUUID().toString(),
                                                     name = nombre,
                                                     razonSocial = razon,
                                                     cuit = cuit,
+                                                    categories = cats,
+                                                    photoUrl = existingCompany?.photoUrl,
                                                     branches = listOf(branch)
                                                 )
-                                                viewModel.addCompany(company)
-                                                
-                                                // Sync legacy
-                                                viewModel.updateProfile(
-                                                    nombreEmpresa = nombre,
-                                                    direccionEmpresa = "$calle $numero".trim(),
-                                                    cuitEmpresa = cuit,
-                                                    tieneEmpresa = true
-                                                )
+                                                // Guardar empresa con foto en una sola operación (evita race condition)
+                                                viewModel.addCompany(company, pendingUri)
                                             },
+                                            categoriesEmpresa = currentProvider?.companies?.firstOrNull()?.categories ?: emptyList(),
+                                            categoriasPrestador = try { val arr = org.json.JSONArray(categorias); (0 until arr.length()).map { arr.getString(it) } } catch (e: Exception) { emptyList() },
                                             onEliminar = null,
                                             extraContent = {
                                                 val team = firstBranch?.employees ?: emptyList()
@@ -845,19 +863,26 @@ fun EditProfileScreenUnified(
                                                 onExpandChange = {
                                                     expandedSection = if (expandedSection == "empresa_${index + 1}") null else "empresa_${index + 1}"
                                                 },
-                                                onGuardar = { nombre, razon, cuit, prov, loc, cp, calle, num, horario ->
+                                                onGuardar = { nombre, razon, cuit, prov, loc, cp, calle, num, horario, cats, _, pendingUri, lat, lng, pais ->
                                                     val updatedCompany = company.copy(
                                                         name = nombre,
                                                         razonSocial = razon,
                                                         cuit = cuit,
+                                                        categories = cats,
+                                                        photoUrl = company.photoUrl, // mantener URL existente
                                                         branches = listOf(BranchProvider(
+                                                            id = branch?.id ?: java.util.UUID.randomUUID().toString(),
                                                             name = "Sucursal",
-                                                            address = AddressProvider(calle=calle, numero=num, localidad=loc, provincia=prov, codigoPostal=cp),
-                                                            workingHours = horario
+                                                            address = AddressProvider(calle=calle, numero=num, localidad=loc, provincia=prov, codigoPostal=cp, latitude = lat, longitude = lng, pais = pais),
+                                                            workingHours = horario,
+                                                            employees = branch?.employees ?: emptyList()
                                                         ))
                                                     )
-                                                    viewModel.addCompany(updatedCompany) // Actúa como update si ID coincide
+                                                    // Guardar empresa con foto en una sola operación (evita race condition)
+                                                    viewModel.addCompany(updatedCompany, pendingUri)
                                                 },
+                                                categoriesEmpresa = company.categories,
+                                                categoriasPrestador = try { val arr = org.json.JSONArray(categorias); (0 until arr.length()).map { arr.getString(it) } } catch (e: Exception) { emptyList() },
                                                 onEliminar = {
                                                     viewModel.removeCompany(company.id)
                                                 },
@@ -995,6 +1020,7 @@ fun EditProfileScreenUnified(
             onDismiss = { showServiceTypeDialog = false },
             onServiceTypeSelected = { newType ->
                 serviceType = newType
+                viewModel.updateProfile(serviceType = newType.name)
             },
             colors = colors
         )

@@ -203,6 +203,14 @@ class PrestadorRegisterViewModel @Inject constructor(
                 // =========================================================================
                 providerRepository.syncProviderWithFirebase(providerToSync)
 
+                // Guardar FCM token ahora que el documento existe en Firestore
+                com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                    .addOnSuccessListener { token ->
+                        firestore.collection("providers").document(userId)
+                            .update("fcmToken", token)
+                            .addOnFailureListener { /* ignorar */ }
+                    }
+
                 _registerState.value = RegisterState.Success
             } catch (e: Exception) {
                 _registerState.value = RegisterState.Error(e.message ?: "Error al registrar")

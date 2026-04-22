@@ -147,8 +147,9 @@ fun ChatConversationScreen(
         Message(
             id = entity.messageId,
             text = if (type == Message.MessageType.IMAGE) null else entity.text ?: "",
-            imageUrl = if (type == Message.MessageType.IMAGE) (entity.imageUrl ?: entity.text) else entity.imageUrl,
-            audioUrl = entity.audioUrl,
+            imageUrl = if (type == Message.MessageType.IMAGE)
+                (entity.imageLocalPath ?: entity.imageUrl ?: entity.text) else entity.imageUrl,
+            audioUrl = entity.audioLocalPath ?: entity.audioUrl,
             audioDuration = entity.audioDuration,
             latitude = entity.latitude,
             longitude = entity.longitude,

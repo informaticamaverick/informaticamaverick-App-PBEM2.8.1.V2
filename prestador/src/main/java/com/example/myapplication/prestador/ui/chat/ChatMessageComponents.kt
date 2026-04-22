@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -313,28 +314,25 @@ fun ImageMessageContent(
 ) {
     Column {
         if (imageUrl != null) {
-            val imageBitmap = remember(imageUrl) {
-                try {
-                    val bytes = android.util.Base64.decode(imageUrl, android.util.Base64.DEFAULT)
-                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-                        ?.asImageBitmap()
-                } catch (e: Exception) { null }
+            // Resuelve el modelo: local path → file:// URI, URL remota o Base64
+            val model = remember(imageUrl) {
+                when {
+                    imageUrl.startsWith("/") -> "file://$imageUrl"
+                    imageUrl.startsWith("file://") -> imageUrl
+                    imageUrl.startsWith("http") -> imageUrl
+                    imageUrl != "[Imagen]" && imageUrl.isNotEmpty() -> {
+                        try {
+                            android.util.Base64.decode(imageUrl, android.util.Base64.NO_WRAP)
+                        } catch (e: Exception) { null }
+                    }
+                    else -> null
+                }
             }
-            if (imageBitmap != null) {
-                androidx.compose.foundation.Image(
-                    bitmap = imageBitmap,
-                    contentDescription = "Imagen",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onImageClick() },
-                    contentScale = ContentScale.Crop
-                )
-            } else {
+
+            if (model != null) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageUrl)
+                        .data(model)
                         .crossfade(true)
                         .build(),
                     contentDescription = "Imagen",
@@ -345,6 +343,24 @@ fun ImageMessageContent(
                         .clickable { onImageClick() },
                     contentScale = ContentScale.Crop
                 )
+            } else {
+                Surface(
+                    color = Color.White.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.7f)
+                        )
+                        Text("Imagen no disponible", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                    }
+                }
             }
         }
 
