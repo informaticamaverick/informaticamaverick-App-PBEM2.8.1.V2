@@ -55,7 +55,7 @@ data class Provider(
     val bannerImageUrl: String? = null,
     val galleryImages: List<String> = emptyList(),
     val favoriteProviderIds: List<String> = emptyList(),
-    val serviceType: String = "PROFESSIONAL",
+    val serviceType: String = "TECHNICAL",
     val createdAt: Long
 ) {
     val id: String get() = uid

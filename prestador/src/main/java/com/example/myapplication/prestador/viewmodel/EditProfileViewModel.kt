@@ -134,7 +134,30 @@ class EditProfileViewModel @Inject constructor(
             }
         }
     }
+    fun uploadCompanyPhoto(uri: Uri, companyId: String) {
+        viewModelScope.launch {
+            try {
+                val userId = auth.currentUser?.uid?: return@launch
 
+                //Mismo metodo que el chat
+                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(context, uri, maxWidth = 400, maxHeight = 400, quality = 75)
+                    ?: return@launch
+                val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+
+                //GUARDAR EN ROOM
+                val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
+                val updateCompanies = current.companies.map { company ->
+                    if ( company.id == companyId) company.copy(photoUrl = base64)
+                    else company
+                }
+                val updatedProvider = current.copy(companies = updateCompanies)
+                providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+                _profileState.value = ProfileState.Success(updatedProvider)
+            } catch (e: Exception) {
+                android.util.Log.e("EditProfileViewModel", "Error subiendo foto empresa: ${e.message}")
+            }
+        }
+    }
 
     init {
         loadProfile()
@@ -278,6 +301,8 @@ class EditProfileViewModel @Inject constructor(
                     ))
                 }
 
+                // Preservar service type de room
+                val savedServiceType = providerRepository.getProviderByIdOnce(userId)?.serviceType
                 val provider = ProviderEntity(
                     id = userId,
                     name = str(perfil, "nombre") ?: "",
@@ -316,57 +341,14 @@ class EditProfileViewModel @Inject constructor(
                     categories = (doc.get("servicios") as? List<*>)?.map { it.toString() } ?: emptyList(),
                     createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                     workingHours = str(localMap, "horarioLocal") ?: "",
-                    galleryImages = (doc.get("galleryImages") as? List<*>)?.map { it.toString() } ?: emptyList()
+                    galleryImages = (doc.get("galleryImages") as? List<*>)?.map { it.toString() } ?: emptyList(),
+                    serviceType = savedServiceType ?: "TECHNICAL"  //Room nunca sobreescribe lo que ya se guardo en room
                 )
                 
                 // ORDEN CRÍTICO: 1. Guardar Provider (SSOT incluye jerarquía completa)
                 providerRepository.saveProvider(provider)
                 
-                /*
-                // 2. Business (Obsoleto: ahora dentro de ProviderEntity)
-                provider.companies.forEach { company ->
-                    val businessEntity = BusinessEntity(
-                        id = company.id,
-                        providerId = userId,
-                        nombreNegocio = company.name,
-                        razonSocial = company.razonSocial,
-                        cuitNegocio = company.cuit,
-                        direccion = company.branches.firstOrNull()?.address?.fullString() ?: "",
-                        codigoPostal = company.branches.firstOrNull()?.address?.codigoPostal ?: "",
-                        descripcion = company.description,
-                        imageUrl = company.photoUrl,
-                        verificado = company.isVerified,
-                        rating = company.rating,
-                        categorias = org.json.JSONArray(company.categories).toString(),
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    businessRepository.saveBusiness(businessEntity)
-                    
-                    // 3. Sucursales (Obsoleto: ahora dentro de ProviderEntity)
-                    company.branches.forEach { branch ->
-                        val sucursalEntity = SucursalEntity(
-                            id = branch.id,
-                            businessId = company.id,
-                            nombre = branch.name,
-                            horario = branch.workingHours,
-                            direccionId = branch.address.id,
-                            telefono = "", 
-                            isActive = true,
-                            doesService = branch.doesService,
-                            doesProduct = branch.doesProduct,
-                            works24h = branch.works24h,
-                            hasPhysicalLocation = branch.hasPhysicalLocation,
-                            doesHomeVisits = branch.doesHomeVisits,
-                            doesShipping = branch.doesShipping,
-                            acceptsAppointments = branch.acceptsAppointments,
-                            rating = branch.rating,
-                            galleryImages = org.json.JSONArray(branch.galleryImages).toString(),
-                            updatedAt = System.currentTimeMillis()
-                        )
-                        sucursalRepository.saveSucursal(sucursalEntity)
-                    }
-                }
-                */
+
 
                 _galleryImages.value = org.json.JSONArray(provider.galleryImages).toString()
                 _profileState.value = ProfileState.Success(provider)
@@ -478,7 +460,8 @@ class EditProfileViewModel @Inject constructor(
                     categories = categorias?.let { 
                         val arr = org.json.JSONArray(it)
                         (0 until arr.length()).map { i -> arr.getString(i) }
-                    } ?: currentProvider.categories
+                    } ?: currentProvider.categories,
+                    serviceType = serviceType ?: currentProvider.serviceType
                 )
                 
                 // Asegurar que el registro padre exista antes de cualquier operación dependiente
@@ -747,7 +730,8 @@ class EditProfileViewModel @Inject constructor(
     fun saveAdditionalAddress(address: AddressProvider) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
         val updatedAddresses = current.addresses.filter { it.id != address.id } + address
-        val updatedProvider = current.copy(addresses = updatedAddresses)
+        // Actualizar también el campo `address` (singular) para que la UI lo muestre después de guardar
+        val updatedProvider = current.copy(addresses = updatedAddresses, address = address)
         viewModelScope.launch {
             providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
             _profileState.value = ProfileState.Success(updatedProvider)
@@ -764,13 +748,33 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    fun addCompany(company: CompanyProvider) {
-        val current = (profileState.value as? ProfileState.Success)?.provider ?: return
-        val updatedCompanies = current.companies + company
-        val updatedProvider = current.copy(companies = updatedCompanies, hasCompanyProfile = true)
+    fun addCompany(company: CompanyProvider, photoUri: android.net.Uri? = null) {
         viewModelScope.launch {
-            providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
-            _profileState.value = ProfileState.Success(updatedProvider)
+            try {
+                val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
+
+                // Procesar foto en el mismo coroutine para evitar race condition
+                val finalCompany = if (photoUri != null) {
+                    val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
+                        context, photoUri, maxWidth = 400, maxHeight = 400, quality = 75
+                    )
+                    if (bytes != null) company.copy(photoUrl = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes))
+                    else company
+                } else company
+
+                // Reemplazar si ya existe el mismo ID, si no agregar
+                val updatedCompanies = if (current.companies.any { it.id == finalCompany.id }) {
+                    current.companies.map { if (it.id == finalCompany.id) finalCompany else it }
+                } else {
+                    current.companies + finalCompany
+                }
+
+                val updatedProvider = current.copy(companies = updatedCompanies, hasCompanyProfile = true)
+                providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+                _profileState.value = ProfileState.Success(updatedProvider)
+            } catch (e: Exception) {
+                android.util.Log.e("EditProfileViewModel", "Error guardando empresa: ${e.message}")
+            }
         }
     }
 

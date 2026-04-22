@@ -56,15 +56,27 @@ fun PrestadorRegisterScreen(
     viewModel: PrestadorRegisterViewModel = hiltViewModel()
 ) {
     val colors = getPrestadorColors()
-    // Email de la cuenta de Google (solo presente cuando isGoogleUser = true)
-    val googleEmail = remember {
-        if (isGoogleUser) FirebaseAuth.getInstance().currentUser?.email ?: "" else ""
-    }
 
     // Estados del formulario
     var nombre by remember { mutableStateOf("") }
     var apellido by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+
+    // Pre-rellenar desde Google cuando el composable arranca
+    LaunchedEffect(isGoogleUser) {
+        if (isGoogleUser) {
+            val user = FirebaseAuth.getInstance().currentUser
+            val displayName = user?.displayName ?: ""
+            nombre = displayName.substringBefore(" ").trim()
+            apellido = displayName.substringAfter(" ", "").trim()
+            email = user?.email ?: ""
+        }
+    }
+
+    // Email de la cuenta de Google (solo para mostrar en UI)
+    val googleEmail = remember {
+        if (isGoogleUser) FirebaseAuth.getInstance().currentUser?.email ?: "" else ""
+    }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var mensaje by remember { mutableStateOf("") }

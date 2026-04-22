@@ -386,10 +386,10 @@ class ChatRepository @Inject constructor(
                 
                 if (msgType == "IMAGE") {
                     val base64 = snapshot.child("content").getValue(String::class.java)
-                        ?: snapshot.child("imageIrl").getValue(String::class.java)
+                        ?: snapshot.child("imageUrl").getValue(String::class.java)
                     if (base64 != null && !base64.startsWith("http") && !base64.startsWith("/")) {
                         localImagePath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, base64, msgId)
-                        resolvedImageUrl = "[Imagen]"
+                        resolvedImageUrl = localImagePath // Correción: Ahora usa el path local en vez de "[imagen]"
                     } else {
                         resolvedImageUrl = base64
                     }
