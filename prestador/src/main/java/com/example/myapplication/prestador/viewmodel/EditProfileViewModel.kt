@@ -23,6 +23,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.compose.runtime.currentRecomposeScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -153,6 +154,33 @@ class EditProfileViewModel @Inject constructor(
                 _profileState.value = ProfileState.Success(updatedProvider)
             } catch (e: Exception) {
                 android.util.Log.e("EditProfileViewModel", "Error subiendo foto empresa: ${e.message}")
+            }
+        }
+    }
+
+
+    fun uploadBannerPhoto(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val userId = auth.currentUser?.uid ?: return@launch
+                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
+                    context, uri, maxWidth = 800, maxHeight = 300, quality = 80
+                ) ?: return@launch
+                val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+                firestore.collection("providerss")
+                    .document(userId)
+                    .update(mapOf(
+                        "perfil.bannerImageUrl" to base64,
+                        "updateAt" to System.currentTimeMillis()
+                    ))
+                    .await()
+                val current = (profileState.value as?
+                        ProfileState.Success)?.provider ?: return@launch
+                val updated = current.copy(bannerImageUrl = base64)
+                providerRepository.saveProvider(updated)
+                _profileState.value = ProfileState.Success(updated)
+            } catch (e: Exception) {
+                android.util.Log.e("EditProfileViewModel", "Error subiendo banner: ${e.message}")
             }
         }
     }
@@ -354,6 +382,9 @@ class EditProfileViewModel @Inject constructor(
                 
                 // ORDEN CRÍTICO: 1. Guardar Provider (SSOT incluye jerarquía completa)
                 providerRepository.saveProvider(provider)
+                //forzar isSubscribed = true en Firebase hasta que haya logica de pago
+                firestore.collection("providers").document(userId)
+                    .update("isSubscribed", true).await()
                 
 
 
@@ -464,6 +495,15 @@ class EditProfileViewModel @Inject constructor(
                     doesService = doesService ?: currentProvider.doesService,
                     doesProduct = doesProduct ?: currentProvider.doesProduct,
                     workingHours = horarioLocal ?: currentProvider.workingHours,
+                    companies = currentProvider.companies,
+                    addresses = currentProvider.addresses,
+                    address = currentProvider.address,
+                    photoUrl = currentProvider.photoUrl,
+                    bannerImageUrl = currentProvider.bannerImageUrl,
+                    galleryImages = currentProvider.galleryImages,
+                    isSubscribed = currentProvider.isSubscribed,
+                    isVerified = currentProvider.isVerified,
+                    rating = currentProvider.rating,
                     categories = categorias?.let { 
                         val arr = org.json.JSONArray(it)
                         (0 until arr.length()).map { i -> arr.getString(i) }
@@ -520,8 +560,8 @@ class EditProfileViewModel @Inject constructor(
                 if (turnosEnLocal != null) {
                     updateData["local.turnosEnLocal"] = turnosEnLocal
                     updateData["turnosEnLocal"] = turnosEnLocal
-                    updateData["isSubscribed"] = true // Mock o lógica de suscripción si aplica
                 }
+                updateData["isSubscribed"] = true // Mock o lógica de suscripción si aplica
 
                 // --- REPLICACIÓN DE CAMPOS DE APP CLIENTE EN RAÍZ ---
                 if (name != null) updateData["nombre"] = name

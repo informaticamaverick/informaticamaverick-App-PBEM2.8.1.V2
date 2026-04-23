@@ -1,4 +1,4 @@
-﻿package com.example.myapplication.prestador.ui.profile
+package com.example.myapplication.prestador.ui.profile
 
 import android.net.Uri
 import android.provider.ContactsContract
@@ -70,6 +70,7 @@ import com.example.myapplication.prestador.data.model.EmployeeProvider
 import com.example.myapplication.prestador.data.model.ServicioFirebase
 import com.example.myapplication.prestador.ui.profile.sections.*
 import com.example.myapplication.prestador.ui.profile.dialogs.*
+import kotlin.contracts.contract
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,6 +100,8 @@ fun EditProfileScreenUnified(
     var imageUrl by remember { mutableStateOf("") }
     
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var bannerImageUrl by remember { mutableStateOf("") }
+    var selectedBannerUri by remember { mutableStateOf<Uri?>(null) }
     var description by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var profesion by remember { mutableStateOf("") }
@@ -135,12 +138,14 @@ fun EditProfileScreenUnified(
     var categorias by remember { mutableStateOf("[]") }
     var rating by remember { mutableStateOf(0.0) }
     var reviewCount by remember { mutableStateOf(0) }
+    var inicialized by remember { mutableStateOf(false) }
 
     // =========================================================================
     // SECCIÓN: OBSERVACIÓN DEL ESTADO (SSOT)
     // =========================================================================
     LaunchedEffect(profileState) {
-        if (profileState is ProfileState.Success) {
+        if (profileState is ProfileState.Success && !inicialized) {
+            inicialized= true
             val p = (profileState as ProfileState.Success).provider
             name = p.name ?: ""
             apellido = p.apellido ?: ""
@@ -148,6 +153,7 @@ fun EditProfileScreenUnified(
             phone = p.phone ?: ""
             dniCuit = p.dniCuit ?: ""
             imageUrl = p.imageUrl ?: ""
+            bannerImageUrl = p.bannerImageUrl ?: ""
             description = p.description ?: ""
             profesion = p.profesion ?: ""
             tieneMatricula = p.tieneMatricula
@@ -217,6 +223,15 @@ fun EditProfileScreenUnified(
         uri?.let {
             selectedImageUri = it
             viewModel.uploadProfilePhoto(it)
+        }
+    }
+
+    val bannerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            selectedBannerUri = it
+            viewModel.uploadBannerPhoto(it)
         }
     }
     
@@ -369,12 +384,17 @@ fun EditProfileScreenUnified(
                                     profesion = profesion,
                                     imageUrl = imageUrl,
                                     selectedImageUri = selectedImageUri,
+                                    bannerImageUrl = bannerImageUrl,
+                                    selectedBannerUri = selectedBannerUri,
                                     tieneEmpresa = tieneEmpresa,
                                     colors = colors,
                                     paddingValues = paddingValues,
                                     onBack = onBack,
                                     onImageClick = {
                                         if (!isUploadingPhoto) galleryLauncher.launch("image/*")
+                                    },
+                                    onBannerClick = {
+                                        bannerLauncher.launch("image/*")
                                     }
                                 )
                                 if (isUploadingPhoto) {
@@ -424,6 +444,10 @@ fun EditProfileScreenUnified(
                             item { Spacer(modifier = Modifier.height(16.dp)) }
                             item {
                                 val currentProvider = (profileState as? ProfileState.Success)?.provider
+                                val extraAddresses = currentProvider?.addresses
+                                    ?.filter { it.id != "principal" } ?: emptyList()
+                                var showAgregarDialog by remember { mutableStateOf(false) }
+
                                 DireccionSection(
                                     titulo = "Dirección personal",
                                     direccion = currentProvider?.address?.let {
@@ -439,7 +463,6 @@ fun EditProfileScreenUnified(
                                             numero = it.numero ?: "",
                                             latitud = it.latitude,
                                             longitud = it.longitude,
-                                            // Timestamps fijos para que remember(direccion) no resetee en cada recomposición
                                             createdAt = 0L,
                                             updatedAt = 0L
                                         )
@@ -447,7 +470,6 @@ fun EditProfileScreenUnified(
                                     expanded = expandedSection == "direccion",
                                     onExpandChange = { expandedSection = if (expandedSection == "direccion") null else "direccion" },
                                     onGuardar = { p, prov, loc, cp, c, n, lat, lon ->
-                                        // 1. Crear el objeto de dirección jerárquico
                                         val newAddress = AddressProvider(
                                             id = currentProvider?.address?.id ?: "principal",
                                             calle = c,
@@ -459,12 +481,7 @@ fun EditProfileScreenUnified(
                                             latitude = lat,
                                             longitude = lon
                                         )
-                                        
-                                        // 2. Guardar a través del ViewModel (SSOT)
-                                        // El ViewModel ahora se encarga de actualizar el ProviderEntity completo
                                         viewModel.saveAdditionalAddress(newAddress)
-                                        
-                                        // 3. Sincronizar campos legacy en raíz solo si es necesario para compatibilidad UI inmediata
                                         val direccionTexto = "$c $n".trim()
                                         address = direccionTexto
                                         provincia = prov
@@ -472,9 +489,62 @@ fun EditProfileScreenUnified(
                                         localidad = loc
                                         calle = c
                                         numero = n
+                                    },
+                                    extraContent = {
+                                        // Direcciones adicionales guardadas
+                                        extraAddresses.forEach { addr ->
+                                            val calleNum = listOf(addr.calle, addr.numero).filter { !it.isNullOrBlank() }.joinToString(" ")
+                                            val ciudad = listOf(addr.localidad, addr.provincia).filter { !it.isNullOrBlank() }.joinToString(", ")
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.LocationOn,
+                                                    contentDescription = null,
+                                                    tint = colors.primaryOrange,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    if (calleNum.isNotBlank()) Text(calleNum, fontSize = 13.sp, color = colors.textPrimary, fontWeight = FontWeight.Medium)
+                                                    if (ciudad.isNotBlank()) Text(ciudad, fontSize = 12.sp, color = colors.textSecondary)
+                                                }
+                                                IconButton(onClick = { viewModel.removeAdditionalAddress(addr.id) }) {
+                                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Eliminar", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                                }
+                                            }
+                                        }
+
+                                        // Botón agregar otra dirección
+                                        OutlinedButton(
+                                            onClick = { showAgregarDialog = true },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primaryOrange),
+                                            border = BorderStroke(1.dp, colors.primaryOrange)
+                                        ) {
+                                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Agregar otra dirección", fontSize = 13.sp)
+                                        }
+
+                                        if (showAgregarDialog) {
+                                            AgregarDireccionDialog(
+                                                colors = colors,
+                                                onDismiss = { showAgregarDialog = false },
+                                                onConfirm = { newAddr ->
+                                                    viewModel.saveAdditionalAddress(newAddr)
+                                                    showAgregarDialog = false
+                                                }
+                                            )
+                                        }
                                     }
                                 )
                             }
+
+                            item { Spacer(modifier = Modifier.height(16.dp)) }
 
                             item { Spacer(modifier = Modifier.height(16.dp)) }
 
@@ -899,7 +969,7 @@ fun EditProfileScreenUnified(
                                                 .fillMaxWidth()
                                                 .padding(horizontal = 16.dp),
                                             colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primaryOrange),
-                                            border = androidx.compose.foundation.BorderStroke(1.dp, colors.primaryOrange)
+                                            border = BorderStroke(1.dp, colors.primaryOrange)
                                         ) {
                                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(6.dp))

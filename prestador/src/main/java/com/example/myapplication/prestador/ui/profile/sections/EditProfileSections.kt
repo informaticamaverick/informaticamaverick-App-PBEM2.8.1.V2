@@ -67,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.prestador.viewmodel.PhotoUploadState
 import com.example.myapplication.prestador.viewmodel.BusinessViewModel
 import androidx.compose.runtime.collectAsState
+import com.example.myapplication.prestador.data.model.AddressProvider
 import com.example.myapplication.prestador.data.model.ServicioFirebase
 import com.example.myapplication.prestador.ui.profile.LOCALIDADES_POR_PROVINCIA
 import com.example.myapplication.prestador.ui.profile.PROVINCIAS_ARGENTINA
@@ -75,6 +76,8 @@ import com.example.myapplication.prestador.ui.profile.SucursalesSection
 import com.example.myapplication.prestador.ui.profile.HorarioSelectorField
 import com.example.myapplication.prestador.ui.profile.dialogs.CambiarEmailDialog
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
+import androidx.compose.ui.text.style.TextAlign
+import okhttp3.Address
 
 @Composable
 fun HeaderSection(
@@ -83,145 +86,201 @@ fun HeaderSection(
     profesion: String,
     imageUrl: String?,
     selectedImageUri: Uri?,
+    bannerImageUrl: String?,
+    selectedBannerUri: Uri?,
     tieneEmpresa: Boolean,
     colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
     paddingValues: PaddingValues,
     onBack: () -> Unit,
-    onImageClick: () -> Unit
+    onImageClick: () -> Unit,
+    onBannerClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(280.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        colors.primaryOrange.copy(alpha = 0.2f),
-                        colors.backgroundColor
-                    )
-                )
-            )
+            .height(300.dp)
     ) {
-        Column(
+        // ── BANNER ──────────────────────────────────────────────────────
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = paddingValues.calculateTopPadding()),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .height(190.dp)
         ) {
-            // Botón back
+            val bannerModel: Any? = selectedBannerUri
+                ?: bannerImageUrl?.takeIf { it.isNotEmpty() }
+            if (bannerModel != null) {
+                AsyncImage(
+                    model = bannerModel,
+                    contentDescription = "Banner",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    colors.primaryOrange.copy(alpha = 0.8f),
+                                    Color(0xFFFF5722).copy(alpha = 0.5f),
+                                    colors.backgroundColor
+                                )
+                            )
+                        )
+                )
+            }
+            // Degradado inferior
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent,
+                                colors.backgroundColor.copy(alpha = 0.85f)),
+                            startY = 100f
+                        )
+                    )
+            )
+            // Barra superior: Volver + Editar banner
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(4.dp),
+                    .padding(top = paddingValues.calculateTopPadding())
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
-                        tint = colors.primaryOrange
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Foto de perfil
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .clip(CircleShape)
-                    .border(4.dp, colors.primaryOrange, CircleShape)
-                    .clickable { onImageClick() }
-            ) {
-                if (selectedImageUri != null) {
-                    AsyncImage(
-                        model = selectedImageUri,
-                        contentDescription = "Foto de perfil",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else if (imageUrl != null) {
-                    if (imageUrl.startsWith("http")) {
-                        // URL remota: usar Coil normalmente
-                        AsyncImage(
-                            model = imageUrl,
-                            contentDescription = "Foto de perfil",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        // Base64: decodificar a Bitmap y mostrar directamente
-                        val bitmap = remember(imageUrl) {
-                            try {
-                                val bytes = android.util.Base64.decode(imageUrl, android.util.Base64.DEFAULT)
-                                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
-                            } catch (e: Exception) { null }
-                        }
-                        if (bitmap != null) {
-                            Image(
-                                bitmap = bitmap,
-                                contentDescription = "Foto de perfil",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(colors.primaryOrange.copy(alpha = 0.1f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = colors.primaryOrange.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-                
-                // Botón de cámara
                 Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(36.dp),
+                    modifier = Modifier.size(36.dp),
                     shape = CircleShape,
-                    color = colors.primaryOrange,
-                    shadowElevation = 4.dp
+                    color = Color.Black.copy(alpha = 0.35f)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    IconButton(onClick = onBack, modifier =
+                        Modifier.fillMaxSize()) {
                         Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "Cambiar foto",
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Surface(
+                    modifier = Modifier.size(36.dp),
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.35f)
+                ) {
+                    IconButton(onClick = onBannerClick, modifier =
+                        Modifier.fillMaxSize()) {
+                        Icon(
+                            Icons.Default.Image,
+                            contentDescription = "Editar banner",
                             tint = Color.White,
                             modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
+        }
+
+        // ── FOTO DE PERFIL (solapando el banner) ────────────────────────
+        Box(
+            modifier = Modifier
+                .padding(top = 148.dp, start = 20.dp)
+                .size(90.dp)
+                .clip(CircleShape)
+                .border(3.dp, colors.primaryOrange, CircleShape)
+                .clickable { onImageClick() }
+        ) {
+            when {
+                selectedImageUri != null -> AsyncImage(
+                    model = selectedImageUri,
+                    contentDescription = "Foto de perfil",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                !imageUrl.isNullOrEmpty() && imageUrl.startsWith("http") ->
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Foto de perfil",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                !imageUrl.isNullOrEmpty() -> {
+                    val bitmap = remember(imageUrl) {
+                        try {
+                            val bytes = android.util.Base64.decode(imageUrl,
+                                android.util.Base64.DEFAULT)
+
+                            android.graphics.BitmapFactory.decodeByteArray(bytes, 0,
+                                bytes.size)?.asImageBitmap()
+                        } catch (e: Exception) { null }
+                    }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = "Foto de perfil",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+
+                            Modifier.fillMaxSize().background(colors.primaryOrange.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Person, null,
+                                Modifier.size(48.dp), tint = colors.primaryOrange.copy(alpha = 0.5f))
+                        }
+                    }
+                }
+                else -> Box(
+
+                    Modifier.fillMaxSize().background(colors.primaryOrange.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Person, null, Modifier.size(48.dp),
+                        tint = colors.primaryOrange.copy(alpha = 0.5f))
+                }
+            }
+            // Ícono cámara
+            Surface(
+                modifier = Modifier.align(Alignment.BottomEnd).size(28.dp),
+                shape = CircleShape,
+                color = colors.primaryOrange,
+                shadowElevation = 2.dp
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.CameraAlt, null, tint = Color.White,
+                        modifier = Modifier.size(15.dp))
+                }
+            }
+        }
+
+        // ── NOMBRE + PROFESIÓN ───────────────────────────────────────────
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 20.dp, bottom = 10.dp)
+        ) {
             Text(
-                text = "$name ${apellido}".trim().ifEmpty { "Prestador" },
-                fontSize = 24.sp,
+                text = "$name $apellido".trim().ifEmpty { "Prestador" },
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = colors.textPrimary
             )
-            
             if (profesion.isNotEmpty()) {
                 Text(
                     text = profesion,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = colors.textSecondary
                 )
             }
         }
     }
 }
+
 
 // SECCIÓN: Datos Personales
 @Composable
@@ -2242,4 +2301,382 @@ private fun ModalidadToggleCard(
             )
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SECCIÓN: Direcciones adicionales del prestador
+// ─────────────────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DireccionesAdicionalesSection(
+    addresses: List<AddressProvider>,
+    expanded: Boolean,
+    onExpandChange: () -> Unit,
+    onAddAddress: (AddressProvider) -> Unit,
+    onRemoveAddress: (String) -> Unit,
+    colors: PrestadorColors
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    ArchiveroSection(
+        title = "Mis Direcciones",
+        sectionId = "direcciones_adicionales",
+        icon = Icons.Default.AddLocationAlt,
+        color = Color(0xFF7B1FA2),
+        modifier = Modifier.padding(horizontal = 16.dp),
+        expanded = expanded,
+        onExpandChange = { onExpandChange() }
+    ) {
+        if (addresses.isEmpty()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = colors.surfaceElevated,
+                border = BorderStroke(1.dp, colors.border)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.LocationOff,
+                        contentDescription = null,
+                        tint = colors.textSecondary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "No tenés direcciones adicionales",
+                        fontSize = 13.sp,
+                        color = colors.textSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        } else {
+            addresses.forEach { addr ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = colors.surfaceElevated,
+                    border = BorderStroke(1.dp, colors.border)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF7B1FA2).copy(alpha = 0.12f)
+                        ) {
+                            Icon(
+                                Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = Color(0xFF7B1FA2),
+                                modifier = Modifier
+                                    .padding(6.dp)
+                                    .size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            val calleNum = listOf(addr.calle, addr.numero)
+                                .filter { it.isNotBlank() }.joinToString(" ")
+                            val ciudad = listOf(addr.localidad, addr.provincia)
+                                .filter { it.isNotBlank() }.joinToString(", ")
+                            if (calleNum.isNotBlank()) {
+                                Text(
+                                    calleNum,
+                                    fontSize = 14.sp,
+                                    color = colors.textPrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            if (ciudad.isNotBlank()) {
+                                Text(ciudad, fontSize = 12.sp, color = colors.textSecondary)
+                            }
+                            if (addr.codigoPostal.isNotBlank()) {
+                                Text(
+                                    "CP ${addr.codigoPostal}",
+                                    fontSize = 11.sp,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
+                        IconButton(onClick = { onRemoveAddress(addr.id) }) {
+                            Icon(
+                                Icons.Default.DeleteOutline,
+                                contentDescription = "Eliminar dirección",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        OutlinedButton(
+            onClick = { showDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF7B1FA2)),
+            border = BorderStroke(1.dp, Color(0xFF7B1FA2))
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Agregar dirección", fontSize = 13.sp)
+        }
+    }
+
+    if (showDialog) {
+        AgregarDireccionDialog(
+            colors = colors,
+            onDismiss = { showDialog = false },
+            onConfirm = { addr ->
+                onAddAddress(addr)
+                showDialog = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AgregarDireccionDialog(
+    colors: PrestadorColors,
+    onDismiss: () -> Unit,
+    onConfirm: (AddressProvider) -> Unit
+) {
+    var calle by remember { mutableStateOf("") }
+    var numero by remember { mutableStateOf("") }
+    var localidad by remember { mutableStateOf("") }
+    var provincia by remember { mutableStateOf("") }
+    var codigoPostal by remember { mutableStateOf("") }
+    var calleError by remember { mutableStateOf(false) }
+    var provinciaError by remember { mutableStateOf(false) }
+    var mostrarSugerencias by remember { mutableStateOf(false) }
+    var geocodingLoading by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val provinciasFiltradas = if (provincia.isBlank()) emptyList()
+        else PROVINCIAS_ARGENTINA.filter { it.contains(provincia.trim(), ignoreCase = true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surfaceColor,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.AddLocationAlt,
+                    contentDescription = null,
+                    tint = Color(0xFF7B1FA2),
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    "Nueva dirección",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Provincia con autocomplete
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = provincia,
+                        onValueChange = {
+                            provincia = it
+                            provinciaError = false
+                            mostrarSugerencias = it.isNotEmpty()
+                        },
+                        label = { Text("Provincia *") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Map, contentDescription = null, tint = colors.textSecondary)
+                        },
+                        isError = provinciaError,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF7B1FA2),
+                            unfocusedBorderColor = colors.border,
+                            focusedLabelColor = Color(0xFF7B1FA2)
+                        )
+                    )
+                    AnimatedVisibility(
+                        visible = mostrarSugerencias && provinciasFiltradas.isNotEmpty(),
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp),
+                            color = colors.surfaceElevated,
+                            shadowElevation = 4.dp
+                        ) {
+                            Column {
+                                provinciasFiltradas.take(5).forEach { prov ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                provincia = prov
+                                                provinciaError = false
+                                                mostrarSugerencias = false
+                                            }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    ) {
+                                        Text(prov, fontSize = 13.sp, color = colors.textPrimary)
+                                    }
+                                    HorizontalDivider(color = colors.border)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (provinciaError) {
+                    Text(
+                        "La provincia es requerida",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 11.sp
+                    )
+                }
+
+                FloatingLabelTextField(
+                    value = localidad,
+                    onValueChange = { localidad = it },
+                    label = "Localidad",
+                    leadingIcon = Icons.Default.LocationCity
+                )
+                FloatingLabelTextField(
+                    value = codigoPostal,
+                    onValueChange = { codigoPostal = it },
+                    label = "Código Postal",
+                    leadingIcon = Icons.Default.PinDrop,
+                    keyboardType = KeyboardType.Number
+                )
+                OutlinedTextField(
+                    value = calle,
+                    onValueChange = { calle = it; calleError = false },
+                    label = { Text("Calle *") },
+                    leadingIcon = {
+                        Icon(Icons.Default.EditRoad, contentDescription = null, tint = colors.textSecondary)
+                    },
+                    trailingIcon = {
+                        if (geocodingLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color(0xFF7B1FA2)
+                            )
+                        } else {
+                            IconButton(onClick = {
+                                scope.launch {
+                                    geocodingLoading = true
+                                    try {
+                                        val fusedClient = com.google.android.gms.location.LocationServices
+                                            .getFusedLocationProviderClient(context)
+                                        @Suppress("MissingPermission")
+                                        val loc = fusedClient.lastLocation.await()
+                                        if (loc != null) {
+                                            val geocoder = android.location.Geocoder(
+                                                context, java.util.Locale.getDefault()
+                                            )
+                                            @Suppress("DEPRECATION")
+                                            val addrs = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+                                            if (!addrs.isNullOrEmpty()) {
+                                                val a = addrs[0]
+                                                val calleDetectada = buildString {
+                                                    if (!a.thoroughfare.isNullOrBlank()) append(a.thoroughfare)
+                                                    if (!a.subThoroughfare.isNullOrBlank()) append(" ${a.subThoroughfare}")
+                                                }
+                                                if (calleDetectada.isNotBlank()) {
+                                                    calle = calleDetectada
+                                                    calleError = false
+                                                }
+                                                if (!a.subThoroughfare.isNullOrBlank()) numero = a.subThoroughfare!!
+                                                if (!a.locality.isNullOrBlank()) localidad = a.locality!!
+                                                if (!a.adminArea.isNullOrBlank()) {
+                                                    provincia = a.adminArea!!
+                                                    provinciaError = false
+                                                }
+                                                if (!a.postalCode.isNullOrBlank()) codigoPostal = a.postalCode!!
+                                            }
+                                        }
+                                    } catch (_: Exception) {
+                                    } finally {
+                                        geocodingLoading = false
+                                    }
+                                }
+                            }) {
+                                Icon(
+                                    Icons.Default.MyLocation,
+                                    contentDescription = "Detectar ubicación",
+                                    tint = Color(0xFF7B1FA2)
+                                )
+                            }
+                        }
+                    },
+                    isError = calleError,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF7B1FA2),
+                        unfocusedBorderColor = colors.border,
+                        focusedLabelColor = Color(0xFF7B1FA2)
+                    )
+                )
+                if (calleError) {
+                    Text(
+                        "La calle es requerida",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 11.sp
+                    )
+                }
+                FloatingLabelTextField(
+                    value = numero,
+                    onValueChange = { numero = it },
+                    label = "Número",
+                    leadingIcon = Icons.Default.Numbers,
+                    keyboardType = KeyboardType.Number
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    calleError = calle.isBlank()
+                    provinciaError = provincia.isBlank()
+                    if (!calleError && !provinciaError) {
+                        onConfirm(
+                            AddressProvider(
+                                calle = calle.trim(),
+                                numero = numero.trim(),
+                                localidad = localidad.trim(),
+                                provincia = provincia.trim(),
+                                pais = "Argentina",
+                                codigoPostal = codigoPostal.trim()
+                            )
+                        )
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2))
+            ) {
+                Text("Guardar")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar", color = colors.textSecondary)
+            }
+        }
+    )
 }

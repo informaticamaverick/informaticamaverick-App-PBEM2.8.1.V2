@@ -44,7 +44,8 @@ data class ProviderEntity(
     val hasPhysicalLocation: Boolean = false, 
     val doesHomeVisits: Boolean = false, 
     val doesShipping: Boolean = false, 
-    val acceptsAppointments: Boolean = false, 
+    val acceptsAppointments: Boolean = false,
+
 
     val isSubscribed: Boolean = false, 
     val isVerified: Boolean = false,  

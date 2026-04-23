@@ -336,20 +336,33 @@ class ChatRepository @Inject constructor(
     }
 
     //Listener global notificaciones en todos los chats
-    private val globalListeners = mutableListOf<Pair<DatabaseReference, ChildEventListener>>()
+    private val globalListeners = mutableMapOf<String, Pair<DatabaseReference, ChildEventListener>>()
+    private var firestoreGlobalListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     private var syncStartTime = System.currentTimeMillis()
 
     fun startGlobalListening(myUserId: String) {
-        syncStartTime = System.currentTimeMillis()
-        stopGlobalListening()
-        scope.launch {
-            try {
-                val chatsSnap = firestore.collection("chats")
-                    .whereArrayContains("participants", myUserId)
-                    .get().await()
-                for (doc in chatsSnap.documents) {
+        if (firestoreGlobalListener != null) return // ya escuchando
+
+        firestoreGlobalListener = firestore.collection("chats")
+            .whereArrayContains("participants", myUserId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+
+                val currentChatIds = snapshot.documents.map { it.id }.toSet()
+
+                // Remover listeners de chats que ya no están en Firestore
+                val toRemove = globalListeners.keys.filter { it !in currentChatIds }
+                toRemove.forEach { chatId ->
+                    globalListeners[chatId]?.let { (ref, listener) -> ref.removeEventListener(listener) }
+                    globalListeners.remove(chatId)
+                }
+
+                // Agregar listeners solo para chats nuevos
+                for (doc in snapshot.documents) {
                     val chatId = doc.id
+                    if (globalListeners.containsKey(chatId)) continue
+
                     val messageRef = database.reference
                         .child("chats").child(chatId).child("messages")
                     val listener = object : ChildEventListener {
@@ -372,18 +385,17 @@ class ChatRepository @Inject constructor(
                                 val type = runCatching { MessageType.valueOf(rawType) }.getOrElse { MessageType.TEXT }
                                 val rawContent = snapshot.child("content").getValue(String::class.java)
                                     ?: snapshot.child("text").getValue(String::class.java) ?: ""
-                                
+
                                 var localImagePath: String? = null
                                 var localAudioPath: String? = null
-                                
-                                // --- SECCIÓN: PROCESAMIENTO DE MEDIA EN LISTENER GLOBAL ---
+
                                 val content = when {
                                     type == MessageType.IMAGE && rawContent.isNotEmpty() && !rawContent.startsWith("http") -> {
                                         localImagePath = com.example.myapplication.util.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "IMG_", ".webp")
                                         "[Imagen]"
                                     }
-                                    type == MessageType.AUDIO && rawContent.isNotEmpty() && !rawContent.startsWith("/")
-                                            && !rawContent.startsWith("http") -> {
+                                    type == MessageType.AUDIO && rawContent.isNotEmpty()
+                                            && !rawContent.startsWith("/") && !rawContent.startsWith("http") -> {
                                         localAudioPath = com.example.myapplication.util.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "AUD_", ".3gp")
                                         "[Audio]"
                                     }
@@ -398,7 +410,7 @@ class ChatRepository @Inject constructor(
                                     receiverId = myUserId,
                                     type = type,
                                     content = content,
-                                    imageUrl = localImagePath ?: localAudioPath, // Ruta local
+                                    imageUrl = localImagePath ?: localAudioPath,
                                     latitude = snapshot.child("latitude").getValue(Double::class.java),
                                     longitude = snapshot.child("longitude").getValue(Double::class.java),
                                     locationAddress = snapshot.child("locationAddress").getValue(String::class.java),
@@ -438,7 +450,7 @@ class ChatRepository @Inject constructor(
                             val msgId = snapshot.child("messageId").getValue(String::class.java) ?: snapshot.key ?: return
                             val isReadNow = snapshot.child("isRead").getValue(Boolean::class.java) ?: false
                             val appointmentStatus = snapshot.child("appointmentStatus").getValue(String::class.java)
-                            
+
                             scope.launch {
                                 if (chatDao.messageExists(msgId)) {
                                     chatDao.updateMessageIsRead(msgId, isReadNow)
@@ -453,17 +465,15 @@ class ChatRepository @Inject constructor(
                         override fun onCancelled(error: DatabaseError) {}
                     }
                     messageRef.orderByChild("timestamp").addChildEventListener(listener)
-                    globalListeners += Pair(messageRef, listener)
+                    globalListeners[chatId] = Pair(messageRef, listener)
                 }
-            } catch (e: Exception) {
-                Log.e("ChatRepository", "Error en startGlobalListening: ${e.message}")
             }
-        }
     }
 
     fun stopGlobalListening() {
-        globalListeners.forEach { (ref, listener) -> ref.removeEventListener(listener)
-        }
+        firestoreGlobalListener?.remove()
+        firestoreGlobalListener = null
+        globalListeners.values.forEach { (ref, listener) -> ref.removeEventListener(listener) }
         globalListeners.clear()
     }
 

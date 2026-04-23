@@ -101,13 +101,23 @@ class ProviderRepository @Inject constructor(
                 "perfil" to perfilMap,
                 "hasCompanyProfile" to provider.hasCompanyProfile,
                 "isOnline" to provider.isOnline,
-                "isSubscribed" to provider.isSubscribed,
+                "isSubscribed" to true, // Provisorio hasta que se desarrolle la logica del pago
                 "isVerified" to provider.isVerified,
                 "rating" to provider.rating,
                 "servicios" to provider.categories,
                 "serviceType" to provider.serviceType,
                 "createdAt" to provider.createdAt,
-                "updatedAt" to System.currentTimeMillis()
+                "updatedAt" to System.currentTimeMillis(),
+                "doesService" to provider.doesService,
+                "doesProduct" to provider.doesProduct,
+                "atencionUrgencias" to provider.works24h,
+                "vaDomicilio" to provider.doesHomeVisits,
+                "envios" to provider.doesShipping,
+                "turnosEnLocal" to provider.hasPhysicalLocation,
+                "local" to mapOf(
+                    "turnosEnLocal" to provider.hasPhysicalLocation,
+                    "horarioLocal" to provider.workingHours
+                )
             )
 
             provider.address?.let { addr ->

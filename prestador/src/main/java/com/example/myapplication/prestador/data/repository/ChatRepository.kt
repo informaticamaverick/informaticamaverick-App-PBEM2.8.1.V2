@@ -438,23 +438,14 @@ class ChatRepository @Inject constructor(
                 scope.launch {
                     try {
                         if (conversationDao.getConversationById(conversationId) == null) {
-                            // Buscar nombre y foto del usuario en Firestore
-                            var displayName = senderId
-                            var avatarUrl: String? = null
-                            try {
-                                val userDoc = firestore.collection("usuarios").document(senderId).get().await()
-                                val name = userDoc.getString("name") ?: ""
-                                val lastName = userDoc.getString("lastName") ?: ""
-                                val dispName = userDoc.getString("displayName") ?: ""
-                                displayName = when {
-                                    name.isNotBlank() || lastName.isNotBlank() -> "$name $lastName".trim()
-                                    dispName.isNotBlank() -> dispName
-                                    else -> senderId
-                                }
-                                avatarUrl = userDoc.getString("photoUrl")
-                            } catch (e: Exception) {
-                                Log.e("ChatRepo", "Error fetching sender data: ${e.message}")
+                            // Buscar nombre y foto del remitente (cliente o prestador)
+                            val resolved = resolveParticipantData(senderId, null)
+                            // Si el remitente no existe en Firebase, ignorar el mensaje
+                            if (resolved == null) {
+                                Log.w("ChatRepo", "Remitente $senderId no encontrado en Firebase. Ignorando mensaje.")
+                                return@launch
                             }
+                            val (displayName, avatarUrl) = resolved
                             conversationDao.insertConversation(
                                 ConversationEntity(
                                     conversationId = conversationId,
@@ -611,6 +602,59 @@ class ChatRepository @Inject constructor(
         }
     }
 
+    // ── Resolución de nombre/avatar de un participante ─────────────────────────
+    /**
+     * Busca nombre y avatar del participante: primero en "usuarios", luego en "providers".
+     * Devuelve null SOLO si el documento NO existe en ninguna colección (usuario eliminado de Firebase).
+     * Si el documento existe pero no tiene nombre, devuelve el userId como nombre (usuario sin perfil completo).
+     */
+    private suspend fun resolveParticipantData(userId: String, fallbackAvatarUrl: String?): Pair<String, String?>? {
+
+        fun extractName(doc: com.google.firebase.firestore.DocumentSnapshot): String {
+            val name = doc.getString("name") ?: ""
+            val lastName = doc.getString("lastName") ?: ""
+            val displayNameField = doc.getString("displayName") ?: ""
+            val emailField = doc.getString("email") ?: ""
+            return when {
+                name.isNotBlank() || lastName.isNotBlank() -> "$name $lastName".trim()
+                displayNameField.isNotBlank() -> displayNameField
+                emailField.isNotBlank() -> emailField.substringBefore("@")
+                else -> ""
+            }
+        }
+
+        // Intentar en colección de clientes
+        try {
+            val userDoc = firestore.collection("usuarios").document(userId).get().await()
+            if (userDoc.exists()) {
+                // Documento encontrado → el usuario existe, usar lo que haya (o "Cliente" si todo vacío)
+                val name = extractName(userDoc).ifBlank { "Cliente" }
+                val photo = userDoc.getString("photoUrl") ?: fallbackAvatarUrl
+                Log.d("ChatRepo", "✅ usuarios/$userId → nombre='$name'")
+                return Pair(name, photo)
+            }
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error buscando en usuarios/$userId: ${e.message}")
+        }
+
+        // Fallback: intentar en colección de prestadores
+        try {
+            val provDoc = firestore.collection("providers").document(userId).get().await()
+            if (provDoc.exists()) {
+                val name = extractName(provDoc).ifBlank { "Cliente" }
+                val photo = provDoc.getString("photoUrl") ?: fallbackAvatarUrl
+                Log.d("ChatRepo", "✅ providers/$userId → nombre='$name'")
+                return Pair(name, photo)
+            }
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error buscando en providers/$userId: ${e.message}")
+        }
+
+        // Documento no existe en ninguna colección → usuario eliminado
+        Log.w("ChatRepo", "⚠️ $userId no encontrado en usuarios ni providers")
+        return null
+    }
+
     // ── Sincronizar conversaciones desde Firestore ─────────────────────────────
     private val userDataCache = mutableMapOf<String, Pair<String, String?>>()
 
@@ -629,28 +673,30 @@ class ChatRepository @Inject constructor(
                         val otherUserId = participants.firstOrNull { it != myUserId } ?: continue
                         val existing = conversationDao.getConversationById(doc.id)
 
-                        // 1. Decidir si necesitamos fetch de datos de usuario (solo si no existe en Room o no está en cache)
-                        var displayName = existing?.userName ?: otherUserId
+                        // 1. Siempre re-fetchear si el nombre parece un ID crudo o está vacío
+                        val storedName = existing?.userName ?: ""
+                        val nameSeemsBad = storedName.isBlank()
+                            || storedName == otherUserId
+                            || storedName == "Cliente"
+                            || storedName.length > 20 && storedName.none { it == ' ' } // UID largo sin espacios
+                            || storedName.matches(Regex("^[A-Za-z0-9_-]{20,}$"))       // UID alfanumérico largo
+                            || storedName.matches(Regex("^[A-Za-z]+-?[A-Za-z]+-?\\d+$")) // P-Jar-0
+                        var displayName = storedName.takeIf { !nameSeemsBad } ?: otherUserId
                         var freshAvatarUrl: String? = existing?.userAvatarUrl
-                        
-                        if (existing == null || !userDataCache.containsKey(otherUserId)) {
-                            try {
-                                val userDoc = firestore.collection("usuarios").document(otherUserId).get().await()
-                                val name = userDoc.getString("name") ?: ""
-                                val lastName = userDoc.getString("lastName") ?: ""
-                                val displayNameField = userDoc.getString("displayName") ?: ""
-                                displayName = when {
-                                    name.isNotBlank() || lastName.isNotBlank() -> "$name $lastName".trim()
-                                    displayNameField.isNotBlank() -> displayNameField
-                                    else -> otherUserId
-                                }
-                                freshAvatarUrl = userDoc.getString("photoUrl")
-                                userDataCache[otherUserId] = Pair(displayName, freshAvatarUrl)
-                            } catch (e: Exception) {
-                                Log.e("ChatRepo", "Error fetching user data for $otherUserId: ${e.message}")
+
+                        if (existing == null || !userDataCache.containsKey(otherUserId) || nameSeemsBad) {
+                            val resolved = resolveParticipantData(otherUserId, freshAvatarUrl)
+                            if (resolved == null) {
+                                // Usuario eliminado de Firebase → limpiar de Room y saltar
+                                Log.w("ChatRepo", "Usuario $otherUserId no encontrado en Firebase. Eliminando conversación ${doc.id}.")
+                                conversationDao.deleteConversationById(doc.id)
+                                continue
                             }
+                            displayName = resolved.first
+                            freshAvatarUrl = resolved.second
+                            userDataCache[otherUserId] = resolved
                         } else {
-                            // Usar cache si ya lo pedimos en esta sesión
+                            // Usar cache si ya lo pedimos en esta sesión y el nombre era válido
                             userDataCache[otherUserId]?.let {
                                 displayName = it.first
                                 freshAvatarUrl = it.second
