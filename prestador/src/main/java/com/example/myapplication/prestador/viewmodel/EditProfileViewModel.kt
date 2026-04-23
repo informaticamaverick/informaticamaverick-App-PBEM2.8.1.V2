@@ -331,7 +331,16 @@ class EditProfileViewModel @Inject constructor(
                     acceptsAppointments = doc.getBoolean("turnosEnLocal") ?: bool(localMap, "turnosEnLocal"),
                     
                     isVerified = doc.getBoolean("verificado") ?: doc.getBoolean("isVerified") ?: false,
-                    isSubscribed = doc.getBoolean("suscripto") ?: doc.getBoolean("isSubscribed") ?: false,
+
+
+                //***********************************************************************************************
+                    //isSubscribed = doc.getBoolean("suscripto") ?: doc.getBoolean("isSubscribed") ?: false,
+
+                    // --- MODIFICACIÓN PARA PRUEBAS: Default suscripción true ---
+                    isSubscribed = true,
+                    // --- FIN MODIFICACIÓN ---
+
+               //******************************************************************************************************
                     doesService = doc.getBoolean("doesService") ?: false,
                     doesProduct = doc.getBoolean("doesProduct") ?: false,
 
@@ -808,14 +817,17 @@ class EditProfileViewModel @Inject constructor(
         }
 
         val fcm = FirebaseMessaging.getInstance()
-        val cleanCp = cp.replace(" ", "").uppercase()
+        val cleanCp = cp.normalizeForTopic()
 
         Log.d("FCM_TOPIC", "Iniciando sincronización para CP: $cleanCp (Premium: $isSubscribed)")
 
         categories.forEach { cat ->
-            val cleanCat = cat.replace(" ", "_").lowercase()
+            val cleanCat = cat.normalizeForTopic()
+            // 🔥 CORRECCIÓN: Aseguramos consistencia: "tender_{cp}_{category}"
             val topicName = "tender_${cleanCp}_$cleanCat"
 
+            // ─── SECCIÓN: LÓGICA DE SUSCRIPCIÓN (Premium Incentives) ─────────────────────
+            // Mantenemos la suscripción activa si es premium.
             if (isSubscribed) {
                 fcm.subscribeToTopic(topicName)
                     .addOnCompleteListener { task ->
@@ -826,6 +838,8 @@ class EditProfileViewModel @Inject constructor(
                         }
                     }
             } else {
+                // Si no es premium, nos desuscribimos para no recibir los mensajes 
+                // del topic, ya que el servicio maneja la lógica de upsell.
                 fcm.unsubscribeFromTopic(topicName)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
@@ -855,4 +869,21 @@ sealed class PhotoUploadState {
     object Loading : PhotoUploadState()
     data class Success(val url: String) : PhotoUploadState()
     data class Error(val message: String) : PhotoUploadState()
+}
+
+/**
+ * --- EXTENSIONES DE NORMALIZACIÓN PARA TÓPICOS ---
+ */
+private fun String.removeAccents(): String {
+    val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
+    return "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalized, "")
+}
+
+fun String.normalizeForTopic(): String {
+    return this.removeAccents()
+        .replace(" ", "_")
+        .replace("(", "")
+        .replace(")", "")
+        .replace(Regex("[^a-zA-Z0-9-_.~%]"), "") // Solo caracteres permitidos por FCM
+        .lowercase()
 }

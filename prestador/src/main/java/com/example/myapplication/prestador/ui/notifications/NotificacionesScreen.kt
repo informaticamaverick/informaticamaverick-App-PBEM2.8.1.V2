@@ -488,6 +488,7 @@ private fun tipoColor(tipo: TipoNotificacion): Color = when (tipo) {
     TipoNotificacion.CITA        -> Color(0xFF10B981)
     TipoNotificacion.PRESUPUESTO -> Color(0xFFF59E0B)
     TipoNotificacion.SOLICITUD   -> Color(0xFFF97316)
+    TipoNotificacion.LICITACION  -> Color(0xFF06B6D4)
     TipoNotificacion.SISTEMA     -> Color(0xFF8B5CF6)
 }
 

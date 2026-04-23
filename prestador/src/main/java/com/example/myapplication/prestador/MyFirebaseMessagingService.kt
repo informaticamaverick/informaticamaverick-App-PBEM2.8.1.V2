@@ -50,9 +50,33 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val chatId = message.data["chatId"] ?: ""
         val senderId = message.data["senderId"] ?: ""
 
+        // ─── SECCIÓN: LÓGICA DE NOTIFICACIÓN PREMIUM (UPSWELL) ──────────────────────────
+        // Verificamos si el prestador está suscripto para decidir qué mostrar.
+        // Usamos una llamada simple para obtener el estado del prestador (Room como SSOT)
+        val auth = FirebaseAuth.getInstance()
+        val userId = auth.currentUser?.uid
+        var isPremium = false
+        
+        if (userId != null) {
+            // Nota: En un entorno de producción, inyectar el repositorio es mejor.
+            // Para evitar problemas de inyección, creamos la DB y usamos runBlocking para llamadas suspend
+            val db = androidx.room.Room.databaseBuilder(
+                applicationContext,
+                com.example.myapplication.prestador.data.local.database.PrestadorDatabase::class.java,
+                "prestador-database"
+            ).build()
+            
+            isPremium = kotlinx.coroutines.runBlocking {
+                db.providerDao().getProviderByIdOnce(userId)?.isSubscribed ?: false
+            }
+        }
+
+        val displayTitle = if (isPremium) title else "¡Nuevas Oportunidades!"
+        val displayBody = if (isPremium) body else "Hay Licitaciones o Concursos públicos para tus servicios. Hazte premium para poder participar."
+
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("tenderId", tenderId)
+            putExtra("tenderId", if (isPremium) tenderId else "") // Solo enviamos ID si es premium
             putExtra("chatId", chatId)
             putExtra("senderId", senderId)
         }
@@ -60,6 +84,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             this, System.currentTimeMillis().toInt(), intent,
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
+        // ──────────────────────────────────────────────────────────────────────────────
 
         val channelId = if (tenderId.isNotEmpty()) "tender_notifications" else "chat_messages"
         val channelName = if (tenderId.isNotEmpty()) "Licitaciones" else "Mensajes de chat"
@@ -73,8 +98,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(body)
+            .setContentTitle(displayTitle)
+            .setContentText(displayBody)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
@@ -83,18 +108,18 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
 
-        // 🔥 [NUEVO] Registrar la notificación en la base de datos local (Modo Alertas)
-        if (tenderId.isNotEmpty()) {
-            jobScope.launch {
-                notificacionRepository.guardar(
-                    NotificacionItem(
-                        tipo = TipoNotificacion.LICITACION,
-                        titulo = title,
-                        mensaje = body,
-                        accionRoute = tenderId // Guardamos el tenderId para abrirlo luego
-                    )
+        // ─── SECCIÓN: PERSISTENCIA LOCAL (NOTIFICACIONES) ──────────────────────────
+        // Guardamos la notificación en la base de datos local para que aparezca 
+        // en la pantalla de alertas/notificaciones del usuario.
+        jobScope.launch {
+            notificacionRepository.guardar(
+                NotificacionItem(
+                    tipo = if (tenderId.isNotEmpty()) TipoNotificacion.LICITACION else TipoNotificacion.MENSAJE,
+                    titulo = displayTitle,
+                    mensaje = displayBody,
+                    accionRoute = tenderId.ifEmpty { chatId } 
                 )
-            }
+            )
         }
     }
 }

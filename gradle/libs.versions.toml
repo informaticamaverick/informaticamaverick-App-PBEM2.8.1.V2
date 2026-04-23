@@ -1,6 +1,6 @@
 [versions]
 agp = "8.13.2"
-kotlin = "2.1.0"
+kotlin = "2.0.21"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -13,8 +13,8 @@ composeBom = "2024.12.01"
 coil = "2.7.0"
 room = "2.6.1"
 
-ksp = "2.1.0-1.0.29"
-hilt = "2.52"
+ksp = "2.0.21-1.0.25"
+hilt = "2.51.1"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
 serialization = "1.7.3"

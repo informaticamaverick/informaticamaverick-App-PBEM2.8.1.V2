@@ -444,6 +444,15 @@ class BudgetViewModel @Inject constructor(
             // Datos de la Empresa / Cliente
             val compName = if (location is LocationOption.Business) location.companyName else null
             val branchName = if (location is LocationOption.Business) location.branchName else null
+            
+            // 🔥 CORRECCIÓN: Aseguramos que si LocationOption es Personal/Business, 
+            // los datos de PostalCode se extraigan correctamente de la entidad.
+            val finalPostalCode = when(location) {
+                is LocationOption.Personal -> location.postalCode
+                is LocationOption.Business -> location.postalCode
+                else -> cp 
+            }
+
             val clientDisplayName = if (location is LocationOption.Business) {
                 location.companyName
             } else {
@@ -466,7 +475,10 @@ class BudgetViewModel @Inject constructor(
 
             // 3. GENERACIÓN DE MATCH KEY Y EXPIRACIÓN (Costo Cero)
             // Topic: tender_{cp}_{categoria}
-            val matchKey = if (cp != null) "tender_${cp.replace(" ", "")}_${category.replace(" ", "_")}" else null
+            // 🔥 CORRECCIÓN: Si postal code está vacío, usar un placeholder o omitir para evitar topics rotos.
+            val cleanCp = finalPostalCode?.takeIf { it.isNotBlank() }?.normalizeForTopic() ?: "t4000"
+            val cleanCat = category.normalizeForTopic()
+            val matchKey = "tender_${cleanCp}_$cleanCat"
             
             // Expiración: fecha de fin + 1 día de gracia
             val expiresAt = if (endDate > 0) endDate + TimeUnit.DAYS.toMillis(1) else null
@@ -487,7 +499,7 @@ class BudgetViewModel @Inject constructor(
                 locationAddress = addr,
                 locationNumber = num,
                 locationLocality = loc,
-                locationPostalCode = cp,
+                locationPostalCode = cleanCp, // Guardamos la versión limpia
                 locationType = type,
                 clientDisplayName = clientDisplayName,
                 companyName = compName,
@@ -502,14 +514,12 @@ class BudgetViewModel @Inject constructor(
             repository.createNewTender(newTender)
             
             // 6. ENVÍO DE NOTIFICACIÓN AL TOPIC (Costo Cero)
-            matchKey?.let { topic ->
-                repository.sendTopicNotification(
-                    topic = topic,
-                    title = "🚀 Nueva Licitación: $category",
-                    body = "Se busca: $title en tu zona ($cp). ¡Postúlate ahora!",
-                    tenderId = tenderId
-                )
-            }
+            repository.sendTopicNotification(
+                topic = matchKey,
+                title = "🚀 Nueva Licitación: $category",
+                body = "Se busca: $title en tu zona ($cleanCp). ¡Postúlate ahora!",
+                tenderId = tenderId
+            )
         }
     }
 
@@ -660,6 +670,19 @@ class BudgetViewModel @Inject constructor(
 private fun String.removeAccents(): String {
     val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
     return "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalized, "")
+}
+
+/**
+ * Normaliza una cadena para ser usada como nombre de Tópico en Firebase.
+ * Elimina acentos, paréntesis, espacios y caracteres especiales.
+ */
+fun String.normalizeForTopic(): String {
+    return this.removeAccents()
+        .replace(" ", "_")
+        .replace("(", "")
+        .replace(")", "")
+        .replace(Regex("[^a-zA-Z0-9-_.~%]"), "") // Solo caracteres permitidos por FCM
+        .lowercase()
 }
 
 private fun String.prepareForSearch(): String = this.removeAccents().lowercase().trim()
