@@ -873,14 +873,16 @@ class EditProfileViewModel @Inject constructor(
         }
 
         val fcm = FirebaseMessaging.getInstance()
+        // 🔥 [VALIDACIÓN DE FLUJO] Normalización idéntica a la App Cliente
         val cleanCp = cp.normalizeForTopic()
 
-        Log.d("FCM_TOPIC", "Iniciando sincronización para CP: $cleanCp (Premium: $isSubscribed)")
+        Log.d("FCM_FLOW", "Sincronizando Topics para Prestador - CP: $cleanCp (Premium: $isSubscribed)")
 
         categories.forEach { cat ->
             val cleanCat = cat.normalizeForTopic()
-            // 🔥 CORRECCIÓN: Aseguramos consistencia: "tender_{cp}_{category}"
             val topicName = "tender_${cleanCp}_$cleanCat"
+            
+            Log.d("FCM_FLOW", "Procesando Tópico: $topicName")
 
             // ─── SECCIÓN: LÓGICA DE SUSCRIPCIÓN (Premium Incentives) ─────────────────────
             // Mantenemos la suscripción activa si es premium.

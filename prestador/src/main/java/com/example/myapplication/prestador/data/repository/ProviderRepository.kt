@@ -122,6 +122,41 @@ class ProviderRepository @Inject constructor(
                 )
             )
 
+            // ─── SECCIÓN: GENERACIÓN DE LISTA DE TÓPICOS (MatchKeys) ──────────────────────
+            // 1. Recopilamos todos los códigos postales únicos (Personal + Empresas/Sucursales)
+            val allPostalCodes = (
+                listOfNotNull(provider.address?.codigoPostal) + 
+                provider.addresses.map { it.codigoPostal } + 
+                provider.companies.flatMap { it.branches.map { b -> b.address.codigoPostal } }
+            ).filter { it.isNotBlank() }.distinct()
+
+            // 2. Recopilamos todas las categorías únicas (Personales y de Empresas)
+            val allCats = (
+                provider.categories + 
+                provider.companies.flatMap { it.categories }
+            ).filter { it.isNotBlank() }.distinct()
+
+            // 3. Generamos la matriz de tópicos (CP x Categoría) asegurando datos válidos
+            if (allPostalCodes.isNotEmpty() && allCats.isNotEmpty()) {
+                val topicList = mutableListOf<String>()
+                allPostalCodes.forEach { cp ->
+                    val cleanCp = normalizeForTopic(cp)
+                    allCats.forEach { cat ->
+                        val cleanCat = normalizeForTopic(cat)
+                        if (cleanCp.isNotBlank() && cleanCat.isNotBlank()) {
+                            topicList.add("tender_${cleanCp}_$cleanCat")
+                        }
+                    }
+                }
+                
+                if (topicList.isNotEmpty()) {
+                    providerMap["fcmTopics"] = topicList.distinct()
+                    providerMap["matchKeys"] = topicList.distinct() // Replicamos por compatibilidad
+                    Log.d(TAG, "📡 [TOPICS] Generados ${topicList.size} matchKeys para Firebase.")
+                }
+            }
+            // ─────────────────────────────────────────────────────────────────────────────
+
             provider.address?.let { addr ->
                 providerMap["latitud"] = addr.latitude
                 providerMap["longitud"] = addr.longitude
@@ -275,4 +310,17 @@ class ProviderRepository @Inject constructor(
     fun searchProviders(query: String): Flow<List<ProviderEntity>> = providerDao.searchProviders("%$query%")
     fun getAllProviders(): Flow<List<ProviderEntity>> = providerDao.getAllProviders()
     suspend fun providerExists(id: String): Boolean = providerDao.providerExists(id)
+
+    // ─── SECCIÓN: UTILIDADES DE NORMALIZACIÓN (PRIVADAS) ────────────────────
+
+    private fun normalizeForTopic(input: String): String {
+        val normalized = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFD)
+        val accentRemoved = "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalized, "")
+        return accentRemoved
+            .replace(" ", "_")
+            .replace("(", "")
+            .replace(")", "")
+            .replace(Regex("[^a-zA-Z0-9-_.~%]"), "")
+            .lowercase()
+    }
 }

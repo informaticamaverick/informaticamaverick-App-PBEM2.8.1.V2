@@ -478,7 +478,10 @@ class BudgetViewModel @Inject constructor(
             // 🔥 CORRECCIÓN: Si postal code está vacío, usar un placeholder o omitir para evitar topics rotos.
             val cleanCp = finalPostalCode?.takeIf { it.isNotBlank() }?.normalizeForTopic() ?: "t4000"
             val cleanCat = category.normalizeForTopic()
+            
+            // 🔥 [VALIDACIÓN DE FLUJO] Aseguramos formato estricto y agregamos LOG para depuración
             val matchKey = "tender_${cleanCp}_$cleanCat"
+            Log.d("FCM_FLOW", "MatchKey Generado (Cliente): $matchKey")
             
             // Expiración: fecha de fin + 1 día de gracia
             val expiresAt = if (endDate > 0) endDate + TimeUnit.DAYS.toMillis(1) else null
