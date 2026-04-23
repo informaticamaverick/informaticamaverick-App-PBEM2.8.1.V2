@@ -650,6 +650,8 @@ fun CrearLicUIContent(
             show = showAd,
             onDismiss = {
                 showAd = false
+                
+                // 🔥 [VALIDACIÓN DE FLUJO] Ejecutamos la creación real en el ViewModel
                 onCreateTender(
                     titleInput,
                     description,
@@ -664,7 +666,7 @@ fun CrearLicUIContent(
                     selectedImages
                 )
                 
-                // 🔥 NOTIFICACIÓN REAL 🔥
+                // 🔥 NOTIFICACIÓN LOCAL (UI Feedback) 🔥
                 val locLabel = when (val loc = selectedLocation) {
                     is LocationOption.Personal -> loc.locality
                     is LocationOption.Business -> loc.locality
