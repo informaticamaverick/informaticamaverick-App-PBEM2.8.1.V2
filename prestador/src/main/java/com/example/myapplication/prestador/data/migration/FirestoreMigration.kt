@@ -49,7 +49,6 @@ object FirestoreMigration {
                 modalidad["atencionUrgencias"]?.let { updates["atencionUrgencias"] = it }
                 modalidad["turnosEnLocal"]?.let     { updates["turnosEnLocal"] = it }
                 modalidad["envios"]?.let            { updates["envios"] = it }
-                modalidad["atiendeVirtual"]?.let    { updates["atiendeVirtual"] = it }
                 deletes["modalidad"] = FieldValue.delete()
             }
 

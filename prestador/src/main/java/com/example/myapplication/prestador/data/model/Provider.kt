@@ -85,6 +85,5 @@ data class Provider(
     val pais: String? get() = address?.pais
     val provinciaLocal: String? get() = address?.provincia
     val codigoPostalLocal: String? get() = address?.codigoPostal
-    val atiendeVirtual: Boolean get() = false 
     val trabajaConOtros: Boolean get() = false
 }

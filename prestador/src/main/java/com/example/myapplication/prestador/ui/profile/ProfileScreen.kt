@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.room.util.TableInfo
 import coil.compose.AsyncImage
 import com.example.myapplication.prestador.data.model.BranchProvider
 import com.example.myapplication.prestador.data.model.CompanyProvider
@@ -125,7 +126,19 @@ fun ProfileScreen(
                 providerImageUrl = provider.imageUrl,
                 paddingValues = padding,
                 onBack = { showCompanyView = false },
-                colors = colors
+                colors = colors,
+                onUpdateBranch = { updatedBranch ->
+                    val updatedCompany = firstCompany.copy(
+                        branches = firstCompany.branches.map {
+                            if (it.id == updatedBranch.id) updatedBranch else it
+                        }
+                    )
+                    viewModel.addCompany(updatedCompany)
+                },
+                onUpdateAllBranches = { updatedBranches ->
+                    val updatedCompany = firstCompany.copy(branches = updatedBranches)
+                    viewModel.addCompany(updatedCompany)
+                }
             )
             return@Scaffold
         }
@@ -200,7 +213,7 @@ fun ProfileScreen(
                     Spacer(Modifier.height(12.dp))
                     ProfileSectionCard(Icons.Default.Info, "Sobre mí", Color(0xFF3B82F6), colors) {
                         Text(
-                            provider.description,
+                            provider.description!!,
                             fontSize = 14.sp,
                             color = colors.textSecondary,
                             lineHeight = 20.sp
@@ -213,7 +226,7 @@ fun ProfileScreen(
             if (provider.categories.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(12.dp))
-                    ProfileSectionCard(Icons.Default.Category, "Especialidades", Color(0xFF00897B), colors) {
+                    ProfileSectionCard(Icons.Default.Category, "Categorías", Color(0xFF00897B), colors) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -238,14 +251,16 @@ fun ProfileScreen(
                 }
             }
 
-            // ── 5. SERVICIOS ACTIVOS ─────────────────────────────────────
-            val activeServices = buildList {
-                if (provider.vaDomicilio)      add("🏠" to "Atención a domicilio")
-                if (provider.atiendeVirtual)   add("💻" to "Atención virtual")
-                if (provider.envios)           add("🚚" to "Realiza envíos")
-                if (provider.atencionUrgencias)add("⚠️" to "Urgencias 24hs")
-                if (provider.turnosEnLocal)    add("🏪" to "Atención en local")
-                if (provider.trabajaConOtros)  add("👥" to "Trabaja con equipo")
+            //-5 Servicios activos
+            val activeServices = buildList<Pair<ImageVector, String>> {
+                if (provider.doesService) add(Icons.Default.Build to "Realiza servicios")
+                if (provider.doesProduct)         add(Icons.Default.ShoppingBag   to "Vende productos")
+                if (provider.acceptsAppointments) add(Icons.Default.CalendarMonth  to "Acepta turnos")
+                if (provider.vaDomicilio)         add(Icons.Default.DirectionsCar  to "Atención a domicilio")
+                if (provider.envios)              add(Icons.Default.LocalShipping  to "Realiza envíos")
+                if (provider.atencionUrgencias)   add(Icons.Default.Warning        to "Urgencias 24hs")
+                if (provider.turnosEnLocal)       add(Icons.Default.Store          to "Atención en local")
+                if (provider.trabajaConOtros)     add(Icons.Default.Group          to "Trabaja con equipo")
             }
             if (activeServices.isNotEmpty()) {
                 item {
@@ -255,19 +270,25 @@ fun ProfileScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            activeServices.forEach { (emoji, label) ->
+                            activeServices.forEach { (icon, label) ->
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
                                     color = Color(0xFF3B82F6).copy(alpha = 0.1f),
                                     border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.25f))
                                 ) {
-                                    Text(
-                                        "$emoji $label",
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        fontSize = 12.sp,
-                                        color = Color(0xFF3B82F6),
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(icon, null, Modifier.size(14.dp), tint = Color(0xFF3B82F6))
+                                        Spacer(Modifier.width(5.dp))
+                                        Text(
+                                            label,
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF3B82F6),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -489,7 +510,7 @@ private fun BannerGradient(colors: PrestadorColors) {
 }
 
 @Composable
-private fun ProfilePhoto(imageUrl: String?, colors: PrestadorColors) {
+private fun ProfilePhoto(imageUrl: String?, colors: PrestadorColors, isCompany: Boolean = false) {
     when {
         !imageUrl.isNullOrEmpty() && imageUrl.startsWith("http") -> {
             AsyncImage(
@@ -509,20 +530,25 @@ private fun ProfilePhoto(imageUrl: String?, colors: PrestadorColors) {
             if (bmp != null) {
                 Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             } else {
-                PhotoPlaceholder(colors)
+                PhotoPlaceholder(colors, isCompany)
             }
         }
-        else -> PhotoPlaceholder(colors)
+        else -> PhotoPlaceholder(colors, isCompany)
     }
 }
 
 @Composable
-private fun PhotoPlaceholder(colors: PrestadorColors) {
+private fun PhotoPlaceholder(colors: PrestadorColors, isCompany: Boolean = false) {
     Box(
         Modifier.fillMaxSize().background(colors.primaryOrange.copy(alpha = 0.1f)),
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Default.Person, null, Modifier.size(48.dp), tint = colors.primaryOrange.copy(alpha = 0.5f))
+        Icon(
+            if (isCompany) Icons.Default.Business else Icons.Default.Person,
+            null,
+            Modifier.size(28.dp),
+            tint = colors.primaryOrange.copy(alpha = 0.5f)
+        )
     }
 }
 
@@ -661,12 +687,34 @@ private fun ProfileEmpresaCard(company: CompanyProvider, colors: PrestadorColors
 }
 
 @Composable
-private fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorColors) {
-    val branchName = branch.name.ifBlank { if (index == 0) "Casa Central"
-    else "Sucursal ${index + 1}" }
+private fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorColors, onUpdateBranch: (BranchProvider) -> Unit = {}) {
+    val branchName = branch.name.ifBlank { if (index == 0) "Casa Central" else "Sucursal ${index + 1}" }
     val dir = branch.address.fullString()
 
-    Text(branchName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+    // Título + chips de servicios activos (solo lectura)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(branchName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+        Spacer(Modifier.weight(1f))
+        val activeIcons = buildList<ImageVector> {
+            if (branch.doesService) add(Icons.Default.Build)
+            if (branch.doesProduct) add(Icons.Default.ShoppingBag)
+            if (branch.acceptsAppointments) add(Icons.Default.CalendarMonth)
+            if (branch.doesHomeVisits) add(Icons.Default.DirectionsCar)
+            if (branch.doesShipping) add(Icons.Default.LocalShipping)
+            if (branch.works24h) add(Icons.Default.Warning)
+            if (branch.hasPhysicalLocation) add(Icons.Default.Store)
+        }
+        activeIcons.forEach { icon ->
+            Icon(
+                icon, contentDescription = null,
+                modifier = Modifier.size(16.dp).padding(end = 2.dp),
+                tint = Color(0xFF8B5CF6)
+            )
+        }
+    }
     Spacer(Modifier.height(12.dp))
 
     if (dir.isNotBlank()) {
@@ -740,6 +788,48 @@ private fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorC
             }
         }
     }
+    // Servicios de esta sede
+    val branchServices = buildList<Pair<ImageVector, String>> {
+        if (branch.doesService)         add(Icons.Default.Build         to "Realiza servicios")
+        if (branch.doesProduct)         add(Icons.Default.ShoppingBag   to "Vende productos")
+        if (branch.acceptsAppointments) add(Icons.Default.CalendarMonth  to "Acepta turnos")
+        if (branch.doesHomeVisits)      add(Icons.Default.DirectionsCar  to "Visitas a domicilio")
+        if (branch.doesShipping)        add(Icons.Default.LocalShipping  to "Realiza envíos")
+        if (branch.works24h)            add(Icons.Default.Warning        to "Urgencias 24hs")
+        if (branch.hasPhysicalLocation) add(Icons.Default.Store          to "Atención en local")
+    }
+    if (branchServices.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "SERVICIOS DE ESTA SEDE",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.textSecondary,
+            letterSpacing = 0.5.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            branchServices.forEach { (icon, label) ->
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF8B5CF6).copy(alpha = 0.1f),
+                    border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.25f))
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Icon(icon, null, Modifier.size(13.dp), tint = Color(0xFF8B5CF6))
+                        Spacer(Modifier.width(5.dp))
+                        Text(label, fontSize = 11.sp, color = Color(0xFF8B5CF6), fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -777,7 +867,9 @@ private fun CompanyDetailView(
     providerImageUrl: String?,
     paddingValues: PaddingValues,
     onBack: () -> Unit,
-    colors: PrestadorColors
+    colors: PrestadorColors,
+    onUpdateBranch: (BranchProvider) -> Unit = {},
+    onUpdateAllBranches: (List<BranchProvider>) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -845,14 +937,32 @@ private fun CompanyDetailView(
                         .border(3.dp, Color(0xFF8B5CF6), CircleShape)
                 ) {
                     val logoUrl = company.photoUrl
-                    if (!logoUrl.isNullOrEmpty() && logoUrl.startsWith("http")) {
-                        AsyncImage(logoUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    } else {
-                        Box(
-                            Modifier.fillMaxSize().background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Business, null, Modifier.size(48.dp), tint = Color(0xFF8B5CF6).copy(alpha = 0.6f))
+                    when {
+                        !logoUrl.isNullOrEmpty() && logoUrl.startsWith("http") -> {
+                            AsyncImage(logoUrl, null, Modifier.fillMaxWidth(), contentScale = ContentScale.Crop)
+                        }
+                        !logoUrl.isNullOrEmpty() -> {
+                            val bmp = remember(logoUrl) {
+                                try {
+                                    val b = android.util.Base64.decode(logoUrl, android.util.Base64.DEFAULT)
+                                    android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size)?.asImageBitmap()
+                                } catch (e: Exception) { null }
+                            }
+                            if (bmp != null ) {
+                                Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            } else {
+                                Box(Modifier.fillMaxSize().background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Business, null, Modifier.size(48.dp), tint = Color(0xFF8B5CF6).copy(alpha = 0.6f))
+                                }
+                            }
+                        }
+                        else -> {
+                            Box(Modifier.fillMaxSize().background(Color(0xFF8B5CF6).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Business, null, Modifier.size(48.dp), tint = Color(0xFF8B5CF6).copy(alpha = 0.6f))
+
+                            }
                         }
                     }
                 }
@@ -884,7 +994,7 @@ private fun CompanyDetailView(
                         .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
                         .clickable { onBack() }
                 ) {
-                    ProfilePhoto(imageUrl = providerImageUrl, colors = colors)
+                    ProfilePhoto(imageUrl = providerImageUrl, colors = colors, isCompany = true)
                 }
             }
         }
@@ -893,6 +1003,57 @@ private fun CompanyDetailView(
 
         // ── DATOS DEL NEGOCIO ────────────────────────────────────────────
         item {
+            val firstBranch = company.branches.firstOrNull()
+            var showServiciosDialog by remember { mutableStateOf(false) }
+            var editDoesService by remember(firstBranch) { mutableStateOf(firstBranch?.doesService ?: false) }
+            var editDoesProduct by remember(firstBranch) { mutableStateOf(firstBranch?.doesProduct ?: false) }
+            var editWorks24h by remember(firstBranch) { mutableStateOf(firstBranch?.works24h ?: false) }
+            var editHasPhysical by remember(firstBranch) { mutableStateOf(firstBranch?.hasPhysicalLocation ?: false) }
+            var editDoesHomeVisits by remember(firstBranch) { mutableStateOf(firstBranch?.doesHomeVisits ?: false) }
+            var editDoesShipping by remember(firstBranch) { mutableStateOf(firstBranch?.doesShipping ?: false) }
+            var editAcceptsAppointments by remember(firstBranch) { mutableStateOf(firstBranch?.acceptsAppointments ?: false) }
+
+            if (showServiciosDialog) {
+                AlertDialog(
+                    onDismissRequest = { showServiciosDialog = false },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                val updatedBranches = company.branches.map { b ->
+                                    b.copy(
+                                        doesService = editDoesService,
+                                        doesProduct = editDoesProduct,
+                                        works24h = editWorks24h,
+                                        hasPhysicalLocation = editHasPhysical,
+                                        doesHomeVisits = editDoesHomeVisits,
+                                        doesShipping = editDoesShipping,
+                                        acceptsAppointments = editAcceptsAppointments
+                                    )
+                                }
+                                onUpdateAllBranches(updatedBranches)
+                                showServiciosDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
+                        ) { Text("Guardar") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showServiciosDialog = false }) { Text("Cancelar") }
+                    },
+                    title = { Text("Servicios del negocio", fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            BranchServicioSwitch("Realiza servicios", Icons.Default.Build, editDoesService) { editDoesService = it }
+                            BranchServicioSwitch("Vende productos", Icons.Default.ShoppingBag, editDoesProduct) { editDoesProduct = it }
+                            BranchServicioSwitch("Acepta turnos", Icons.Default.CalendarMonth, editAcceptsAppointments) { editAcceptsAppointments = it }
+                            BranchServicioSwitch("Visitas a domicilio", Icons.Default.DirectionsCar, editDoesHomeVisits) { editDoesHomeVisits = it }
+                            BranchServicioSwitch("Realiza envíos", Icons.Default.LocalShipping, editDoesShipping) { editDoesShipping = it }
+                            BranchServicioSwitch("Urgencias 24hs", Icons.Default.Warning, editWorks24h) { editWorks24h = it }
+                            BranchServicioSwitch("Atención en local", Icons.Default.Store, editHasPhysical) { editHasPhysical = it }
+                        }
+                    }
+                )
+            }
+
             ProfileSectionCard(Icons.Default.Business, "Datos del Negocio", Color(0xFF8B5CF6), colors) {
                 if (company.name.isNotBlank()) {
                     ProfileInfoRow("🏬", "Nombre Comercial", company.name, colors)
@@ -908,6 +1069,42 @@ private fun CompanyDetailView(
                 }
                 if (company.description.isNotBlank()) {
                     Text(company.description, fontSize = 13.sp, color = colors.textSecondary, lineHeight = 18.sp)
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                // Servicios activos + botón config
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val activeIcons = buildList<ImageVector> {
+                        if (editDoesService) add(Icons.Default.Build)
+                        if (editDoesProduct) add(Icons.Default.ShoppingBag)
+                        if (editAcceptsAppointments) add(Icons.Default.CalendarMonth)
+                        if (editDoesHomeVisits) add(Icons.Default.DirectionsCar)
+                        if (editDoesShipping) add(Icons.Default.LocalShipping)
+                        if (editWorks24h) add(Icons.Default.Warning)
+                        if (editHasPhysical) add(Icons.Default.Store)
+                    }
+                    activeIcons.forEach { icon ->
+                        Icon(
+                            icon, contentDescription = null,
+                            modifier = Modifier.size(18.dp).padding(end = 4.dp),
+                            tint = Color(0xFF8B5CF6)
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(
+                        onClick = { showServiciosDialog = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Configurar servicios",
+                            tint = Color(0xFF8B5CF6),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
@@ -917,7 +1114,7 @@ private fun CompanyDetailView(
         // ── SUCURSALES ───────────────────────────────────────────────────
         if (company.branches.isNotEmpty()) {
             item {
-                BranchesPager(branches = company.branches, colors = colors)
+                BranchesPager(branches = company.branches, colors = colors, onUpdateBranch = onUpdateBranch)
             }
         }
     }
@@ -927,7 +1124,8 @@ private fun CompanyDetailView(
 @Composable
 private fun BranchesPager(
     branches: List<BranchProvider>,
-    colors: PrestadorColors
+    colors: PrestadorColors,
+    onUpdateBranch: (BranchProvider) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(pageCount = { branches.size })
 
@@ -942,20 +1140,35 @@ private fun BranchesPager(
             branches.forEachIndexed { index, branch ->
                 val isSelected = pagerState.currentPage == index
                 Surface(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { /* handled by pager */},
                     shape = RoundedCornerShape(10.dp),
-                    color = if (isSelected) Color(0xFF8B5CF6) else colors.surfaceColor,
-                    border = if (!isSelected) BorderStroke(1.dp, colors.textSecondary.copy(alpha = 0.2f)) else null
+                    color = if(isSelected) Color(0xFF8B5CF6) else colors.surfaceColor,
+                    border = if(isSelected) BorderStroke(1.dp, colors.textSecondary.copy(alpha = 0.2f)) else null
                 ) {
-                    Text(
-                        text = branch.name.ifBlank { if (index == 0) "Casa Central" else "Sucursal ${index + 1}" },
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isSelected) Color.White else colors.textSecondary,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
-                    )
+                    if (index == 0) {
+                        Text(
+                            text = "Casa Central",
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isSelected) Color.White else colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp, horizontal = 4.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "Sucursal",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White else colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp, horizontal = 4.dp)
+                        )
+                    }
                 }
             }
         }
@@ -976,7 +1189,7 @@ private fun BranchesPager(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    BranchSection(index = page, branch = branches[page], colors = colors)
+                    BranchSection(index = page, branch = branches[page], colors = colors, onUpdateBranch = onUpdateBranch)
                 }
             }
         }
@@ -1089,5 +1302,25 @@ private fun ProfileBottomBarButton(
             color = tint,
             letterSpacing = 0.5.sp
         )
+    }
+}
+
+@Composable
+private fun BranchServicioSwitch(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(label, fontSize = 13.sp)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

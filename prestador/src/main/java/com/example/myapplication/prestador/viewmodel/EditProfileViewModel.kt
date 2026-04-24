@@ -457,7 +457,6 @@ class EditProfileViewModel @Inject constructor(
         direccionEmpresa: String? = null,
         serviceType: String? = null,
         horarioLocal: String? = null,
-        atiendeVirtual: Boolean? = null,
         doesService: Boolean? = null,
         doesProduct: Boolean? = null,
         categorias: String? = null,
@@ -586,7 +585,6 @@ class EditProfileViewModel @Inject constructor(
 
                 if (atencionUrgencias != null) updateData["atencionUrgencias"] = atencionUrgencias
                 if (vaDomicilio != null) updateData["vaDomicilio"] = vaDomicilio
-                if (atiendeVirtual != null) updateData["atiendeVirtual"] = atiendeVirtual
                 if (envios != null) updateData["envios"] = envios
                 if (doesService != null) updateData["doesService"] = doesService
                 if (doesProduct != null) updateData["doesProduct"] = doesProduct
@@ -769,6 +767,16 @@ class EditProfileViewModel @Inject constructor(
 
     fun removeEmployee(employeeId: String) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
+        var foundCompanyId: String? = null
+        var foundBranchId: String? = null
+        current.companies.forEach { company ->
+            company.branches.forEach { branch ->
+                if (branch.employees.any { it.id == employeeId }) {
+                    foundCompanyId = company.id
+                    foundBranchId = branch.id
+                }
+            }
+        }
         val updatedCompanies = current.companies.map { company ->
             company.copy(branches = company.branches.map { branch ->
                 branch.copy(employees = branch.employees.filter { it.id != employeeId })
@@ -777,6 +785,9 @@ class EditProfileViewModel @Inject constructor(
         val updatedProvider = current.copy(companies = updatedCompanies)
         viewModelScope.launch {
             providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+            if (foundCompanyId != null && foundBranchId != null) {
+                providerRepository.deleteEmployeeFromFirebase(foundCompanyId!!, foundBranchId!!, employeeId)
+            }
             _profileState.value = ProfileState.Success(updatedProvider)
         }
     }
@@ -798,6 +809,7 @@ class EditProfileViewModel @Inject constructor(
         val updatedProvider = current.copy(addresses = updatedAddresses)
         viewModelScope.launch {
             providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+            providerRepository.deleteAddressFromFirebase(addressId)
             _profileState.value = ProfileState.Success(updatedProvider)
         }
     }
@@ -841,6 +853,7 @@ class EditProfileViewModel @Inject constructor(
         )
         viewModelScope.launch {
             providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+            providerRepository.deleteCompanyFromFirebase(companyId)
             _profileState.value = ProfileState.Success(updatedProvider)
         }
     }

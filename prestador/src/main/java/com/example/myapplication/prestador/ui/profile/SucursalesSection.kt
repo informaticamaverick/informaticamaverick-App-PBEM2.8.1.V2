@@ -1,5 +1,6 @@
 ﻿package com.example.myapplication.prestador.ui.profile
 
+import android.R
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +38,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.tasks.await
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.selection.selectable
 
 @Composable
 fun SucursalesSection(
@@ -70,6 +73,10 @@ fun SucursalesSection(
     var nombreError by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var geocodingLoading by remember { mutableStateOf(false) }
+    var geocodedLat by remember { mutableStateOf<Double?>(null) }
+    var geocodedLng by remember { mutableStateOf<Double?>(null) }
+    var geocodingAddressLoading by remember { mutableStateOf(false) }
+    var geocodingAddressResult by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -101,6 +108,9 @@ fun SucursalesSection(
                                 nuevaProvincia = addr.adminArea !!
                             if (!addr.postalCode.isNullOrBlank()) nuevoCp = addr.postalCode!!
                         }
+                        geocodedLat = location.latitude
+                        geocodedLng = location.longitude
+                        geocodingAddressResult = "✓ ${String.format("%.5f", location.latitude)}, ${String.format("%.5f", location.longitude)}"
 
                     }
                 } catch (e: Exception) {
@@ -126,6 +136,8 @@ fun SucursalesSection(
                 agregando = false
                 nuevoNombre = ""; nuevaProvincia = ""; nuevaLocalidad = ""
                 nuevaCalle = ""; nuevoNumero = ""; nuevoCp = ""; nuevoHorario = ""
+                geocodedLat = null; geocodedLng = null
+                geocodingAddressResult = null
                 nombreError = false
                 errorMessage = null
                 onSucursalAgregada()
@@ -413,6 +425,89 @@ fun SucursalesSection(
 
                     HorarioSelectorField(horario = nuevoHorario, onHorarioChange = { nuevoHorario = it })
 
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            if (nuevaCalle.isBlank() && nuevaProvincia.isBlank()) return@OutlinedButton
+                            scope.launch {
+                                geocodingAddressLoading = true
+                                geocodingAddressResult = null
+                                try {
+                                    val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+                                    val query = buildString {
+                                        if (nuevaCalle.isNotBlank()) append(nuevaCalle.trim())
+                                        if (nuevoNumero.isNotBlank()) append(" ${nuevoNumero.trim()}")
+                                        if (nuevaLocalidad.isNotBlank()) append(", ${nuevaLocalidad.trim()}")
+                                        if (nuevaProvincia.isNotBlank()) append(", ${nuevaProvincia.trim()}")
+                                        append(", Argentina")
+                                    }
+                                    @Suppress("DEPRECATION")
+                                    val results = geocoder.getFromLocationName(query, 1)
+                                    if (!results.isNullOrEmpty()) {
+                                        geocodedLat = results[0].latitude
+                                        geocodedLng = results[0].longitude
+                                        geocodingAddressResult = "✓ ${String.format("%.5f", geocodedLat)}, ${String.format("%.5f", geocodedLng)}"
+                                    } else {
+                                        geocodingAddressResult = "No se encontraron coordenadas"
+                                        geocodedLat = null
+                                        geocodedLng = null
+                                    }
+                                } catch (_: Exception) {
+                                    geocodingAddressResult = "Error al obtener coordenadas"
+                                } finally {
+                                    geocodingAddressLoading = false
+                                }
+                            }
+                        },
+                        enabled = !geocodingAddressLoading && (nuevaCalle.isNotBlank() || nuevaProvincia.isNotBlank()),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primaryOrange),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, colors.primaryOrange.copy(alpha = 0.6f))
+                    ) {
+                        if (geocodingAddressLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp, color = colors.primaryOrange)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Obteniendo coordenadas...", fontSize = 13.sp)
+                        } else {
+                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Sincronizar coordenadas", fontSize = 13.sp)
+                        }
+                    }
+
+                    if (geocodingAddressResult != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val esExito = geocodingAddressResult!!.startsWith("✓")
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (esExito) Color(0xFF2E7D32).copy(alpha = 0.1f) else Color.Red.copy(alpha = 0.08f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp,
+                                if (esExito) Color(0xFF2E7D32).copy(alpha = 0.4f) else Color.Red.copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    if (esExito) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = if (esExito) Color(0xFF2E7D32) else Color.Red,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    geocodingAddressResult!!,
+                                    fontSize = 12.sp,
+                                    color = if (esExito) Color(0xFF2E7D32) else Color.Red
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     if (errorMessage != null) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -456,7 +551,9 @@ fun SucursalesSection(
                                     nuevaCalle.takeIf { it.isNotBlank() },
                                     nuevoNumero.takeIf { it.isNotBlank() },
                                     nuevoCp.takeIf { it.isNotBlank() },
-                                    nuevoHorario.takeIf { it.isNotBlank() }
+                                    nuevoHorario.takeIf { it.isNotBlank() },
+                                    geocodedLat,
+                                    geocodedLng
                                 )
                             },
                             enabled = uiState !is SucursalesViewModel.UiState.Loading,
@@ -668,17 +765,77 @@ private fun DatosSubseccion(
     var editNumero by remember(sucursal) { mutableStateOf(direccion.numero) }
     var editCp by remember(sucursal) { mutableStateOf(direccion.codigoPostal) }
     var editHorario by remember(sucursal) { mutableStateOf(sucursal.workingHours) }
+    var editGeoLat by remember(sucursal) { mutableStateOf(direccion.latitude) }
+    var editGeoLng by remember(sucursal) { mutableStateOf(direccion.longitude) }
+    var editGeoResult by remember(sucursal) { mutableStateOf<String?>(null) }
+    var editGeoLoading by remember { mutableStateOf(false) }
+    var showServiciosDialog by remember { mutableStateOf(false) }
+    var editDoesService by remember(sucursal) { mutableStateOf(sucursal.doesService)}
+    var editDoesProduct by remember(sucursal) { mutableStateOf(sucursal.doesProduct)}
+    var editWorks24h by remember(sucursal) { mutableStateOf(sucursal.works24h) }
+    var editHasPhysical by remember(sucursal) { mutableStateOf(sucursal.hasPhysicalLocation) }
+    var editDoesHomeVisits by remember(sucursal) { mutableStateOf(sucursal.doesHomeVisits) }
+    var editDoesShipping by remember(sucursal) { mutableStateOf(sucursal.doesShipping) }
+    var editAcceptsAppointments by remember(sucursal) { mutableStateOf(sucursal.acceptsAppointments) }
+    val context = LocalContext.current
+    val editScope = rememberCoroutineScope()
+
+
+    if (showServiciosDialog) {
+        AlertDialog(
+            onDismissRequest = { showServiciosDialog = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onUpdate(sucursal.copy(
+                            doesService = editDoesService,
+                            doesProduct = editDoesProduct,
+                            works24h = editWorks24h,
+                            hasPhysicalLocation = editHasPhysical,
+                            doesHomeVisits = editDoesHomeVisits,
+                            doesShipping = editDoesShipping,
+                            acceptsAppointments = editAcceptsAppointments
+                        ))
+                        showServiciosDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange)
+                ) { Text("Guardar")}
+            },
+            dismissButton = {
+                TextButton(onClick = { showServiciosDialog = false }) {
+                    Text("Cancelar") }
+                },
+            title =  { Text("Servicios de esta sede", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    ServicioSwitch("Realiza servicios", Icons.Default.Build, editDoesService) {editDoesService = it}
+                    ServicioSwitch("Vende productos", Icons.Default.ShoppingBag, editDoesProduct) { editDoesProduct = it }
+                    ServicioSwitch("Acepta turnos", Icons.Default.CalendarMonth, editAcceptsAppointments) { editAcceptsAppointments = it }
+                    ServicioSwitch("Visitas a domicilio", Icons.Default.DirectionsCar, editDoesHomeVisits) { editDoesHomeVisits = it }
+                    ServicioSwitch("Realiza envíos", Icons.Default.LocalShipping, editDoesShipping) { editDoesShipping = it }
+                    ServicioSwitch("Urgencias 24hs", Icons.Default.Warning, editWorks24h) { editWorks24h = it }
+                    ServicioSwitch("Atención en local", Icons.Default.Store, editHasPhysical) { editHasPhysical = it }
+                }
+            }
+        )
+    }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Business, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text("Datos de la sucursal", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.weight(1f))
+        IconButton(
+            onClick = { showServiciosDialog = true },
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(Icons.Default.Settings, contentDescription = "Servicios",
+                tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
+        }
         if (!editando) {
-            TextButton(onClick = { editando = true }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
+            TextButton(onClick = { editando = true}, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Editar", fontSize = 12.sp)
             }
         }
     }
@@ -715,6 +872,83 @@ private fun DatosSubseccion(
                 }
             }
             HorarioSelectorField(horario = editHorario, onHorarioChange = { editHorario = it })
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            OutlinedButton(
+                onClick = {
+                    if (editCalle.isBlank() && editProvincia.isBlank()) return@OutlinedButton
+                    editScope.launch {
+                        editGeoLoading = true
+                        editGeoResult = null
+                        try {
+                            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+                            val query = buildString {
+                                if (editCalle.isNotBlank()) append(editCalle.trim())
+                                if (editNumero.isNotBlank()) append(" ${editNumero.trim()}")
+                                if (editLocalidad.isNotBlank()) append(", ${editLocalidad.trim()}")
+                                if (editProvincia.isNotBlank()) append(", ${editProvincia.trim()}")
+                                append(", Argentina")
+                            }
+                            @Suppress("DEPRECATION")
+                            val results = geocoder.getFromLocationName(query, 1)
+                            if (!results.isNullOrEmpty()) {
+                                editGeoLat = results[0].latitude
+                                editGeoLng = results[0].longitude
+                                editGeoResult = "✓ ${String.format("%.5f", editGeoLat)}, ${String.format("%.5f", editGeoLng)}"
+                            } else {
+                                editGeoResult = "No se encontraron coordenadas"
+                                editGeoLat = null
+                                editGeoLng = null
+                            }
+                        } catch (_: Exception) {
+                            editGeoResult = "Error al obtener coordenadas"
+                        } finally {
+                            editGeoLoading = false
+                        }
+                    }
+                },
+                enabled = !editGeoLoading && (editCalle.isNotBlank() || editProvincia.isNotBlank()),
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primaryOrange),
+                border = androidx.compose.foundation.BorderStroke(1.dp, colors.primaryOrange.copy(alpha = 0.6f))
+            ) {
+                if (editGeoLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp, color = colors.primaryOrange)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Obteniendo coordenadas...", fontSize = 13.sp)
+                } else {
+                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Sincronizar coordenadas", fontSize = 13.sp)
+                }
+            }
+
+            if (editGeoResult != null) {
+                val esExito = editGeoResult!!.startsWith("✓")
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (esExito) Color(0xFF2E7D32).copy(alpha = 0.1f) else Color.Red.copy(alpha = 0.08f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp,
+                        if (esExito) Color(0xFF2E7D32).copy(alpha = 0.4f) else Color.Red.copy(alpha = 0.3f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            if (esExito) Icons.Default.CheckCircle else Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = if (esExito) Color(0xFF2E7D32) else Color.Red,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(editGeoResult!!, fontSize = 12.sp,
+                            color = if (esExito) Color(0xFF2E7D32) else Color.Red)
+                    }
+                }
+            }
         }
         Spacer(modifier = Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -723,7 +957,9 @@ private fun DatosSubseccion(
                     editNombre = sucursal.name; editProvincia = direccion.provincia
                     editLocalidad = direccion.localidad; editCalle = direccion.calle
                     editNumero = direccion.numero; editCp = direccion.codigoPostal
-                    editHorario = sucursal.workingHours; editando = false
+                    editHorario = sucursal.workingHours
+                    editGeoLat = direccion.latitude; editGeoLng = direccion.longitude
+                    editGeoResult = null; editando = false
                 },
                 modifier = Modifier.weight(1f), contentPadding = PaddingValues(vertical = 6.dp)
             ) { Text("Cancelar", fontSize = 13.sp) }
@@ -738,7 +974,9 @@ private fun DatosSubseccion(
                                 localidad = editLocalidad,
                                 calle = editCalle,
                                 numero = editNumero,
-                                codigoPostal = editCp
+                                codigoPostal = editCp,
+                                latitude = editGeoLat,
+                                longitude = editGeoLng
                             )
                         ))
                         editando = false
@@ -957,5 +1195,26 @@ private fun EquipoSubseccion(
                 ) { Text("Guardar", fontSize = 13.sp) }
             }
         }
+    }
+}
+
+@Composable
+private fun ServicioSwitch(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(label, fontSize = 13.sp)
+        }
+        Switch(checked, onCheckedChange = onCheckedChange)
     }
 }

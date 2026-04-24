@@ -437,6 +437,8 @@ fun ProfessionalDataSection(
     onDescriptionChange: (String) -> Unit,
     expanded: Boolean,
     onExpandChange: () -> Unit,
+    onGuardar: (profesion: String, tieneMatricula: Boolean, matricula:
+    String, description: String) -> Unit,
     colors: com.example.myapplication.prestador.ui.theme.PrestadorColors
 ) {
     // Mapeo profesión → label + hint de matrícula
@@ -574,6 +576,15 @@ fun ProfessionalDataSection(
             label = "Descripci\u00f3n / Sobre m\u00ed",
             leadingIcon = Icons.Default.Info
         )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { onGuardar(profesion, tieneMatricula, matricula, description) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
+            Text("Guardar datos profecionales", fontSize = 13.sp)
+        }
     }
 }
 
@@ -2188,8 +2199,6 @@ fun ProfessionalModalidadBlock(
     onTurnosEnLocalChange: (Boolean) -> Unit,
     vaDomicilio: Boolean,
     onVaDomicilioChange: (Boolean) -> Unit,
-    atiendeVirtual: Boolean,
-    onAtiendeVirtualChange: (Boolean) -> Unit,
     provinciaLocal: String,
     onProvinciaLocalChange: (String) -> Unit,
     direccionLocal: String,
@@ -2236,15 +2245,6 @@ fun ProfessionalModalidadBlock(
             description = "Te desplazas al domicilio del cliente",
             checked = vaDomicilio,
             onCheckedChange = onVaDomicilioChange,
-            accentColor = purple,
-            colors = colors
-        )
-        ModalidadToggleCard(
-            icon = Icons.Default.VideoCall,
-            label = "Atencion online / virtual",
-            description = "Atendes por videollamada u otro medio",
-            checked = atiendeVirtual,
-            onCheckedChange = onAtiendeVirtualChange,
             accentColor = purple,
             colors = colors
         )

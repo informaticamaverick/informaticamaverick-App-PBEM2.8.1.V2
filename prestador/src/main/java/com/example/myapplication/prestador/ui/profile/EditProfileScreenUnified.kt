@@ -124,7 +124,6 @@ fun EditProfileScreenUnified(
     var codigoPostalLocal by remember { mutableStateOf("") }
     var tieneEmpresa by remember { mutableStateOf(false) }
     var tieneSucursales by remember { mutableStateOf(false) }
-    var atiendeVirtual by remember { mutableStateOf(false) }
     var trabajaConOtros by remember { mutableStateOf(false) }
     var nombreEmpresa by remember { mutableStateOf("") }
     var cuitEmpresa by remember { mutableStateOf("") }
@@ -180,7 +179,6 @@ fun EditProfileScreenUnified(
             codigoPostalLocal = p.codigoPostalLocal ?: ""
             
             tieneEmpresa = p.tieneEmpresa
-            atiendeVirtual = p.atiendeVirtual
             trabajaConOtros = p.trabajaConOtros
             
             // Colecciones jerárquicas
@@ -560,6 +558,14 @@ fun EditProfileScreenUnified(
                                     onDescriptionChange = { description = it },
                                     expanded = expandedSection == "professional",
                                     onExpandChange = { expandedSection = if (expandedSection == "professional") null else "professional" },
+                                    onGuardar = { prof, tieneMat, mat, desc ->
+                                        viewModel.updateProfile(
+                                            profesion = prof,
+                                            tieneMatricula = tieneMat,
+                                            matricula = mat.takeIf { tieneMatricula },
+                                            description = desc
+                                        )
+                                    },
                                     colors = colors
                                 )
                             }
@@ -657,11 +663,6 @@ fun EditProfileScreenUnified(
                                         viewModel.updateProfile(turnosEnLocal = value)
                                     },
                                     vaDomicilio = vaDomicilio,
-                                    onAtiendeVirtualChange = { value ->
-                                        atiendeVirtual = value
-                                        viewModel.updateProfile(atiendeVirtual = value)
-                                    },
-                                    atiendeVirtual = atiendeVirtual,
                                     onVaDomicilioChange = { value ->
                                         vaDomicilio = value
                                         viewModel.updateProfile(vaDomicilio = value)
@@ -1043,7 +1044,6 @@ fun EditProfileScreenUnified(
                                 provinciaLocal = provinciaLocal.takeIf { turnosEnLocal },
                                 codigoPostalLocal = codigoPostalLocal.takeIf { turnosEnLocal },
                                 tieneEmpresa = tieneEmpresa,
-                                atiendeVirtual = atiendeVirtual,
                                 trabajaConOtros = trabajaConOtros,
                                 nombreEmpresa = nombreEmpresa.takeIf { tieneEmpresa },
                                 cuitEmpresa = cuitEmpresa.takeIf { tieneEmpresa },

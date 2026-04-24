@@ -139,7 +139,6 @@ class ProfileViewModel @Inject constructor(
                 actions.add(BeSmallActionModel("divider_v_edit", Icons.Default.Clear, "DIVIDER", isDefault = true))
                 actions.add(BeSmallActionModel("save_profile", Icons.Default.Save, "GUARDAR", emoji = "💾", isDefault = true))
                 actions.add(BeSmallActionModel("add_company", Icons.Default.Business, "EMPRESA", emoji = "🏢", isDefault = true))
-                actions.add(BeSmallActionModel("add_location", Icons.Default.LocationOn, "UBICACIÓN", emoji = "📍", isDefault = true))
             } else {
                 // MODO LECTURA (Por defecto al entrar): Be ofrece Editar, Divider, Compartir, Ajustes
                 // Se marcan como isDefault = true para que aparezcan por defecto sin necesidad de mantener presionado

@@ -3,6 +3,7 @@ package com.example.myapplication.prestador.data.repository
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import android.widget.FilterQueryProvider
 import com.example.myapplication.prestador.data.local.dao.ProviderDao
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
 import com.example.myapplication.prestador.data.model.Provider
@@ -199,11 +200,59 @@ class ProviderRepository @Inject constructor(
         }
     }
 
+    suspend fun deleteAddressFromFirebase(addressId: String) {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("providers")
+            .document(uid)
+            .collection("addresses")
+            .document(addressId)
+            .delete()
+            .await()
+        Log.d(TAG, "✅ [REMOTO] Dirección $addressId eliminada de Firestore.")
+    }
+
     // ─── OTROS MÉTODOS DE REPOSITORIO ──────────────────────────────────────
 
+    suspend fun deleteBranchFromFirebase(companyId: String, branchId: String) {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("providers")
+            .document(uid)
+            .collection("companies")
+            .document(companyId)
+            .collection("branches")
+            .document(branchId)
+            .delete()
+            .await()
+        Log.d(TAG, "✅ [REMOTO] Sucursal $branchId eliminada de Firestore.")
+    }
+
+    suspend fun deleteEmployeeFromFirebase(companyId: String, branchId: String, employeeId: String) {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("providers")
+            .document(uid)
+            .collection("companies")
+            .document(companyId)
+            .collection("branches")
+            .document(branchId)
+            .collection("employees")
+            .document(employeeId)
+            .delete()
+            .await()
+        Log.d(TAG, "✅ [REMOTO] Empleado $employeeId eliminado de Firestore.")
+    }
+
+    suspend fun deleteCompanyFromFirebase(companyId: String) {
+        val uid = auth.currentUser?.uid ?: return
+        firestore.collection("providers")
+            .document(uid)
+            .collection("companies")
+            .document(companyId)
+            .delete()
+            .await()
+        Log.d(TAG, "✅ [REMOTO] Empresa $companyId eliminada de Firestore.")
+    }
+
     fun searchProviders(query: String): Flow<List<ProviderEntity>> = providerDao.searchProviders("%$query%")
-    
     fun getAllProviders(): Flow<List<ProviderEntity>> = providerDao.getAllProviders()
-    
     suspend fun providerExists(id: String): Boolean = providerDao.providerExists(id)
 }

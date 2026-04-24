@@ -141,7 +141,6 @@ fun PerfilUsuarioScreen(
                 "save_profile" -> viewModel.saveProfile()
                 "cancel_edit" -> viewModel.setEditMode(false)
                 "add_company" -> { editMode = EditMode.Company(CompanyClient()) }
-                "add_location" -> { editMode = EditMode.PersonalAddress(null) }
             }
         }
     }
@@ -859,54 +858,6 @@ fun PersonalM3Section(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // --- TARJETA 2: DIRECCIONES PERSONALES ---
-        Box(modifier = Modifier.fillMaxWidth().background(Color(0xFF16161D)).padding(vertical = 24.dp)) {
-            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("DIRECCIONES PERSONALES", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
-                    if (isEditMode) {
-                        IconButton(onClick = { onEditRequest(EditMode.PersonalAddress(null)) }) {
-                            Icon(Icons.Default.Add, null, tint = GeminiAccentLocal)
-                        }
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-
-                val addresses = if (isEditMode) uiState.personalAddresses else user.personalAddresses
-                if (addresses.isNotEmpty()) {
-                    addresses.forEach { addr ->
-                        // --- [MODIFICADO] Usando nueva tarjeta estilo Maps Android 16 ---
-                        MapsStyleAddressCardLocal(
-                            address = addr,
-                            isEditMode = isEditMode,
-                            onEdit = { onEditRequest(EditMode.PersonalAddress(addr)) },
-                            onDelete = {
-                                onRequestDelete("Eliminar Dirección", "¿Estás seguro que deseas eliminar esta dirección?") {
-                                    val current = uiState.personalAddresses.toMutableList()
-                                    current.remove(addr)
-                                    onUpdatePersonalAddresses(current)
-                                }
-                            },
-                            onMapsClick = {
-                                try {
-                                    val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(addr.fullString())}")
-                                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                                    context.startActivity(mapIntent)
-                                } catch (e: Exception) {}
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                } else if (isEditMode) {
-                    Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
-                        Text("No hay direcciones cargadas", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-        }
     }
 }
 

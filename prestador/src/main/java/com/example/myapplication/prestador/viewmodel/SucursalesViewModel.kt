@@ -84,7 +84,9 @@ class SucursalesViewModel @Inject constructor(
         calle: String?,
         numero: String?,
         cp: String?,
-        horario: String?
+        horario: String?,
+        lat: Double? = null,
+        lng: Double? = null
     ) {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
@@ -106,7 +108,9 @@ class SucursalesViewModel @Inject constructor(
                         numero = numero ?: "",
                         localidad = localidad ?: "",
                         provincia = provincia ?: "",
-                        codigoPostal = cp ?: ""
+                        codigoPostal = cp ?: "",
+                        latitude = lat,
+                        longitude = lng
                     ),
                     hasPhysicalLocation = true
                 )
@@ -164,12 +168,20 @@ class SucursalesViewModel @Inject constructor(
                 val currentProvider = providerRepository.getProviderByIdOnce(providerId)
                     ?: throw Exception("Perfil no encontrado")
 
+                val companyId = currentProvider.companies
+                    .firstOrNull { c -> c.branches.any { it.id == sucursalId } }?.id
+
                 val updatedCompanies = currentProvider.companies.map { company ->
                     company.copy(branches = company.branches.filter { it.id != sucursalId })
                 }
 
                 val updatedProvider = currentProvider.copy(companies = updatedCompanies)
+                // 1. Room + Firebase (upsert del provider actualizado)
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+                // 2. Borrar el documento de la sucursal en Firebase
+                if (companyId != null) {
+                    providerRepository.deleteBranchFromFirebase(companyId, sucursalId)
+                }
 
                 _uiState.value = UiState.Success("Sucursal eliminada correctamente")
             } catch (e: Exception) {
@@ -177,6 +189,7 @@ class SucursalesViewModel @Inject constructor(
             }
         }
     }
+
 
     /**
      * Gestiona el equipo de trabajo de una sucursal.
@@ -219,13 +232,29 @@ class SucursalesViewModel @Inject constructor(
                 val currentProvider = providerRepository.getProviderByIdOnce(providerId)
                     ?: return@launch
 
+                var foundCompanyId: String? = null
+                var foundBranchId: String? = null
+                currentProvider.companies.forEach { company ->
+                    company.branches.forEach { branch ->
+                        if (branch.employees.any { it.id == employeeId }) {
+                            foundCompanyId = company.id
+                            foundBranchId = branch.id
+                        }
+                    }
+                }
+
                 val updatedCompanies = currentProvider.companies.map { company ->
                     company.copy(branches = company.branches.map { branch ->
                         branch.copy(employees = branch.employees.filter { it.id != employeeId })
                     })
                 }
 
+                // 1. Room + Firebase (upsert)
                 providerRepository.syncProviderWithFirebase(currentProvider.copy(companies = updatedCompanies).toDomain())
+                // 2. Borrar el documento del empleado en Firebase
+                if (foundCompanyId != null && foundBranchId != null) {
+                    providerRepository.deleteEmployeeFromFirebase(foundCompanyId!!, foundBranchId!!, employeeId)
+                }
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "Error al eliminar miembro")
             }
