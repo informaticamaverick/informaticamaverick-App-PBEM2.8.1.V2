@@ -130,6 +130,7 @@ fun EditProfileScreenUnified(
     var direccionEmpresa by remember { mutableStateOf("") }
     var empresaGuardadaTrigger by remember { mutableStateOf(0) }
     var pendingEmpresaRefresh by remember { mutableStateOf(false) }
+    var showPriorizarEmpresaDialog by remember { mutableStateOf(false) }
     var serviceType by remember { mutableStateOf(ServiceType.TECHNICAL) }
     var horarioLocal by remember { mutableStateOf("") }
     var horarioCasaCentral by remember { mutableStateOf("") }
@@ -151,7 +152,10 @@ fun EditProfileScreenUnified(
             email = p.email ?: ""
             phone = p.phone ?: ""
             dniCuit = p.dniCuit ?: ""
-            imageUrl = p.imageUrl ?: ""
+            val gPhoto = com.google.firebase.auth.FirebaseAuth.getInstance()
+                .currentUser?.photoUrl?.toString() ?: ""
+            imageUrl = if (p.imageUrl.isNullOrBlank()) gPhoto else
+                p.imageUrl!!
             bannerImageUrl = p.bannerImageUrl ?: ""
             description = p.description ?: ""
             profesion = p.profesion ?: ""
@@ -612,43 +616,62 @@ fun EditProfileScreenUnified(
 
                             item { Spacer(modifier = Modifier.height(16.dp)) }
 
+                            // Tipo de servicio
                             item {
-                                ServiceConfigSection(
-                                        atencionUrgencias = atencionUrgencias,
-                                        onAtencionUrgenciasChange = { atencionUrgencias = it },
-                                        vaDomicilio = vaDomicilio,
-                                        onVaDomicilioChange = { vaDomicilio = it },
-                                        envios = envios,
-                                        onEnviosChange = { envios = it },
-                                        turnosEnLocal = turnosEnLocal,
-                                        onTurnosEnLocalChange = { turnosEnLocal = it },
-                                        direccionLocal = direccionLocal,
-                                        onDireccionLocalChange = { direccionLocal = it },
-                                        provinciaLocal = provinciaLocal,
-                                        onProvinciaLocalChange = { provinciaLocal = it },
-                                        codigoPostalLocal = codigoPostalLocal,
-                                        onCodigoPostalLocalChange = { codigoPostalLocal = it },
-                                        horarioLocal = horarioLocal,
-                                        onHorarioLocalChange = { horarioLocal = it },
-                                        serviceType = serviceType,
-                                        onServiceTypeClick = { showServiceTypeDialog = true },
-                                        doesService = doesService,
-                                        onDoesServiceChange = { value ->
-                                            doesService = value
-                                            viewModel.updateProfile(doesService = value)
-                                        },
-                                        doesProduct = doesProduct,
-                                        onDoesProductChange = { value ->
-                                            doesProduct = value
-                                            viewModel.updateProfile(doesProduct = value)
-                                        },
-                                        providerId = providerId,
-                                        isEmpresaMode = false,
-                                        direccionEmpresa = "",
-                                        expanded = expandedSection == "services",
-                                        onExpandChange = { expandedSection = if (expandedSection == "services") null else "services" },
-                                        colors = colors
-                                    )
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
+                                    elevation = CardDefaults.cardElevation(2.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(colors.primaryOrange.copy(alpha = 0.15f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Icons.Default.Settings, null, Modifier.size(20.dp), tint = colors.primaryOrange)
+                                            }
+                                            Spacer(Modifier.width(10.dp))
+                                            Text("Tipo de servicio", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colors.textPrimary)
+                                        }
+                                        Spacer(Modifier.height(12.dp))
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = colors.primaryOrange.copy(alpha = 0.1f),
+                                            onClick = { showServiceTypeDialog = true }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = when (serviceType) {
+                                                        ServiceType.TECHNICAL -> Icons.Default.Build
+                                                        ServiceType.PROFESSIONAL -> Icons.Default.CalendarMonth
+                                                        ServiceType.RENTAL -> Icons.Default.Stadium
+                                                        ServiceType.OTHER -> Icons.Default.MoreHoriz
+                                                    },
+                                                    contentDescription = null,
+                                                    tint = colors.primaryOrange,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text("Tipo de servicio", fontSize = 12.sp, color = colors.textSecondary)
+                                                    Text(serviceType.displayName, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = colors.primaryOrange)
+                                                }
+                                                Icon(Icons.Default.Edit, "Cambiar", tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             item { Spacer(modifier = Modifier.height(16.dp)) }
@@ -840,6 +863,8 @@ fun EditProfileScreenUnified(
                                                     workingHours = horario,
                                                     employees = existingBranch?.employees ?: emptyList()
                                                 )
+                                                //Preservar sucursales existentes (todo excepto casa central)
+                                                val sucursaleExistentes = existingCompany?.branches?.drop(1) ?: emptyList()
                                                 val company = CompanyProvider(
                                                     id = existingCompany?.id ?: java.util.UUID.randomUUID().toString(),
                                                     name = nombre,
@@ -847,14 +872,23 @@ fun EditProfileScreenUnified(
                                                     cuit = cuit,
                                                     categories = cats,
                                                     photoUrl = existingCompany?.photoUrl,
-                                                    branches = listOf(branch)
+                                                    branches = listOf(branch) + sucursaleExistentes
                                                 )
                                                 // Guardar empresa con foto en una sola operación (evita race condition)
                                                 viewModel.addCompany(company, pendingUri)
+                                                // Solo mostrar diálogo si es la primera vez que crea la empresa
+                                                if (existingCompany == null) {
+                                                    showPriorizarEmpresaDialog = true
+                                                }
                                             },
                                             categoriesEmpresa = currentProvider?.companies?.firstOrNull()?.categories ?: emptyList(),
                                             categoriasPrestador = try { val arr = org.json.JSONArray(categorias); (0 until arr.length()).map { arr.getString(it) } } catch (e: Exception) { emptyList() },
-                                            onEliminar = null,
+                                            onEliminar = firstCompany?.let { company ->
+                                                {
+                                                    viewModel.removeCompany(company.id)
+                                                    tieneEmpresa = false
+                                                }
+                                            },
                                             extraContent = {
                                                 val team = firstBranch?.employees ?: emptyList()
                                                 val referentesLegacy = team.map { emp ->
@@ -909,6 +943,7 @@ fun EditProfileScreenUnified(
                                                 scope.launch {
                                                     snackbarHostState.showSnackbar("✅ Sucursal guardada correctamente")
                                                 }
+                                                viewModel.loadProfile()
                                             }
                                         )
 
@@ -1128,6 +1163,32 @@ fun EditProfileScreenUnified(
                 ) {
                     Text("Entendido")
                 }
+            }
+        )
+    }
+
+    if (showPriorizarEmpresaDialog) {
+        AlertDialog(
+            onDismissRequest = { showPriorizarEmpresaDialog = false },
+            icon = {
+                Icon(Icons.Default.Business, contentDescription = null, tint = colors.primaryOrange)
+            },
+            title = { Text("¿Perfil principal?", color = colors.textPrimary) },
+            text = { Text("¿Querés que tu empresa aparezca como perfil principal cuando los usuarios te busquen?", color = colors.textSecondary) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateProfile(priorizarEmpresa = true)
+                        showPriorizarEmpresaDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange)
+                ) { Text("Sí, mi empresa") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    viewModel.updateProfile(priorizarEmpresa = false)
+                    showPriorizarEmpresaDialog = false
+                }) { Text("No, yo como prestador") }
             }
         )
     }

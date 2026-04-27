@@ -64,7 +64,7 @@ import com.example.myapplication.prestador.data.local.Converters
         NotificacionEntity::class,
 
    ],
-    version = 38,
+    version = 39,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

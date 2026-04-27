@@ -583,7 +583,7 @@ fun ProfessionalDataSection(
             colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            Text("Guardar datos profecionales", fontSize = 13.sp)
+            Text("Guardar datos profesionales", fontSize = 13.sp)
         }
     }
 }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -37,6 +38,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import androidx.room.util.TableInfo
 import coil.compose.AsyncImage
 import com.example.myapplication.prestador.data.model.BranchProvider
@@ -58,7 +61,28 @@ fun ProfileScreen(
     val profileState by viewModel.profileState.collectAsState()
     val provider = (profileState as? ProfileState.Success)?.provider
     val listState = rememberLazyListState()
-    var showCompanyView by remember { mutableStateOf(false) }
+    var showCompanyView by remember(provider) { mutableStateOf(
+        provider?.priorizarEmpresa == true && provider.companies.isNotEmpty()
+    )
+    }
+    var showServicioProviderDialog by remember { mutableStateOf(false) }
+    var editProviderDoesService by remember(provider) { mutableStateOf(provider?.doesService ?: false) }
+    var editProviderDoesProduct by remember(provider) { mutableStateOf(provider?.doesProduct ?: false) }
+
+    var editProviderWorks24h by remember(provider) { mutableStateOf(provider?.atencionUrgencias ?: false) }
+    var editProviderTurnosLocal by remember(provider) {
+        mutableStateOf(provider?.turnosEnLocal ?: false) }
+    var editProviderVaDomicilio by remember(provider) {
+        mutableStateOf(provider?.vaDomicilio ?: false) }
+    var editProviderEnvios by remember(provider) {
+        mutableStateOf(provider?.envios ?: false) }
+    var editProviderAcceptsTurnos by remember(provider) {
+        mutableStateOf(provider?.acceptsAppointments ?: false) }
+    // Local/taller
+    var localDireccion by remember(provider) { mutableStateOf(provider?.direccionLocal ?: "") }
+    var localProvincia by remember(provider) { mutableStateOf(provider?.provinciaLocal ?: "") }
+    var localCp by remember(provider) { mutableStateOf(provider?.codigoPostalLocal ?: "") }
+    var localHorario by remember(provider) { mutableStateOf(provider?.horarioLocal ?: "") }
 
     val topBarAlpha by animateFloatAsState(
         targetValue = (listState.firstVisibleItemScrollOffset.toFloat() / 250f).coerceIn(0f, 1f),
@@ -193,8 +217,11 @@ fun ProfileScreen(
                         Spacer(Modifier.height(8.dp))
                     }
                     // Direcciones
-                    val todasDirecciones = listOfNotNull(provider.address) +
-                        provider.addresses.filter { it.id != "principal" }
+                    val todasDirecciones = (listOfNotNull(provider.address)
+                            +
+                            provider.addresses.filter { it.id != "principal" })
+                        .distinctBy { it.fullString() }
+
                     todasDirecciones.forEachIndexed { index, addr ->
                         ProfileInfoRow(
                             "📍",
@@ -252,25 +279,84 @@ fun ProfileScreen(
             }
 
             //-5 Servicios activos
-            val activeServices = buildList<Pair<ImageVector, String>> {
-                if (provider.doesService) add(Icons.Default.Build to "Realiza servicios")
-                if (provider.doesProduct)         add(Icons.Default.ShoppingBag   to "Vende productos")
-                if (provider.acceptsAppointments) add(Icons.Default.CalendarMonth  to "Acepta turnos")
-                if (provider.vaDomicilio)         add(Icons.Default.DirectionsCar  to "Atención a domicilio")
-                if (provider.envios)              add(Icons.Default.LocalShipping  to "Realiza envíos")
-                if (provider.atencionUrgencias)   add(Icons.Default.Warning        to "Urgencias 24hs")
-                if (provider.turnosEnLocal)       add(Icons.Default.Store          to "Atención en local")
-                if (provider.trabajaConOtros)     add(Icons.Default.Group          to "Trabaja con equipo")
-            }
-            if (activeServices.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(12.dp))
-                    ProfileSectionCard(Icons.Default.Build, "Servicios", Color(0xFF3B82F6), colors) {
+            val allServices = listOf(
+                Triple(Icons.Default.Build,         "Realiza servicios",
+                    editProviderDoesService),
+                Triple(Icons.Default.ShoppingBag,   "Vende productos",
+                    editProviderDoesProduct),
+                Triple(Icons.Default.CalendarMonth, "Acepta turnos",
+                    editProviderAcceptsTurnos),
+                Triple(Icons.Default.DirectionsCar, "Atención a domicilio",
+                    editProviderVaDomicilio),
+                Triple(Icons.Default.LocalShipping, "Realiza envíos",
+                    editProviderEnvios),
+                Triple(Icons.Default.Warning,       "Urgencias 24hs",
+                    editProviderWorks24h),
+                Triple(Icons.Default.Store,         "Atención en local",
+                    editProviderTurnosLocal),
+                Triple(Icons.Default.Group,         "Trabaja con equipo",
+                    provider.trabajaConOtros)
+            )
+            val activeServices = allServices.filter { it.third }
+            item {
+                Spacer(Modifier.height(12.dp))
+                if (showServicioProviderDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showServicioProviderDialog = false },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    viewModel.updateProfile(
+                                        doesService = editProviderDoesService,
+                                        doesProduct = editProviderDoesProduct,
+                                        atencionUrgencias = editProviderWorks24h,
+                                        turnosEnLocal = editProviderTurnosLocal,
+                                        vaDomicilio = editProviderVaDomicilio,
+                                        envios = editProviderEnvios
+                                    )
+                                    showServicioProviderDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                            ) { Text("Guardar")}
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showServicioProviderDialog = false }) { Text("Cancelar") }
+                        },
+                        title = { Text("Servicios que ofrezco", fontWeight = FontWeight.Bold)},
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                BranchServicioSwitch("Realiza servicios",
+                                    Icons.Default.Build,         editProviderDoesService)    {
+                                    editProviderDoesService = it }
+                                BranchServicioSwitch("Vende productos",
+                                    Icons.Default.ShoppingBag,   editProviderDoesProduct)    {
+                                    editProviderDoesProduct = it }
+                                BranchServicioSwitch("Acepta turnos",
+                                    Icons.Default.CalendarMonth, editProviderAcceptsTurnos)  {
+                                    editProviderAcceptsTurnos = it }
+                                BranchServicioSwitch("Visitas a domicilio",
+                                    Icons.Default.DirectionsCar, editProviderVaDomicilio)    {
+                                    editProviderVaDomicilio = it }
+                                BranchServicioSwitch("Realiza envíos",
+                                    Icons.Default.LocalShipping, editProviderEnvios)         {
+                                    editProviderEnvios = it }
+                                BranchServicioSwitch("Urgencias 24hs",
+                                    Icons.Default.Warning,       editProviderWorks24h)       {
+                                    editProviderWorks24h = it }
+                                BranchServicioSwitch("Atención en local",
+                                    Icons.Default.Store,         editProviderTurnosLocal)    {
+                                    editProviderTurnosLocal = it }
+                            }
+                        }
+                    )
+                }
+                ProfileSectionCard(Icons.Default.Build, "Servicios", Color(0xFF3B82F6), colors) {
+                    if (activeServices.isNotEmpty()) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            activeServices.forEach { (icon, label) ->
+                            activeServices.forEach { (icon, label, _) ->
                                 Surface(
                                     shape = RoundedCornerShape(20.dp),
                                     color = Color(0xFF3B82F6).copy(alpha = 0.1f),
@@ -282,12 +368,323 @@ fun ProfileScreen(
                                     ) {
                                         Icon(icon, null, Modifier.size(14.dp), tint = Color(0xFF3B82F6))
                                         Spacer(Modifier.width(5.dp))
-                                        Text(
-                                            label,
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF3B82F6),
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                        Text(label, fontSize = 12.sp, color = Color(0xFF3B82F6), fontWeight = FontWeight.Medium)
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    } else {
+                        Text("No hay servicios configurados", fontSize = 13.sp, color = colors.textSecondary)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        OutlinedButton(
+                            onClick = { showServicioProviderDialog = true },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF3B82F6)),
+                            border = BorderStroke(1.dp, Color(0xFF3B82F6)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Settings, null, Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Configurar", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+            // ── 6. LOCAL / TALLER ────────────────────────────────────────
+            if (editProviderTurnosLocal) {
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    val localScope = rememberCoroutineScope()
+                    val localContext = androidx.compose.ui.platform.LocalContext.current
+                    var localEditando by remember { mutableStateOf(false) }
+                    var localGeoLoading by remember { mutableStateOf(false) }
+                    var localLocalidad by remember(provider) { mutableStateOf(provider.address?.localidad ?: "") }
+                    var localCalle by remember(provider) { mutableStateOf(provider.address?.calle ?: "") }
+                    var localNumero by remember(provider) { mutableStateOf(provider.address?.numero ?: "") }
+                    var mostrarSugerenciasProvincia by remember { mutableStateOf(false) }
+                    var mostrarSugerenciasLocalidad by remember { mutableStateOf(false) }
+                    var geocodedLat by remember { mutableStateOf<Double?>(null) }
+                    var geocodedLng by remember { mutableStateOf<Double?>(null) }
+
+                    val provinciasFiltradas = if (localProvincia.isBlank()) emptyList()
+                        else PROVINCIAS_ARGENTINA.filter { it.contains(localProvincia.trim(), ignoreCase = true) }
+                    val localidadesDeProvincia = LOCALIDADES_POR_PROVINCIA.entries
+                        .firstOrNull { it.key.equals(localProvincia.trim(), ignoreCase = true) }?.value ?: emptyList()
+                    val localidadesFiltradas = if (localLocalidad.isBlank()) localidadesDeProvincia
+                        else localidadesDeProvincia.filter { it.nombre.contains(localLocalidad.trim(), ignoreCase = true) }
+
+                    val locationPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+                    ) { granted ->
+                        if (granted) {
+                            localScope.launch {
+                                localGeoLoading = true
+                                try {
+                                    val fusedClient = com.google.android.gms.location.LocationServices
+                                        .getFusedLocationProviderClient(localContext)
+                                    @Suppress("MissingPermission")
+                                    val loc = fusedClient.lastLocation.await()
+                                    if (loc != null) {
+                                        val geocoder = android.location.Geocoder(localContext, java.util.Locale.getDefault())
+                                        @Suppress("DEPRECATION")
+                                        val addrs = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+                                        if (!addrs.isNullOrEmpty()) {
+                                            val a = addrs[0]
+                                            if (!a.thoroughfare.isNullOrBlank()) localCalle = a.thoroughfare!!
+                                            if (!a.subThoroughfare.isNullOrBlank()) localNumero = a.subThoroughfare!!
+                                            if (!a.locality.isNullOrBlank()) localLocalidad = a.locality!!
+                                            if (!a.adminArea.isNullOrBlank()) localProvincia = a.adminArea!!
+                                            if (!a.postalCode.isNullOrBlank()) localCp = a.postalCode!!
+                                            geocodedLat = loc.latitude
+                                            geocodedLng = loc.longitude
+                                        }
+                                    }
+                                } catch (_: Exception) {
+                                } finally {
+                                    localGeoLoading = false
+                                }
+                            }
+                        }
+                    }
+
+                    ProfileSectionCard(Icons.Default.Store, "Local / Taller", Color(0xFFE53935), colors) {
+                        if (!localEditando) {
+                            // Modo lectura
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val dir = listOfNotNull(
+                                    buildString {
+                                        if (localCalle.isNotBlank()) append(localCalle.trim())
+                                        if (localNumero.isNotBlank()) append(" ${localNumero.trim()}")
+                                    }.ifBlank { null },
+                                    localLocalidad.ifBlank { null },
+                                    localProvincia.ifBlank { null },
+                                    localCp.takeIf { it.isNotBlank() }?.let { "CP $it" }
+                                ).joinToString(", ")
+                                if (dir.isNotBlank()) {
+                                    ProfileInfoRow("📍", "Dirección", dir, colors)
+                                    Spacer(Modifier.height(4.dp))
+                                }
+                                if (localHorario.isNotBlank()) {
+                                    ProfileInfoRow("🕐", "Horario", localHorario, colors)
+                                    Spacer(Modifier.height(4.dp))
+                                }
+                                if (dir.isBlank() && localHorario.isBlank()) {
+                                    Text("Sin datos cargados", fontSize = 13.sp, color = colors.textSecondary)
+                                    Spacer(Modifier.height(4.dp))
+                                }
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                OutlinedButton(
+                                    onClick = { localEditando = true },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE53935)),
+                                    border = BorderStroke(1.dp, Color(0xFFE53935)),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Edit, null, Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Editar", fontSize = 12.sp)
+                                }
+                            }
+                        } else {
+                            // Modo edición
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                                // Provincia con autocomplete
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField(
+                                        value = localProvincia,
+                                        onValueChange = { localProvincia = it; mostrarSugerenciasProvincia = true },
+                                        label = "Provincia",
+                                        leadingIcon = Icons.Default.Place
+                                    )
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = mostrarSugerenciasProvincia && provinciasFiltradas.isNotEmpty(),
+                                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+                                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+                                    ) {
+                                        Surface(shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp), shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
+                                            Column {
+                                                provinciasFiltradas.take(5).forEach { prov ->
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable {
+                                                                localProvincia = prov
+                                                                mostrarSugerenciasProvincia = false
+                                                            }
+                                                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                                                    ) { Text(prov, fontSize = 13.sp) }
+                                                    HorizontalDivider()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Localidad con autocomplete (autocompleta CP)
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField(
+                                        value = localLocalidad,
+                                        onValueChange = { localLocalidad = it; mostrarSugerenciasLocalidad = true },
+                                        label = "Localidad",
+                                        leadingIcon = Icons.Default.LocationCity
+                                    )
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = mostrarSugerenciasLocalidad && localidadesFiltradas.isNotEmpty(),
+                                        enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+                                        exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+                                    ) {
+                                        Surface(shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp), shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
+                                            Column {
+                                                localidadesFiltradas.take(5).forEach { loc ->
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable {
+                                                                localLocalidad = loc.nombre
+                                                                localCp = loc.codigoPostal
+                                                                mostrarSugerenciasLocalidad = false
+                                                            }
+                                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween
+                                                    ) {
+                                                        Text(loc.nombre, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                                                        Text(loc.codigoPostal, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    }
+                                                    HorizontalDivider()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // CP
+                                com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField(
+                                    value = localCp,
+                                    onValueChange = { localCp = it },
+                                    label = "Código Postal",
+                                    leadingIcon = Icons.Default.PinDrop,
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Text
+                                )
+
+                                // Calle con botón GPS
+                                OutlinedTextField(
+                                    value = localCalle,
+                                    onValueChange = { localCalle = it },
+                                    label = { Text("Calle") },
+                                    leadingIcon = { Icon(Icons.Default.EditRoad, null, tint = colors.textSecondary) },
+                                    trailingIcon = {
+                                        if (localGeoLoading) {
+                                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = colors.primaryOrange)
+                                        } else {
+                                            IconButton(onClick = {
+                                                locationPermLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                                            }) {
+                                                Icon(Icons.Default.MyLocation, "Detectar ubicación", tint = colors.primaryOrange)
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = colors.primaryOrange,
+                                        focusedLabelColor = colors.primaryOrange,
+                                        unfocusedBorderColor = colors.border
+                                    )
+                                )
+
+                                // Número
+                                com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField(
+                                    value = localNumero,
+                                    onValueChange = { localNumero = it },
+                                    label = "Número",
+                                    leadingIcon = Icons.Default.Numbers,
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                )
+
+                                // Botón geocodificar
+                                OutlinedButton(
+                                    onClick = {
+                                        localScope.launch {
+                                            localGeoLoading = true
+                                            try {
+                                                val geocoder = android.location.Geocoder(localContext, java.util.Locale.getDefault())
+                                                val query = "$localCalle $localNumero, $localLocalidad, $localProvincia, Argentina"
+                                                @Suppress("DEPRECATION")
+                                                val results = geocoder.getFromLocationName(query, 1)
+                                                if (!results.isNullOrEmpty()) {
+                                                    val r = results[0]
+                                                    geocodedLat = r.latitude
+                                                    geocodedLng = r.longitude
+                                                    if (!r.postalCode.isNullOrBlank() && localCp.isBlank())
+                                                        localCp = r.postalCode!!
+                                                }
+                                            } catch (_: Exception) {
+                                            } finally {
+                                                localGeoLoading = false
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    border = BorderStroke(1.dp, colors.primaryOrange)
+                                ) {
+                                    Icon(Icons.Default.MyLocation, null, Modifier.size(16.dp), tint = colors.primaryOrange)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        if (geocodedLat != null) "✓ Ubicación confirmada" else "Confirmar ubicación en mapa",
+                                        fontSize = 13.sp,
+                                        color = if (geocodedLat != null) Color(0xFF4CAF50) else colors.primaryOrange
+                                    )
+                                }
+
+                                // Horario
+                                HorarioSelectorField(
+                                    horario = localHorario,
+                                    onHorarioChange = { localHorario = it }
+                                )
+
+                                // Botones Cancelar / Guardar
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedButton(
+                                        onClick = { localEditando = false },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.textSecondary),
+                                        border = BorderStroke(1.dp, colors.border)
+                                    ) { Text("Cancelar", fontSize = 12.sp) }
+                                    Button(
+                                        onClick = {
+                                            localScope.launch {
+                                                localGeoLoading = true
+                                                try {
+                                                    val fullCalle = "$localCalle $localNumero".trim()
+                                                    viewModel.updateProfile(
+                                                        turnosEnLocal = true,
+                                                        direccionLocal = fullCalle,
+                                                        provinciaLocal = localProvincia,
+                                                        codigoPostalLocal = localCp,
+                                                        horarioLocal = localHorario,
+                                                        latitud = geocodedLat,
+                                                        longitud = geocodedLng
+                                                    )
+                                                    localEditando = false
+                                                } finally {
+                                                    localGeoLoading = false
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                                        enabled = !localGeoLoading
+                                    ) {
+                                        if (localGeoLoading) {
+                                            CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                        } else {
+                                            Text("Guardar", fontSize = 12.sp)
+                                        }
                                     }
                                 }
                             }
@@ -788,48 +1185,6 @@ private fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorC
             }
         }
     }
-    // Servicios de esta sede
-    val branchServices = buildList<Pair<ImageVector, String>> {
-        if (branch.doesService)         add(Icons.Default.Build         to "Realiza servicios")
-        if (branch.doesProduct)         add(Icons.Default.ShoppingBag   to "Vende productos")
-        if (branch.acceptsAppointments) add(Icons.Default.CalendarMonth  to "Acepta turnos")
-        if (branch.doesHomeVisits)      add(Icons.Default.DirectionsCar  to "Visitas a domicilio")
-        if (branch.doesShipping)        add(Icons.Default.LocalShipping  to "Realiza envíos")
-        if (branch.works24h)            add(Icons.Default.Warning        to "Urgencias 24hs")
-        if (branch.hasPhysicalLocation) add(Icons.Default.Store          to "Atención en local")
-    }
-    if (branchServices.isNotEmpty()) {
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "SERVICIOS DE ESTA SEDE",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textSecondary,
-            letterSpacing = 0.5.sp
-        )
-        Spacer(Modifier.height(8.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            branchServices.forEach { (icon, label) ->
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = Color(0xFF8B5CF6).copy(alpha = 0.1f),
-                    border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.25f))
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Icon(icon, null, Modifier.size(13.dp), tint = Color(0xFF8B5CF6))
-                        Spacer(Modifier.width(5.dp))
-                        Text(label, fontSize = 11.sp, color = Color(0xFF8B5CF6), fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -1072,28 +1427,49 @@ private fun CompanyDetailView(
                     Spacer(Modifier.height(8.dp))
                 }
 
-                // Servicios activos + botón config
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val activeIcons = buildList<ImageVector> {
-                        if (editDoesService) add(Icons.Default.Build)
-                        if (editDoesProduct) add(Icons.Default.ShoppingBag)
-                        if (editAcceptsAppointments) add(Icons.Default.CalendarMonth)
-                        if (editDoesHomeVisits) add(Icons.Default.DirectionsCar)
-                        if (editDoesShipping) add(Icons.Default.LocalShipping)
-                        if (editWorks24h) add(Icons.Default.Warning)
-                        if (editHasPhysical) add(Icons.Default.Store)
+                // Servicios activos con etiquetas
+                val activeServices = buildList<Pair<ImageVector, String>> {
+                    if (editDoesService)         add(Icons.Default.Build         to "Realiza servicios")
+                    if (editDoesProduct)         add(Icons.Default.ShoppingBag   to "Vende productos")
+                    if (editAcceptsAppointments) add(Icons.Default.CalendarMonth  to "Acepta turnos")
+                    if (editDoesHomeVisits)      add(Icons.Default.DirectionsCar  to "Visitas a domicilio")
+                    if (editDoesShipping)        add(Icons.Default.LocalShipping  to "Realiza envíos")
+                    if (editWorks24h)            add(Icons.Default.Warning        to "Urgencias 24hs")
+                    if (editHasPhysical)         add(Icons.Default.Store          to "Atención en local")
+                }
+                if (activeServices.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "SERVICIOS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textSecondary,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        activeServices.forEach { (icon, label) ->
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color(0xFF8B5CF6).copy(alpha = 0.1f),
+                                border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.25f))
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Icon(icon, null, Modifier.size(13.dp), tint = Color(0xFF8B5CF6))
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(label, fontSize = 11.sp, color = Color(0xFF8B5CF6), fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
                     }
-                    activeIcons.forEach { icon ->
-                        Icon(
-                            icon, contentDescription = null,
-                            modifier = Modifier.size(18.dp).padding(end = 4.dp),
-                            tint = Color(0xFF8B5CF6)
-                        )
-                    }
-                    Spacer(Modifier.weight(1f))
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     IconButton(
                         onClick = { showServiciosDialog = true },
                         modifier = Modifier.size(32.dp)

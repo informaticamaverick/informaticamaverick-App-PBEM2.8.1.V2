@@ -101,6 +101,7 @@ class ProviderRepository @Inject constructor(
                 "galleryImages" to provider.galleryImages,
                 "perfil" to perfilMap,
                 "hasCompanyProfile" to provider.hasCompanyProfile,
+                "empresa.priorizarEmpresa" to provider.priorizarEmpresa,
                 "isOnline" to provider.isOnline,
                 "isSubscribed" to true, // Provisorio hasta que se desarrolle la logica del pago
                 "isVerified" to provider.isVerified,
@@ -168,7 +169,20 @@ class ProviderRepository @Inject constructor(
                         "id" to branch.id,
                         "name" to branch.name,
                         "nombre" to branch.name,
-                        "address" to branch.address,
+                        "address" to branch.address?.let { addr ->
+                            mapOf(
+                                "id" to addr.id,
+                                "calle" to addr.calle,
+                                "numero" to addr.numero,
+                                "localidad" to addr.localidad,
+                                "provincia" to addr.provincia,
+                                "pais" to addr.pais,
+                                "codigoPostal" to addr.codigoPostal,
+                                "latitude" to addr.latitude,
+                                "longitude" to addr.longitude,
+                                "direccion" to addr.fullString()
+                            )
+                        },
                         "horario" to branch.workingHours,
                         "workingHours" to branch.workingHours,
                         "galleryImages" to branch.galleryImages,
@@ -243,13 +257,19 @@ class ProviderRepository @Inject constructor(
 
     suspend fun deleteCompanyFromFirebase(companyId: String) {
         val uid = auth.currentUser?.uid ?: return
-        firestore.collection("providers")
+        val companyRef = firestore.collection("providers")
             .document(uid)
             .collection("companies")
             .document(companyId)
-            .delete()
-            .await()
-        Log.d(TAG, "✅ [REMOTO] Empresa $companyId eliminada de Firestore.")
+
+        // Borrar todas las branches de la empresa (Firestore no las borra automáticamente)
+        val branches = companyRef.collection("branches").get().await()
+        for (branch in branches.documents) {
+            branch.reference.delete().await()
+        }
+
+        companyRef.delete().await()
+        Log.d(TAG, "✅ [REMOTO] Empresa $companyId y sus branches eliminadas de Firestore.")
     }
 
     fun searchProviders(query: String): Flow<List<ProviderEntity>> = providerDao.searchProviders("%$query%")

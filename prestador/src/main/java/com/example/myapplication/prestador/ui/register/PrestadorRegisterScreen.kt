@@ -61,15 +61,21 @@ fun PrestadorRegisterScreen(
     var nombre by remember { mutableStateOf("") }
     var apellido by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
+    var profileImageUri by remember { mutableStateOf<Uri?>(null) }
+
 
     // Pre-rellenar desde Google cuando el composable arranca
     LaunchedEffect(isGoogleUser) {
         if (isGoogleUser) {
             val user = FirebaseAuth.getInstance().currentUser
             val displayName = user?.displayName ?: ""
-            nombre = displayName.substringBefore(" ").trim()
-            apellido = displayName.substringAfter(" ", "").trim()
+            nombre = displayName.substringBefore(" ", "").trim()
             email = user?.email ?: ""
+            //Foto de perfil
+            val googlePhoto = user?.photoUrl?.toString()
+            if (!googlePhoto.isNullOrBlank()) {
+                profileImageUri = android.net.Uri.parse(googlePhoto)
+            }
         }
     }
 
@@ -84,7 +90,7 @@ fun PrestadorRegisterScreen(
     var serviceType by remember { mutableStateOf(ServiceType.TECHNICAL) }
     var expandedTipoServicio by remember { mutableStateOf(false) }
     var expandedCategoria by remember { mutableStateOf(false) }
-    var profileImageUri by remember { mutableStateOf<Uri?>(null) }
+
 
 
 
@@ -118,11 +124,34 @@ fun PrestadorRegisterScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> profileImageUri = uri }
 
+    var showPriorizarDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(registerState) {
         when (registerState) {
-            is RegisterState.Success -> onRegisterSuccess()
+            is RegisterState.Success -> {
+                showPriorizarDialog = true
+            }
             else -> {}
         }
+    }
+    if (showPriorizarDialog) {
+        AlertDialog(
+            onDismissRequest = { onRegisterSuccess()},
+            title = { Text("¿Perfil principal?")},
+            text = { Text("¿Querés que tu empresa aparezca como perfil principal cuando los usuarios te busquen?")},
+            confirmButton = {
+                TextButton(onClick = { showPriorizarDialog = false
+                viewModel.setPriorizarEmpresa(true)
+                onRegisterSuccess()
+                }) { Text("Sí, mi empresa") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showPriorizarDialog = false
+                    onRegisterSuccess()
+                }) { Text("No, yo como prestador")}
+            }
+        )
     }
 
     Scaffold(

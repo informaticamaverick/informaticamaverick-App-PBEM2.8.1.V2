@@ -725,6 +725,15 @@ private fun SucursalExpandableCard(
 
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
 
+                    // — Características —
+                    BooleanosSucursalSubseccion(
+                        sucursal = sucursal,
+                        colors = colors,
+                        onUpdate = onUpdate
+                    )
+
+                    HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
+
                     // — Encargado —
                     EncargadoSubseccion(
                         encargado = encargado,
@@ -769,69 +778,15 @@ private fun DatosSubseccion(
     var editGeoLng by remember(sucursal) { mutableStateOf(direccion.longitude) }
     var editGeoResult by remember(sucursal) { mutableStateOf<String?>(null) }
     var editGeoLoading by remember { mutableStateOf(false) }
-    var showServiciosDialog by remember { mutableStateOf(false) }
-    var editDoesService by remember(sucursal) { mutableStateOf(sucursal.doesService)}
-    var editDoesProduct by remember(sucursal) { mutableStateOf(sucursal.doesProduct)}
-    var editWorks24h by remember(sucursal) { mutableStateOf(sucursal.works24h) }
-    var editHasPhysical by remember(sucursal) { mutableStateOf(sucursal.hasPhysicalLocation) }
-    var editDoesHomeVisits by remember(sucursal) { mutableStateOf(sucursal.doesHomeVisits) }
-    var editDoesShipping by remember(sucursal) { mutableStateOf(sucursal.doesShipping) }
-    var editAcceptsAppointments by remember(sucursal) { mutableStateOf(sucursal.acceptsAppointments) }
-    val context = LocalContext.current
     val editScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
-
-    if (showServiciosDialog) {
-        AlertDialog(
-            onDismissRequest = { showServiciosDialog = false },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        onUpdate(sucursal.copy(
-                            doesService = editDoesService,
-                            doesProduct = editDoesProduct,
-                            works24h = editWorks24h,
-                            hasPhysicalLocation = editHasPhysical,
-                            doesHomeVisits = editDoesHomeVisits,
-                            doesShipping = editDoesShipping,
-                            acceptsAppointments = editAcceptsAppointments
-                        ))
-                        showServiciosDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange)
-                ) { Text("Guardar")}
-            },
-            dismissButton = {
-                TextButton(onClick = { showServiciosDialog = false }) {
-                    Text("Cancelar") }
-                },
-            title =  { Text("Servicios de esta sede", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    ServicioSwitch("Realiza servicios", Icons.Default.Build, editDoesService) {editDoesService = it}
-                    ServicioSwitch("Vende productos", Icons.Default.ShoppingBag, editDoesProduct) { editDoesProduct = it }
-                    ServicioSwitch("Acepta turnos", Icons.Default.CalendarMonth, editAcceptsAppointments) { editAcceptsAppointments = it }
-                    ServicioSwitch("Visitas a domicilio", Icons.Default.DirectionsCar, editDoesHomeVisits) { editDoesHomeVisits = it }
-                    ServicioSwitch("Realiza envíos", Icons.Default.LocalShipping, editDoesShipping) { editDoesShipping = it }
-                    ServicioSwitch("Urgencias 24hs", Icons.Default.Warning, editWorks24h) { editWorks24h = it }
-                    ServicioSwitch("Atención en local", Icons.Default.Store, editHasPhysical) { editHasPhysical = it }
-                }
-            }
-        )
-    }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Business, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text("Datos de la sucursal", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         Spacer(modifier = Modifier.weight(1f))
-        IconButton(
-            onClick = { showServiciosDialog = true },
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(Icons.Default.Settings, contentDescription = "Servicios",
-                tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
-        }
         if (!editando) {
             TextButton(onClick = { editando = true}, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
@@ -1194,6 +1149,45 @@ private fun EquipoSubseccion(
                     contentPadding = PaddingValues(vertical = 6.dp)
                 ) { Text("Guardar", fontSize = 13.sp) }
             }
+        }
+    }
+}
+
+@Composable
+private fun BooleanosSucursalSubseccion(
+    sucursal: BranchProvider,
+    colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
+    onUpdate: (BranchProvider) -> Unit
+) {
+    var local by remember(sucursal) { mutableStateOf(sucursal) }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.Tune, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text("Características", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    }
+    Spacer(modifier = Modifier.height(6.dp))
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        ServicioSwitch("Ofrece servicios", Icons.Default.Build, local.doesService) {
+            local = local.copy(doesService = it); onUpdate(local)
+        }
+        ServicioSwitch("Vende productos", Icons.Default.ShoppingBag, local.doesProduct) {
+            local = local.copy(doesProduct = it); onUpdate(local)
+        }
+        ServicioSwitch("Atención 24hs", Icons.Default.AccessTime, local.works24h) {
+            local = local.copy(works24h = it); onUpdate(local)
+        }
+        ServicioSwitch("Tiene local físico", Icons.Default.Store, local.hasPhysicalLocation) {
+            local = local.copy(hasPhysicalLocation = it); onUpdate(local)
+        }
+        ServicioSwitch("Va a domicilio", Icons.Default.Home, local.doesHomeVisits) {
+            local = local.copy(doesHomeVisits = it); onUpdate(local)
+        }
+        ServicioSwitch("Hace envíos", Icons.Default.LocalShipping, local.doesShipping) {
+            local = local.copy(doesShipping = it); onUpdate(local)
+        }
+        ServicioSwitch("Acepta turnos", Icons.Default.CalendarToday, local.acceptsAppointments) {
+            local = local.copy(acceptsAppointments = it); onUpdate(local)
         }
     }
 }

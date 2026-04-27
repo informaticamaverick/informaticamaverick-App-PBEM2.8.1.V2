@@ -222,145 +222,16 @@ class PrestadorRegisterViewModel @Inject constructor(
         _registerState.value = RegisterState.Idle
     }
 
-    // =========================================================================
-    // SECCIÓN: MÉTODOS OBSOLETOS (SSOT)
-    // Se comentan para evitar duplicidad, ya que syncProviderWithFirebase
-    // maneja toda la jerarquía de forma atómica.
-    // =========================================================================
-    /*
-    private suspend fun saveCompanyAndBranches(
-        userId: String,
-        nombreNegocio: String,
-        razonSocial: String,
-        cuitNegocio: String,
-        direccionNegocio: String,
-        codigoPostalNegocio: String,
-        sucursales: List<Map<String, String>>
-    ) {
-        val companyId = UUID.randomUUID().toString()
-        val business = BusinessEntity(
-            id = companyId,
-            providerId = userId,
-            nombreNegocio = nombreNegocio,
-            razonSocial = razonSocial,
-            cuitNegocio = cuitNegocio,
-            direccion = direccionNegocio,
-            codigoPostal = codigoPostalNegocio,
-            createdAt = System.currentTimeMillis()
-        )
-        businessRepository.saveBusiness(business)
-        companiesFirestoreSync.subirCompany(business, userId)
 
-        sucursales.forEach { sucMap ->
-            val sucId = UUID.randomUUID().toString()
-            val sucursal = SucursalEntity(
-                id = sucId,
-                businessId = companyId,
-                nombre = sucMap["nombre"] ?: "Sucursal",
-                direccionId = sucMap["direccion"], // Podría ser un ID o string temporal
-                telefono = sucMap["telefono"],
-                doesService = true, // Valores por defecto para sucursal inicial
-                hasPhysicalLocation = true,
-                acceptsAppointments = true
-            )
-            sucursalRepository.saveSucursal(sucursal)
-            sucursalFirestoreSync.subirSucursal(sucursal, userId)
+
+    fun setPriorizarEmpresa(value: Boolean) {
+        viewModelScope.launch {
+            val userId = auth.currentUser?.uid ?: return@launch
+            firestore.collection("providers").document(userId)
+                .update("empresa.priorizarEmpresa", value)
+                .await()
         }
     }
-
-    private suspend fun saveProviderToRoom(
-        id: String,
-        nombre: String,
-        apellido: String,
-        email: String,
-        telefono: String,
-        mensaje: String,
-        servicios: List<String>,
-        serviceType: String,
-        dniCuit: String = "",
-        profesion: String = "",
-        matricula: String = "",
-        tieneEmpresa: Boolean = false,
-        direccion: String = "",
-        provincia: String = "",
-        codigoPostal: String = "",
-        atencionUrgencias: Boolean = false,
-        vaDomicilio: Boolean = false,
-        turnosEnLocal: Boolean = false,
-        doesService: Boolean = false,
-        doesProduct: Boolean = false
-    ) {
-        val mainAddress = AddressProvider(
-            id = "main",
-            calle = direccion,
-            numero = "",
-            localidad = "",
-            provincia = provincia,
-            pais = "Argentina",
-            codigoPostal = codigoPostal
-        )
-
-        // Obtener empresas y sucursales guardadas para ProviderEntity
-        val companiesList = if (tieneEmpresa) {
-            val businesses = businessRepository.getBusinessesByProvider(id).first()
-            businesses.map { b ->
-                val branches = sucursalRepository.getSucursalesByBusiness(b.id).first()
-                CompanyProvider(
-                    id = b.id,
-                    name = b.nombreNegocio,
-                    razonSocial = b.razonSocial,
-                    cuit = b.cuitNegocio,
-                    description = b.descripcion ?: "",
-                    branches = branches.map { s ->
-                        BranchProvider(
-                            id = s.id,
-                            name = s.nombre,
-                            address = AddressProvider(calle = s.direccionId ?: ""),
-                            doesService = s.doesService,
-                            doesProduct = s.doesProduct,
-                            works24h = s.works24h,
-                            hasPhysicalLocation = s.hasPhysicalLocation,
-                            doesHomeVisits = s.doesHomeVisits,
-                            doesShipping = s.doesShipping,
-                            acceptsAppointments = s.acceptsAppointments,
-                            rating = s.rating,
-                            galleryImages = try { org.json.JSONArray(s.galleryImages).let { arr -> (0 until arr.length()).map { arr.getString(it) } } } catch(e: Exception) { emptyList() }
-                        )
-                    }
-                )
-            }
-        } else emptyList()
-
-        val providerEntity = ProviderEntity(
-            id = id,
-            name = nombre,
-            lastName = apellido,
-            displayName = "$nombre $apellido".trim(),
-            email = email,
-            phoneNumber = telefono,
-            photoUrl = null,
-            description = mensaje,
-            cuilCuit = dniCuit,
-            profesion = profesion,
-            matricula = matricula,
-            address = mainAddress,
-            addresses = listOf(mainAddress),
-            companies = companiesList,
-            hasCompanyProfile = tieneEmpresa,
-            rating = 0f,
-            categories = servicios,
-            works24h = atencionUrgencias,
-            doesHomeVisits = vaDomicilio,
-            hasPhysicalLocation = turnosEnLocal,
-            acceptsAppointments = turnosEnLocal,
-            doesService = doesService,
-            doesProduct = doesProduct,
-            createdAt = System.currentTimeMillis()
-        )
-
-        providerDao.insertProvider(providerEntity)
-    }
-    */
 }
 
 sealed class RegisterState {
@@ -368,4 +239,7 @@ sealed class RegisterState {
     object Loading : RegisterState()
     object Success : RegisterState()
     data class Error(val message: String) : RegisterState()
+
+
 }
+

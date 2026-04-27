@@ -351,6 +351,7 @@ class EditProfileViewModel @Inject constructor(
                     
                     companies = companiesList,
                     hasCompanyProfile = bool(empresa, "tieneEmpresa"),
+                    priorizarEmpresa = bool(empresa, "priorizarEmpresa") || (doc.getBoolean("priorizarEmpresa") ?: false),
 
                     works24h = doc.getBoolean("atencionUrgencias") ?: bool(modalidad, "atencionUrgencias"),
                     doesHomeVisits = doc.getBoolean("vaDomicilio") ?: bool(modalidad, "vaDomicilio"),
@@ -461,7 +462,8 @@ class EditProfileViewModel @Inject constructor(
         doesProduct: Boolean? = null,
         categorias: String? = null,
         latitud: Double? = null,
-        longitud: Double? = null
+        longitud: Double? = null,
+        priorizarEmpresa: Boolean? = null
     ) {
         viewModelScope.launch {
             _updateState.value = UpdateState.Loading
@@ -575,6 +577,7 @@ class EditProfileViewModel @Inject constructor(
                 if (horarioLocal != null) updateData["local.horarioLocal"] = horarioLocal
 
                 if (tieneEmpresa != null) updateData["empresa.tieneEmpresa"] = tieneEmpresa
+                if (priorizarEmpresa != null) updateData["empresa.priorizarEmpresa"] = priorizarEmpresa
                 if (nombreEmpresa != null) {
                     updateData["empresa.nombreEmpresa"] = nombreEmpresa
                     updateData["empresa.razonSocial"] = nombreEmpresa

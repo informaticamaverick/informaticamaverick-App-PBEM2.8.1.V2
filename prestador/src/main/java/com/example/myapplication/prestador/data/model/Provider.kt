@@ -49,6 +49,7 @@ data class Provider(
     // --- SECCIÓN: EMPRESAS ASOCIADAS ---
     val companies: List<CompanyProvider> = emptyList(),
     val hasCompanyProfile: Boolean = false,
+    val priorizarEmpresa: Boolean = false,
 
     // --- SECCIÓN: MULTIMEDIA Y METADATOS ---
     val photoUrl: String? = null,
