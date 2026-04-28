@@ -26,11 +26,18 @@ interface ProviderDao {
     suspend fun getProviderById(providerId: String): ProviderEntity?
 
     /**
-     * Búsqueda por categoría.
+     * Búsqueda por categoría (suspend, para cache check).
      * Como "categories" se guarda como una lista serializada, usamos LIKE para búsqueda parcial.
      */
     @Query("SELECT * FROM provider_profile WHERE categories LIKE '%' || :category || '%'")
     suspend fun getProvidersByCategory(category: String): List<ProviderEntity>
+
+    /**
+     * Búsqueda por categoría como Flow (para mostrar resultados reactivos sin filtrar por CP).
+     * Usar después de sincronizar con Firestore para mostrar todos los resultados obtenidos.
+     */
+    @Query("SELECT * FROM provider_profile WHERE categories LIKE '%' || :category || '%'")
+    fun getProvidersByCategoryFlow(category: String): Flow<List<ProviderEntity>>
 
     /**
      * Obtiene un flujo de datos de un proveedor específico para observar cambios en tiempo real.

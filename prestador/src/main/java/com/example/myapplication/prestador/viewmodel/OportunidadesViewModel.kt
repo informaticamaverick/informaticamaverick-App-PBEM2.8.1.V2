@@ -5,7 +5,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
-import com.example.myapplication.prestador.data.local.dao.AppointmentDao
 import com.example.myapplication.prestador.data.local.dao.ClienteDao
 import com.example.myapplication.prestador.data.local.dao.AvailabilityScheduleDao
 import com.example.myapplication.prestador.data.local.dao.ProviderDao
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.ContextualFlowRow
 class OportunidadesViewModel @Inject constructor(
     application: Application,
     private val clienteDao: ClienteDao,
-    private val appointmentDao: AppointmentDao,
     private val availabilityScheduleDao: AvailabilityScheduleDao,
     private val providerDao: ProviderDao
 ) : AndroidViewModel(application) {
@@ -60,7 +58,6 @@ class OportunidadesViewModel @Inject constructor(
     private val auth = FirebaseAuth.getInstance()
     private var listenerRegistration: ListenerRegistration? = null
     private var idsYaVistos = mutableSetOf<String>()
-    private val _proximaCita = MutableStateFlow<com.example.myapplication.prestador.data.local.entity.AppointmentEntity?>(null)
     private val _restriccionHorario = MutableStateFlow<String?>(null)
     private val _restriccionDistacia = MutableStateFlow<String?>(null)
     private val _restriccionSolicitudActiva = MutableStateFlow<String?>(null)
@@ -72,7 +69,6 @@ class OportunidadesViewModel @Inject constructor(
 
     val restriccionCitaEnCurso: StateFlow<String?> = _restriccionCitaEnCurso
     val restriccionDistancia: StateFlow<String?> = _restriccionDistacia
-    val proximaCita: StateFlow<com.example.myapplication.prestador.data.local.entity.AppointmentEntity?> = _proximaCita
 
     companion object{
         const val DISTANCIA_MAXIMA_KM = 20.0
@@ -103,19 +99,6 @@ class OportunidadesViewModel @Inject constructor(
         viewModelScope.launch {
             clienteDao.getAllClientes().collect {
                 _clientes.value = it
-            }
-        }
-        // Verificar si ya hay un trabajo FAST activo al iniciar (ej: app reiniciada)
-        viewModelScope.launch {
-            val fastActivo = appointmentDao.getAllAppointmentsFlow().let { flow ->
-                var lista = emptyList<com.example.myapplication.prestador.data.local.entity.AppointmentEntity>()
-                val job = viewModelScope.launch { flow.collect { lista = it } }
-                kotlinx.coroutines.delay(300)
-                job.cancel()
-                lista
-            }
-            _hayTrabajoFastActivo.value = fastActivo.any {
-                it.serviceType == "FAST" && (it.status == "confirmed" || it.status == "in_progress")
             }
         }
     }
@@ -218,32 +201,7 @@ class OportunidadesViewModel @Inject constructor(
     }
 
     private fun verificarConflicto() {
-        viewModelScope.launch {
-            val ahora = java.util.Calendar.getInstance()
-            val hoy = "%04d-%02d-%02d".format(
-                ahora.get(java.util.Calendar.YEAR),
-                ahora.get(java.util.Calendar.MONTH) + 1,
-                ahora.get(java.util.Calendar.DAY_OF_MONTH)
-            )
-
-            val minutosAhora =
-                ahora.get(java.util.Calendar.HOUR_OF_DAY) * 60 + ahora.get(java.util.Calendar.MINUTE)
-            val citas = appointmentDao.getAllAppointmentsFlow().let { flow ->
-                var lista = emptyList<com.example.myapplication.prestador.data.local.entity.AppointmentEntity>()
-                val job = viewModelScope.launch { flow.collect { lista = it } }
-                kotlinx.coroutines.delay(200)
-                job.cancel()
-                lista.filter { it.date == hoy }
-            }
-            _proximaCita.value = citas.firstOrNull { cita ->
-                if (cita.status != "pending" && cita.status != "confirmed")
-                    return@firstOrNull false
-                val partes = cita.time.split(":")
-                val minutosCita = partes[0].toInt() * 60 + partes[1].toInt()
-                val diff = minutosCita - minutosAhora
-                diff in 0..120
-            }
-        }
+        // Appointment scheduling removed
     }
 
     private fun verificarHorario() {
@@ -316,33 +274,7 @@ class OportunidadesViewModel @Inject constructor(
     }
 
     private fun verificarCitaEnCurso() {
-        viewModelScope.launch {
-            val ahora = java.util.Calendar.getInstance()
-            val hoy = "%04d-%02d-%02d".format(ahora.get(java.util.Calendar.YEAR),
-                ahora.get(java.util.Calendar.MONTH) + 1,
-                ahora.get(java.util.Calendar.DAY_OF_MONTH)
-            )
-            val minutosAhora = ahora.get(java.util.Calendar.HOUR_OF_DAY) * 60 +
-                    ahora.get(java.util.Calendar.MINUTE)
-            val citas = appointmentDao.getAllAppointmentsFlow().let {
-                flow ->
-                var lista = emptyList<com.example.myapplication.prestador.data.local.entity.AppointmentEntity>()
-                val job = viewModelScope.launch { flow.collect { lista = it } }
-                kotlinx.coroutines.delay(200)
-                job.cancel()
-                lista.filter { it.date == hoy }
-            }
-            val citaEnCurso = citas.firstOrNull { cita ->
-                if (cita.status != "pending" && cita.status != "confirmed") return@firstOrNull false
-                val partes = cita.time.split(":")
-                val inicio = partes[0].toInt() * 60 + partes[1].toInt()
-                val fin = inicio + cita.duration
-                minutosAhora in inicio..fin
-            }
-            _restriccionCitaEnCurso.value = if (citaEnCurso != null)
-                "Estás en una cita ahora (${citaEnCurso.service})"
-            else null
-        }
+        _restriccionCitaEnCurso.value = null
     }
 
     private fun expirarSolicitudesViejas(lista: List<OportunidadItem>) {
@@ -381,31 +313,6 @@ class OportunidadesViewModel @Inject constructor(
                     .update(mapOf("estado" to "aceptada", "prestadorId" to prestadorId))
                     .await()
 
-                //Crear appointment en Room para que aparezca en "Tu proximo servicio"
-                val ahora = java.util.Calendar.getInstance()
-                val hoy = "%04d-%02d-%02d".format(
-                    ahora.get(java.util.Calendar.YEAR),
-                    ahora.get(java.util.Calendar.MONTH) + 1,
-                    ahora.get(java.util.Calendar.DAY_OF_MONTH)
-                )
-                val hora = "%02d:%02d".format(
-                    ahora.get(java.util.Calendar.HOUR_OF_DAY),
-                    ahora.get(java.util.Calendar.MINUTE)
-                )
-                val appointment = com.example.myapplication.prestador.data.local.entity.AppointmentEntity(
-                    id = "fast_${oportunidad.id}",
-                    clientId = oportunidad.clienteId,
-                    clientName = oportunidad.clienteNombre,
-                    providerId = prestadorId,
-                    service = oportunidad.titulo,
-                    date = hoy,
-                    time = hora,
-                    duration = 60,
-                    status = "confirmed",
-                    notes = oportunidad.descripcion,
-                    serviceType = "FAST"
-                )
-                appointmentDao.insertAppointment(appointment)
                 _mensajeAceptar.value = "⚡ ¡Trabajo Fast aceptado! Revisá tu próximo servicio."
                 cargarOportunidades()
             } catch (e: Exception) {
@@ -419,18 +326,6 @@ class OportunidadesViewModel @Inject constructor(
     fun completarTrabajoFast(appointmentId: String) {
         viewModelScope.launch {
             try {
-                // Actualizar estado en Room
-                val appointments = appointmentDao.getAllAppointmentsFlow().let { flow ->
-                    var lista = emptyList<com.example.myapplication.prestador.data.local.entity.AppointmentEntity>()
-                    val job = viewModelScope.launch { flow.collect { lista = it } }
-                    kotlinx.coroutines.delay(200)
-                    job.cancel()
-                    lista
-                }
-                val appointment = appointments.firstOrNull { it.id == appointmentId }
-                if (appointment != null) {
-                    appointmentDao.insertAppointment(appointment.copy(status = "completed"))
-                }
                 // Actualizar estado en Firestore
                 val firestoreId = appointmentId.removePrefix("fast_")
                 firestore.collection("solicitudes_fast")

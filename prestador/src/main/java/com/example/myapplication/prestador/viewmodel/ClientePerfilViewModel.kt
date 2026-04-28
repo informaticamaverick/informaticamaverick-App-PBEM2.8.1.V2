@@ -3,8 +3,6 @@ package com.example.myapplication.prestador.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.local.dao.AppointmentDao
-import com.example.myapplication.prestador.data.local.entity.AppointmentEntity
 import com.example.myapplication.prestador.data.model.ClienteDireccion
 import com.example.myapplication.prestador.data.model.ClienteEmpresa
 import com.example.myapplication.prestador.data.model.ClienteProfile
@@ -21,15 +19,13 @@ import javax.inject.Inject
 data class ClientePerfilUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
-    val profile: ClienteProfile = ClienteProfile(),
-    val appointments: List<AppointmentEntity> = emptyList()
+    val profile: ClienteProfile = ClienteProfile()
 )
 
 @HiltViewModel
 class ClientePerfilViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    private val firestore: FirebaseFirestore,
-    private val appointmentDao: AppointmentDao
+    private val firestore: FirebaseFirestore
 ) : ViewModel() {
 
     private val clientId: String = checkNotNull(savedStateHandle["clientId"])
@@ -39,7 +35,6 @@ class ClientePerfilViewModel @Inject constructor(
 
     init {
         loadClienteProfile()
-        loadAppointmentHistory()
     }
 
     private fun loadClienteProfile() {
@@ -163,14 +158,6 @@ class ClientePerfilViewModel @Inject constructor(
                     isLoading = false,
                     error = "Error al cargar el perfil: ${e.message}"
                 )
-            }
-        }
-    }
-
-    private fun loadAppointmentHistory() {
-        viewModelScope.launch {
-            appointmentDao.getAppointmentsByClient(clientId).collect { list ->
-                _uiState.value = _uiState.value.copy(appointments = list)
             }
         }
     }

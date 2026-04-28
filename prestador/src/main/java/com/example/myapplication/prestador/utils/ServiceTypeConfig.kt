@@ -72,7 +72,7 @@ fun getServiceTypeConfig(serviceType: ServiceType): ServiceTypeConfig {
             cancelAction = "Cancelar Servicio",
             confirmAction = "Confirmar Servicio",
             calendarTitle = "Mis Servicios",
-            createDialogTitle = "Nuevo Servicio",
+            createDialogTitle = "Agendar Cita",
             detailsDialogTitle = "Detalles del Servicio",
             notificationAcceptedMessage = { clientName -> "$clientName aceptó el servicio" },
             notificationRejectedMessage = { clientName, reason -> "$clientName rechazó el servicio: $reason" },

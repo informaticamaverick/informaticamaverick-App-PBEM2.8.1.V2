@@ -34,7 +34,8 @@ data class ProviderEntity(
     val addresses: List<AddressProvider> = emptyList(), // Soporte para más de 1 dirección
     val address: AddressProvider? = null, // Dirección principal (compatibilidad)
     val companies: List<CompanyProvider> = emptyList(), 
-    val hasCompanyProfile: Boolean = false, 
+    val hasCompanyProfile: Boolean = false,
+    val priorizarEmpresa: Boolean = false,
 
     // --- SECCIÓN: CARACTERÍSTICAS Y BOOLEANOS ---
     val doesService: Boolean = false, 
@@ -100,6 +101,7 @@ data class ProviderEntity(
             description = description,
             companies = companies,
             hasCompanyProfile = hasCompanyProfile,
+            priorizarEmpresa = priorizarEmpresa,
             photoUrl = photoUrl,
             bannerImageUrl = bannerImageUrl,
             galleryImages = galleryImages,
@@ -145,6 +147,7 @@ data class ProviderEntity(
                 description = provider.description,
                 companies = provider.companies,
                 hasCompanyProfile = provider.hasCompanyProfile,
+                priorizarEmpresa = provider.priorizarEmpresa,
                 photoUrl = provider.photoUrl,
                 bannerImageUrl = provider.bannerImageUrl,
                 galleryImages = provider.galleryImages,

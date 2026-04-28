@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.example.myapplication.prestador.data.local.entity.AppointmentEntity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -138,8 +137,7 @@ private fun ClientePerfilContent(
         item {
             ClienteInfoSection(
                 phone = profile.phoneNumber,
-                email = profile.email,
-                appointments = uiState.appointments
+                email = profile.email
             )
         }
         if (profile.bio.isNotBlank()) {
@@ -155,7 +153,7 @@ private fun ClientePerfilContent(
             item { ClienteEmpresasSection(companies = profile.companies) }
         }
         item {
-            ClienteAppointmentsSection(appointments = uiState.appointments)
+            ClienteAppointmentsSection()
         }
     }
 }
@@ -264,18 +262,10 @@ private fun ClienteBadge(icon: ImageVector, label: String, color: Color) {
 }
 
 @Composable
-private fun ClienteInfoSection(phone: String, email: String, appointments: List<AppointmentEntity>) {
+private fun ClienteInfoSection(phone: String, email: String) {
     val colors = getPrestadorColors()
 
-    // "Cliente desde" = fecha del primer turno confirmado o completado
-    val clienteSdesde = remember(appointments) {
-        val first = appointments
-            .filter { it.status == "confirmado" || it.status == "completo" }
-            .minByOrNull { it.createdAt }
-        if (first != null)
-            SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(first.createdAt))
-        else ""
-    }
+    val clienteSdesde = ""
 
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -509,8 +499,9 @@ private fun EmpresaColapsable(
 }
 
 @Composable
-private fun ClienteAppointmentsSection(appointments: List<AppointmentEntity>) {
+private fun ClienteAppointmentsSection() {
     val colors = getPrestadorColors()
+    val appointments = emptyList<Any>()
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
@@ -525,7 +516,7 @@ private fun ClienteAppointmentsSection(appointments: List<AppointmentEntity>) {
                 Spacer(modifier = Modifier.weight(1f))
                 Surface(shape = CircleShape, color = Color(0xFFF97316).copy(alpha = 0.15f)) {
                     Text(
-                        text = appointments.size.toString(),
+                        text = "0",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFF97316),
@@ -534,56 +525,7 @@ private fun ClienteAppointmentsSection(appointments: List<AppointmentEntity>) {
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            if (appointments.isEmpty()) {
-                Text(text = "Sin citas registradas", fontSize = 14.sp, color = colors.textSecondary)
-            } else {
-                appointments.take(5).forEach { apt ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier.size(8.dp).background(
-                                color = when (apt.status) {
-                                    "CONFIRMED" -> Color(0xFF10B981)
-                                    "CANCELLED" -> colors.error
-                                    "COMPLETED" -> Color(0xFF3B82F6)
-                                    else -> Color(0xFFF59E0B)
-                                },
-                                shape = CircleShape
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = apt.service, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
-                            Text(text = "${apt.date} ${apt.time}", fontSize = 11.sp, color = colors.textSecondary)
-                        }
-                        Text(
-                            text = when (apt.status) {
-                                "CONFIRMED" -> "Confirmada"
-                                "CANCELLED" -> "Cancelada"
-                                "COMPLETED" -> "Completada"
-                                else -> "Pendiente"
-                            },
-                            fontSize = 11.sp,
-                            color = when (apt.status) {
-                                "CONFIRMED" -> Color(0xFF10B981)
-                                "CANCELLED" -> colors.error
-                                "COMPLETED" -> Color(0xFF3B82F6)
-                                else -> Color(0xFFF59E0B)
-                            }
-                        )
-                    }
-                }
-                if (appointments.size > 5) {
-                    Text(
-                        text = "+ ${appointments.size - 5} citas más",
-                        fontSize = 12.sp,
-                        color = colors.textSecondary,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
+            Text(text = "Sin citas registradas", fontSize = 14.sp, color = colors.textSecondary)
         }
     }
 }

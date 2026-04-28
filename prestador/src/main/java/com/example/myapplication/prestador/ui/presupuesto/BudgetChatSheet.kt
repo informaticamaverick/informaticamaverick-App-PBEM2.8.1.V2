@@ -28,7 +28,6 @@ import com.example.myapplication.prestador.data.local.entity.ClienteEntity
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager
 import com.example.myapplication.prestador.viewmodel.PresupuestoViewModel
 import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.ProfileState

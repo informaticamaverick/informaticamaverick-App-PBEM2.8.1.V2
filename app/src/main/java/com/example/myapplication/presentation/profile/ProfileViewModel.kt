@@ -199,7 +199,53 @@ class ProfileViewModel @Inject constructor(
     fun onZipCodeChange(value: String) = _uiState.update { it.copy(zipCode = value, error = null) }
 
     // --- MANEJO DE DIRECCIONES ---
-    fun updatePersonalAddresses(newList: List<AddressClient>) = _uiState.update { it.copy(personalAddresses = newList) }
+    fun updatePersonalAddresses(newList: List<AddressClient>) {
+        _uiState.update { it.copy(personalAddresses = newList) }
+        // Auto-guardar en Firebase inmediatamente para no perder la dirección
+        savePersonalAddressesToFirebase(newList)
+    }
+
+    private fun savePersonalAddressesToFirebase(addresses: List<AddressClient>) {
+        val uid = auth.currentUser?.uid ?: return
+        viewModelScope.launch {
+            try {
+                val addressesMapped = addresses.map { addr ->
+                    mapOf(
+                        "id" to addr.id,
+                        "label" to addr.label,
+                        "calle" to addr.calle,
+                        "numero" to addr.numero,
+                        "localidad" to addr.localidad,
+                        "provincia" to addr.provincia,
+                        "pais" to addr.pais,
+                        "codigoPostal" to addr.codigoPostal,
+                        "latitude" to addr.latitude,
+                        "longitude" to addr.longitude
+                    )
+                }
+                // Guardar como campo en el documento principal
+                firestore.collection("usuarios").document(uid)
+                    .update("personalAddresses", addressesMapped)
+                    .await()
+                // También guardar cada dirección en la subcolección (para refreshUserFromRemote)
+                val userDocRef = firestore.collection("usuarios").document(uid)
+                addresses.forEach { addr ->
+                    val addrMap = mapOf(
+                        "id" to addr.id, "label" to addr.label, "calle" to addr.calle,
+                        "numero" to addr.numero, "localidad" to addr.localidad,
+                        "provincia" to addr.provincia, "pais" to addr.pais,
+                        "codigoPostal" to addr.codigoPostal,
+                        "latitude" to addr.latitude, "longitude" to addr.longitude
+                    )
+                    userDocRef.collection("personalAddresses").document(addr.id)
+                        .set(addrMap, com.google.firebase.firestore.SetOptions.merge()).await()
+                }
+                Log.d("ProfileVM", "✅ Direcciones personales guardadas en Firebase (${addresses.size})")
+            } catch (e: Exception) {
+                Log.w("ProfileVM", "⚠️ No se pudo auto-guardar dirección: ${e.message}")
+            }
+        }
+    }
     
     // --- MANEJO DE CONTACTOS ADICIONALES ---
     fun updateAdditionalEmails(newList: List<String>) = _uiState.update { it.copy(additionalEmails = newList) }

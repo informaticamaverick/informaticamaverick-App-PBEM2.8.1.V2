@@ -1,6 +1,7 @@
 package com.example.myapplication.prestador.data.repository
 
 import android.util.Log
+import java.util.Collections
 import com.example.myapplication.prestador.data.local.dao.ConversationDao
 import com.example.myapplication.prestador.data.local.dao.MessageDao
 import com.example.myapplication.prestador.data.local.entity.ConversationEntity
@@ -374,6 +375,7 @@ class ChatRepository @Inject constructor(
         messageChildListener?.let { messageListenerRef?.removeEventListener(it) }
         val messagesRef = database.reference.child("chats").child(conversationId).child("messages")
         messageListenerRef = messagesRef
+        val listeningStartAt = System.currentTimeMillis()
         messageChildListener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousKey: String?) {
                 val senderId = snapshot.child("senderId").getValue(String::class.java) ?: return
@@ -462,7 +464,7 @@ class ChatRepository @Inject constructor(
                         
                         val existsInRoom = messageDao.getMessageById(msgId) != null
                         messageDao.insertMessage(msg)
-                        
+                        val isNewMessage = msg.timestamp >= listeningStartAt - 5_000
                         if (!isOwn && !existsInRoom) {
                             conversationDao.incrementUnreadCount(conversationId)
                             val senderName = conversationDao.getConversationById(conversationId)?.userName ?: senderId
@@ -657,6 +659,8 @@ class ChatRepository @Inject constructor(
 
     // ── Sincronizar conversaciones desde Firestore ─────────────────────────────
     private val userDataCache = mutableMapOf<String, Pair<String, String?>>()
+    // IDs ya detectados como fantasmas — evita que coroutines concurrentes los procesen múltiples veces
+    private val ghostsBeingDeleted = Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
 
     fun syncConversationsFromFirestore(myUserId: String) {
         firestore.collection("chats")
@@ -687,9 +691,17 @@ class ChatRepository @Inject constructor(
                         if (existing == null || !userDataCache.containsKey(otherUserId) || nameSeemsBad) {
                             val resolved = resolveParticipantData(otherUserId, freshAvatarUrl)
                             if (resolved == null) {
-                                // Usuario eliminado de Firebase → limpiar de Room y saltar
+                                // Si ya está siendo eliminado por otra coroutine, saltar
+                                if (!ghostsBeingDeleted.add(doc.id)) continue
                                 Log.w("ChatRepo", "Usuario $otherUserId no encontrado en Firebase. Eliminando conversación ${doc.id}.")
                                 conversationDao.deleteConversationById(doc.id)
+                                try {
+                                    firestore.collection("chats").document(doc.id).delete().await()
+                                    Log.w("ChatRepo", "Chat fantasma eliminado de Firestore: ${doc.id}")
+                                } catch (e: Exception) {
+                                    Log.e("ChatRepo", "Error borrando chat fantasma: ${e.message}")
+                                    ghostsBeingDeleted.remove(doc.id) // permitir reintento si falló
+                                }
                                 continue
                             }
                             displayName = resolved.first
@@ -718,6 +730,12 @@ class ChatRepository @Inject constructor(
                         )
                         
                         if (existing == null) {
+                            // Eliminar duplicado si ya existe una conv con el mismo userId pero distinto ID
+                            val duplicate = conversationDao.getConversationByUserId(otherUserId)
+                            if (duplicate != null && duplicate.conversationId != doc.id) {
+                                Log.w("ChatRepo", "Eliminando conversación duplicada: ${duplicate.conversationId} para usuario $otherUserId")
+                                conversationDao.deleteConversationById(duplicate.conversationId)
+                            }
                             conversationDao.insertConversation(conversation)
                         } else {
                             // Solo actualizar si algo relevante cambió para evitar loops de recomposición
@@ -979,4 +997,25 @@ class ChatRepository @Inject constructor(
         }
         globalRtdbListeners.clear()
     }
+
+    suspend fun deleteConversations(userIds: Set<String>) {
+        for (userId in userIds) {
+            val conversation = conversationDao.getConversationByUserId(userId) ?: continue
+            val convId = conversation.conversationId
+            //1.Borrar en Room
+            conversationDao.deleteConversationById(convId)
+            //2. Parar listener en RTDB
+            val rtdbRef = database.reference.child("chats").child(convId).child("Mensajes")
+            globalRtdbListeners[convId]?. let { rtdbRef.removeEventListener(it) }
+            globalRtdbListeners.remove(convId)
+            //3. Borrar de Firestore
+            try {
+                firestore.collection("chats").document(convId).delete().await()
+                Log.d("ChatRepo", "Conversación $convId eliminada de Firestore")
+            } catch (e: Exception) {
+                Log.e("ChatRepo", "Error borrando de Firestore: ${e.message}")
+            }
+        }
+    }
+
 }

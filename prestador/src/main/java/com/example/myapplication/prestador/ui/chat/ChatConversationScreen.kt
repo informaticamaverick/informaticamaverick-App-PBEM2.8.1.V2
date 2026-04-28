@@ -1,10 +1,15 @@
 package com.example.myapplication.prestador.ui.chat
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.content.Context
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -36,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 //import com.example.myapplication.prestador.data.PPrestadorProfileFalso
-import com.example.myapplication.prestador.data.local.entity.AppointmentEntity
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.presupuesto.BudgetItem
 import com.example.myapplication.prestador.ui.presupuesto.BudgetMiscExpense
@@ -45,7 +49,6 @@ import com.example.myapplication.prestador.ui.presupuesto.BudgetPreviewPDFDialog
 import com.example.myapplication.prestador.ui.presupuesto.BudgetService
 import com.example.myapplication.prestador.ui.presupuesto.BudgetTax
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.AppointmentViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -54,8 +57,6 @@ import com.example.myapplication.prestador.utils.displayAddress
 import com.example.myapplication.prestador.utils.displayCompanyOrFullName
 import com.example.myapplication.prestador.utils.PrestadorProfile
 import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
-import com.example.myapplication.prestador.viewmodel.EmpleadosViewModel
-import com.example.myapplication.prestador.viewmodel.RentalSpacesViewModel
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -70,10 +71,7 @@ fun ChatConversationScreen(
     providerId: String,  // Ahora es requerido, se pasa desde ChatScreen
     onBack: () -> Unit,
     onNavigateToPresupuesto: () -> Unit = {},
-    appointmentViewModel: AppointmentViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
-    rentalSpacesViewModel: RentalSpacesViewModel = hiltViewModel(),
-    empleadosViewModel: EmpleadosViewModel = hiltViewModel(),
     onNavigateToClientePerfil: () -> Unit = {}
 ){
     val context = LocalContext.current
@@ -120,9 +118,6 @@ fun ChatConversationScreen(
 
 
     val colors = getPrestadorColors()
-
-    // 🎯 OBSERVAR StateFlow inmutable del nuevo manager
-    val messagesFromManager by com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager.getMessages(userId).collectAsState(initial = emptyList())
 
     LaunchedEffect(chatId) {
         chatViewModel.loadMessagesByConversation(chatId)
@@ -192,8 +187,8 @@ fun ChatConversationScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
 
     // Con reverseLayout=true: ítem[0] = abajo. scrollToItem(0) va al mensaje más nuevo (sin animación).
-    LaunchedEffect(messagesFromManager.size) {
-        if (messagesFromManager.isNotEmpty()) {
+    LaunchedEffect(mappedMessages.size) {
+        if (mappedMessages.isNotEmpty()) {
             listState.scrollToItem(0)
         }
     }
@@ -202,11 +197,6 @@ fun ChatConversationScreen(
     var showAttachMenu by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
     var recordingTime by remember { mutableStateOf(0) }
-
-    // Estado del diálogo de agendar cita
-    var showScheduleDialog by remember { mutableStateOf(false) }
-
-    var reschedulingAppointmentId by remember { mutableStateOf<String?>(null) }
 
     // Estado del sheet de presupuesto
     var showBudgetSheet by remember { mutableStateOf(false) }
@@ -241,30 +231,7 @@ fun ChatConversationScreen(
         (profileState as? com.example.myapplication.prestador.viewmodel.ProfileState.Success)?.provider
     val providerDisplayName = provider?.displayCompanyOrFullName(businessEntity).orEmpty()
     val providerDisplayAddress = provider?.displayAddress(businessEntity).orEmpty()
-    val rentalSpaces by rentalSpacesViewModel.rentalSpaces.collectAsState()
-    val availableSpaces = remember(rentalSpaces) {
-        rentalSpaces.filter { it.isActive }.map { it.id to it.name }
-    }
-    LaunchedEffect(providerId, currentServiceType) {
-        if (currentServiceType == com.example.myapplication.prestador.data.model.ServiceType.RENTAL && providerId.isNotBlank()) {
-            rentalSpacesViewModel.setProviderId(providerId)
-        }
-    }
-    val availableSlots by appointmentViewModel.availabilitySlots.collectAsState()
-    val slotsLoading by appointmentViewModel.availabilityLoading.collectAsState()
-    val empleadosState by empleadosViewModel.uiState.collectAsState()
-    val availableEmployees = remember(empleadosState) {
-        when (val state = empleadosState) {
-            is com.example.myapplication.prestador.viewmodel.EmpleadosUiState.Success ->
-                state.empleados.filter { it.activo }.map { it.id to it.nombreCompleto() }
-
-            else -> emptyList()
-        }
-    }
-
     // Estado para guardar datos de cita temporalmente
-    var pendingAppointmentDate by remember { mutableStateOf("") }
-    var pendingAppointmentTime by remember { mutableStateOf("") }
 
     // Estados para imágenes
     var cameraImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -273,6 +240,16 @@ fun ChatConversationScreen(
     // Estados para grabación de audio
     var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var audioFilePath by remember { mutableStateOf<String?>(null) }
+
+    //Liberar MediaRecorder si el usuario sale del chat sin terminar la grabación
+    DisposableEffect(Unit) {
+        onDispose {
+            try { mediaRecorder?.stop() } catch (_: Exception) {}
+            try { mediaRecorder?.release() } catch (_: Exception) {}
+                mediaRecorder = null
+        }
+    }
+
 
     // Estado para rastrear propuestas pendientes y sus timers
     var pendingProposals by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -300,16 +277,6 @@ fun ChatConversationScreen(
         android.util.Log.d("TYPING_DEBUG", "LaunchedEffect chatId=$chatId userId=$userId")
         typingClientName = userName
         chatViewModel.observeClientTyping(chatId, userId)
-    }
-
-    // 🔄 Sincronizar el manager con los mensajes reales que vienen del ViewModel
-    LaunchedEffect(userId, mappedMessages) {
-        if (userId.isNotBlank()) {
-            com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager.syncWithRealData(
-                userId,
-                mappedMessages
-            )
-        }
     }
 
     // ⚠️ NOTA: La lógica de auto-respuesta y mensajes espontáneos
@@ -391,7 +358,19 @@ fun ChatConversationScreen(
 
     // Launcher para tomar foto con la cámara
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicture()
+        contract = object : ActivityResultContract<Uri, Boolean>() {
+            override fun createIntent(context: Context, input: Uri): Intent {
+                return Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                    putExtra(MediaStore.EXTRA_OUTPUT, input)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                }
+            }
+            override fun parseResult(resultCode: Int, intent: Intent?): Boolean
+            {
+                return resultCode == Activity.RESULT_OK
+            }
+        }
     ) { success ->
         if (success) {
             cameraImageUri = tempPhotoUri
@@ -464,25 +443,6 @@ fun ChatConversationScreen(
     ) { isGranted ->
         if (isGranted) {
             startRecording()
-        }
-    }
-
-    // Launcher para permisos de calendario
-    val calendarPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val readGranted = permissions[android.Manifest.permission.READ_CALENDAR] ?: false
-        val writeGranted = permissions[android.Manifest.permission.WRITE_CALENDAR] ?: false
-
-        if (readGranted && writeGranted) {
-            // Permisos concedidos, mostrar el diálogo
-            showScheduleDialog = true
-        } else {
-            android.widget.Toast.makeText(
-                context,
-                "Se necesitan permisos de calendario para agendar citas",
-                android.widget.Toast.LENGTH_LONG
-            ).show()
         }
     }
 
@@ -679,7 +639,7 @@ fun ChatConversationScreen(
                 ) {
 
                     items(
-                        messagesFromManager,
+                        mappedMessages,
                         key = { message -> message.id }
                     ) { message ->
                         Row(
@@ -690,20 +650,6 @@ fun ChatConversationScreen(
                             MessageBubble(
                                 message = message,
                                 isFromCurrentUser = message.isFromCurrentUser,
-                                onReschedule = {
-                                    reschedulingAppointmentId = message.appointmentId
-                                    showScheduleDialog = true
-                                },
-                                onAccept = {
-                                    com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager.updateAppointmentStatus(userId, message.appointmentId ?: message.id, "ACCEPTED")
-                                    // También notificamos al ViewModel para lógica adicional (Calendario, etc.)
-                                    chatViewModel.updateAppointmentStatus(message.id, "ACCEPTED")
-                                },
-
-                                onReject = {
-                                    com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager.updateAppointmentStatus(userId, message.appointmentId ?: message.id, "REJECTED")
-                                    chatViewModel.updateAppointmentStatus(message.id, "REJECTED")
-                                },
                                 onVerPresupuesto = if (message.type == Message.MessageType.BUDGET) {
                                     { presupuestoMsgToView = message }
                                 } else null,
@@ -859,107 +805,9 @@ fun ChatConversationScreen(
                                 showAttachMenu = false
                                 showBudgetSheet = true
                             },
-                            onScheduleClick = {
-                                showAttachMenu = false
-                                // Verificar permisos de calendario
-                                val hasReadPermission =
-                                    androidx.core.content.ContextCompat.checkSelfPermission(
-                                        context,
-                                        android.Manifest.permission.READ_CALENDAR
-                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
-                                val hasWritePermission =
-                                    androidx.core.content.ContextCompat.checkSelfPermission(
-                                        context,
-                                        android.Manifest.permission.WRITE_CALENDAR
-                                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-
-                                if (hasReadPermission && hasWritePermission) {
-                                    // Ya tiene permisos, mostrar diálogo
-                                    showScheduleDialog = true
-                                } else {
-                                    // Solicitar permisos
-                                    calendarPermissionLauncher.launch(
-                                        arrayOf(
-                                            android.Manifest.permission.READ_CALENDAR,
-                                            android.Manifest.permission.WRITE_CALENDAR
-                                        )
-                                    )
-                                }
-                            }
+                            onScheduleClick = { showAttachMenu = false }
                         )
                     }
-                }
-
-                // Diálogo de agendar cita
-                if (showScheduleDialog) {
-                    com.example.myapplication.prestador.ui.appointments.CreateAppointmentDialog(
-                        serviceType = currentServiceType,
-                        onDismiss = { showScheduleDialog = false
-                                    reschedulingAppointmentId = null },
-                        onRequestSlots = { date, duration ->
-                            if (effectiveProviderId.isNotBlank()) {
-                                println("🟠 Chat: loadAvailabilitySlots providerId=$effectiveProviderId date=$date duration=$duration")
-                                appointmentViewModel.loadAvailabilitySlots(
-                                    effectiveProviderId,
-                                    date,
-                                    duration
-                                )
-                            } else {
-                                println("🔴 Chat: providerId vacío, no se pueden cargar turnos")
-                            }
-                        },
-                        slotsRequestKey = effectiveProviderId,
-                        isSlotsLoading = slotsLoading,
-                        onConfirm = { clientName, service, date, time, duration, rentalSpaceId, scheduleId, notes, assignedEmployeeIds, peopleCount ->
-                            showScheduleDialog = false
-                            val oldId = reschedulingAppointmentId
-                            reschedulingAppointmentId = null
-                            if (oldId != null) {
-                                appointmentViewModel.cancelAppointment(oldId)
-                            }
-                            val appointmentId = "apt_${userId}_${System.currentTimeMillis()}"
-                            val newAppointment = AppointmentEntity(
-                                id = appointmentId,
-                                clientId = userId,
-                                clientName = userName,
-                                providerId = effectiveProviderId,
-                                service = service,
-                                date = date,
-                                time = time,
-                                duration = duration,
-                                status = "pending",
-                                notes = notes,
-                                serviceType = currentServiceType.name,
-                                rentalSpaceId = rentalSpaceId,
-                                scheduleId = scheduleId,
-                                assignedEmployeeIds = assignedEmployeeIds,
-                                peopleCount = peopleCount
-                            )
-                            appointmentViewModel.saveAppointment(newAppointment)
-
-                            // Enviar el mensaje de propuesta al chat real (Firestore)
-                            chatViewModel.sendAppointmentMessage(
-                                conversationId = chatId,
-                                appointmentId = appointmentId,
-                                title = service,
-                                date = date,
-                                time = time,
-                                notes = notes
-                            )
-
-                            coroutineScope.launch { listState.animateScrollToItem(0) }
-
-
-                        },
-                        colors = com.example.myapplication.prestador.ui.theme.getPrestadorColors(),
-                        availableSpaces = availableSpaces,
-                        availableSlots = availableSlots,
-                        availableEmployees = if (currentServiceType == com.example.myapplication.prestador.data.model.ServiceType.TECHNICAL)
-                            availableEmployees else emptyList(),
-                        initialClientName = userName
-                    )
-
                 }
 
                 // Sheet de presupuesto en el chat

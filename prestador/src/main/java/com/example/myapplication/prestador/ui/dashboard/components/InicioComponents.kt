@@ -1,4 +1,4 @@
-﻿package com.example.myapplication.prestador.ui.dashboard.components
+package com.example.myapplication.prestador.ui.dashboard.components
 
 import android.R
 import android.view.RoundedCorner
@@ -40,8 +40,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.room.util.TableInfo
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager
-import com.example.myapplication.prestador.viewmodel.AppointmentViewModel
 import com.example.myapplication.prestador.viewmodel.DashboardUiState
 import com.example.myapplication.prestador.viewmodel.DashboardViewModel
 import java.util.UUID
@@ -70,14 +68,14 @@ fun InicioScreen(
     onLimpiarMensaje: () -> Unit = {},
     nuevaSolicitud: OportunidadItem? = null,
     onDescartarNuevaSolicitud: () -> Unit = {},
-    proximaCita: com.example.myapplication.prestador.data.local.entity.AppointmentEntity? = null,
+    proximaCita: String? = null,
     restriccionHorario: String? = null,
     restriccionDistancia: String? = null,
     restriccionSolicitudActiva: String? = null,
     restriccionCitaEnCurso: String? = null,
     conectadoFast: Boolean = true,
-    onToggleConexionFast: () -> Unit = {},
     onNavigateToPromotionList: () -> Unit = {},
+    onToggleConexionFast: () -> Unit = {},
 ) {
     val colors = getPrestadorColors()
     val mostarFast = state.serviceType.equals("TECHNICAL", ignoreCase = true)
@@ -291,9 +289,9 @@ fun InicioScreen(
                         Text(text = if (mostarFast || state.serviceType.equals("PROFESSIONAL", ignoreCase = true)) "¡Bienvenido!" else "¡Vamos a trabajar!", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Text(
                             text = if (state.serviceType.equals("PROFESSIONAL", ignoreCase = true))
-                                "Tienes ${state.citasHoy} cita${if (state.citasHoy != 1) "s" else ""} programada${if (state.citasHoy != 1) "s" else ""} para hoy"
+                                "Tienes 0 citas programadas para hoy"
                             else
-                                "Tienes ${state.citasHoy} trabajo${if (state.citasHoy != 1) "s" else ""} programado${if (state.citasHoy != 1) "s" else ""} para hoy",
+                                "Tienes 0 trabajos programados para hoy",
                             fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f)
                         )
                     }
@@ -591,329 +589,40 @@ fun InicioScreen(
                 color = colors.textPrimary
             )
             Spacer(Modifier.height(10.dp))
-            if (state.proximaCita != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
-                    elevation = CardDefaults.cardElevation(4.dp),
-                    onClick = onNavigateToCalendar
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
+                elevation = CardDefaults.cardElevation(4.dp),
+                onClick = onNavigateToCalendar
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                        // Franja naranja borde izquierdo
-                        Box(
-                            modifier = Modifier
-                                .width(5.dp)
-                                .fillMaxHeight()
-                                .background(
-                                    if (mostarFast && state.proximaCita.serviceType == "FAST") Color(0xFFFFB300) else colors.primaryOrange,
-                                    RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
-                                )
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.width(52.dp)
-                        ) {
-                            Text(
-                                text = "HOY",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.primaryOrange
-                            )
-                            Text(
-                                text = state.proximaCita.time,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.primaryOrange
-                            )
-                        }
-                        // Línea divisoria gris
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 10.dp)
-                                .width(1.dp)
-                                .height(52.dp)
-                                .background(Color(0xFF424242).copy(alpha = 0.25f), RoundedCornerShape(1.dp))
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (state.proximaCita.serviceType == "FAST") {
-                                    Box(
-                                        modifier = Modifier
-                                            .background(Color(0xFFFFB300), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 5.dp, vertical = 1.dp)
-                                    ) {
-                                        Text("⚡ FAST", fontSize = 10.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                                    }
-                                    Spacer(Modifier.width(6.dp))
-                                }
-                                Text(
-                                    text = state.proximaCita.service,
-                                    fontSize = 15.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.textPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Text(
-                                text = "Cliente: ${state.proximaCita.clientName}",
-                                fontSize = 13.sp,
-                                color = colors.textSecondary
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                when (state.proximaCita.serviceType) {
-                                    "TECHNICAL" -> {
-                                        Icon(Icons.Default.LocationOn, null, tint = colors.primaryOrange, modifier = Modifier.size(12.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = state.proximaCita.notes.ifBlank { "Sin direccion" },
-                                            fontSize = 12.sp,
-                                            color = colors.textSecondary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    "PROFESSIONAL" -> {
-                                        Icon(Icons.Default.AccessTime, null, tint = Color(0xFF5C6BC0), modifier = Modifier.size(12.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = "Duracion: ${state.proximaCita.duration} min",
-                                            fontSize = 12.sp,
-                                            color = colors.textSecondary
-                                        )
-                                    }
-                                    "RENTAL" -> {
-                                        Icon(Icons.Default.People, null, tint = Color(0xFF26A69A), modifier = Modifier.size(12.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = "Personas: ${state.proximaCita.peopleCount ?: "-"}",
-                                            fontSize = 12.sp,
-                                            color = colors.textSecondary
-                                        )
-                                    }
-                                    else -> {
-                                        Icon(Icons.Default.LocationOn, null, tint = colors.textSecondary, modifier = Modifier.size(12.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = state.proximaCita.notes.ifBlank { "Sin notas" },
-                                            fontSize = 12.sp,
-                                            color = colors.textSecondary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            IconButton(onClick = { onNavigateToChat(state.proximaCita!!.clientId) }) {
-                                Icon(Icons.Default.Chat, null, tint = colors.primaryOrange, modifier = Modifier.size(22.dp))
-                            }
-                            IconButton(onClick = {
-                                val address = state.proximaCita!!.notes.ifBlank { state.proximaCita.clientName }
-                                val uri = android.net.Uri.parse("geo:0,0?q=${android.net.Uri.encode(address)}")
-                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
-                                intent.setPackage("com.google.android.apps.maps")
-                                if (intent.resolveActivity(context.packageManager) != null) {
-                                    context.startActivity(intent)
-                                } else {
-                                    val webUri = android.net.Uri.parse("https://maps.google.com/?q=${android.net.Uri.encode(address)}")
-                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, webUri))
-                                }
-                            }) {
-                                Icon(Icons.Default.Navigation, null, tint = colors.primaryOrange, modifier = Modifier.size(22.dp))
-                            }
-
-                        } // cierra Column botones
-                        } // cierra Row contenido
-
-                        if (showCompletarDialog) {
-                            Dialog(onDismissRequest = { showCompletarDialog = false }) {
-                                Card(
-                                    shape = RoundedCornerShape(24.dp),
-                                    colors = CardDefaults.cardColors(containerColor = colors.backgroundColor),
-                                    elevation = CardDefaults.cardElevation(8.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(28.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        // Ícono verde con fondo circular
-                                        Box(
-                                            modifier = Modifier
-                                                .size(64.dp)
-                                                .background(Color(0xFF4CAF50).copy(alpha = 0.12f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                Icons.Default.CheckCircle,
-                                                contentDescription = null,
-                                                tint = Color(0xFF4CAF50),
-                                                modifier = Modifier.size(36.dp)
-                                            )
-                                        }
-                                        Spacer(Modifier.height(16.dp))
-                                        Text(
-                                            text = "Completar cita",
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = colors.textPrimary
-                                        )
-                                        Spacer(Modifier.height(8.dp))
-                                        // Info del servicio
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = colors.primaryOrange.copy(alpha = 0.08f)
-                                            ),
-                                            elevation = CardDefaults.cardElevation(0.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    Icons.Default.WorkHistory,
-                                                    contentDescription = null,
-                                                    tint = colors.primaryOrange,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                                Spacer(Modifier.width(8.dp))
-                                                Column {
-                                                    Text(
-                                                        text = state.proximaCita!!.service,
-                                                        fontSize = 13.sp,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        color = colors.textPrimary,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                    Text(
-                                                        text = state.proximaCita.clientName,
-                                                        fontSize = 12.sp,
-                                                        color = colors.textSecondary
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        Spacer(Modifier.height(12.dp))
-                                        Text(
-                                            text = "Se enviará un mensaje al cliente solicitando su calificación ⭐",
-                                            fontSize = 13.sp,
-                                            color = colors.textSecondary,
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                        )
-                                        Spacer(Modifier.height(24.dp))
-                                        // Botones
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            OutlinedButton(
-                                                onClick = { showCompletarDialog = false },
-                                                modifier = Modifier.weight(1f).height(44.dp),
-                                                shape = RoundedCornerShape(12.dp),
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                                border = androidx.compose.foundation.BorderStroke(1.dp, colors.textSecondary.copy(alpha = 0.4f))
-                                            ) {
-                                                Text("Cancelar", color = colors.textSecondary, fontWeight = FontWeight.SemiBold)
-                                            }
-                                            Button(
-                                                onClick = {
-                                                    showCompletarDialog = false
-                                                    onCompletarCita(
-                                                        state.proximaCita!!.id,
-                                                        state.proximaCita.clientId
-                                                    )
-                                                },
-                                                modifier = Modifier.weight(1f).height(44.dp),
-                                                shape = RoundedCornerShape(12.dp),
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                                            ) {
-                                                Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                                Text("Completar", fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } // cierra Row IntrinsicSize
-                } // cierra Card
-                Spacer(Modifier.height(8.dp))
-                if (mostarFast && state.proximaCita?.serviceType == "FAST") {
-                    Button(
-                        onClick = {
-                            onCompletarTrabajoFast(state.proximaCita!!.id, state.proximaCita.clientId)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300))
-                    ) {
-                        Icon(Icons.Default.ElectricBolt, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("⚡ Completar trabajo Fast", fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Button(
-                        onClick = {
-                            showCompletarDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                    ) {
-                        Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Completar cita", fontWeight = FontWeight.Bold)
-                    }
-                }
-            } else {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
-                    elevation = CardDefaults.cardElevation(4.dp),
-                    onClick = onNavigateToCalendar
-                ) {
-                    Row(
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            .size(44.dp)
+                            .background(colors.primaryOrange.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(colors.primaryOrange.copy(alpha = 0.1f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.CalendarToday, null, tint = colors.primaryOrange, modifier = Modifier.size(24.dp))
-                        }
-                        Column {
-                            Text(
-                                text = "Sin servicios pendientes",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textPrimary
-                            )
-                            Text(
-                                text = "Toca para ver tu calendario",
-                                fontSize = 12.sp,
-                                color = colors.textSecondary
-                            )
-                        }
+                        Icon(Icons.Default.CalendarToday, null, tint = colors.primaryOrange, modifier = Modifier.size(24.dp))
+                    }
+                    Column {
+                        Text(
+                            text = "Sin servicios pendientes",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary
+                        )
+                        Text(
+                            text = "Toca para ver tu calendario",
+                            fontSize = 12.sp,
+                            color = colors.textSecondary
+                        )
                     }
                 }
             }
@@ -939,8 +648,7 @@ fun InicioScreen(
             }
 
             Spacer(Modifier.height(8.dp))
-            if (state.solicitudesRecientes.isEmpty()) {
-                Card(
+            Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = colors.surfaceColor)
@@ -956,108 +664,6 @@ fun InicioScreen(
                         )
                     }
                 }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.solicitudesRecientes.forEach { cita ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
-                            elevation = CardDefaults.cardElevation(2.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                //Avatar con inicial
-                                Box(
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .background(colors.primaryOrange.copy(alpha = 0.15f), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = cita.clientName.firstOrNull()?.uppercase() ?: "?",
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.primaryOrange,
-                                        fontSize = 16.sp
-                                    )
-                                }
-                                Spacer(Modifier.width(12.dp))
-
-                                //Info central
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = cita.service,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp,
-                                        color = colors.textPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-
-                                    Spacer(Modifier.height(2.dp))
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        when (cita.serviceType) {
-                                            "TECHNICAL" -> {
-                                                Icon(
-                                                    Icons.Default.LocationOn,
-                                                    null,
-                                                    tint = colors.primaryOrange,
-                                                    modifier = Modifier.size(11.dp)
-                                                )
-                                                Spacer(Modifier.width(3.dp))
-                                                Text(
-                                                    cita.notes.ifBlank { "Sin direccion" },
-                                                    fontSize = 11.sp, color = colors.textSecondary,
-                                                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                                                )
-
-                                            }
-
-                                            "PROFESSIONAL" -> {
-                                                Icon(Icons.Default.AccessTime, null, tint = Color(0xFF5C6BC0), modifier = Modifier.size(11.dp))
-
-                                                Spacer(Modifier.width(3.dp))
-
-                                                Text("${cita.duration} min · ${cita.date}",
-                                                    fontSize = 11.sp, color = colors.textSecondary)
-                                            }
-
-                                            "RENTAL" -> {
-                                                Icon(Icons.Default.People, null, tint = Color(0xFF26A69A), modifier = Modifier.size(11.dp))
-
-                                                Spacer(Modifier.width(3.dp))
-
-                                                Text("${cita.peopleCount ?: "-"} personas",
-                                                    fontSize = 11.sp, color = colors.textSecondary)
-                                            }
-                                            else -> {
-                                                Text("Esperando confirmacion", fontSize = 11.sp, color = colors.textSecondary)
-                                            }
-                                        }
-                                    }
-                                    //Tiempo + flecha
-
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text = cita.time,
-                                            fontSize = 11.sp,
-                                            color = colors.textSecondary
-                                        )
-                                        Icon(
-                                            Icons.Default.ChevronRight, null,
-                                            tint = colors.textSecondary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             Spacer(Modifier.height(20.dp))
         }
 
@@ -1371,7 +977,7 @@ private fun NuevaSolicitudFastDialog(
     solicitud: OportunidadItem,
     onAceptar: () -> Unit,
     onDescartar: () -> Unit,
-    proximaCita: com.example.myapplication.prestador.data.local.entity.AppointmentEntity? = null,
+    proximaCita: String? = null,
     restriccionHorario: String? = null,
     restriccionDistancia: String? = null,
     restriccionSolicitudActiva: String? = null,
@@ -1540,7 +1146,7 @@ private fun NuevaSolicitudFastDialog(
                         restriccionSolicitudActiva,
                         restriccionDistancia,
                         restriccionHorario,
-                        if (proximaCita != null) "Tenés una cita a las ${proximaCita.time}. No podés aceptar." else
+                        if (proximaCita != null) "Tenés una cita a las $proximaCita. No podés aceptar." else
                         null
                     )
                     if (restricciones.isNotEmpty()) {

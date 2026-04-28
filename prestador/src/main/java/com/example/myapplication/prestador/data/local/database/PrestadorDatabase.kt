@@ -16,10 +16,7 @@ import com.example.myapplication.prestador.data.local.entity.PromotionEntity
 import com.example.myapplication.prestador.data.local.entity.EmpleadoEntity
 import com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity
 import com.example.myapplication.prestador.data.local.entity.RentalSpaceEntity
-import com.example.myapplication.prestador.data.local.dao.AppointmentDao
-import com.example.myapplication.prestador.data.local.entity.AppointmentEntity
 import com.example.myapplication.prestador.data.local.dao.BusinessDao
-import com.example.myapplication.prestador.data.local.dao.SucursalDao
 import com.example.myapplication.prestador.data.local.entity.BusinessEntity
 import com.example.myapplication.prestador.data.local.entity.SucursalEntity
 import com.example.myapplication.prestador.data.local.dao.MessageDao
@@ -50,7 +47,6 @@ import com.example.myapplication.prestador.data.local.Converters
         ClienteEntity::class,
         ProviderEntity::class,
         PromotionEntity::class,
-        AppointmentEntity::class,
         // BusinessEntity::class,      <-- OBSOLETO: Ahora integrado en ProviderEntity
         // SucursalEntity::class,      <-- OBSOLETO: Ahora integrado en ProviderEntity
         MessageEntity::class,
@@ -73,7 +69,6 @@ abstract class PrestadorDatabase : RoomDatabase() {
     abstract fun clienteDao(): ClienteDao
     abstract fun providerDao(): ProviderDao
     abstract fun promotionDao(): PromotionDao
-    abstract fun appointmentDao(): AppointmentDao
     // abstract fun businessDao(): BusinessDao   <-- OBSOLETO
     // abstract fun sucursalDao(): SucursalDao   <-- OBSOLETO
     abstract fun messageDao(): MessageDao

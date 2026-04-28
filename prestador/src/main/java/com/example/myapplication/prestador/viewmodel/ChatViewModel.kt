@@ -1,17 +1,11 @@
 package com.example.myapplication.prestador.viewmodel
 
-import android.R
-import androidx.compose.animation.core.animateDecay
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.local.entity.AppointmentEntity
 import com.example.myapplication.prestador.data.local.entity.ConversationEntity
 import com.example.myapplication.prestador.data.local.entity.MessageEntity
-import com.example.myapplication.prestador.data.model.AppointmentStatus
 import com.example.myapplication.prestador.data.model.Message
-import com.example.myapplication.prestador.data.repository.AppointmentRepository
 import com.example.myapplication.prestador.data.repository.ChatRepository
-import com.example.myapplication.prestador.utils.CalendarHelper
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -28,15 +22,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val repository: ChatRepository,
-    private val appointmentRepository: AppointmentRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
-
-    init {
-        // Inicializamos el manager con el repositorio real para que las operaciones
-        // de reprogramación usen persistencia real.
-        com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager.initialize(repository)
-    }
 
     private val myUserId =
         FirebaseAuth.getInstance().currentUser?.uid ?:
@@ -105,19 +92,6 @@ class ChatViewModel @Inject constructor(
             try {
                 _isLoading.value = true
                 repository.getMessagesByConversation(conversationId).collect { newList ->
-                    val previousList = _messages.value
-                    newList.forEach { newMsg ->
-                        if (newMsg.messageType == "APPOINTMENT" && newMsg.isFromCurrentUser) {
-                            val oldMsg = previousList.find {
-                                it.messageId == newMsg.messageId
-                            }
-                            if (oldMsg != null && newMsg.appointmentStatus in listOf("ACCEPTED", "REJECTED")) {
-                                syncAppointmentFromMessage(newMsg)
-                            } else if (oldMsg != null && oldMsg.appointmentStatus != newMsg.appointmentStatus) {
-                                syncAppointmentFromMessage(newMsg)
-                            }
-                        }
-                    }
                     _messages.value = newList
                 }
             } catch (e: Exception) {
@@ -340,7 +314,7 @@ class ChatViewModel @Inject constructor(
                 _successMessage.value =
                     "Conversación creada"
             } catch (e: Exception) {
-                _errorMessage.value = "Erroral crear conversación: ${e.message}"
+                _errorMessage.value = "Error al crear conversación: ${e.message}"
             }
         }
     }
@@ -352,7 +326,7 @@ class ChatViewModel @Inject constructor(
 
                 repository.markMessagesAsRead(conversationId)
             } catch (e: Exception) {
-                _errorMessage.value = "Erroral marcar mensajes: ${e.message}"
+                _errorMessage.value = "Error al marcar mensajes: ${e.message}"
             }
         }
     }
@@ -363,107 +337,7 @@ class ChatViewModel @Inject constructor(
 
                 repository.deleteMessage(messageId)
             } catch (e: Exception) {
-                _errorMessage.value = "Erroral eliminar mensaje: ${e.message}"
-            }
-        }
-    }
-
-    fun updateAppointmentStatus(messageId: String, status: String, reason: String? = null) {
-        viewModelScope.launch {
-            try {
-                repository.updateAppointmentStatus(messageId, status, reason)
-
-                val message = repository.getMessageById(messageId)
-                if (message != null && !message.appointmentDate.isNullOrBlank()) {
-                    val conversation = repository.getConversationById(message.conversationId)
-                    val rawAppointmentId = message.appointmentId ?: message.messageId
-                    val clientId = conversation?.userId ?: message.conversationId
-
-                    val existingAppointment = appointmentRepository.getAppointmentByIdSync(rawAppointmentId)
-                        ?: appointmentRepository.findAppointmentBySlot(
-                            providerId = myUserId,
-                            clientId = clientId,
-                            date = message.appointmentDate,
-                            time = message.appointmentTime ?: ""
-                        )
-
-                    val appointmentId = existingAppointment?.id ?: rawAppointmentId
-
-                    when (status) {
-                        "ACCEPTED" -> {
-                            val appointment = AppointmentEntity(
-                                id = appointmentId,
-                                clientId = clientId,
-                                clientName = conversation?.userName ?: existingAppointment?.clientName ?: "Cliente",
-                                providerId = existingAppointment?.providerId ?: myUserId,
-                                service = message.appointmentTitle ?: existingAppointment?.service ?: "Cita",
-                                date = message.appointmentDate,
-                                time = message.appointmentTime ?: "",
-                                duration = existingAppointment?.duration ?: 60,
-                                status = "confirmed",
-                                notes = message.text ?: existingAppointment?.notes ?: "",
-                                proposedBy = existingAppointment?.proposedBy ?: "cliente",
-                                serviceType = existingAppointment?.serviceType ?: "OTHER",
-                                rentalSpaceId = existingAppointment?.rentalSpaceId,
-                                scheduleId = existingAppointment?.scheduleId,
-                                createdAt = existingAppointment?.createdAt ?: System.currentTimeMillis(),
-                                updatedAt = System.currentTimeMillis(),
-                                urgencyLevel = existingAppointment?.urgencyLevel,
-                                peopleCount = existingAppointment?.peopleCount,
-                                assignedEmployeeIds = existingAppointment?.assignedEmployeeIds
-                            )
-                            appointmentRepository.saveAppointment(appointment)
-
-                            if (existingAppointment?.status != "confirmed") {
-                                CalendarHelper.saveAppointmentToCalendar(
-                                    context = context,
-                                    title = message.appointmentTitle?.ifBlank { "Cita con cliente" } ?: "Cita con cliente",
-                                    description = "${conversation?.userName ?: "Cliente"} - ${message.text ?: ""}",
-                                    date = message.appointmentDate,
-                                    time = message.appointmentTime ?: "00:00"
-                                )
-                            }
-                        }
-
-                        "REJECTED" -> {
-                            if (existingAppointment != null) {
-                                appointmentRepository.updateAppointment(
-                                    existingAppointment.copy(
-                                        status = "cancelled",
-                                        updatedAt = System.currentTimeMillis()
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al actualizar cita: ${e.message}"
-            }
-        }
-    }
-
-    fun sendAppointmentMessage(
-        conversationId: String,
-        appointmentId: String,
-        title: String,
-        date: String,
-        time: String,
-        notes: String
-    ) {
-        viewModelScope.launch {
-            try {
-                repository.sendAppointmentMessage(
-                    conversationId = conversationId,
-                    senderId = myUserId,
-                    appointmentId = appointmentId,
-                    title = title,
-                    date = date,
-                    time = time,
-                    notes = notes
-                )
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al enviar propuesta de turno: ${e.message}"
+                _errorMessage.value = "Error al eliminar mensaje: ${e.message}"
             }
         }
     }
@@ -483,34 +357,20 @@ class ChatViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        try { mediaRecorder?.stop() } catch (_: Exception) {}
+        try { mediaRecorder?.release() } catch (_: Exception) {}
+        mediaRecorder = null
+        recordingTimerJob?.cancel()
         repository.stopListening()
         repository.stopGlobalListening()
     }
 
-    private fun syncAppointmentFromMessage(message: MessageEntity) {
-        if (message.appointmentDate.isNullOrBlank()) return
+    fun deleteConversations(userIds: Set<String>) {
         viewModelScope.launch {
             try {
-                val rawId = message.appointmentId?: message.messageId
-                val conversation = repository.getConversationById(message.conversationId)
-                val clientId = conversation?.userId ?: message.conversationId
-                val existing = appointmentRepository.getAppointmentByIdSync(rawId) ?:
-                appointmentRepository.findAppointmentBySlot(
-                    providerId = myUserId,
-                    clientId = clientId,
-                    date = message.appointmentDate,
-                    time = message.appointmentTime ?: ""
-                )
-                if (existing == null) return@launch
-                val newStatus = when (message.appointmentStatus) {
-                    "ACCEPTED" -> "confirmed"
-                    "REJECTED" -> "cancelled"
-                    else -> return@launch
-                }
-                appointmentRepository.updateAppointment(existing.copy(status = newStatus, updatedAt = System.currentTimeMillis())
-                )
+                repository.deleteConversations(userIds)
             } catch (e: Exception) {
-                android.util.Log.e("CharViewModel", "Error sincronizando cita: ${e.message}")
+                _errorMessage.value = "Error al eliminar conversaciones: ${e.message}"
             }
         }
     }

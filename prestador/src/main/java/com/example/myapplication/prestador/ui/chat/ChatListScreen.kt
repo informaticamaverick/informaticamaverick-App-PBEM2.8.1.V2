@@ -81,7 +81,9 @@ fun ChatListScreen(
     onShowNotificationDialog: () -> Unit,
     onShowVisibilityDialog: () -> Unit,
     onShowDateRangeDialog: () -> Unit,
-    onShowLockDialog: () -> Unit
+    onShowLockDialog: () -> Unit,
+    onRequestDeleteConfirmation: () -> Unit,
+    onDeleteSelected: (Set<String>) -> Unit
 ) {
     val colors = getPrestadorColors()
 
@@ -137,7 +139,11 @@ fun ChatListScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { onDeletionModeChange(false); onChatSelectionChange(emptySet()) }) {
+                        IconButton(
+                            onClick = { if (selectedChatsForDeletion.isNotEmpty())
+                            onRequestDeleteConfirmation()},
+                            enabled = selectedChatsForDeletion.isNotEmpty()
+                        ) {
                             Icon(Icons.Default.Delete, "Eliminar", tint = Color.White)
                         }
                     },

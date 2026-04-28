@@ -2,7 +2,9 @@ package com.example.myapplication.presentation.client
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -32,6 +34,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -62,6 +65,35 @@ import kotlinx.coroutines.launch
 // --- CONSTANTES DE ESTILO LOCALES ---
 val GeminiAccentLocal = Color(0xFFA78BFA)
 // BentoDarkGlassBackgroundLocal eliminado por no usarse
+
+/**
+ * Convierte un string de foto (URL, content://, base64 raw) al modelo correcto para Coil.
+ * - URLs https:// y content:// se usan tal cual.
+ * - Strings base64 raw se decodifican a ByteArray (Coil los muestra nativamente).
+ * - Strings vacíos o nulos devuelven null (Coil mostrará el error/placeholder).
+ */
+@Composable
+fun rememberImageModel(photoString: String?): Any? {
+    return remember(photoString) {
+        when {
+            photoString.isNullOrBlank() -> null
+            photoString.startsWith("http") || photoString.startsWith("content://") || photoString.startsWith("file://") -> photoString
+            photoString.startsWith("data:image") -> {
+                try {
+                    val b64 = photoString.substringAfter("base64,")
+                    Base64.decode(b64, Base64.DEFAULT)
+                } catch (e: Exception) { null }
+            }
+            photoString.length > 100 -> {
+                // Raw base64 (JPEG starts with /9j/, PNG starts with iVBOR)
+                try {
+                    Base64.decode(photoString, Base64.DEFAULT)
+                } catch (e: Exception) { photoString }
+            }
+            else -> photoString
+        }
+    }
+}
 
 // -- MODELO PARA ANIMACIÓN DE ÓVALO --
 data class ActiveProfileInfo(
@@ -612,7 +644,7 @@ fun PerfilUsuarioContent(
                                     }
                             ) {
                                 AsyncImage(
-                                    model = currentActiveInfo.photo,
+                                    model = rememberImageModel(currentActiveInfo.photo),
                                     contentDescription = null,
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),
@@ -684,6 +716,7 @@ fun PerfilUsuarioContent(
 
 @Composable
 fun BubbleItem(photoUrl: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val imageModel = rememberImageModel(photoUrl)
     Box(
         modifier = modifier
             .clip(CircleShape)
@@ -692,7 +725,7 @@ fun BubbleItem(photoUrl: String?, onClick: () -> Unit, modifier: Modifier = Modi
             .clickable { onClick() }
     ) {
         AsyncImage(
-            model = photoUrl,
+            model = imageModel,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
@@ -858,6 +891,62 @@ fun PersonalM3Section(
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // --- TARJETA 2: DIRECCIONES PERSONALES ---
+        Box(modifier = Modifier.fillMaxWidth().background(Color(0xFF16161D)).padding(vertical = 24.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "MIS DIRECCIONES",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (isEditMode) {
+                        IconButton(onClick = { onEditRequest(EditMode.PersonalAddress(null)) }) {
+                            Icon(Icons.Default.Add, null, tint = GeminiAccentLocal)
+                        }
+                    }
+                }
+
+                val addresses = if (isEditMode) uiState.personalAddresses else user.personalAddresses
+                if (addresses.isEmpty()) {
+                    Text(
+                        "Sin direcciones registradas",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                } else {
+                    addresses.forEachIndexed { index, addr ->
+                        MapsStyleAddressCardLocal(
+                            address = addr,
+                            isEditMode = isEditMode,
+                            onEdit = { onEditRequest(EditMode.PersonalAddress(addr)) },
+                            onDelete = {
+                                onRequestDelete("Eliminar Dirección", "¿Deseas eliminar esta dirección?") {
+                                    val newList = uiState.personalAddresses.toMutableList()
+                                    newList.removeAt(index)
+                                    onUpdatePersonalAddresses(newList)
+                                }
+                            },
+                            onMapsClick = {
+                                val gmmIntentUri = android.net.Uri.parse("geo:0,0?q=${android.net.Uri.encode(addr.fullString())}")
+                                val mapIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, gmmIntentUri)
+                                mapIntent.setPackage("com.google.android.apps.maps")
+                                context.startActivity(mapIntent)
+                            }
+                        )
+                        if (index < addresses.lastIndex) Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
     }
 }
 

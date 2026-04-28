@@ -55,12 +55,6 @@ object DatabaseModule {
         return database.clienteDao()
     }
 
-    @Provides
-    @Singleton
-    fun providerAppointmentDao(database: PrestadorDatabase): AppointmentDao {
-        return database.appointmentDao()
-    }
-
     /*
     @Provides
     @Singleton

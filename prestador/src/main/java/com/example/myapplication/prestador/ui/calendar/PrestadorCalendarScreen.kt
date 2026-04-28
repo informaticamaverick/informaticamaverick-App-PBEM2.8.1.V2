@@ -38,19 +38,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.myapplication.prestador.data.local.entity.AppointmentEntity
 import com.example.myapplication.prestador.data.model.ServiceType
-import com.example.myapplication.prestador.ui.appointments.CreateAppointmentDialog
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.utils.getServiceTypeConfig
 import com.example.myapplication.prestador.viewmodel.ChatViewModel
-import com.example.myapplication.prestador.viewmodel.RentalSpacesViewModel
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import com.example.myapplication.prestador.ui.calendar.dialogs.*
 import com.example.myapplication.prestador.utils.ServiceTypeConfig
-import com.example.myapplication.prestador.viewmodel.AppointmentViewModel
 import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.EmpleadosViewModel
 
@@ -103,9 +99,7 @@ fun PrestadorCalendarScreen(
     onBack: () -> Unit = {},
     triggerCreateDialog: Boolean = false,
     onCreateDialogHandled: () -> Unit = {},
-    appointmentViewModel: AppointmentViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
-    rentalSpacesViewModel: RentalSpacesViewModel = hiltViewModel(),
     empleadosViewModel: EmpleadosViewModel = hiltViewModel(),
     chatViewModel: ChatViewModel = hiltViewModel(),
     onNavigateToClientePerfil: (client: String) -> Unit = {}
@@ -163,8 +157,8 @@ fun PrestadorCalendarScreen(
         currentDate = newDate
     }
     
-    // 🎯 CARGAR CITAS DESDE ROOM DATABASE
-    val appointmentsFromDb by appointmentViewModel.appointments.collectAsState()
+    // Citas deshabilitadas — AppointmentViewModel y AppointmentEntity eliminados
+    val appointments = emptyList<Appointment>()
     
     //Formato de fecha para la comparacion
     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -182,9 +176,8 @@ fun PrestadorCalendarScreen(
     var showRescheduleDialog by remember { mutableStateOf(false) }
     var appointmentToReschedule by remember { mutableStateOf<Appointment?>(null) }
 
-    // Estado para el modal de edición
+    // Estado para el modal de edición (deshabilitado — citas eliminadas)
     var showEditDialog by remember { mutableStateOf(false) }
-    var appointmentEntityToEdit by remember { mutableStateOf<com.example.myapplication.prestador.data.local.entity.AppointmentEntity?>(null) }
 
     // Estado para el modal de crear cita
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -207,11 +200,6 @@ fun PrestadorCalendarScreen(
             else -> ""
         }
     }
-    LaunchedEffect(providerId) {
-        if (providerId.isNotBlank()) {
-            appointmentViewModel.syncPendingWithFirestore(providerId)
-        }
-    }
 
     // Obtener serviceType actual
     val currentServiceType = remember(profileState) {
@@ -222,62 +210,10 @@ fun PrestadorCalendarScreen(
         }
     }
 
-    // Transformar AppointmentEntity a Appointment (modelo local)
-    val appointments = remember(appointmentsFromDb, currentServiceType) {
-        appointmentsFromDb
-            .filter { it.serviceType == currentServiceType.name && it.status != "cancelled" }
-            .sortedWith(
-                compareByDescending<AppointmentEntity> {
-                    when (it.status) {
-                        "confirmed" -> 3
-                        "pending" -> 2
-                        "completed" -> 1
-                        "cancelled" -> 0
-                        else -> -1
-                    }
-                }.thenByDescending { it.updatedAt }
-            )
-            .distinctBy { "${it.providerId}|${it.clientId}|${it.date}|${it.time}" }
-            .map { entity ->
-            Appointment(
-                id = entity.id,
-                clientId = entity.clientId,
-                date = entity.date,
-                time = entity.time,
-                service = entity.service,
-                clientName = entity.clientName,
-                status = when (entity.status) {
-                    "confirmed" -> AppointmentStatus.CONFIRMED
-                    "pending" -> AppointmentStatus.PENDING
-                    "cancelled" -> AppointmentStatus.CANCELLED
-                    "completed" -> AppointmentStatus.COMPLETED
-                    else -> AppointmentStatus.PENDING
-                },
-                avatarColor = generateColorFromId(entity.clientId)
-            )
-        }
-    }
-
     //Filtrar citas del dia seleccionado
     val appointmentsForSelectedDay = appointments.filter { it.date == selectedDateStr }
     //dias que tienen citas
     val daysWithAppointments = appointments.filter { it.status != AppointmentStatus.CANCELLED }.map { it.date }.toSet()
-
-    // Cargar espacios si es RENTAL
-    LaunchedEffect(providerId, currentServiceType) {
-        if (currentServiceType == ServiceType.RENTAL && providerId.isNotBlank()) {
-            rentalSpacesViewModel.setProviderId(providerId)
-        }
-    }
-
-    val rentalSpaces by rentalSpacesViewModel.rentalSpaces.collectAsState()
-    val availableSpaces = remember(rentalSpaces) {
-        rentalSpaces.filter { it.isActive }.map { it.id to it.name }
-    }
-
-    // Slots disponibles (solo PROFESSIONAL)
-    val availableSlots by appointmentViewModel.availabilitySlots.collectAsState()
-    val slotsLoading by appointmentViewModel.availabilityLoading.collectAsState()
 
     //Cargar empleados para TECHNICAL
     val empleadosState by empleadosViewModel.uiState.collectAsState()
@@ -424,33 +360,14 @@ fun PrestadorCalendarScreen(
                 serviceTypeConfig = serviceTypeConfig,
                 onExpandClick = { isExpanded = !isExpanded },
                 onNavigateToClientePerfil = onNavigateToClientePerfil,
-                onReschedule = { appointmentId ->
-                    val entity = appointmentsFromDb.find { it.id == appointmentId }
-                    if (entity != null) {
-                        appointmentEntityToEdit = entity
-                        showEditDialog = true
-                    }
-                },
+                onReschedule = { _ -> },
 
                 onCancel = { appointmentId ->
                     appointmentToCancel = appointmentId
                     showCancelDialog = true
                 },
-                onConfirm = { appointmentId ->
-                    coroutineScope.launch {
-                        appointmentViewModel.confirmAppointment(appointmentId)
-                        // Programar recordatorios al confirmar
-                        appointmentsFromDb.find { it.id == appointmentId }?.let {
-                            com.example.myapplication.prestador.utils.AppointmentReminderScheduler.schedule(context, it)
-                        }
-                    }
-                },
-                onComplete = { appointmentId ->
-                    coroutineScope.launch {
-                        appointmentViewModel.completeAppointment(appointmentId)
-                        com.example.myapplication.prestador.utils.AppointmentReminderScheduler.cancel(context, appointmentId)
-                    }
-                },
+                onConfirm = { _ -> },
+                onComplete = { _ -> },
                 onGenerarPresupuesto = { appointmentId, _ ->
                     onNavigateToPresupuesto(appointmentId)
                 }
@@ -463,12 +380,6 @@ fun PrestadorCalendarScreen(
         CancelAppointmentDialog(
             serviceTypeConfig = serviceTypeConfig,
             onConfirm = {
-                appointmentToCancel?.let { id ->
-                    coroutineScope.launch {
-                        appointmentViewModel.cancelAppointment(id)
-                        com.example.myapplication.prestador.utils.AppointmentReminderScheduler.cancel(context, id)
-                    }
-                }
                 showCancelDialog = false
                 appointmentToCancel = null
             },
@@ -508,122 +419,6 @@ fun PrestadorCalendarScreen(
         )
     }
 
-    // Diálogo de editar cita existente
-    if (showEditDialog && appointmentEntityToEdit != null) {
-        val entity = appointmentEntityToEdit!!
-        CreateAppointmentDialog(
-            serviceType = currentServiceType,
-            onDismiss = { showEditDialog = false; appointmentEntityToEdit = null },
-            onRequestSlots = { date, duration ->
-                if (providerId.isNotBlank()) {
-                    appointmentViewModel.loadAvailabilitySlots(providerId, date, duration)
-                }
-            },
-            slotsRequestKey = providerId,
-            isSlotsLoading = slotsLoading,
-            onConfirm = { clientName, service, date, time, duration, rentalSpaceId, scheduleId, notes, assignedEmployeeIds, peopleCount ->
-                val updated = entity.copy(
-                    clientName = clientName,
-                    service = service,
-                    date = date,
-                    time = time,
-                    duration = duration,
-                    rentalSpaceId = rentalSpaceId,
-                    scheduleId = scheduleId,
-                    notes = notes,
-                    assignedEmployeeIds = assignedEmployeeIds,
-                    peopleCount = peopleCount,
-                    status = "pending",
-                    updatedAt = System.currentTimeMillis()
-                )
-                appointmentViewModel.updateAppointment(updated)
-
-                // Notificar al cliente por chat
-                val rescheduleMessage = com.example.myapplication.prestador.data.model.Message(
-                    id = "msg_reschedule_${System.currentTimeMillis()}_${entity.clientId}",
-                    text = "Propuesta de cambio de cita",
-                    timestamp = System.currentTimeMillis(),
-                    isFromCurrentUser = true,
-                    type = com.example.myapplication.prestador.data.model.Message.MessageType.APPOINTMENT,
-                    appointmentDate = date,
-                    appointmentTime = time,
-                    appointmentId = entity.id,
-                    appointmentStatus = com.example.myapplication.prestador.data.model.Message.AppointmentProposalStatus.PENDING,
-                    appointmentTitle = service
-                )
-                com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager.addMessage(entity.clientId, rescheduleMessage)
-
-                showEditDialog = false
-                appointmentEntityToEdit = null
-            },
-            colors = com.example.myapplication.prestador.ui.theme.getPrestadorColors(),
-            availableSpaces = availableSpaces,
-            availableSlots = availableSlots,
-            availableEmployees = if (currentServiceType == ServiceType.TECHNICAL) availableEmployees else emptyList(),
-            initialClientName = entity.clientName,
-            initialService = entity.service,
-            initialDate = entity.date,
-            initialTime = entity.time,
-            initialDuration = entity.duration,
-            initialNotes = entity.notes,
-            initialPeopleCount = entity.peopleCount ?: 1,
-            isEditMode = true,
-            clienteSugeridos = clientesFiltrados,
-            onBuscarClientes = { query -> clienteBusqueda = query }
-        )
-    }
-
-    // Diálogo de crear nueva cita/servicio/reserva
-    if (showCreateDialog) {
-        CreateAppointmentDialog(
-            serviceType = currentServiceType,
-            onDismiss = { showCreateDialog = false },
-            onRequestSlots = { date, duration ->
-                if (providerId.isNotBlank()) {
-                    appointmentViewModel.loadAvailabilitySlots(providerId, date, duration)
-                }
-            },
-            slotsRequestKey = providerId,
-            isSlotsLoading = slotsLoading,
-            onConfirm = { clientName, service, date, time, duration, rentalSpaceId, scheduleId, notes, assignedEmployeeIds, peopleCount ->
-                val newAppointment = AppointmentEntity(
-                    id = java.util.UUID.randomUUID().toString(),
-                    clientId = "",
-                    clientName = clientName,
-                    providerId = providerId,
-                    service = service,
-                    date = date,
-                    time = time,
-                    duration = duration,
-                    status = "pending",
-                    notes = notes,
-                    serviceType = currentServiceType.name,
-                    rentalSpaceId = rentalSpaceId,
-                    scheduleId = scheduleId,
-                    assignedEmployeeIds = assignedEmployeeIds,
-                    peopleCount = peopleCount
-                )
-                appointmentViewModel.validateAndSave(
-                    appointment = newAppointment,
-                    serviceType = currentServiceType,
-                    onSuccess = { showCreateDialog = false },
-                    onError = { msg ->
-                        coroutineScopeSnackbar.launch {
-                            snackbarHostState.showSnackbar(msg)
-                        }
-                    }
-                )
-            },
-            colors = getPrestadorColors(),
-            availableSpaces = availableSpaces,
-            availableSlots = availableSlots,
-            initialDate = selectedDateStr,
-            availableEmployees = if (currentServiceType == ServiceType.TECHNICAL)
-            availableEmployees else emptyList(),
-            clienteSugeridos = clientesFiltrados,
-            onBuscarClientes = { query -> clienteBusqueda = query }
-        )
-    }
 }
 
 //Header del calendario con navegacion de mes

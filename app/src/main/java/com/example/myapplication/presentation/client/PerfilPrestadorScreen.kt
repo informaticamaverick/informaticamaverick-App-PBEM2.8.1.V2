@@ -73,6 +73,11 @@ fun PerfilPrestadorCliente(
     //val allCategories by categoryViewModel.categories.collectAsStateWithLifecycle()
     val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
     
+    // Cargar datos frescos desde Firestore al abrir la pantalla
+    LaunchedEffect(providerId) {
+        providerViewModel.loadProviderDetail(providerId)
+    }
+
     // 🔥 [RECOMENDACIÓN 1]: Estado centralizado en el ViewModel
     val perfilUiState by providerViewModel.perfilUiState.collectAsStateWithLifecycle()
 
@@ -131,6 +136,13 @@ fun PerfilPrestadorContent(
     // --- LÓGICA DE NAVEGACIÓN ---
     // 🔥 [RECOMENDACIÓN]: El ViewModel ahora es dueño del conteo de páginas y lógica derivada
     val pagerState = rememberPagerState(pageCount = { perfilUiState.totalPages })
+
+    // Ir a página 1 si priorizarEmpresa=true y hay empresas
+    LaunchedEffect(provider.priorizarEmpresa, perfilUiState.totalPages) {
+        if (provider.priorizarEmpresa && perfilUiState.totalPages > 1 && pagerState.currentPage == 0) {
+            pagerState.scrollToPage(1)
+        }
+    }
 
     // 🔥 [RECOMENDACIÓN]: Sincronización con el ViewModel
     // Cuando cambia la página, notificamos al ViewModel para que recalcule el perfil activo, burbujas y banner.

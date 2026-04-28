@@ -4,13 +4,17 @@ import android.util.Log
 import com.example.myapplication.data.local.ProviderDao
 import com.example.myapplication.data.local.ProviderEntity
 import com.example.myapplication.data.model.AddressProvider
+import com.example.myapplication.data.model.BranchProvider
 import com.example.myapplication.data.model.CompanyProvider
+import com.example.myapplication.data.model.EmployeeProvider
 import com.example.myapplication.data.model.Provider
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,6 +55,120 @@ class ProviderRepository @Inject constructor(
     }
 
     /**
+     * Carga el perfil completo de un prestador desde Firestore (incluye subcollections
+     * de empresas, sucursales y empleados) y actualiza Room.
+     * Usar al abrir la pantalla de detalle para datos frescos con priorizarEmpresa.
+     */
+    suspend fun fetchAndSyncProviderDetail(providerId: String) {
+        try {
+            val doc = firestore.collection("providers").document(providerId)
+                .get(Source.SERVER).await()
+            if (!doc.exists()) return
+
+            val perfil = doc.get("perfil") as? Map<*, *>
+            val ubicacion = doc.get("ubicacion") as? Map<*, *>
+            val empresaMap = doc.get("empresa") as? Map<*, *>
+
+            // Leer companies subcollection
+            val companiesSnapshot = doc.reference.collection("companies").get().await()
+            val companiesList = mutableListOf<CompanyProvider>()
+            for (compDoc in companiesSnapshot.documents) {
+                val branchesSnapshot = compDoc.reference.collection("branches").get().await()
+                val branchesList = mutableListOf<BranchProvider>()
+                for (branchDoc in branchesSnapshot.documents) {
+                    val employeesSnapshot = branchDoc.reference.collection("employees").get().await()
+                    val employeesList = employeesSnapshot.documents.map { empDoc ->
+                        EmployeeProvider(
+                            id = empDoc.id,
+                            name = empDoc.getString("name") ?: "",
+                            lastName = empDoc.getString("lastName") ?: "",
+                            position = empDoc.getString("position") ?: "",
+                            detail = empDoc.getString("detail") ?: "",
+                            photoUrl = empDoc.getString("photoUrl")
+                        )
+                    }
+                    val addrMap = branchDoc.get("address") as? Map<*, *>
+                    val branchAddr = AddressProvider(
+                        id = addrMap?.get("id") as? String ?: UUID.randomUUID().toString(),
+                        calle = addrMap?.get("calle") as? String ?: "",
+                        numero = addrMap?.get("numero") as? String ?: "",
+                        localidad = addrMap?.get("localidad") as? String ?: "",
+                        provincia = addrMap?.get("provincia") as? String ?: "",
+                        pais = addrMap?.get("pais") as? String ?: "Argentina",
+                        codigoPostal = addrMap?.get("codigoPostal") as? String ?: "",
+                        latitude = addrMap?.get("latitude") as? Double,
+                        longitude = addrMap?.get("longitude") as? Double
+                    )
+                    branchesList.add(BranchProvider(
+                        id = branchDoc.id,
+                        name = branchDoc.getString("nombre") ?: branchDoc.getString("name") ?: "",
+                        address = branchAddr,
+                        workingHours = branchDoc.getString("horario") ?: branchDoc.getString("workingHours") ?: "",
+                        employees = employeesList,
+                        galleryImages = (branchDoc.get("galleryImages") as? List<*>)?.map { it.toString() } ?: emptyList(),
+                        doesService = branchDoc.getBoolean("doesService") ?: false,
+                        doesProduct = branchDoc.getBoolean("doesProduct") ?: false,
+                        works24h = branchDoc.getBoolean("works24h") ?: false,
+                        hasPhysicalLocation = branchDoc.getBoolean("hasPhysicalLocation") ?: false,
+                        doesHomeVisits = branchDoc.getBoolean("doesHomeVisits") ?: false,
+                        doesShipping = branchDoc.getBoolean("doesShipping") ?: false,
+                        acceptsAppointments = branchDoc.getBoolean("acceptsAppointments") ?: false,
+                        rating = (branchDoc.getDouble("rating") ?: 0.0).toFloat()
+                    ))
+                }
+                companiesList.add(CompanyProvider(
+                    id = compDoc.id,
+                    name = compDoc.getString("nombreNegocio") ?: compDoc.getString("name") ?: "",
+                    razonSocial = compDoc.getString("razonSocial") ?: "",
+                    cuit = compDoc.getString("cuitNegocio") ?: compDoc.getString("cuit") ?: "",
+                    description = compDoc.getString("descripcion") ?: compDoc.getString("description") ?: "",
+                    rating = (compDoc.getDouble("rating") ?: 0.0).toFloat(),
+                    photoUrl = compDoc.getString("photoUrl"),
+                    bannerImageUrl = compDoc.getString("bannerImageUrl"),
+                    categories = (compDoc.get("categories") as? List<*>)?.map { it.toString() } ?: emptyList(),
+                    isVerified = compDoc.getBoolean("verificado") ?: false,
+                    branches = branchesList
+                ))
+            }
+
+            val priorizarEmpresa = (empresaMap?.get("priorizarEmpresa") as? Boolean)
+                ?: (doc.getBoolean("priorizarEmpresa") ?: false)
+
+            val existing = providerDao.getProviderFlowById(providerId).first()
+            val entity = (existing ?: ProviderEntity(
+                id = doc.id,
+                email = (perfil?.get("email") as? String) ?: "",
+                displayName = (perfil?.get("nombre") as? String) ?: "",
+                name = (perfil?.get("nombre") as? String) ?: "",
+                lastName = (perfil?.get("apellido") as? String) ?: "",
+                phoneNumber = (perfil?.get("telefono") as? String) ?: "",
+                rating = (doc.getDouble("rating") ?: 0.0).toFloat(),
+                categories = (doc.get("servicios") as? List<*>)?.map { it.toString() } ?: emptyList(),
+                isSubscribed = doc.getBoolean("isSubscribed") ?: false,
+                isVerified = doc.getBoolean("verificado") ?: false,
+                photoUrl = (perfil?.get("imageUrl") as? String) ?: doc.getString("photoUrl"),
+                bannerImageUrl = (perfil?.get("bannerUrl") as? String) ?: doc.getString("bannerImageUrl"),
+                address = AddressProvider(
+                    codigoPostal = ubicacion?.get("codigoPostal")?.toString() ?: "",
+                    calle = (ubicacion?.get("direccion") ?: ubicacion?.get("calle"))?.toString() ?: "",
+                    localidad = ubicacion?.get("localidad")?.toString() ?: "",
+                    provincia = ubicacion?.get("provincia")?.toString() ?: "",
+                    pais = ubicacion?.get("pais")?.toString() ?: "Argentina"
+                ),
+                createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+            )).copy(
+                companies = companiesList,
+                hasCompanyProfile = doc.getBoolean("hasCompanyProfile") ?: companiesList.isNotEmpty(),
+                priorizarEmpresa = priorizarEmpresa
+            )
+            providerDao.insertAll(listOf(entity))
+        } catch (e: Exception) {
+            Log.e("ProviderRepo", "Error fetching provider detail: ${e.message}")
+        }
+    }
+
+
+    /**
      * Busca prestadores que pertenezcan a una categoría específica.
      */
     suspend fun getProvidersByCategory(category: String): List<Provider> {
@@ -74,16 +192,21 @@ class ProviderRepository @Inject constructor(
      * Implementado según el Plan de Acción para minimizar costos de Firestore.
      */
     suspend fun getProvidersByRegionAndCategory(zipCode: String, category: String): Flow<List<Provider>> {
-        val localData = providerDao.getProvidersByFilter(zipCode, category).first()
+        // Cache check: si ya hay datos locales para esta categoría, evitamos llamar a Firestore.
+        // Usamos solo la categoría (sin zip) porque el fallback de Firestore puede traer
+        // prestadores de otras zonas y queremos mostrarlos igual.
+        val localData = providerDao.getProvidersByCategory(category)
 
         if (localData.isEmpty()) {
-            Log.d("ProviderRepo", "🔍 Local vacío para $category/$zipCode. Sincronizando desde Firebase...")
+            Log.d("ProviderRepo", "🔍 Local vacío para $category/${zipCode.ifBlank { "*" }}. Sincronizando desde Firebase...")
             searchAndSyncProviders(zipCode, category)
         } else {
-            Log.d("ProviderRepo", "✅ Usando datos locales para $category/$zipCode (${localData.size} encontrados)")
+            Log.d("ProviderRepo", "✅ Usando datos locales para $category (${localData.size} encontrados)")
         }
 
-        return providerDao.getProvidersByFilter(zipCode, category).map { entities ->
+        // Retornamos TODOS los prestadores de esta categoría en Room,
+        // sin filtrar por CP para no excluir resultados del fallback de Firestore.
+        return providerDao.getProvidersByCategoryFlow(category).map { entities ->
             entities.map { it.toDomain() }
         }
     }
@@ -100,22 +223,26 @@ class ProviderRepository @Inject constructor(
         try {
             Log.d("ProviderRepo", "📡 Consultando Firestore: '$trimmedCategory' en CP: '$trimmedZip'")
 
-            // 1. Consulta optimizada: solo traemos lo que coincide con el CP y la Categoría
-            // Intentamos buscar por String (CP con letras o ceros a la izquierda)
-            var snapshot = firestore.collection("providers")
-                .whereArrayContains("servicios", trimmedCategory)
-                .whereEqualTo("ubicacion.codigoPostal", trimmedZip)
-                .get()
-                .await()
-            
-            // Si no hay resultados y el CP es puramente numérico, intentamos como Number
-            if (snapshot.isEmpty && trimmedZip.all { it.isDigit() }) {
-                Log.d("ProviderRepo", "ℹ️ Sin resultados por String CP, reintentando como Number...")
+            // Intentamos primero la query combinada (requiere índice compuesto en Firestore)
+            // Si falla (índice inexistente) o no hay resultados, hacemos fallback solo por categoría
+            var snapshot = try {
+                firestore.collection("providers")
+                    .whereArrayContains("servicios", trimmedCategory)
+                    .whereEqualTo("ubicacion.codigoPostal", trimmedZip)
+                    .get().await()
+                    .also { Log.d("ProviderRepo", "📥 Query combinada: ${it.size()} docs") }
+            } catch (e: Exception) {
+                Log.w("ProviderRepo", "⚠️ Query combinada falló (índice?): ${e.message}. Fallback solo por categoría.")
+                null
+            }
+
+            // Fallback: buscar solo por categoría y filtrar CP en memoria
+            if (snapshot == null || snapshot.isEmpty) {
+                Log.d("ProviderRepo", "🔄 Fallback: buscando solo por categoría '$trimmedCategory'")
                 snapshot = firestore.collection("providers")
                     .whereArrayContains("servicios", trimmedCategory)
-                    .whereEqualTo("ubicacion.codigoPostal", trimmedZip.toLong())
-                    .get()
-                    .await()
+                    .get().await()
+                Log.d("ProviderRepo", "📥 Fallback devolvió ${snapshot.size()} docs")
             }
 
             Log.d("ProviderRepo", "📥 Firestore devolvió ${snapshot.size()} documentos")
@@ -150,7 +277,7 @@ class ProviderRepository @Inject constructor(
                         matricula = (perfil["matricula"] as? String) ?: doc.getString("matricula"),
                         cuilCuit = (perfil["dniCuit"] as? String) ?: doc.getString("cuilCuit"),
                         rating = doc.getDouble("rating")?.toFloat() ?: (perfil["rating"] as? Number)?.toFloat() ?: 0f,
-                        isSubscribed = doc.getBoolean("suscripto") ?: doc.getBoolean("isSubscribed") ?: false,
+                        isSubscribed = (doc.getBoolean("isSubscribed") ?: false) || (doc.getBoolean("suscripto") ?: false),
                         isVerified = doc.getBoolean("verificado") ?: doc.getBoolean("isVerified") ?: false,
                         
                         // --- CARACTERÍSTICAS REPLICADAS ---

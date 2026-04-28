@@ -19,11 +19,29 @@ interface ConversationDao {
     suspend fun insertConversations(conversations: List<ConversationEntity>)
 
     //CONSULTAR
-    @Query("SELECT * FROM conversations ORDER BY lastMessageTimestamp DESC")
+    @Query("""
+        SELECT * FROM conversations c1
+        WHERE conversationId = (
+        SELECT conversationId FROM conversations c2
+        WHERE c2.userId = c1.userId
+        ORDER BY lastMessageTimestamp DESC
+        LIMIT 1
+        )
+        ORDER BY lastMessageTimestamp DESC
+    """)
     fun getAllConversations(): Flow<List<ConversationEntity>>
 
-    @Query("SELECT * FROM conversations ORDER BY lastMessageTimestamp DESC")
-    suspend fun  getAllConversationsSync(): List<ConversationEntity>
+    @Query("""
+        SELECT * FROM conversations c1
+        WHERE conversationId = (
+        SELECT conversationId FROM conversations c2
+        WHERE c2.userId = c1.userId
+        ORDER BY lastMessageTimestamp DESC
+        LIMIT 1
+        )
+        ORDER BY lastMessageTimestamp DESC
+    """)
+    suspend fun getAllConversationsSync(): List<ConversationEntity>
 
     @Query("SELECT * FROM conversations WHERE conversationId = :conversationId")
     suspend fun getConversationById(conversationId: String): ConversationEntity?

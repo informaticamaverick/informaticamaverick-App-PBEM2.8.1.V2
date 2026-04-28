@@ -47,27 +47,49 @@ class UserRepository @Inject constructor(
 
     /**
      * Comprime y sube una imagen a Storage si es una URI local.
+     * Soporta: content://, file://, base64 raw (JPEG/PNG), y URLs https (pasa directo).
      */
     private suspend fun uploadAndGetUrl(uriString: String?, path: String): String? {
         if (uriString.isNullOrBlank()) return null
-        
-        if (!uriString.startsWith("content://") && !uriString.startsWith("file://")) {
+
+        // URLs de Storage o web: pasar directo
+        if (uriString.startsWith("https://") || uriString.startsWith("http://")) {
             return uriString
         }
 
-        return try {
-            val uri = Uri.parse(uriString)
-            val bytes = ImageUtils.compressImageToWebP(context, uri) ?: return uriString
-            
-            val ref = storage.reference.child(path)
-            ref.putBytes(bytes).await()
-            val downloadUrl = ref.downloadUrl.await().toString()
-            Log.d("UserRepository", "✓ Imagen subida: $path")
-            downloadUrl
-        } catch (e: Exception) {
-            Log.e("UserRepository", "❌ Error subiendo imagen: ${e.message}")
-            uriString
+        // URIs locales (content:// o file://)
+        if (uriString.startsWith("content://") || uriString.startsWith("file://")) {
+            return try {
+                val uri = Uri.parse(uriString)
+                val bytes = ImageUtils.compressImageToWebP(context, uri) ?: return uriString
+                val ref = storage.reference.child(path)
+                ref.putBytes(bytes).await()
+                val downloadUrl = ref.downloadUrl.await().toString()
+                Log.d("UserRepository", "✓ Imagen subida: $path")
+                downloadUrl
+            } catch (e: Exception) {
+                Log.e("UserRepository", "❌ Error subiendo imagen: ${e.message}")
+                uriString
+            }
         }
+
+        // Base64 raw (strings largas que no son URIs ni URLs)
+        if (uriString.length > 100 && !uriString.startsWith("data:")) {
+            return try {
+                val bytes = android.util.Base64.decode(uriString, android.util.Base64.NO_WRAP)
+                val ref = storage.reference.child(path)
+                ref.putBytes(bytes).await()
+                val downloadUrl = ref.downloadUrl.await().toString()
+                Log.d("UserRepository", "✓ Base64 subida a Storage: $path")
+                downloadUrl
+            } catch (e: Exception) {
+                Log.w("UserRepository", "⚠️ No se pudo subir base64 a Storage: ${e.message}")
+                // Devolver como data URI para que Coil lo pueda mostrar localmente
+                "data:image/jpeg;base64,$uriString"
+            }
+        }
+
+        return uriString
     }
 
     /**

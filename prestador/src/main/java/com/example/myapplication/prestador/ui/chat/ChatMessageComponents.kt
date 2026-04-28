@@ -20,12 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
@@ -78,9 +76,6 @@ fun MessageBubble(
     message: Message,
     isFromCurrentUser: Boolean,
     senderAvatarUrl: String? = null,
-    onReschedule: (() -> Unit)? = null,
-    onAccept: (() -> Unit)? = null,
-    onReject: (() -> Unit)? = null,
     onVerPresupuesto: (() -> Unit)? = null,
     onImageClick: ((String?) -> Unit)? = null
 ){
@@ -204,26 +199,11 @@ fun MessageBubble(
                             fileSize = message.fileSize ?: 0
                         )
                     }
-                    Message.MessageType.APPOINTMENT -> {
-                        // 🐛 DEBUG: Log del mensaje de cita
-                        println("🎨 MessageBubble APPOINTMENT - ID: ${message.appointmentId}, Status: ${message.appointmentStatus}")
-
-                        AppointmentMessageContent(
-                            title = message.appointmentTitle ?: "",
-                            date = message.appointmentDate ?: "",
-                            time = message.appointmentTime ?: "",
-                            status = message.appointmentStatus,
-                            rejectionReason = message.rejectionReason,
-                            isFromCurrentUser = isFromCurrentUser,
-                            onReschedule = onReschedule,
-                            onAccept = onAccept,
-                            onReject = onReject
-                        )
-                    }
                     Message.MessageType.BUDGET -> {
                         BudgetMessageContent(message = message, onVerPresupuesto = onVerPresupuesto)
                     }
                     Message.MessageType.AUDIO -> { /* handled above with early return */ }
+                    Message.MessageType.APPOINTMENT -> { /* appointment UI removed */ }
                 }
 
                 // Timestamp y estado (excepto para AUDIO y BUDGET que tienen su propio layout)
@@ -689,248 +669,6 @@ fun DocumentMessageContent(
                 tint = Color.White,
                 modifier = Modifier.size(24.dp)
             )
-        }
-    }
-}
-
-// Contenido de mensaje de cita/appointment
-@Composable
-fun AppointmentMessageContent(
-    title: String,
-    date: String,
-    time: String,
-    status: Message.AppointmentProposalStatus? = null,
-    rejectionReason: String? = null,
-    isFromCurrentUser: Boolean = false,
-    onReschedule: (() -> Unit)? = null,
-    onAccept: (() -> Unit)? = null,
-    onReject: (() -> Unit)? = null
-) {
-    val colors = getPrestadorColors()
-
-    val accentColor = when (status) {
-        Message.AppointmentProposalStatus.ACCEPTED -> Color(0xFF10B981)
-        Message.AppointmentProposalStatus.REJECTED -> Color(0xFFEF4444)
-        else -> Color(0xFF7C3AED)
-    }
-
-    val statusLabel = when (status) {
-        Message.AppointmentProposalStatus.ACCEPTED -> "✓  Cita confirmada"
-        Message.AppointmentProposalStatus.REJECTED -> "✗  Propuesta rechazada"
-        else -> "⏳  Pendiente de respuesta"
-    }
-
-    // Formatear la fecha de yyyy-MM-dd a dd/MM/yyyy si viene en formato ISO
-    val displayDate = if (date.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
-        val parts = date.split("-")
-        "${parts[2]}/${parts[1]}/${parts[0]}"
-    } else date
-
-    Card(
-        modifier = Modifier
-            .widthIn(min = 220.dp, max = 280.dp)
-            .padding(2.dp),
-        shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceColor)
-    ) {
-        Column {
-            // Franja de color + título
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(accentColor)
-                    .padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text(
-                        text = "Solicitud de Turno",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        lineHeight = 15.sp
-                    )
-                    Text(
-                        text = "Nueva solicitud del cliente",
-                        fontSize = 10.sp,
-                        color = Color.White.copy(alpha = 0.8f),
-                        lineHeight = 12.sp
-                    )
-                }
-            }
-
-            // Cuerpo
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Fecha y hora con iconos
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Bloque FECHA
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(accentColor.copy(alpha = 0.07f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.CalendarToday, null, tint = accentColor, modifier = Modifier.size(14.dp))
-                        Column {
-                            Text("Fecha", fontSize = 9.sp, color = colors.textSecondary, fontWeight = FontWeight.Medium)
-                            Text(
-                                text = if (displayDate.isBlank()) "—" else displayDate,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textPrimary
-                            )
-                        }
-                    }
-                    // Bloque HORA
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(accentColor.copy(alpha = 0.07f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.Schedule, null, tint = accentColor, modifier = Modifier.size(14.dp))
-                        Column {
-                            Text("Hora", fontSize = 9.sp, color = colors.textSecondary, fontWeight = FontWeight.Medium)
-                            Text(
-                                text = if (time.isBlank()) "—" else time,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textPrimary
-                            )
-                        }
-                    }
-                }
-
-                // Notas / descripción si las hay
-                if (title.isNotBlank()) {
-                    Row(
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Default.Notes, null, tint = colors.textSecondary, modifier = Modifier.size(14.dp).padding(top = 2.dp))
-                        Text(
-                            text = title,
-                            fontSize = 12.sp,
-                            color = colors.textSecondary,
-                            lineHeight = 17.sp
-                        )
-                    }
-                }
-
-                HorizontalDivider(color = colors.divider)
-
-                // Badge de estado
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = accentColor.copy(alpha = 0.12f)
-                    ) {
-                        Text(
-                            text = statusLabel,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = accentColor,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        )
-                    }
-                }
-
-                // Motivo de rechazo
-                if (status == Message.AppointmentProposalStatus.REJECTED && !rejectionReason.isNullOrBlank()) {
-                    Text(
-                        text = "\"$rejectionReason\"",
-                        fontSize = 12.sp,
-                        color = colors.textSecondary,
-                        fontStyle = FontStyle.Italic
-                    )
-                }
-
-                // Mensaje de espera (cuando el prestador envió la propuesta)
-                if (status == Message.AppointmentProposalStatus.PENDING && isFromCurrentUser) {
-                    Text(
-                        text = "Esperando respuesta del cliente...",
-                        fontSize = 11.sp,
-                        color = colors.textSecondary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // Botones Aceptar / Rechazar
-                if (status == Message.AppointmentProposalStatus.PENDING && !isFromCurrentUser) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedButton(
-                            onClick = { onReject?.invoke() },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
-                            border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
-                            modifier = Modifier.weight(1f).height(36.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                        ) {
-                            Icon(Icons.Default.Close, null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Rechazar", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                        Button(
-                            onClick = { onAccept?.invoke() },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                            modifier = Modifier.weight(1f).height(36.dp),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                        ) {
-                            Icon(Icons.Default.Done, null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Aceptar", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-
-                // Botón reprogramar tras rechazo
-                if (status == Message.AppointmentProposalStatus.REJECTED) {
-                    OutlinedButton(
-                        onClick = { onReschedule?.invoke() },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primaryOrange),
-                        border = BorderStroke(1.dp, colors.primaryOrange.copy(alpha = 0.6f)),
-                        modifier = Modifier.fillMaxWidth().height(36.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Icon(Icons.Default.CalendarToday, null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Proponer nueva fecha", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
         }
     }
 }

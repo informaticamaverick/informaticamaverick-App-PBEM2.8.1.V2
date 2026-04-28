@@ -2,8 +2,6 @@ package com.example.myapplication.prestador.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.local.entity.AppointmentEntity
-import com.example.myapplication.prestador.data.repository.AppointmentRepository
 import com.example.myapplication.prestador.data.repository.PresupuestoRepository
 import com.example.myapplication.prestador.data.repository.ProviderRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -22,18 +20,14 @@ import javax.inject.Inject
 data class DashboardUiState(
     val saludo: String = "",
     val nombrePrestador: String = "",
-    val proximaCita: AppointmentEntity? = null,
-    val citasHoy: Int = 0,
     val gananciasSemanales: Double = 0.0,
     val serviceType: String = "",
-    val solicitudesRecientes: List<AppointmentEntity> = emptyList(),
     val isLoading: Boolean = true,
     val imageBase64: String? = null
 )
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val appointmentRepository: AppointmentRepository,
     private val presupuestoRepository: PresupuestoRepository,
     private val providerRepository: ProviderRepository
 ) : ViewModel() {
@@ -88,37 +82,11 @@ class DashboardViewModel @Inject constructor(
         val hoy = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             .format(Calendar.getInstance().time)
         viewModelScope.launch {
-            // Filtrar citas por el UID del usuario actual
-            appointmentRepository.getAppointmentsByProvider(uid)
-                .collect { citas ->
-                    val citasHoy = citas.count {
-                        it.date == hoy && it.status != "cancelado" && it.status != "cancelled"
-                    }
-                    val proximaCita =
-                        citas.filter { it.date >= hoy && (it.status == "confirmado" || it.status == "confirmed" || it.status == "pending") }
-
-                            .sortedWith(compareBy({ it.date }, { it.time }))
-                            .firstOrNull()
-                    _uiState.update {
-                        it.copy(
-                            citasHoy = citasHoy,
-                            proximaCita = proximaCita,
-                            solicitudesRecientes = citas
-                                .filter { c -> c.status == "pending"}
-                                .sortedByDescending { c -> c.date + c.time }
-                                .take(3),
-                            isLoading = false
-                        )
-                    }
-                }
-        }
-
-        viewModelScope.launch {
             val cal = Calendar.getInstance()
             cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
             val fromDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(cal.time)
             val ganancias = presupuestoRepository.getGananciasDesde(uid, fromDate)
-            _uiState.update { it.copy(gananciasSemanales = ganancias) }
+            _uiState.update { it.copy(gananciasSemanales = ganancias, isLoading = false) }
         }
     }
 }

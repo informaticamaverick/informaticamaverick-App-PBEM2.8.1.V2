@@ -3,6 +3,9 @@ package com.example.myapplication.prestador.ui.chat
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.data.ChatData
@@ -11,6 +14,7 @@ import com.example.myapplication.prestador.viewmodel.ChatViewModel
 import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.Color
 
 enum class ChatFilterState {
     ALL, NOTIFICATIONS_ON, VISIBLE,
@@ -81,6 +85,7 @@ fun PrestadorChatScreen(
     var showVisibilityDialog by remember { mutableStateOf(false) }
     var showDateRangeDialog by remember { mutableStateOf(false) }
     var showLockDialog by remember { mutableStateOf(false) }
+    var showConfirmDeleteDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(activeChatUserId) {
         onInConversationChange(activeChatUserId != null)
@@ -116,7 +121,13 @@ fun PrestadorChatScreen(
                 onShowNotificationDialog = { showNotificationDialog = true },
                 onShowVisibilityDialog = { showVisibilityDialog = true },
                 onShowDateRangeDialog = { showDateRangeDialog = true },
-                onShowLockDialog = { showLockDialog = true }
+                onShowLockDialog = { showLockDialog = true },
+                onDeleteSelected = { userIds ->
+                    chatViewModel.deleteConversations(userIds)
+                    selectedChatsForDeletion = emptySet()
+                    isDeletionMode = false
+                },
+                onRequestDeleteConfirmation = { showConfirmDeleteDialog = true },
             )
         } else {
             val userName = realConversations.firstOrNull { it.userId == chatUserId }?.userName ?: "Usuario"
@@ -155,6 +166,29 @@ fun PrestadorChatScreen(
         LockSettingsDialog(
             onDismiss = { showLockDialog = false },
             onConfirm = { showLockDialog = false }
+        )
+    }
+
+    if (showConfirmDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDeleteDialog = false },
+            title = { Text("Eliminar conversaciones") },
+            text = { Text("¿Eliminás ${selectedChatsForDeletion.size} conversación(es)? Esta acción no se puede deshacer.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        chatViewModel.deleteConversations(selectedChatsForDeletion)
+                        selectedChatsForDeletion = emptySet()
+                        isDeletionMode = false
+                        showConfirmDeleteDialog = false
+                    }
+                ) { Text("Eliminar", color = Color.Red) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDeleteDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
         )
     }
 }

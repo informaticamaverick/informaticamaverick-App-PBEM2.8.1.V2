@@ -40,8 +40,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.room.util.TableInfo
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager
-import com.example.myapplication.prestador.viewmodel.AppointmentViewModel
 import com.example.myapplication.prestador.viewmodel.DashboardUiState
 import com.example.myapplication.prestador.viewmodel.DashboardViewModel
 import java.util.UUID
@@ -68,15 +66,12 @@ fun InicioContent(
     onNavigateToChat: (clientId: String) -> Unit = {}
 ) {
     val viewModel: DashboardViewModel = hiltViewModel()
-    val appointmentViewModel: AppointmentViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
-    val appContext = androidx.compose.ui.platform.LocalContext.current
     val oportunidadesVM: OportunidadesViewModel = hiltViewModel()
     val oportunidades by oportunidadesVM.oportunidades.collectAsState()
     val oportunidadesLoading by oportunidadesVM.isLoading.collectAsState()
     val mensajeAceptar by oportunidadesVM.mensajeAceptar.collectAsState()
     val nuevaSolicitud by oportunidadesVM.nuevaSolicitud.collectAsState()
-    val proximaCita by oportunidadesVM.proximaCita.collectAsState()
     val restriccionHorario by oportunidadesVM.restriccionHorario.collectAsState()
     val restriccionDistancia by oportunidadesVM.restriccionDistancia.collectAsState()
     val conectadoFast by oportunidadesVM.conectadoFast.collectAsState()
@@ -92,20 +87,7 @@ fun InicioContent(
         onNavigateToPresupuesto = onNavigateToPresupuesto,
         onNavigateToPresupuestos = onNavigateToPresupuestos,
         onNavigateToChat = onNavigateToChat,
-        onCompletarCita = { appointmentId, clientId ->
-            appointmentViewModel.completeAppointment(appointmentId)
-
-            AppointmentRescheduleManager.addMessage(
-                clientId,
-                Message(
-                    id = UUID.randomUUID().toString(),
-                    timestamp = System.currentTimeMillis(),
-                    isFromCurrentUser = true,
-                    type = Message.MessageType.TEXT,
-                    text = "El servicio ha sido completado. ¡Gracias por elegirnos! Te pedimos que nos dejes tu calificación para seguir mejorando. ⭐⭐⭐⭐⭐"
-                )
-            )
-        },
+        onCompletarCita = { _, _ -> },
         oportunidades = oportunidades,
         oportunidadesLoading = oportunidadesLoading,
         mensajeAceptar = mensajeAceptar,
@@ -114,7 +96,6 @@ fun InicioContent(
         onLimpiarMensaje = { oportunidadesVM.limpiarMensaje() },
         nuevaSolicitud = nuevaSolicitud,
         onDescartarNuevaSolicitud = { oportunidadesVM.descartarNuevaSolicitud() },
-        proximaCita = proximaCita,
         restriccionHorario = restriccionHorario,
         restriccionDistancia = restriccionDistancia,
         conectadoFast = conectadoFast,
@@ -122,18 +103,8 @@ fun InicioContent(
         restriccionCitaEnCurso = restriccionCitaEnCurso,
         onToggleConexionFast = { oportunidadesVM.toggleConexionFast() },
         onNavigateToPromotionList = onNavigateToPromotionList,
-        onCompletarTrabajoFast = { appointmentId, clientId ->
+        onCompletarTrabajoFast = { appointmentId, _ ->
             oportunidadesVM.completarTrabajoFast(appointmentId)
-            AppointmentRescheduleManager.addMessage(
-                clientId,
-                Message(
-                    id = UUID.randomUUID().toString(),
-                    timestamp = System.currentTimeMillis(),
-                    isFromCurrentUser = true,
-                    type = Message.MessageType.TEXT,
-                    text = "⚡ ¡Servicio Fast completado! ¡Gracias por elegirnos! Te pedimos que nos dejes tu calificación para seguir mejorando. ⭐⭐⭐⭐⭐"
-                )
-            )
         },
     )
 }

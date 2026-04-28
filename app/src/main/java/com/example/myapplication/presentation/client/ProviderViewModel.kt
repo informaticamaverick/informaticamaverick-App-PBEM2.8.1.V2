@@ -89,11 +89,11 @@ class ProviderViewModel @Inject constructor(
         category to location?.zipCode
     }.flatMapLatest { (category, zipCode) ->
         flow {
-            if (category != null && zipCode != null) {
-                // [FIX]: Log para depuración
-                android.util.Log.d("ProviderVM", "🔄 Buscando proveedores para $category en CP $zipCode")
-                // Activa la lógica de "Primero Room, luego Firebase" para minimizar costos de Firestore
-                emitAll(repository.getProvidersByRegionAndCategory(zipCode, category))
+            if (category != null) {
+                // Si no hay zipCode, buscamos solo por categoría (sin filtro de zona)
+                val zip = zipCode ?: ""
+                android.util.Log.d("ProviderVM", "🔄 Buscando proveedores para $category en CP '$zip'")
+                emitAll(repository.getProvidersByRegionAndCategory(zip, category))
             } else {
                 emitAll(repository.allProviders)
             }
@@ -490,13 +490,12 @@ class ProviderViewModel @Inject constructor(
      * 3. Sincroniza con Firebase (esto actualiza Room automáticamente).
      */
     fun refreshData(category: String, zipCode: String?) {
-        if (zipCode == null) return
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
             try {
                 // Sincronizamos con Firebase (el repositorio se encarga de persistir en Room)
-                repository.searchAndSyncProviders(zipCode, category)
+                repository.searchAndSyncProviders(zipCode ?: "", category)
             } catch (e: Exception) {
                 _error.value = "Error al refrescar: ${e.message}"
             } finally {
@@ -532,6 +531,12 @@ class ProviderViewModel @Inject constructor(
     // --- SECCIÓN: OPERACIONES DE DETALLE (CONSERVADAS) ---
 
     fun getProviderById(providerId: String): Flow<Provider?> = repository.getProviderById(providerId)
+
+    fun loadProviderDetail(providerId: String) {
+        viewModelScope.launch {
+            repository.fetchAndSyncProviderDetail(providerId)
+        }
+    }
 
     /** Helpers para lógica de negocio en pantallas de detalle */
     fun getAllBranchesForProvider(provider: Provider): List<BranchProvider> {

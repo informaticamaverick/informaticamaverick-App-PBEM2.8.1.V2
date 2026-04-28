@@ -153,31 +153,15 @@ fun PrestadorDashboardScreen(
                         triggerCreateDialog = triggerCalendarCreate,
                         onCreateDialogHandled = { triggerCalendarCreate = false },
                         onNavigateToClientePerfil = onNavigateToClientePerfil,
-                        onNavigateToChat = { clientId, clientName, newDate, newTime, existingAppointmentId ->
-                            println("🔥 DASHBOARD: onNavigateToChat recibido")
-                            println("🔥 ClientId: $clientId, Nombre: $clientName")
-                            println("🔥 Nueva Fecha: $newDate, Nueva Hora: $newTime")
-                            println("🔥 AppointmentId: $existingAppointmentId")
-                            
-                            // 🎯 USAR NUEVO MANAGER INMUTABLE
-                            com.example.myapplication.prestador.viewmodel.AppointmentRescheduleManager.updateAppointmentProposal(
-                                clientId = clientId,
-                                appointmentId = existingAppointmentId,
-                                newDate = newDate,
-                                newTime = newTime
-                            )
-                            println("🔥 Mensaje actualizado a PENDING con nueva fecha/hora")
-
+                        onNavigateToChat = { clientId, _, _, _, _ ->
                             // Configurar qué chat abrir PRIMERO
                             targetChatUserId = clientId
-                            println("🔥 targetChatUserId configurado: $targetChatUserId")
                             
                             // Delay para asegurar que el estado se actualiza antes de navegar
                             coroutineScope.launch {
                                 delay(100) // Esperar 100ms
                                 // Cambiar al tab de chat
                                 selectedTab = 3
-                                println("🔥 Tab cambiado a: $selectedTab (chat)")
                             }
                         },
 
