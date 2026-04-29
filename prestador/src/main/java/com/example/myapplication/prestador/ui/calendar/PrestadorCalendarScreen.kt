@@ -42,6 +42,8 @@ import com.example.myapplication.prestador.data.model.ServiceType
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.utils.getServiceTypeConfig
 import com.example.myapplication.prestador.viewmodel.ChatViewModel
+import com.example.myapplication.prestador.viewmodel.CalendarViewModel
+import com.example.myapplication.prestador.data.local.entity.BookedAppointmentEntity
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -70,24 +72,6 @@ enum class AppointmentStatus {
     COMPLETED     // Completada
 }
 
-// Datos de ejemplo (luego los conectaremos con Firebase)
-val SAMPLE_APPOINTMENTS = listOf(
-    Appointment("apt_maria_001", "cliente_001", "2026-02-21", "15:00",
-        "Sesión de corte y color", "María González",
-        AppointmentStatus.PENDING,
-        Color(0xFF6366F1)),
-    Appointment("apt_carlos_001", "cliente_002", "2026-02-24", "10:00",
-        "Corte de cabello", "Carlos Rodríguez",
-        AppointmentStatus.CONFIRMED, Color(0xFFEC4899)),
-    Appointment("apt_ana_001", "cliente_003", "2026-02-25", "14:00",
-        "Peinado para evento", "Ana López",
-        AppointmentStatus.PENDING,
-        Color(0xFF10B981)),
-    Appointment("apt_juan_001", "cliente_004", "2026-02-27", "11:30",
-        "Corte y barba", "Juan Pérez",
-        AppointmentStatus.CONFIRMED, Color(0xFFF59E0B))
-)
-
 
 //pantalla principal del calendario para el prestador
 
@@ -102,6 +86,7 @@ fun PrestadorCalendarScreen(
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
     empleadosViewModel: EmpleadosViewModel = hiltViewModel(),
     chatViewModel: ChatViewModel = hiltViewModel(),
+    calendarViewModel: CalendarViewModel = hiltViewModel(),
     onNavigateToClientePerfil: (client: String) -> Unit = {}
 ) {
     val colors = getPrestadorColors()
@@ -157,8 +142,25 @@ fun PrestadorCalendarScreen(
         currentDate = newDate
     }
     
-    // Citas deshabilitadas — AppointmentViewModel y AppointmentEntity eliminados
-    val appointments = emptyList<Appointment>()
+    // Turnos confirmados desde Room
+    val bookedAppointments by calendarViewModel.allAppointments.collectAsState()
+    val appointments = remember(bookedAppointments) {
+        bookedAppointments.map { entity ->
+            Appointment(
+                id = entity.id,
+                clientId = entity.clientId,
+                date = entity.date,
+                time = entity.time,
+                service = entity.notes.ifBlank { "Turno reservado" },
+                clientName = entity.clientName,
+                status = if (entity.status == "CANCELLED") AppointmentStatus.CANCELLED
+                         else AppointmentStatus.CONFIRMED,
+                avatarColor = Color(
+                    (entity.clientId.hashCode().toLong() and 0xFFFFFFFF) or 0xFF000000
+                )
+            )
+        }
+    }
     
     //Formato de fecha para la comparacion
     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -380,9 +382,10 @@ fun PrestadorCalendarScreen(
         CancelAppointmentDialog(
             serviceTypeConfig = serviceTypeConfig,
             onConfirm = {
-                showCancelDialog = false
-                appointmentToCancel = null
-            },
+            appointmentToCancel?.let { calendarViewModel.cancelAppointment(it) }
+            showCancelDialog = false
+            appointmentToCancel = null
+        },
             onDismiss = {
                 showCancelDialog = false
                 appointmentToCancel = null

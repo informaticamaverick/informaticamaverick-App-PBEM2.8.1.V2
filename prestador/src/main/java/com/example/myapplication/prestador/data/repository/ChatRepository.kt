@@ -27,11 +27,13 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.net.Uri
+import com.example.myapplication.prestador.data.local.dao.BookedAppointmentDao
 import com.google.firebase.database.ChildEvent
 import com.google.firebase.database.ValueEventListener
 import com.example.myapplication.prestador.data.repository.NotificacionRepository
 import com.example.myapplication.prestador.data.model.NotificacionItem
 import com.example.myapplication.prestador.data.model.TipoNotificacion
+import com.example.myapplication.prestador.data.local.entity.BookedAppointmentEntity
 
 @Singleton
 class ChatRepository @Inject constructor(
@@ -42,7 +44,8 @@ class ChatRepository @Inject constructor(
     private val auth: FirebaseAuth,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val notificationHelper: NotificationHelper,
-    private val notificacionRepository: NotificacionRepository
+    private val notificacionRepository: NotificacionRepository,
+    private val bookedAppointmentDao: BookedAppointmentDao
 ) {
     private var messageListenerRef: DatabaseReference? = null
     private var messageChildListener: ChildEventListener? = null
@@ -370,6 +373,88 @@ class ChatRepository @Inject constructor(
         }
     }
 
+    //Enviar invitacion de calendario (CALENDAR_INVITE
+    //El prestador comparte su disponibilidad; el cliente elige dia y hora
+    suspend fun sendCalendarInviteMessage(
+        conversationId: String,
+        myUserId: String,
+        startDate: String,
+        endDate: String,
+        availabilityJson: String,
+        bookedSlotsJson: String,
+    ): MessageEntity {
+        val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
+        val messageId = UUID.randomUUID().toString()
+        val timestamp = System.currentTimeMillis()
+        val message = MessageEntity(
+            messageId = messageId,
+            conversationId = conversationId,
+            text = "Calendario de disponibilidad enviado",
+            timestamp = timestamp,
+            isFromCurrentUser = true,
+            messageType = "CALENDAR_INVITE",
+            calendarStartDate = startDate,
+            calendarEndDate = endDate,
+            availabilityJson = availabilityJson,
+            bookedSlotsJson = bookedSlotsJson
+        )
+        messageDao.insertMessage(message)
+        conversationDao.updateLastMessage(conversationId, "Calendario de disponibilidad", timestamp, "CALENDAR_INVITE")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Calendario de disponibilidad", timestamp)
+        try {
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(messageId)
+                .setValue(hashMapOf(
+                    "messageId" to messageId,
+                    "chatId" to conversationId,
+                    "senderId" to myUserId,
+                    "receiverId" to receiverId,
+                    "text" to "Calendario de disponibilidad enviado",
+                    "type" to "CALENDAR_INVITE",
+                    "timestamp" to timestamp,
+                    "isRead" to false,
+                    "isDelivered" to false,
+                    "calendarStartDate" to startDate,
+                    "calendarEndDate" to endDate,
+                    "availabilityJson" to availabilityJson,
+                    "bookedSlotsJson" to bookedSlotsJson
+                )).await()
+            messageDao.markAsSynced(messageId)
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error RTDB calendarInvite: ${e.message}")
+        }
+        return message
+    }
+
+    //Actualizar estado de solicitud de turno
+    //El prestador acepta o rechaza; se actualiza Room + RTDB
+    suspend fun updateAppointementRequestStatus(
+        messageId: String,
+        conversationId: String,
+        newStatus: String,        // "ACCEPTED" o "REJECTED"
+        rejectionReason: String? = null
+    ) {
+        //Actualizar en room
+        messageDao.updateAppointmentStatus(messageId, newStatus, rejectionReason)
+        //Actualizar en Firebase RTDB
+        try {
+            val updates = mutableMapOf<String, Any>("appointmentStatus" to newStatus)
+            if (rejectionReason != null) updates["rejectionReason"] = rejectionReason
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(messageId)
+                .updateChildren(updates).await()
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error RTDB updateRequestStatus: ${e.message}")
+        }
+    }
+
+    suspend fun updateAppointmentRequestStatus(
+        messageId: String,
+        conversationId: String,
+        newStatus: String,
+        rejectionReason: String? = null
+    ) = updateAppointementRequestStatus(messageId, conversationId, newStatus, rejectionReason)
+
     // ── Escuchar mensajes en tiempo real (RTDB) ────────────────────────────────
     fun startListening(conversationId: String, myUserId: String) {
         messageChildListener?.let { messageListenerRef?.removeEventListener(it) }
@@ -435,7 +520,12 @@ class ChatRepository @Inject constructor(
                     appointmentStatus = snapshot.child("appointmentStatus").getValue(String::class.java)
                         ?: if (msgType == "VISIT") "PENDING" else null,
                     rejectionReason = snapshot.child("rejectionReason").getValue(String::class.java),
-                    budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java)
+                    budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java),
+                    calendarStartDate = snapshot.child("calendarStartDate").getValue(String::class.java),
+                    calendarEndDate = snapshot.child("calendarEndDate").getValue(String::class.java),
+                    availabilityJson = snapshot.child("availabilityJson").getValue(String::class.java),
+                    bookedSlotsJson = snapshot.child("bookedSlotsJson").getValue(String::class.java),
+                    calendarInviteMessageId = snapshot.child("calendarInviteMessageId").getValue(String::class.java),
                 )
                 scope.launch {
                     try {
@@ -1016,6 +1106,93 @@ class ChatRepository @Inject constructor(
                 Log.e("ChatRepo", "Error borrando de Firestore: ${e.message}")
             }
         }
+    }
+
+    suspend fun saveBookedAppointmet(
+        messageId: String,
+        clientId: String,
+        clientName: String,
+        date: String,
+        time: String,
+        service: String = "",
+        chatId: String
+    ) {
+        bookedAppointmentDao.insertAppointment(
+            BookedAppointmentEntity(
+                id = "appt_$messageId",
+                clientId = clientId,
+                clientName = clientName,
+                date = date,
+                time = time,
+                service = service,
+                status = "CONFIRMED",
+                chatId = chatId,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    // ── Enviar comprobante de turno confirmado ──────────────────────────────────
+    suspend fun sendAppointmentReceiptMessage(
+        conversationId: String,
+        myUserId: String,
+        date: String,
+        time: String,
+        service: String,
+        providerName: String,
+        isTechnician: Boolean,
+        profession: String?,
+        address: String?,
+        code: String
+    ): MessageEntity {
+        val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
+        val message = MessageEntity(
+            messageId = UUID.randomUUID().toString(),
+            conversationId = conversationId,
+            text = "Turno confirmado",
+            timestamp = System.currentTimeMillis(),
+            isFromCurrentUser = true,
+            messageType = "APPOINTMENT_RECEIPT",
+            appointmentDate = date,
+            appointmentTime = time,
+            receiptService = service,
+            receiptProviderName = providerName,
+            receiptIsTechnician = isTechnician,
+            receiptProfession = profession,
+            receiptAddress = address,
+            receiptCode = code
+        )
+        messageDao.insertMessage(message)
+        conversationDao.updateLastMessage(conversationId, "Turno confirmado", message.timestamp, "APPOINTMENT_RECEIPT")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Turno confirmado", message.timestamp)
+        try {
+            val receiptData = hashMapOf(
+                "messageId" to message.messageId,
+                "chatId" to conversationId,
+                "senderId" to myUserId,
+                "receiverId" to receiverId,
+                "text" to "Turno confirmado",
+                "type" to "APPOINTMENT_RECEIPT",
+                "timestamp" to message.timestamp,
+                "appointmentDate" to date,
+                "appointmentTime" to time,
+                "receiptService" to service,
+                "receiptProviderName" to providerName,
+                "receiptIsTechnician" to isTechnician,
+                "receiptProfession" to (profession ?: ""),
+                "receiptAddress" to (address ?: ""),
+                "receiptCode" to code,
+                "isRead" to false,
+                "isDelivered" to false
+            )
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(message.messageId)
+                .setValue(receiptData).await()
+            messageDao.markAsSynced(message.messageId)
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error sending receipt: ${e.message}")
+        }
+        return message
     }
 
 }

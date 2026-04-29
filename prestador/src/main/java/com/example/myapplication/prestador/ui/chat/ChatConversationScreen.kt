@@ -134,6 +134,9 @@ fun ChatConversationScreen(
             "DOCUMENT" -> Message.MessageType.DOCUMENT
             "APPOINTMENT" -> Message.MessageType.APPOINTMENT
             "BUDGET" -> Message.MessageType.BUDGET
+            "CALENDAR_INVITE" -> Message.MessageType.CALENDAR_INVITE
+            "APPOINTMENT_REQUEST" -> Message.MessageType.APPOINTMENT_REQUEST
+            "APPOINTMENT_RECEIPT" -> Message.MessageType.APPOINTMENT_RECEIPT
             else -> Message.MessageType.TEXT
         }
         val budgetObj = if (type == Message.MessageType.BUDGET && entity.budgetDataJson != null) {
@@ -176,7 +179,19 @@ fun ChatConversationScreen(
             budgetImpuestosJson = budgetObj?.optString("impuestosJ"),
             budgetNotas = budgetObj?.optString("notas"),
             budgetValidezDias = budgetObj?.optInt("validezDias"),
-            budgetTituloTrabajo = budgetObj?.optString("titulo")
+            budgetTituloTrabajo = budgetObj?.optString("titulo"),
+            calendarStartDate = entity.calendarStartDate,
+            calendarEndDate = entity.calendarEndDate,
+            availabilityJson = entity.availabilityJson,
+            bookedSlotsJson = entity.bookedSlotsJson,
+            calendarInviteMessageId = entity.calendarInviteMessageId,
+            // Campos del recibo de turno confirmado
+            receiptService = entity.receiptService,
+            receiptProviderName = entity.receiptProviderName,
+            receiptProfession = entity.receiptProfession,
+            receiptAddress = entity.receiptAddress,
+            receiptCode = entity.receiptCode,
+            receiptIsTechnician = entity.receiptIsTechnician
         )
     }.toList() }
 
@@ -195,6 +210,7 @@ fun ChatConversationScreen(
 
     // Estados para adjuntos y grabación
     var showAttachMenu by remember { mutableStateOf(false) }
+    var showSendCalendarDialog by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
     var recordingTime by remember { mutableStateOf(0) }
 
@@ -653,7 +669,39 @@ fun ChatConversationScreen(
                                 onVerPresupuesto = if (message.type == Message.MessageType.BUDGET) {
                                     { presupuestoMsgToView = message }
                                 } else null,
-                                onImageClick = { url -> zoomedImageUrl = url }
+                                onImageClick = { url -> zoomedImageUrl = url },
+                                onAccept = if (message.type == Message.MessageType.APPOINTMENT_REQUEST &&
+                                    message.appointmentStatus == Message.AppointmentProposalStatus.PENDING) {
+                                    { serviceTitle ->
+                                        chatViewModel.respondToAppointmentRequest(
+                                            messageId = message.id,
+                                            clientName = userName,
+                                            date = message.appointmentDate ?: "",
+                                            time = message.appointmentTime ?: "",
+                                            service = serviceTitle,
+                                            providerName = providerDisplayName,
+                                            serviceType = provider?.serviceType ?: "PROFESSIONAL",
+                                            doesHomeVisits = provider?.doesHomeVisits ?: false,
+                                            profession = provider?.profesion,
+                                            providerAddress = provider?.address?.fullString(),
+                                            accepted = true
+                                        )
+                                    }
+                                } else null,
+
+                                onReject = if (message.type == Message.MessageType.APPOINTMENT_REQUEST &&
+                                    message.appointmentStatus == Message.AppointmentProposalStatus.PENDING) {
+                                    { msgId, reason ->
+                                        chatViewModel.respondToAppointmentRequest(
+                                            messageId = msgId,
+                                            clientName = userName,
+                                            date = message.appointmentDate ?: "",
+                                            time = message.appointmentTime ?: "",
+                                            accepted = false,
+                                            rejectionReason = reason
+                                        )
+                                    }
+                                } else null
                             )
                         }
                     }
@@ -805,9 +853,30 @@ fun ChatConversationScreen(
                                 showAttachMenu = false
                                 showBudgetSheet = true
                             },
-                            onScheduleClick = { showAttachMenu = false }
+                            onScheduleClick = {
+                                showAttachMenu = false
+                                showSendCalendarDialog = true
+                            }
                         )
                     }
+                }
+
+                // Dialog para enviar calendario de disponibilidad
+                if (showSendCalendarDialog) {
+                    SendCalendarDialog(
+                        providerId = providerId,
+                        onDismiss = { showSendCalendarDialog = false },
+                        onSend = { startDate, endDate, availabilityJson, bookedSlotsJson ->
+                            chatViewModel.sendCalendarInvite(
+                                startDate = startDate,
+                                endDate = endDate,
+                                availabilityJson = availabilityJson,
+                                bookedSlotsJson = bookedSlotsJson
+                            )
+                            showSendCalendarDialog = false
+                            coroutineScope.launch { listState.animateScrollToItem(0) }
+                        }
+                    )
                 }
 
                 // Sheet de presupuesto en el chat

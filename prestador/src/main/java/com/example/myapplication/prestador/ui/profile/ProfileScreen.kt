@@ -48,6 +48,8 @@ import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.ProfileState
+import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
+import com.example.myapplication.prestador.data.local.entity.toDayAbbr
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -55,17 +57,23 @@ fun ProfileScreen(
     onBack: () -> Unit = {},
     onEditProfile: () -> Unit = {},
     onSettings: () -> Unit = {},
-    viewModel: EditProfileViewModel = hiltViewModel()
+    viewModel: EditProfileViewModel = hiltViewModel(),
+    scheduleVm: AvailabilityViewModel = hiltViewModel()
 ){
     val colors = getPrestadorColors()
     val profileState by viewModel.profileState.collectAsState()
     val provider = (profileState as? ProfileState.Success)?.provider
+    val horarios by scheduleVm.schedules.collectAsState()
     val listState = rememberLazyListState()
     var showCompanyView by remember(provider) { mutableStateOf(
         provider?.priorizarEmpresa == true && provider.companies.isNotEmpty()
     )
     }
     var showServicioProviderDialog by remember { mutableStateOf(false) }
+    var showHorariosDialog by remember { mutableStateOf(false) }
+    var horarioToEdit by remember { mutableStateOf<com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity?>(null) }
+    var showAddScheduleDialog by remember { mutableStateOf(false) }
+    var showDeleteScheduleDialog by remember { mutableStateOf<List<com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity>?>(null) }
     var editProviderDoesService by remember(provider) { mutableStateOf(provider?.doesService ?: false) }
     var editProviderDoesProduct by remember(provider) { mutableStateOf(provider?.doesProduct ?: false) }
 
@@ -195,7 +203,36 @@ fun ProfileScreen(
 
             // ── 2. DATOS PROFESIONALES ───────────────────────────────────
             item {
-                ProfileSectionCard(Icons.Default.Work, "Datos Profesionales", colors.primaryOrange, colors) {
+                ProfileSectionCard(
+                    icon = Icons.Default.Work,
+                    title = "Datos Profesionales",
+                    iconColor = colors.primaryOrange,
+                    colors = colors,
+                    actionButton = {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { showHorariosDialog = true }
+                                .background(Color(0xFF7C3AED).copy(alpha = 0.10f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CalendarMonth,
+                                contentDescription = "Horarios de Atención",
+                                tint = Color(0xFF7C3AED),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                "Horarios",
+                                fontSize = 9.sp,
+                                color = Color(0xFF7C3AED),
+                                fontWeight = FontWeight.SemiBold,
+                                lineHeight = 11.sp
+                            )
+                        }
+                    }
+                ) {
                     if (!provider.profesion.isNullOrBlank()) {
                         ProfileInfoRow("🎓", "Profesión", provider.profesion!!, colors)
                         Spacer(Modifier.height(8.dp))
@@ -347,6 +384,167 @@ fun ProfileScreen(
                                     Icons.Default.Store,         editProviderTurnosLocal)    {
                                     editProviderTurnosLocal = it }
                             }
+                        }
+                    )
+                }
+                // ── POPUP HORARIOS DE ATENCIÓN ───────────────────────────
+                if (showHorariosDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showHorariosDialog = false },
+                        title = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.CalendarMonth,
+                                    null,
+                                    tint = Color(0xFF7C3AED),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Horarios de Atención", fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (horarios.isEmpty()) {
+                                    Text(
+                                        "Sin horarios configurados",
+                                        fontSize = 13.sp,
+                                        color = colors.textSecondary
+                                    )
+                                } else {
+                                    val agrupados = horarios.groupBy {
+                                        Triple(it.startTime, it.endTime, it.appointmentDuration)
+                                    }
+                                    agrupados.forEach { (_, grupo) ->
+                                        val dias = grupo.sortedBy { it.dayOfWeek }
+                                            .joinToString(" · ") { it.dayOfWeek.toDayAbbr() }
+                                        val primero = grupo.first()
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color(0xFF7C3AED).copy(alpha = 0.07f),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.Schedule,
+                                                    null,
+                                                    Modifier.size(16.dp),
+                                                    tint = Color(0xFF7C3AED)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(
+                                                        dias,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(0xFF7C3AED)
+                                                    )
+                                                    Text(
+                                                        "${primero.startTime} - ${primero.endTime}  ·  ${primero.appointmentDuration} min",
+                                                        fontSize = 12.sp,
+                                                        color = colors.textSecondary
+                                                    )
+                                                }
+                                                // Editar
+                                                IconButton(
+                                                    onClick = {
+                                                        horarioToEdit = primero
+                                                        showAddScheduleDialog = true
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        "Editar",
+                                                        tint = Color(0xFF7C3AED),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                                // Eliminar
+                                                IconButton(
+                                                    onClick = { showDeleteScheduleDialog = grupo },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Delete,
+                                                        "Eliminar",
+                                                        tint = Color(0xFFFF5252),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    horarioToEdit = null
+                                    showAddScheduleDialog = true
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED))
+                            ) {
+                                Icon(Icons.Default.Add, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Agregar")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showHorariosDialog = false }) { Text("Cerrar") }
+                        }
+                    )
+                }
+                // Dialog agregar/editar horario
+                if (showAddScheduleDialog) {
+                    AddScheduleDialog(
+                        schedule = horarioToEdit,
+                        onDismiss = {
+                            showAddScheduleDialog = false
+                            horarioToEdit = null
+                        },
+                        onConfirm = { days, startTime, endTime, duration, worksByAppointment ->
+                            if (horarioToEdit != null) {
+                                scheduleVm.updateSchedule(
+                                    horarioToEdit!!.copy(
+                                        dayOfWeek = days.first(),
+                                        startTime = startTime,
+                                        endTime = endTime,
+                                        appointmentDuration = duration,
+                                        worksByAppointment = worksByAppointment
+                                    )
+                                )
+                            } else {
+                                days.forEach { day ->
+                                    scheduleVm.addSchedule(day, startTime, endTime, duration, worksByAppointment)
+                                }
+                            }
+                            showAddScheduleDialog = false
+                            horarioToEdit = null
+                        },
+                        colors = colors
+                    )
+                }
+                // Dialog confirmar eliminación
+                showDeleteScheduleDialog?.let { grupo ->
+                    AlertDialog(
+                        onDismissRequest = { showDeleteScheduleDialog = null },
+                        title = { Text("Eliminar horario") },
+                        text = { Text("¿Eliminás este horario?") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                grupo.forEach { scheduleVm.deleteSchedule(it.id) }
+                                showDeleteScheduleDialog = null
+                            }) {
+                                Text("Eliminar", color = Color(0xFFFF5252))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeleteScheduleDialog = null }) { Text("Cancelar") }
                         }
                     )
                 }
@@ -956,6 +1154,7 @@ private fun ProfileSectionCard(
     title: String,
     iconColor: Color,
     colors: PrestadorColors,
+    actionButton: @Composable (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
@@ -979,6 +1178,10 @@ private fun ProfileSectionCard(
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colors.textPrimary)
+                if (actionButton != null) {
+                    Spacer(Modifier.weight(1f))
+                    actionButton()
+                }
             }
             Spacer(Modifier.height(12.dp))
             content()
@@ -1088,30 +1291,8 @@ private fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorC
     val branchName = branch.name.ifBlank { if (index == 0) "Casa Central" else "Sucursal ${index + 1}" }
     val dir = branch.address.fullString()
 
-    // Título + chips de servicios activos (solo lectura)
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(branchName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-        Spacer(Modifier.weight(1f))
-        val activeIcons = buildList<ImageVector> {
-            if (branch.doesService) add(Icons.Default.Build)
-            if (branch.doesProduct) add(Icons.Default.ShoppingBag)
-            if (branch.acceptsAppointments) add(Icons.Default.CalendarMonth)
-            if (branch.doesHomeVisits) add(Icons.Default.DirectionsCar)
-            if (branch.doesShipping) add(Icons.Default.LocalShipping)
-            if (branch.works24h) add(Icons.Default.Warning)
-            if (branch.hasPhysicalLocation) add(Icons.Default.Store)
-        }
-        activeIcons.forEach { icon ->
-            Icon(
-                icon, contentDescription = null,
-                modifier = Modifier.size(16.dp).padding(end = 2.dp),
-                tint = Color(0xFF8B5CF6)
-            )
-        }
-    }
+    // Título
+    Text(branchName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
     Spacer(Modifier.height(12.dp))
 
     if (dir.isNotBlank()) {
@@ -1133,6 +1314,49 @@ private fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorC
             colors = colors
         )
     }
+    // Chips de servicios activos de esta sede
+    val activeServices = buildList<Pair<ImageVector, String>> {
+        if (branch.doesService)          add(Icons.Default.Build         to "Realiza servicios")
+        if (branch.doesProduct)          add(Icons.Default.ShoppingBag   to "Vende productos")
+        if (branch.acceptsAppointments)  add(Icons.Default.CalendarMonth  to "Acepta turnos")
+        if (branch.doesHomeVisits)       add(Icons.Default.DirectionsCar  to "A domicilio")
+        if (branch.doesShipping)         add(Icons.Default.LocalShipping  to "Realiza envíos")
+        if (branch.works24h)             add(Icons.Default.Warning        to "Urgencias 24hs")
+        if (branch.hasPhysicalLocation)  add(Icons.Default.Store          to "Atención en local")
+    }
+    if (activeServices.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "SERVICIOS DE ESTA SEDE",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = colors.textSecondary,
+            letterSpacing = 0.5.sp
+        )
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            activeServices.forEach { (icon, label) ->
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF8B5CF6).copy(alpha = 0.1f),
+                    border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.25f))
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Icon(icon, null, Modifier.size(13.dp), tint = Color(0xFF8B5CF6))
+                        Spacer(Modifier.width(5.dp))
+                        Text(label, fontSize = 11.sp, color = Color(0xFF8B5CF6), fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        }
+    }
+
     if (branch.employees.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))
         Text("EQUIPO DE TRABAJO", fontSize = 11.sp, fontWeight = FontWeight.Bold,
@@ -1534,16 +1758,28 @@ private fun BranchesPager(
                                 .padding(vertical = 8.dp, horizontal = 4.dp)
                         )
                     } else {
-                        Text(
-                            text = "Sucursal",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSelected) Color.White else colors.textSecondary,
-                            textAlign = TextAlign.Center,
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp, horizontal = 4.dp)
-                        )
+                                .padding(vertical = 6.dp, horizontal = 4.dp)
+                        ) {
+                            Text(
+                                text = "Sucursal",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.White else colors.textSecondary,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = branch.name.ifBlank { "Sucursal ${index + 1}" },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (isSelected) Color.White.copy(alpha = 0.85f) else colors.textSecondary.copy(alpha = 0.7f),
+                                textAlign = TextAlign.Center,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }

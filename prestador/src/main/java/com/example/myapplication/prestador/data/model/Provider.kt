@@ -33,6 +33,7 @@ data class Provider(
     val doesHomeVisits: Boolean = false,
     val doesShipping: Boolean = false,
     val acceptsAppointments: Boolean = false,
+    val trabajaConOtros: Boolean = false,
 
     val isSubscribed: Boolean = false,
     val isVerified: Boolean = false,
@@ -86,5 +87,4 @@ data class Provider(
     val pais: String? get() = address?.pais
     val provinciaLocal: String? get() = address?.provincia
     val codigoPostalLocal: String? get() = address?.codigoPostal
-    val trabajaConOtros: Boolean get() = false
 }

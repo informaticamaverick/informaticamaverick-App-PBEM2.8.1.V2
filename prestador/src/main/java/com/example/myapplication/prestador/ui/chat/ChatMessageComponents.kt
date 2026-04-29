@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
@@ -77,11 +78,15 @@ fun MessageBubble(
     isFromCurrentUser: Boolean,
     senderAvatarUrl: String? = null,
     onVerPresupuesto: (() -> Unit)? = null,
-    onImageClick: ((String?) -> Unit)? = null
+    onImageClick: ((String?) -> Unit)? = null,
+    onAccept: ((messageId: String) -> Unit)? = null,
+    onReject: ((messageId: String, reason: String?) -> Unit)? = null
 ){
     val colors = getPrestadorColors()
     val bubbleColor = if (message.type == Message.MessageType.BUDGET ||
-        message.type == Message.MessageType.APPOINTMENT) {
+        message.type == Message.MessageType.APPOINTMENT ||
+        message.type == Message.MessageType.CALENDAR_INVITE ||
+        message.type == Message.MessageType.APPOINTMENT_REQUEST) {
         Color.Transparent
     } else if (isFromCurrentUser) {
         colors.primaryOrange
@@ -122,7 +127,9 @@ fun MessageBubble(
         ) {
             Column(
                 modifier = if (message.type == Message.MessageType.BUDGET ||
-                    message.type == Message.MessageType.APPOINTMENT) Modifier else Modifier.padding(
+                    message.type == Message.MessageType.APPOINTMENT ||
+                    message.type == Message.MessageType.CALENDAR_INVITE ||
+                    message.type == Message.MessageType.APPOINTMENT_REQUEST) Modifier else Modifier.padding(
                         start = 12.dp,
                         end = 12.dp,
                         top = 8.dp,
@@ -203,11 +210,45 @@ fun MessageBubble(
                         BudgetMessageContent(message = message, onVerPresupuesto = onVerPresupuesto)
                     }
                     Message.MessageType.AUDIO -> { /* handled above with early return */ }
-                    Message.MessageType.APPOINTMENT -> { /* appointment UI removed */ }
+                    Message.MessageType.APPOINTMENT -> { /* legacy — not rendered */ }
+                    Message.MessageType.CALENDAR_INVITE -> {
+                        CalendarInviteBubble(
+                            startDate = message.calendarStartDate ?: "",
+                            endDate = message.calendarEndDate ?: "",
+                            isFromCurrentUser = isFromCurrentUser
+                        )
+                    }
+                    Message.MessageType.APPOINTMENT_REQUEST -> {
+                        AppointmentRequestBubble(
+                            date = message.appointmentDate ?: "",
+                            time = message.appointmentTime ?: "",
+                            title = message.appointmentTitle ?: "",
+                            status = message.appointmentStatus,
+                            isFromCurrentUser = isFromCurrentUser,
+                            onAccept = onAccept?.let { cb -> { serviceTitle -> cb(message.id) } },
+                            onReject = onReject?.let { cb -> { reason -> cb(message.id, reason) } }
+                        )
+                    }
+                    Message.MessageType.APPOINTMENT_RECEIPT -> {
+                        AppointmentReceiptBubble(
+                            date = message.appointmentDate ?: "",
+                            time = message.appointmentTime ?: "",
+                            service = message.receiptService ?: "",
+                            providerName = message.receiptProviderName ?: "",
+                            isTechnician = message.receiptIsTechnician,
+                            profession = message.receiptProfession,
+                            address = message.receiptAddress,
+                            code = message.receiptCode,
+                            isFromCurrentUser = isFromCurrentUser
+                        )
+                    }
                 }
 
                 // Timestamp y estado (excepto para AUDIO y BUDGET que tienen su propio layout)
-                if (message.type != Message.MessageType.AUDIO && message.type != Message.MessageType.BUDGET && message.type != Message.MessageType.TEXT) {
+                if (message.type != Message.MessageType.AUDIO && message.type != Message.MessageType.BUDGET && message.type != Message.MessageType.TEXT &&
+                    message.type != Message.MessageType.CALENDAR_INVITE &&
+                    message.type != Message.MessageType.APPOINTMENT_REQUEST &&
+                    message.type != Message.MessageType.APPOINTMENT_RECEIPT) {
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Row(
@@ -989,3 +1030,366 @@ fun ImageZoomDialog(
     }
 }
 
+/**
+ * Burbuja para CALENDAR_INVITE (lado del prestador).
+ * Muestra un resumen de la disponibilidad enviada al cliente.
+ */
+@Composable
+fun CalendarInviteBubble(
+    startDate: String,
+    endDate: String,
+    isFromCurrentUser: Boolean
+) {
+    val colors = getPrestadorColors()
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isFromCurrentUser) colors.primaryOrange.copy(alpha = 0.15f) else colors.surfaceElevated,
+        border = BorderStroke(1.dp, colors.primaryOrange.copy(alpha = 0.4f)),
+        modifier = Modifier.widthIn(min = 200.dp, max = 280.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = null,
+                    tint = colors.primaryOrange,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Calendario enviado",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = colors.textPrimary
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Del $startDate al $endDate",
+                fontSize = 12.sp,
+                color = colors.textSecondary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "El cliente puede elegir un turno disponible",
+                fontSize = 11.sp,
+                color = colors.textSecondary,
+                fontStyle = FontStyle.Italic
+            )
+        }
+    }
+}
+
+/**
+ * Burbuja para APPOINTMENT_REQUEST (lado del prestador).
+ * El cliente solicitó un turno → el prestador puede Aceptar o Rechazar.
+ * Cuando ya tiene estado ACCEPTED/REJECTED muestra el badge correspondiente.
+ */
+@Composable
+fun AppointmentRequestBubble(
+    date: String,
+    time: String,
+    title: String = "",
+    status: Message.AppointmentProposalStatus?,
+    isFromCurrentUser: Boolean,
+    onAccept: ((serviceTitle: String) -> Unit)? = null,
+    onReject: ((reason: String?) -> Unit)? = null
+) {
+    val colors = getPrestadorColors()
+    var showRejectDialog by remember { mutableStateOf(false) }
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    var rejectReason by remember { mutableStateOf("") }
+    var serviceTitle by remember { mutableStateOf(title.ifBlank { "Servicio técnico" }) }
+
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = colors.surfaceElevated,
+            border = BorderStroke(
+                1.dp, when (status) {
+                    Message.AppointmentProposalStatus.ACCEPTED -> Color(0xFF4CAF50)
+                    Message.AppointmentProposalStatus.REJECTED -> Color(0xFFF44336)
+                    else -> colors.primaryOrange.copy(alpha = 0.4f)
+                }
+            ),
+            modifier = Modifier.widthIn(min = 220.dp, max = 280.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = colors.primaryOrange,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Solicitud de turno",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = colors.textPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(text = "📅 $date", fontSize = 13.sp, color = colors.textPrimary)
+                Text(text = "🕐 $time", fontSize = 13.sp, color = colors.textPrimary)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                when (status) {
+                    Message.AppointmentProposalStatus.ACCEPTED -> {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF4CAF50)
+                        ) {
+                            Text(
+                                text = "✅ Aceptado",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(
+                                    horizontal = 10.dp,
+                                    vertical = 4.dp
+                                )
+                            )
+                        }
+                    }
+
+                    Message.AppointmentProposalStatus.REJECTED -> {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFF44336)
+                        ) {
+                            Text(
+                                text = "❌ Rechazado",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(
+                                    horizontal = 10.dp,
+                                    vertical = 4.dp
+                                )
+                            )
+                        }
+                    }
+
+                    else -> {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { showConfirmDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(vertical = 6.dp)
+                            ) {
+                                Text("Aceptar", fontSize = 12.sp)
+                            }
+                            OutlinedButton(
+                                onClick = { showRejectDialog = true },
+                                border = BorderStroke(1.dp, Color(0xFFF44336)),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(vertical = 6.dp)
+                            ) {
+                                Text("Rechazar", fontSize = 12.sp, color = Color(0xFFF44336))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Dialog para confirmar y editar servicio
+        if (showConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = { showConfirmDialog = false },
+                title = { Text("Confirmar turno") },
+                text = {
+                    Column {
+                        Text("Servicio / Motivo:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = serviceTitle,
+                            onValueChange = { serviceTitle = it },
+                            placeholder = { Text("Ej: Instalación de gas") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onAccept?.invoke(serviceTitle.ifBlank { "Servicio técnico" })
+                            showConfirmDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                    ) { Text("Confirmar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showConfirmDialog = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        // Dialog para rechazar
+        if (showRejectDialog) {
+            AlertDialog(
+                onDismissRequest = { showRejectDialog = false },
+                title = { Text("Rechazar solicitud") },
+                text = {
+                    Column {
+                        Text("Podés indicar un motivo (opcional):", fontSize = 13.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = rejectReason,
+                            onValueChange = { rejectReason = it },
+                            placeholder = { Text("Ej: No tengo disponibilidad ese día") },
+                            singleLine = false,
+                            maxLines = 3,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            onReject?.invoke(rejectReason.ifBlank { null })
+                            showRejectDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
+                    ) { Text("Rechazar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRejectDialog = false }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+    }
+
+/**
+ * Comprobante de turno confirmado (APPOINTMENT_RECEIPT)
+ * Se envía automáticamente cuando el prestador acepta un turno.
+ * Muestra: Servicio, Profesional, Fecha, Hora, Domicilio/Consultorio, Código.
+ */
+@Composable
+fun AppointmentReceiptBubble(
+    date: String,
+    time: String,
+    service: String,
+    providerName: String,
+    isTechnician: Boolean,
+    profession: String? = null,
+    address: String? = null,
+    code: String? = null,
+    isFromCurrentUser: Boolean
+) {
+    val colors = getPrestadorColors()
+    
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isFromCurrentUser) colors.primaryOrange.copy(alpha = 0.12f) else colors.surfaceElevated,
+        border = BorderStroke(1.5.dp, colors.primaryOrange.copy(alpha = 0.5f)),
+        modifier = Modifier.widthIn(min = 220.dp, max = 300.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Done,
+                    contentDescription = null,
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isTechnician) "Visita técnica confirmada" else "Turno confirmado",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = colors.textPrimary
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = colors.primaryOrange.copy(alpha = 0.2f), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(10.dp))
+            
+            // Contenido - Solo lo esencial
+            val textColor = colors.textPrimary
+            val secondaryColor = colors.textSecondary
+            
+            // Servicio
+            if (service.isNotBlank()) {
+                Text(
+                    text = service,
+                    fontSize = 12.sp,
+                    color = textColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+            
+            // Profesional
+            Text(
+                text = providerName,
+                fontSize = 11.sp,
+                color = secondaryColor
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Fecha
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("📅", fontSize = 13.sp)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = date,
+                    fontSize = 11.sp,
+                    color = textColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            
+            // Hora
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🕐", fontSize = 13.sp)
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = time,
+                    fontSize = 11.sp,
+                    color = textColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            
+            // Domicilio/Consultorio si existe
+            if (!address.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Text("📍", fontSize = 13.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = address,
+                        fontSize = 10.sp,
+                        color = secondaryColor,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            
+            // Código
+            if (!code.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(color = colors.primaryOrange.copy(alpha = 0.2f), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = code,
+                    fontSize = 10.sp,
+                    color = colors.primaryOrange,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+            }
+        }
+    }
+}

@@ -55,19 +55,6 @@ object DatabaseModule {
         return database.clienteDao()
     }
 
-    /*
-    @Provides
-    @Singleton
-    fun provideBusinessDao(database: PrestadorDatabase): BusinessDao {
-        return database.businessDao()
-    }
-
-    @Provides
-    @Singleton
-    fun provideSucursalDao(database: PrestadorDatabase): SucursalDao {
-        return database.sucursalDao()
-    }
-    */
 
     @Provides
     @Singleton
@@ -105,13 +92,7 @@ object DatabaseModule {
         return database.plantillaPresupuestoDao()
     }
 
-    /*
-    @Provides
-    @Singleton
-    fun provideDireccionDao(database: PrestadorDatabase): DireccionDao {
-        return database.direccionDao()
-    }
-    */
+
 
     @Provides
     @Singleton
@@ -124,6 +105,12 @@ object DatabaseModule {
     fun provideNotificacionDao(database:
     PrestadorDatabase): NotificacionDao {
         return database.noticacionDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBookedAppointmentDao(database: PrestadorDatabase): BookedAppointmentDao {
+        return database.bookedAppointmentDao()
     }
 
 }

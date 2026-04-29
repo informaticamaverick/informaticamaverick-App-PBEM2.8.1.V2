@@ -73,7 +73,7 @@ fun AvailabilityScheduleSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Horarios de Atención",
+                    text = "Disponibilidad",
                     color = colors.textPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
@@ -228,19 +228,20 @@ fun AvailabilityScheduleSection(
                 showAddDialog = false
                 scheduleToEdit = null
             },
-            onConfirm = { days, startTime, endTime, duration ->
+            onConfirm = { days, startTime, endTime, duration, worksByAppointment ->
                 if (scheduleToEdit != null) {
                     viewModel.updateSchedule(
                         scheduleToEdit!!.copy(
                             dayOfWeek = days.first(),
                             startTime = startTime,
                             endTime = endTime,
-                            appointmentDuration = duration
+                            appointmentDuration = duration,
+                            worksByAppointment = worksByAppointment
                         )
                     )
                 } else {
                     days.forEach { day ->
-                        viewModel.addSchedule(day, startTime, endTime, duration)
+                        viewModel.addSchedule(day, startTime, endTime, duration, worksByAppointment)
                     }
                 }
             },
@@ -315,7 +316,8 @@ private fun ScheduleSumaryCard(
                     color = colors.primaryOrange
                 )
                 Text(
-                    text = "${first.startTime} - ${first.endTime}  ·  Turnos ${first.appointmentDuration} min",
+                    text = "${first.startTime} - ${first.endTime}" +
+                        if (first.worksByAppointment) "  ·  Turnos ${first.appointmentDuration} min" else "  ·  Sin turnos",
                     fontSize = 13.sp,
                     color = colors.textPrimary
                 )

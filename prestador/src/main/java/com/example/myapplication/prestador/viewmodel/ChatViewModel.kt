@@ -342,6 +342,195 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    // ── Enviar calendario de disponibilidad
+    // El prestador elige el rango de fechas y envía su disponibilidad al cliente
+    fun sendCalendarInvite(
+        startDate: String,        // "yyyy-MM-dd"
+        endDate: String,          // "yyyy-MM-dd"
+        availabilityJson: String, // JSON con las reglas de horario
+        bookedSlotsJson: String   // JSON con los slots ya ocupados
+    ) {
+        if (currentConversationId.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.sendCalendarInviteMessage(
+                    conversationId = currentConversationId,
+                    myUserId = myUserId,
+                    startDate = startDate,
+                    endDate = endDate,
+                    availabilityJson = availabilityJson,
+                    bookedSlotsJson = bookedSlotsJson
+                )
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al enviar calendario:${e.message}"
+            }
+        }
+    }
+
+    // ── Responder a una solicitud de turno del cliente
+    // El prestador acepta o rechaza; se envía mensaje automático de texto
+    fun respondToAppointmentRequest(
+        messageId: String,
+        clientName: String,
+        date: String,   // "yyyy-MM-dd"
+        time: String,   // "HH:mm"
+        service: String = "",
+        providerName: String = "",
+        serviceType: String = "PROFESSIONAL",
+        doesHomeVisits: Boolean = false,
+        profession: String? = null,
+        providerAddress: String? = null,
+        accepted: Boolean,
+        rejectionReason: String? = null
+    ) {
+        if (currentConversationId.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val newStatus = if (accepted) "ACCEPTED" else "REJECTED"
+                // 1. Actualizar estado del mensaje en Room + RTDB
+                repository.updateAppointmentRequestStatus(
+                    messageId = messageId,
+                    conversationId = currentConversationId,
+                    newStatus = newStatus,
+                    rejectionReason = rejectionReason
+                )
+                
+                // 2. Si aceptó, enviar comprobante visual
+                if (accepted) {
+                    val receipt = buildAppointmentReceipt(
+                        date = date,
+                        time = time,
+                        service = service,
+                        providerName = providerName,
+                        serviceType = serviceType,
+                        doesHomeVisits = doesHomeVisits,
+                        profession = profession,
+                        providerAddress = providerAddress
+                    )
+                    repository.sendAppointmentReceiptMessage(
+                        conversationId = currentConversationId,
+                        myUserId = myUserId,
+                        date = receipt.date,
+                        time = receipt.time,
+                        service = receipt.service,
+                        providerName = receipt.providerName,
+                        isTechnician = receipt.isTechnician,
+                        profession = receipt.profession,
+                        address = receipt.address,
+                        code = receipt.code
+                    )
+                } else {
+                    // Si rechazó, enviar mensaje de rechazo
+                    val motivo = if (!rejectionReason.isNullOrBlank()) "Motivo: $rejectionReason" else ""
+                    val rejectText = "❌ No puedo atenderte el $date a las $time. $motivo Por favor elegí otro horario."
+                    repository.sendMessage(currentConversationId, rejectText, myUserId)
+                }
+
+                //3. Si aceptó, guardar en Room local del prestador
+                if (accepted) {
+                    val conversation = repository.getConversationById(currentConversationId)
+                    val clientId = conversation?.userId ?: ""
+                    repository.saveBookedAppointmet(
+                        messageId = messageId,
+                        clientId = clientId,
+                        clientName = clientName,
+                        date = date,
+                        time = time,
+                        service = service,
+                        chatId = currentConversationId
+                    )
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al responder solicitud:${e.message}"
+            }
+        }
+    }
+
+     private data class ReceiptData(
+        val date: String,
+        val time: String,
+        val service: String,
+        val providerName: String,
+        val isTechnician: Boolean,
+        val profession: String?,
+        val address: String?,
+        val code: String
+    )
+
+    private fun buildAppointmentReceipt(
+        date: String,
+        time: String,
+        service: String,
+        providerName: String,
+        serviceType: String,
+        doesHomeVisits: Boolean,
+        profession: String?,
+        providerAddress: String?
+    ): ReceiptData {
+        val isTechnician = serviceType == "TECHNICAL" || doesHomeVisits
+        val dateFormatted = formatDateForDisplay(date)
+        val timeFormatted = if (time.isNotBlank()) "$time hs" else time
+        val code = if (isTechnician) {
+            "#VIS-${date.replace("-", "")}-001"
+        } else {
+            "#TRN-${date.replace("-", "")}-001"
+        }
+        
+        return ReceiptData(
+            date = dateFormatted,
+            time = timeFormatted,
+            service = service,
+            providerName = providerName,
+            isTechnician = isTechnician,
+            profession = if (!profession.isNullOrBlank()) profession else null,
+            address = if (!providerAddress.isNullOrBlank()) providerAddress else null,
+            code = code
+        )
+    }
+
+    private fun formatDateForDisplay(dateStr: String): String {
+        // Convierte "2026-05-07" → "Mié 07/05/2026"
+        return try {
+            val parts = dateStr.split("-")
+            if (parts.size == 3) {
+                val year = parts[0]
+                val month = parts[1]
+                val day = parts[2]
+                val dayOfWeek = getDayOfWeek(dateStr)
+                "$dayOfWeek $day/$month/$year"
+            } else {
+                dateStr
+            }
+        } catch (e: Exception) {
+            dateStr
+        }
+    }
+
+    private fun getDayOfWeek(dateStr: String): String {
+        // "2026-05-07" → "Mié"
+        return try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("es", "ES"))
+            val date = sdf.parse(dateStr) ?: return ""
+            val cal = java.util.Calendar.getInstance()
+            cal.time = date
+            val dayOfWeek = cal.get(java.util.Calendar.DAY_OF_WEEK)
+            when (dayOfWeek) {
+                1 -> "Dom"
+                2 -> "Lun"
+                3 -> "Mar"
+                4 -> "Mié"
+                5 -> "Jue"
+                6 -> "Vie"
+                7 -> "Sáb"
+                else -> ""
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+
+
     fun clearMessages() {
         _errorMessage.value = null
         _successMessage.value = null

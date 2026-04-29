@@ -1017,7 +1017,7 @@ fun EditProfileScreenUnified(
                             }
                         }
 
-                            item { Spacer(modifier = Modifier.height(16.dp)) }
+                        item { Spacer(modifier = Modifier.height(16.dp)) }
 
                             item {
                                 EmpleadosSection(

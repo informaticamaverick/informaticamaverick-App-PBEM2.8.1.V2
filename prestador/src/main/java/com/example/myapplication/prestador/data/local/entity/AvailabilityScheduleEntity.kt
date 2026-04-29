@@ -16,7 +16,7 @@ import androidx.room.Index
             entity = ProviderEntity::class,
             parentColumns = ["id"],
             childColumns = ["providerId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.NO_ACTION
         )
     ],
     indices = [Index(value = ["providerId"])]
@@ -28,7 +28,8 @@ data class AvailabilityScheduleEntity(
     val dayOfWeek: Int,              // 1=Lunes, 7=Domingo
     val startTime: String,           // Formato "HH:mm" ej: "09:00"
     val endTime: String,             // Formato "HH:mm" ej: "18:00"
-    val appointmentDuration: Int,    // Duración de cada turno en minutos (15, 30, 45, 60)
+    val appointmentDuration: Int, // Duración de cada turno en minutos (Personalizable)
+    val worksByAppointment: Boolean = true, // Si trabaja con sistema de turnos
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()

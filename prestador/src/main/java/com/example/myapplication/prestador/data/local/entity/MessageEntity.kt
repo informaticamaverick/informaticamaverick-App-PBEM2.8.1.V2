@@ -61,7 +61,7 @@ data class MessageEntity(
     val fileSize: Long? = null,
     val fileMimeType: String? = null,
     
-    // Campos para cita/appointment
+    // Solicitud de turno
     val appointmentId: String? = null,
     val appointmentTitle: String? = null,
     val appointmentDate: String? = null,
@@ -70,6 +70,21 @@ data class MessageEntity(
     val rejectionReason: String? = null,
     //Campos para presupuestos
     val budgetDataJson: String? = null,
+
+    // Nuevos campos agregados en migración 39->40
+    val calendarStartDate: String? = null,
+    val calendarEndDate: String? = null,
+    val availabilityJson: String? = null,
+    val bookedSlotsJson: String? = null,
+    val calendarInviteMessageId: String? = null,
+    
+    // Campos para comprobante de turno confirmado (APPOINTMENT_RECEIPT)
+    val receiptService: String? = null,
+    val receiptProviderName: String? = null,
+    val receiptProfession: String? = null,
+    val receiptAddress: String? = null,
+    val receiptCode: String? = null,
+    val receiptIsTechnician: Boolean = false,
     
     // Estado de sincronización
     val isSynced: Boolean = false,

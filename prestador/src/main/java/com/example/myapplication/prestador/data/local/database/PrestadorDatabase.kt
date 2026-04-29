@@ -30,6 +30,8 @@ import com.example.myapplication.prestador.data.local.dao.DireccionDao
 import com.example.myapplication.prestador.data.local.dao.ReferenteDao
 import com.example.myapplication.prestador.data.local.entity.DireccionEntity
 import com.example.myapplication.prestador.data.local.entity.ReferenteEntity
+import com.example.myapplication.prestador.data.local.dao.BookedAppointmentDao
+import com.example.myapplication.prestador.data.local.entity.BookedAppointmentEntity
 import com.example.myapplication.prestador.data.local.dao.NotificacionDao
 import com.example.myapplication.prestador.data.local.entity.NotificacionEntity
 import androidx.room.migration.Migration
@@ -58,9 +60,9 @@ import com.example.myapplication.prestador.data.local.Converters
         // DireccionEntity::class,     <-- OBSOLETO: Ahora integrado en ProviderEntity
         ReferenteEntity::class,
         NotificacionEntity::class,
-
+        BookedAppointmentEntity::class,
    ],
-    version = 39,
+    version = 46,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -82,7 +84,6 @@ abstract class PrestadorDatabase : RoomDatabase() {
     // abstract fun direccionDao(): DireccionDao <-- OBSOLETO
     abstract fun referenteDao(): ReferenteDao
     abstract fun noticacionDao(): NotificacionDao
+    abstract fun bookedAppointmentDao(): BookedAppointmentDao
 }
-
-
 

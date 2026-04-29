@@ -711,6 +711,109 @@ object DatabaseMigrations {
         }
     }
 
+    val MIGRATION_39_40 = object : Migration(39, 40) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            database.execSQL("ALTER TABLE 'messages' ADD COLUMN'calendarStartDate' TEXT")
+                        database.execSQL("ALTER TABLE 'messages' ADD COLUMN'calendarEndDate' TEXT")
+                        database.execSQL("ALTER TABLE 'messages' ADD COLUMN'availabilityJson' TEXT")
+                        database.execSQL("ALTER TABLE 'messages' ADD COLUMN'bookedSlotsJson' TEXT")
+                        database.execSQL("ALTER TABLE 'messages' ADD COLUMN'calendarInviteMessageId' TEXT")
+        }
+    }
+
+    val MIGRATION_40_41 = object : Migration(40, 41) {
+        override fun migrate(database: SupportSQLiteDatabase) {
+            // Para instalaciones frescas en v40, la columna trabajaConOtros no existe
+            // porque el campo era un alias computado (no columna Room). La agregamos si falta.
+            // Para usuarios que actualizaron desde v11, ya existe (MIGRATION_11_12 la creó).
+            val cursor = database.query("PRAGMA table_info(providers)")
+            var hasColumn = false
+            while (cursor.moveToNext()) {
+                val nameIndex = cursor.getColumnIndex("name")
+                if (nameIndex >= 0 && cursor.getString(nameIndex) == "trabajaConOtros") {
+                    hasColumn = true
+                    break
+                }
+            }
+            cursor.close()
+            if (!hasColumn) {
+                database.execSQL("ALTER TABLE providers ADD COLUMN trabajaConOtros INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+    }
+
+    val MIGRATION_41_42 = object : Migration(41, 42) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Recrear tabla sin CASCADE para evitar borrado en INSERT OR REPLACE del provider
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS availability_schedules_new (
+                 id TEXT NOT NULL PRIMARY KEY,
+                 providerId TEXT NOT NULL,
+                 dayOfWeek INTEGER NOT NULL,
+                 startTime TEXT NOT NULL,
+                 endTime TEXT NOT NULL,
+                 appointmentDuration INTEGER NOT NULL,
+                 isActive INTEGER NOT NULL DEFAULT 1,
+                 createdAt INTEGER NOT NULL,
+                 updatedAt INTEGER NOT NULL,
+                 FOREIGN KEY(providerId) REFERENCES providers(id) ON DELETE 
+NO ACTION
+             )
+         """)
+            db.execSQL("INSERT INTO availability_schedules_new SELECT * FROM availability_schedules")
+                    db.execSQL("DROP TABLE availability_schedules")
+                    db.execSQL("ALTER TABLE availability_schedules_new RENAME TO availability_schedules")
+                    db.execSQL("CREATE INDEX IF NOT EXISTS index_availability_schedules_providerId ON availability_schedules(providerId)")
+        }
+    }
+
+
+
+    val MIGRATION_42_43 = object : Migration(42, 43) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS booked_appointments (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    clientId TEXT NOT NULL,
+                    clientName TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    time TEXT NOT NULL,
+                    notes TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'CONFIRMED',
+                    chatId TEXT NOT NULL DEFAULT '',
+                    createdAt INTEGER NOT NULL
+                )
+            """.trimIndent())
+        }
+    }
+
+    val MIGRATION_43_44 = object : Migration(43, 44) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE availability_schedules ADD COLUMN worksByAppointment INTEGER NOT NULL DEFAULT 1"
+            )
+        }
+    }
+
+    val MIGRATION_44_45 = object : Migration(44, 45) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "ALTER TABLE booked_appointments ADD COLUMN service TEXT NOT NULL DEFAULT ''"
+            )
+        }
+    }
+
+    val MIGRATION_45_46 = object : Migration(45, 46) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE messages ADD COLUMN receiptService TEXT")
+            db.execSQL("ALTER TABLE messages ADD COLUMN receiptProviderName TEXT")
+            db.execSQL("ALTER TABLE messages ADD COLUMN receiptProfession TEXT")
+            db.execSQL("ALTER TABLE messages ADD COLUMN receiptAddress TEXT")
+            db.execSQL("ALTER TABLE messages ADD COLUMN receiptCode TEXT")
+            db.execSQL("ALTER TABLE messages ADD COLUMN receiptIsTechnician INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_6_7,
         MIGRATION_7_8,
@@ -739,6 +842,13 @@ object DatabaseMigrations {
         MIGRATION_33_34,
         MIGRATION_37_38,
         MIGRATION_38_39,
+        MIGRATION_39_40,
+        MIGRATION_40_41,
+        MIGRATION_41_42,
+        MIGRATION_42_43,
+        MIGRATION_43_44,
+        MIGRATION_44_45,
+        MIGRATION_45_46,
     )
 }
 

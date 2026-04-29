@@ -53,13 +53,13 @@ class AvailabilityViewModel @Inject constructor(
         dayOfWeek: Int,
         startTime: String,
         endTime: String,
-        appointmentDuration: Int
+        appointmentDuration: Int,
+        worksByAppointment: Boolean = true
     ) {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
 
             try {
-                // Validaciones
                 if (dayOfWeek !in 1..7) {
                     _uiState.value = UiState.Error("Día de semana inválido")
                     return@launch
@@ -80,8 +80,8 @@ class AvailabilityViewModel @Inject constructor(
                     return@launch
                 }
 
-                if (appointmentDuration !in listOf(15, 30, 45, 60, 90, 120)) {
-                    _uiState.value = UiState.Error("Duración de turno inválida")
+                if (worksByAppointment && appointmentDuration < 5) {
+                    _uiState.value = UiState.Error("La duración mínima de turno es 5 minutos")
                     return@launch
                 }
 
@@ -91,7 +91,8 @@ class AvailabilityViewModel @Inject constructor(
                     dayOfWeek = dayOfWeek,
                     startTime = startTime,
                     endTime = endTime,
-                    appointmentDuration = appointmentDuration,
+                    appointmentDuration = if (worksByAppointment) appointmentDuration else 0,
+                    worksByAppointment = worksByAppointment,
                     isActive = true,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()

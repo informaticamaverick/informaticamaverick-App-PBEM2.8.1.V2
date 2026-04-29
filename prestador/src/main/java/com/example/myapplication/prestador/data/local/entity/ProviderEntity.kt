@@ -46,9 +46,9 @@ data class ProviderEntity(
     val doesHomeVisits: Boolean = false, 
     val doesShipping: Boolean = false, 
     val acceptsAppointments: Boolean = false,
+    val trabajaConOtros: Boolean = false,
 
-
-    val isSubscribed: Boolean = false, 
+    val isSubscribed: Boolean = false,
     val isVerified: Boolean = false,  
 
     val isFavorite: Boolean = false, 
@@ -92,7 +92,6 @@ data class ProviderEntity(
     val pais: String? get() = address?.pais
     val provinciaLocal: String? get() = address?.provincia
     val codigoPostalLocal: String? get() = address?.codigoPostal
-    val trabajaConOtros: Boolean get() = false
 
     /**
      * Convierte la entidad de la base de datos (ProviderEntity) en un objeto de dominio (Provider).
@@ -121,6 +120,7 @@ data class ProviderEntity(
             doesHomeVisits = doesHomeVisits,
             doesShipping = doesShipping,
             acceptsAppointments = acceptsAppointments,
+            trabajaConOtros = trabajaConOtros,
             isSubscribed = isSubscribed,
             isVerified = isVerified,
             isFavorite = isFavorite,
@@ -169,6 +169,7 @@ data class ProviderEntity(
                 doesHomeVisits = provider.doesHomeVisits,
                 doesShipping = provider.doesShipping,
                 acceptsAppointments = provider.acceptsAppointments,
+                trabajaConOtros = provider.trabajaConOtros,
                 isSubscribed = provider.isSubscribed,
                 isVerified = provider.isVerified,
                 isFavorite = provider.isFavorite,
