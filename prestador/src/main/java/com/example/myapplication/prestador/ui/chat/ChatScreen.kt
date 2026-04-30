@@ -31,6 +31,9 @@ fun PrestadorChatScreen(
     onInConversationChange: (Boolean) -> Unit = {},
     onNavigateToPresupuesto: () -> Unit = {},
     initialChatUserId: String? = null,
+    autoOpenCalendarDialog: Boolean = false,
+    rescheduleDate: String = "",
+    rescheduleTime: String = "",
     chatViewModel: ChatViewModel = hiltViewModel(),
     onNavigateToClientePerfil: (clientId: String) -> Unit = {}
 ) {
@@ -139,7 +142,10 @@ fun PrestadorChatScreen(
                 providerId = providerId,
                 onBack = { activeChatUserId = null; inputText = "" },
                 onNavigateToPresupuesto = onNavigateToPresupuesto,
-                onNavigateToClientePerfil = { onNavigateToClientePerfil(chatUserId)}
+                onNavigateToClientePerfil = { onNavigateToClientePerfil(chatUserId)},
+                autoOpenCalendarDialog = autoOpenCalendarDialog,
+                rescheduleDate = rescheduleDate,
+                rescheduleTime = rescheduleTime
             )
         }
     }

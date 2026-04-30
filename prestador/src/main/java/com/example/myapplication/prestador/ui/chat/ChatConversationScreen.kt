@@ -72,7 +72,10 @@ fun ChatConversationScreen(
     onBack: () -> Unit,
     onNavigateToPresupuesto: () -> Unit = {},
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
-    onNavigateToClientePerfil: () -> Unit = {}
+    onNavigateToClientePerfil: () -> Unit = {},
+    autoOpenCalendarDialog: Boolean = false,
+    rescheduleDate: String = "",
+    rescheduleTime: String = ""
 ){
     val context = LocalContext.current
     val notificationHelper = remember { NotificationHelper(context) }
@@ -137,6 +140,7 @@ fun ChatConversationScreen(
             "CALENDAR_INVITE" -> Message.MessageType.CALENDAR_INVITE
             "APPOINTMENT_REQUEST" -> Message.MessageType.APPOINTMENT_REQUEST
             "APPOINTMENT_RECEIPT" -> Message.MessageType.APPOINTMENT_RECEIPT
+            "RESCHEDULE_NOTICE" -> Message.MessageType.RESCHEDULE_NOTICE
             else -> Message.MessageType.TEXT
         }
         val budgetObj = if (type == Message.MessageType.BUDGET && entity.budgetDataJson != null) {
@@ -213,6 +217,16 @@ fun ChatConversationScreen(
     var showSendCalendarDialog by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
     var recordingTime by remember { mutableStateOf(0) }
+
+    // Auto-abrir el diálogo de calendario al entrar desde "Reprogramar" del calendario
+    LaunchedEffect(autoOpenCalendarDialog) {
+        if (autoOpenCalendarDialog) {
+            if (rescheduleDate.isNotBlank() && rescheduleTime.isNotBlank()) {
+                chatViewModel.sendRescheduleNotice(chatId, rescheduleDate, rescheduleTime)
+            }
+            showSendCalendarDialog = true
+        }
+    }
 
     // Estado del sheet de presupuesto
     var showBudgetSheet by remember { mutableStateOf(false) }

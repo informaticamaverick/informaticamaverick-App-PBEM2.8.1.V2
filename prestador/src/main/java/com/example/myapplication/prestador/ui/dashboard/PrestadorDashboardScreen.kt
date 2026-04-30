@@ -66,6 +66,9 @@ fun PrestadorDashboardScreen(
     var selectedTab by rememberSaveable { mutableStateOf(2) }
     var isInConversation by remember { mutableStateOf(false) }
     var targetChatUserId by remember { mutableStateOf<String?>(null) }
+    var autoOpenCalendarInChat by remember { mutableStateOf(false) }
+    var pendingRescheduleDate by remember { mutableStateOf("") }
+    var pendingRescheduleTime by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
     var triggerCalendarCreate by remember { mutableStateOf(false) }
     val isProfessional = false // TODO: Obtener de perfil real
@@ -153,15 +156,20 @@ fun PrestadorDashboardScreen(
                         triggerCreateDialog = triggerCalendarCreate,
                         onCreateDialogHandled = { triggerCalendarCreate = false },
                         onNavigateToClientePerfil = onNavigateToClientePerfil,
-                        onNavigateToChat = { clientId, _, _, _, _ ->
-                            // Configurar qué chat abrir PRIMERO
+                        onNavigateToChat = { clientId, _, newDate, newTime, appointmentId ->
                             targetChatUserId = clientId
-                            
-                            // Delay para asegurar que el estado se actualiza antes de navegar
                             coroutineScope.launch {
-                                delay(100) // Esperar 100ms
-                                // Cambiar al tab de chat
+                                if (appointmentId == "RESCHEDULE") {
+                                    pendingRescheduleDate = newDate
+                                    pendingRescheduleTime = newTime
+                                    autoOpenCalendarInChat = true
+                                }
+                                delay(100)
                                 selectedTab = 3
+                                if (appointmentId == "RESCHEDULE") {
+                                    delay(600)
+                                    autoOpenCalendarInChat = false
+                                }
                             }
                         },
 
@@ -201,7 +209,10 @@ fun PrestadorDashboardScreen(
                             onInConversationChange = { isInConversation = it },
                             onNavigateToClientePerfil = onNavigateToClientePerfil,
                             onNavigateToPresupuesto = onNavigateToPresupuesto,
-                            initialChatUserId = targetChatUserId
+                            initialChatUserId = targetChatUserId,
+                            autoOpenCalendarDialog = autoOpenCalendarInChat,
+                            rescheduleDate = pendingRescheduleDate,
+                            rescheduleTime = pendingRescheduleTime
                         )
                     }
                     4 -> NotificacionesScreen(

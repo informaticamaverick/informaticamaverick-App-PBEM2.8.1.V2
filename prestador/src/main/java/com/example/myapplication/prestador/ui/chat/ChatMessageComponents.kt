@@ -20,7 +20,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Tag
+import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
@@ -86,7 +91,9 @@ fun MessageBubble(
     val bubbleColor = if (message.type == Message.MessageType.BUDGET ||
         message.type == Message.MessageType.APPOINTMENT ||
         message.type == Message.MessageType.CALENDAR_INVITE ||
-        message.type == Message.MessageType.APPOINTMENT_REQUEST) {
+        message.type == Message.MessageType.APPOINTMENT_REQUEST ||
+        message.type == Message.MessageType.APPOINTMENT_RECEIPT ||
+        message.type == Message.MessageType.RESCHEDULE_NOTICE) {
         Color.Transparent
     } else if (isFromCurrentUser) {
         colors.primaryOrange
@@ -129,7 +136,9 @@ fun MessageBubble(
                 modifier = if (message.type == Message.MessageType.BUDGET ||
                     message.type == Message.MessageType.APPOINTMENT ||
                     message.type == Message.MessageType.CALENDAR_INVITE ||
-                    message.type == Message.MessageType.APPOINTMENT_REQUEST) Modifier else Modifier.padding(
+                    message.type == Message.MessageType.APPOINTMENT_REQUEST ||
+                    message.type == Message.MessageType.APPOINTMENT_RECEIPT ||
+                    message.type == Message.MessageType.RESCHEDULE_NOTICE) Modifier else Modifier.padding(
                         start = 12.dp,
                         end = 12.dp,
                         top = 8.dp,
@@ -223,9 +232,10 @@ fun MessageBubble(
                             date = message.appointmentDate ?: "",
                             time = message.appointmentTime ?: "",
                             title = message.appointmentTitle ?: "",
+                            rawContent = message.text,
                             status = message.appointmentStatus,
                             isFromCurrentUser = isFromCurrentUser,
-                            onAccept = onAccept?.let { cb -> { serviceTitle -> cb(message.id) } },
+                            onAccept = onAccept?.let { cb -> { serviceTitle -> cb(serviceTitle) } },
                             onReject = onReject?.let { cb -> { reason -> cb(message.id, reason) } }
                         )
                     }
@@ -242,13 +252,21 @@ fun MessageBubble(
                             isFromCurrentUser = isFromCurrentUser
                         )
                     }
+                    Message.MessageType.RESCHEDULE_NOTICE -> {
+                        RescheduleNoticeBubble(
+                            originalDate = message.appointmentDate ?: "",
+                            originalTime = message.appointmentTime ?: "",
+                            isFromCurrentUser = isFromCurrentUser
+                        )
+                    }
                 }
 
                 // Timestamp y estado (excepto para AUDIO y BUDGET que tienen su propio layout)
                 if (message.type != Message.MessageType.AUDIO && message.type != Message.MessageType.BUDGET && message.type != Message.MessageType.TEXT &&
                     message.type != Message.MessageType.CALENDAR_INVITE &&
                     message.type != Message.MessageType.APPOINTMENT_REQUEST &&
-                    message.type != Message.MessageType.APPOINTMENT_RECEIPT) {
+                    message.type != Message.MessageType.APPOINTMENT_RECEIPT &&
+                    message.type != Message.MessageType.RESCHEDULE_NOTICE) {
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Row(
@@ -1090,6 +1108,7 @@ fun AppointmentRequestBubble(
     date: String,
     time: String,
     title: String = "",
+    rawContent: String? = null,
     status: Message.AppointmentProposalStatus?,
     isFromCurrentUser: Boolean,
     onAccept: ((serviceTitle: String) -> Unit)? = null,
@@ -1101,177 +1120,231 @@ fun AppointmentRequestBubble(
     var rejectReason by remember { mutableStateOf("") }
     var serviceTitle by remember { mutableStateOf(title.ifBlank { "Servicio técnico" }) }
 
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = colors.surfaceElevated,
-            border = BorderStroke(
-                1.dp, when (status) {
-                    Message.AppointmentProposalStatus.ACCEPTED -> Color(0xFF4CAF50)
-                    Message.AppointmentProposalStatus.REJECTED -> Color(0xFFF44336)
-                    else -> colors.primaryOrange.copy(alpha = 0.4f)
-                }
-            ),
-            modifier = Modifier.widthIn(min = 220.dp, max = 280.dp)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Schedule,
-                        contentDescription = null,
-                        tint = colors.primaryOrange,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Solicitud de turno",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = colors.textPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(text = "📅 $date", fontSize = 13.sp, color = colors.textPrimary)
-                Text(text = "🕐 $time", fontSize = 13.sp, color = colors.textPrimary)
+    // Parsear contenido pipe-separated: "Solicitud de turno|DíaNombre|HoraInicio|HoraFin"
+    val contentParts = remember(rawContent) {
+        rawContent?.takeIf { it.contains("|") }?.split("|") ?: emptyList()
+    }
+    val dayName = contentParts.getOrNull(1)?.takeIf { it.isNotBlank() && !it.contains("-") }
+    val endTime = contentParts.getOrNull(3)?.takeIf { it.isNotBlank() }
+
+    val borderColor = when (status) {
+        Message.AppointmentProposalStatus.ACCEPTED -> Color(0xFF4CAF50)
+        Message.AppointmentProposalStatus.REJECTED -> Color(0xFFF44336)
+        else -> colors.primaryOrange.copy(alpha = 0.6f)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = colors.surfaceElevated,
+        border = BorderStroke(1.dp, borderColor),
+        modifier = Modifier.widthIn(min = 220.dp, max = 300.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Schedule,
+                    contentDescription = null,
+                    tint = colors.primaryOrange,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Solicitud de turno",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = colors.textPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = colors.primaryOrange.copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Servicio / título
+            if (title.isNotBlank()) {
+                ReceiptInfoRow(
+                    icon = Icons.Default.Build,
+                    label = "Servicio",
+                    value = title,
+                    colors = colors
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            // Fecha
+            if (date.isNotBlank()) {
+                val displayDate = if (dayName != null) "$dayName, $date" else date
+                ReceiptInfoRow(
+                    icon = Icons.Default.CalendarToday,
+                    label = "Fecha",
+                    value = displayDate,
+                    colors = colors
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            // Hora
+            if (time.isNotBlank()) {
+                val displayTime = if (endTime != null) "$time – $endTime" else time
+                ReceiptInfoRow(
+                    icon = Icons.Default.AccessTime,
+                    label = "Hora",
+                    value = displayTime,
+                    colors = colors
+                )
                 Spacer(modifier = Modifier.height(8.dp))
+            }
 
-                when (status) {
-                    Message.AppointmentProposalStatus.ACCEPTED -> {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFF4CAF50)
-                        ) {
-                            Text(
-                                text = "✅ Aceptado",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(
-                                    horizontal = 10.dp,
-                                    vertical = 4.dp
-                                )
-                            )
-                        }
+            // Badge de estado o botones
+            when (status) {
+                Message.AppointmentProposalStatus.ACCEPTED -> {
+                    HorizontalDivider(color = Color(0xFF4CAF50).copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Done,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Aceptado",
+                            color = Color(0xFF4CAF50),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-
-                    Message.AppointmentProposalStatus.REJECTED -> {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFFF44336)
-                        ) {
-                            Text(
-                                text = "❌ Rechazado",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(
-                                    horizontal = 10.dp,
-                                    vertical = 4.dp
-                                )
-                            )
-                        }
+                }
+                Message.AppointmentProposalStatus.REJECTED -> {
+                    HorizontalDivider(color = Color(0xFFF44336).copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            tint = Color(0xFFF44336),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Rechazado",
+                            color = Color(0xFFF44336),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-
-                    else -> {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { showConfirmDialog = true },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(vertical = 6.dp)
-                            ) {
-                                Text("Aceptar", fontSize = 12.sp)
-                            }
-                            OutlinedButton(
-                                onClick = { showRejectDialog = true },
-                                border = BorderStroke(1.dp, Color(0xFFF44336)),
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(vertical = 6.dp)
-                            ) {
-                                Text("Rechazar", fontSize = 12.sp, color = Color(0xFFF44336))
-                            }
+                }
+                else -> {
+                    HorizontalDivider(color = colors.primaryOrange.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { showConfirmDialog = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Aceptar", fontSize = 12.sp)
+                        }
+                        OutlinedButton(
+                            onClick = { showRejectDialog = true },
+                            border = BorderStroke(1.dp, Color(0xFFF44336)),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFFF44336))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Rechazar", fontSize = 12.sp, color = Color(0xFFF44336))
                         }
                     }
                 }
             }
         }
-
-        // Dialog para confirmar y editar servicio
-        if (showConfirmDialog) {
-            AlertDialog(
-                onDismissRequest = { showConfirmDialog = false },
-                title = { Text("Confirmar turno") },
-                text = {
-                    Column {
-                        Text("Servicio / Motivo:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = serviceTitle,
-                            onValueChange = { serviceTitle = it },
-                            placeholder = { Text("Ej: Instalación de gas") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onAccept?.invoke(serviceTitle.ifBlank { "Servicio técnico" })
-                            showConfirmDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                    ) { Text("Confirmar") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showConfirmDialog = false }) {
-                        Text("Cancelar")
-                    }
-                }
-            )
-        }
-
-        // Dialog para rechazar
-        if (showRejectDialog) {
-            AlertDialog(
-                onDismissRequest = { showRejectDialog = false },
-                title = { Text("Rechazar solicitud") },
-                text = {
-                    Column {
-                        Text("Podés indicar un motivo (opcional):", fontSize = 13.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = rejectReason,
-                            onValueChange = { rejectReason = it },
-                            placeholder = { Text("Ej: No tengo disponibilidad ese día") },
-                            singleLine = false,
-                            maxLines = 3,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            onReject?.invoke(rejectReason.ifBlank { null })
-                            showRejectDialog = false
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
-                    ) { Text("Rechazar") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showRejectDialog = false }) {
-                        Text("Cancelar")
-                    }
-                }
-            )
-        }
     }
+
+    // Dialog para confirmar y editar servicio
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text("Confirmar turno") },
+            text = {
+                Column {
+                    Text("Servicio / Motivo:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = serviceTitle,
+                        onValueChange = { serviceTitle = it },
+                        placeholder = { Text("Ej: Instalación de gas") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onAccept?.invoke(serviceTitle.ifBlank { "Servicio técnico" })
+                        showConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                ) { Text("Confirmar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Dialog para rechazar
+    if (showRejectDialog) {
+        AlertDialog(
+            onDismissRequest = { showRejectDialog = false },
+            title = { Text("Rechazar solicitud") },
+            text = {
+                Column {
+                    Text("Podés indicar un motivo (opcional):", fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = rejectReason,
+                        onValueChange = { rejectReason = it },
+                        placeholder = { Text("Ej: No tengo disponibilidad ese día") },
+                        singleLine = false,
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onReject?.invoke(rejectReason.ifBlank { null })
+                        showRejectDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
+                ) { Text("Rechazar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRejectDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
 
 /**
  * Comprobante de turno confirmado (APPOINTMENT_RECEIPT)
  * Se envía automáticamente cuando el prestador acepta un turno.
  * Muestra: Servicio, Profesional, Fecha, Hora, Domicilio/Consultorio, Código.
  */
+
 @Composable
 fun AppointmentReceiptBubble(
     date: String,
@@ -1288,11 +1361,11 @@ fun AppointmentReceiptBubble(
     
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = if (isFromCurrentUser) colors.primaryOrange.copy(alpha = 0.12f) else colors.surfaceElevated,
-        border = BorderStroke(1.5.dp, colors.primaryOrange.copy(alpha = 0.5f)),
-        modifier = Modifier.widthIn(min = 220.dp, max = 300.dp)
+        color = if (isFromCurrentUser) colors.primaryOrange.copy(alpha = 0.15f) else colors.surfaceElevated,
+        border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.6f)),
+        modifier = Modifier.widthIn(min = 200.dp, max = 300.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
@@ -1305,89 +1378,192 @@ fun AppointmentReceiptBubble(
                 Text(
                     text = if (isTechnician) "Visita técnica confirmada" else "Turno confirmado",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     color = colors.textPrimary
                 )
             }
-            
-            Spacer(modifier = Modifier.height(10.dp))
-            HorizontalDivider(color = colors.primaryOrange.copy(alpha = 0.2f), thickness = 1.dp)
-            Spacer(modifier = Modifier.height(10.dp))
-            
-            // Contenido - Solo lo esencial
-            val textColor = colors.textPrimary
-            val secondaryColor = colors.textSecondary
-            
+
+            Spacer(modifier = Modifier.height(6.dp))
+
             // Servicio
             if (service.isNotBlank()) {
-                Text(
-                    text = service,
-                    fontSize = 12.sp,
-                    color = textColor,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(6.dp))
+                ReceiptInfoRow(icon = Icons.Default.Build, label = "Servicio", value = service, colors = colors)
+                Spacer(modifier = Modifier.height(4.dp))
             }
-            
+
             // Profesional
-            Text(
-                text = providerName,
-                fontSize = 11.sp,
-                color = secondaryColor
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Fecha
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("📅", fontSize = 13.sp)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = date,
-                    fontSize = 11.sp,
-                    color = textColor,
-                    fontWeight = FontWeight.Medium
-                )
+            if (providerName.isNotBlank()) {
+                val profValue = if (!profession.isNullOrBlank()) "$providerName . $profession" else providerName
+                ReceiptInfoRow(icon = Icons.Default.Person, label = "Profesional", value = profValue, colors = colors)
+                Spacer(modifier = Modifier.height(4.dp))
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            
-            // Hora
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🕐", fontSize = 13.sp)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = time,
-                    fontSize = 11.sp,
-                    color = textColor,
-                    fontWeight = FontWeight.Medium
-                )
+
+            // Fecha y hora
+            if (time.isNotBlank()) {
+                ReceiptInfoRow(icon = Icons.Default.AccessTime, label = "Hora", value = time, colors = colors)
+                Spacer(modifier = Modifier.height(4.dp))
             }
-            
-            // Domicilio/Consultorio si existe
+
+            // Domicilio
             if (!address.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Top) {
-                    Text("📍", fontSize = 13.sp)
-                    Spacer(modifier = Modifier.width(6.dp))
+                val context = LocalContext.current
+                ReceiptInfoRow(
+                    icon = Icons.Default.LocationOn,
+                    label = if (isTechnician) "Domicilio" else "Dirección",
+                    value = address,
+                    colors = colors,
+                    clickable = true,
+                    onClick = {
+                        val uri = android.net.Uri.parse(
+                            "https://www.google.com/maps/search/?api=1&query=${android.net.Uri.encode(address)}"
+                        )
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                        context.startActivity(intent)
+                    }
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            // Código
+            if (!code.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                HorizontalDivider(color = Color(0xFF4CAF50).copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Tag,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = address,
-                        fontSize = 10.sp,
-                        color = secondaryColor,
-                        modifier = Modifier.weight(1f)
+                        text = code,
+                        fontSize = 11.sp,
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                     )
                 }
             }
-            
-            // Código
-            if (!code.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider(color = colors.primaryOrange.copy(alpha = 0.2f), thickness = 1.dp)
-                Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun ReceiptInfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    colors: PrestadorColors,
+    clickable: Boolean = false,
+    onClick: () -> Unit = {}
+) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (clickable) Color(0xFF1976D2) else colors.primaryOrange,
+            modifier = Modifier
+                .size(14.dp)
+                .padding(top = 1.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Column(
+            modifier = if (clickable) Modifier.clickable { onClick() } else Modifier
+        ) {
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                color = colors.textSecondary,
+                fontWeight = FontWeight.Medium,
+                lineHeight = 12.sp
+            )
+            Text(
+                text = value,
+                fontSize = 12.sp,
+                color = if (clickable) Color(0xFF1976D2) else colors.textPrimary,
+                lineHeight = 16.sp,
+                textDecoration = if (clickable) androidx.compose.ui.text.style.TextDecoration.Underline else androidx.compose.ui.text.style.TextDecoration.None
+            )
+        }
+    }
+}
+
+@Composable
+fun RescheduleNoticeBubble(
+    originalDate: String,
+    originalTime: String,
+    isFromCurrentUser: Boolean
+) {
+    val colors = getPrestadorColors()
+
+    val formattedDate = remember(originalDate) {
+        try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val displaySdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+            displaySdf.format(sdf.parse(originalDate)!!)
+        } catch (e: Exception) { originalDate }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isFromCurrentUser) colors.primaryOrange.copy(alpha = 0.12f) else colors.surfaceElevated,
+        border = BorderStroke(1.dp, Color(0xFFFF6B35).copy(alpha = 0.7f)),
+        modifier = Modifier.widthIn(min = 200.dp, max = 300.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = null,
+                    tint = Color(0xFFFF6B35),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = code,
-                    fontSize = 10.sp,
-                    color = colors.primaryOrange,
+                    text = "Turno reprogramado",
                     fontWeight = FontWeight.Bold,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    fontSize = 14.sp,
+                    color = colors.textPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            HorizontalDivider(color = Color(0xFFFF6B35).copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (formattedDate.isNotBlank()) {
+                ReceiptInfoRow(
+                    icon = Icons.Default.CalendarToday,
+                    label = "Fecha original",
+                    value = formattedDate,
+                    colors = colors
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+
+            if (originalTime.isNotBlank()) {
+                ReceiptInfoRow(
+                    icon = Icons.Default.AccessTime,
+                    label = "Hora original",
+                    value = originalTime,
+                    colors = colors
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFFFF6B35).copy(alpha = 0.08f)
+            ) {
+                Text(
+                    text = "Recibirás nuevos horarios disponibles para elegir.",
+                    fontSize = 11.sp,
+                    color = Color(0xFFFF6B35),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    lineHeight = 14.sp
                 )
             }
         }

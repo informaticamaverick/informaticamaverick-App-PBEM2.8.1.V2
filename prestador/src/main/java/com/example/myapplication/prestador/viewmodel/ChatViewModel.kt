@@ -139,6 +139,52 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    fun sendRescheduleNotice(conversationId: String, originalDate: String, originalTime: String) {
+        if (conversationId.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.sendRescheduleNoticeMessage(
+                    conversationId = conversationId,
+                    myUserId = myUserId,
+                    originalDate = originalDate,
+                    originalTime = originalTime
+                )
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al notificar reprogramación: ${e.message}"
+            }
+        }
+    }
+
+    fun sendCompletionNotice(conversationId: String, date: String, time: String) {
+        if (conversationId.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.sendMessage(
+                    conversationId = conversationId,
+                    text = "✅ Tu turno del $date a las $time fue completado. ¡Gracias!",
+                    myUserId = myUserId
+                )
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al notificar completado: ${e.message}"
+            }
+        }
+    }
+
+    fun sendCancellationNotice(conversationId: String, date: String, time: String) {
+        if (conversationId.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.sendMessage(
+                    conversationId = conversationId,
+                    text = "❌ Tu turno del $date a las $time fue cancelado por el prestador.",
+                    myUserId = myUserId
+                )
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al modificar cancelacion: ${e.message}"
+            }
+        }
+    }
+
     fun sendBudgetMessage(pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity) {
         if (currentConversationId.isEmpty())
             return
@@ -394,51 +440,66 @@ class ChatViewModel @Inject constructor(
                     newStatus = newStatus,
                     rejectionReason = rejectionReason
                 )
-                
-                // 2. Si aceptó, enviar comprobante visual
+
                 if (accepted) {
-                    val receipt = buildAppointmentReceipt(
-                        date = date,
-                        time = time,
-                        service = service,
-                        providerName = providerName,
-                        serviceType = serviceType,
-                        doesHomeVisits = doesHomeVisits,
-                        profession = profession,
-                        providerAddress = providerAddress
-                    )
-                    repository.sendAppointmentReceiptMessage(
-                        conversationId = currentConversationId,
-                        myUserId = myUserId,
-                        date = receipt.date,
-                        time = receipt.time,
-                        service = receipt.service,
-                        providerName = receipt.providerName,
-                        isTechnician = receipt.isTechnician,
-                        profession = receipt.profession,
-                        address = receipt.address,
-                        code = receipt.code
-                    )
+                    // Obtener clientId una sola vez
+                    val conversation = repository.getConversationById(currentConversationId)
+                    val clientId = conversation?.userId ?: ""
+                    val isTechnician = serviceType == "TECHNICAL" || doesHomeVisits
+
+                    // 2. Guardar en Room — independiente del comprobante para no perder el turno
+                    try {
+                        repository.saveBookedAppointmet(
+                            messageId = messageId,
+                            clientId = clientId,
+                            clientName = clientName,
+                            date = date,
+                            time = time,
+                            service = service,
+                            chatId = currentConversationId
+                        )
+                        android.util.Log.d("ChatVM", "✅ Turno guardado en Room: $date $time - $service - clientId=$clientId")
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatVM", "❌ Error guardando turno en Room: ${e.message}", e)
+                        _errorMessage.value = "Error al guardar turno: ${e.message}"
+                    }
+
+                    // 3. Enviar comprobante visual (secundario — no afecta el guardado)
+                    try {
+                        val clientAddress = if (isTechnician && clientId.isNotBlank()) {
+                            repository.getClientMainAddress(clientId)
+                        } else null
+                        val receipt = buildAppointmentReceipt(
+                            date = date,
+                            time = time,
+                            service = service,
+                            providerName = providerName,
+                            serviceType = serviceType,
+                            doesHomeVisits = doesHomeVisits,
+                            profession = profession,
+                            providerAddress = providerAddress,
+                            clientAddress = clientAddress
+                        )
+                        repository.sendAppointmentReceiptMessage(
+                            conversationId = currentConversationId,
+                            myUserId = myUserId,
+                            date = receipt.date,
+                            time = receipt.time,
+                            service = receipt.service,
+                            providerName = receipt.providerName,
+                            isTechnician = receipt.isTechnician,
+                            profession = receipt.profession,
+                            address = receipt.address,
+                            code = receipt.code
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatVM", "❌ Error enviando comprobante: ${e.message}", e)
+                    }
                 } else {
                     // Si rechazó, enviar mensaje de rechazo
                     val motivo = if (!rejectionReason.isNullOrBlank()) "Motivo: $rejectionReason" else ""
                     val rejectText = "❌ No puedo atenderte el $date a las $time. $motivo Por favor elegí otro horario."
                     repository.sendMessage(currentConversationId, rejectText, myUserId)
-                }
-
-                //3. Si aceptó, guardar en Room local del prestador
-                if (accepted) {
-                    val conversation = repository.getConversationById(currentConversationId)
-                    val clientId = conversation?.userId ?: ""
-                    repository.saveBookedAppointmet(
-                        messageId = messageId,
-                        clientId = clientId,
-                        clientName = clientName,
-                        date = date,
-                        time = time,
-                        service = service,
-                        chatId = currentConversationId
-                    )
                 }
             } catch (e: Exception) {
                 _errorMessage.value = "Error al responder solicitud:${e.message}"
@@ -465,7 +526,8 @@ class ChatViewModel @Inject constructor(
         serviceType: String,
         doesHomeVisits: Boolean,
         profession: String?,
-        providerAddress: String?
+        providerAddress: String?,
+        clientAddress: String? = null
     ): ReceiptData {
         val isTechnician = serviceType == "TECHNICAL" || doesHomeVisits
         val dateFormatted = formatDateForDisplay(date)
@@ -475,6 +537,8 @@ class ChatViewModel @Inject constructor(
         } else {
             "#TRN-${date.replace("-", "")}-001"
         }
+        // TECHNICAL → va al domicilio del cliente; PROFESSIONAL → consultorio del prestador
+        val address = if (isTechnician) clientAddress else providerAddress
         
         return ReceiptData(
             date = dateFormatted,
@@ -483,7 +547,7 @@ class ChatViewModel @Inject constructor(
             providerName = providerName,
             isTechnician = isTechnician,
             profession = if (!profession.isNullOrBlank()) profession else null,
-            address = if (!providerAddress.isNullOrBlank()) providerAddress else null,
+            address = if (!address.isNullOrBlank()) address else null,
             code = code
         )
     }

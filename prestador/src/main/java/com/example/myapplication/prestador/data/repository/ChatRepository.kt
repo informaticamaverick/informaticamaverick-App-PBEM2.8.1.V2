@@ -526,6 +526,12 @@ class ChatRepository @Inject constructor(
                     availabilityJson = snapshot.child("availabilityJson").getValue(String::class.java),
                     bookedSlotsJson = snapshot.child("bookedSlotsJson").getValue(String::class.java),
                     calendarInviteMessageId = snapshot.child("calendarInviteMessageId").getValue(String::class.java),
+                    receiptService = snapshot.child("receiptService").getValue(String::class.java),
+                    receiptProviderName = snapshot.child("receiptProviderName").getValue(String::class.java),
+                    receiptProfession = snapshot.child("receiptProfession").getValue(String::class.java),
+                    receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
+                    receiptCode = snapshot.child("receiptCode").getValue(String::class.java),
+                    receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java) ?: false,
                 )
                 scope.launch {
                     try {
@@ -745,6 +751,30 @@ class ChatRepository @Inject constructor(
         // Documento no existe en ninguna colección → usuario eliminado
         Log.w("ChatRepo", "⚠️ $userId no encontrado en usuarios ni providers")
         return null
+    }
+
+    // ── Dirección del cliente (para visitas técnicas) ──────────────────────────
+    suspend fun getClientMainAddress(clientId: String): String? {
+        return try {
+            val addressDocs = firestore
+                .collection("usuarios")
+                .document(clientId)
+                .collection("personalAddresses")
+                .get()
+                .await()
+            val first = addressDocs.documents.firstOrNull() ?: return null
+            val calle = first.getString("calle").orEmpty()
+            val numero = first.getString("numero").orEmpty()
+            val localidad = first.getString("localidad").orEmpty()
+            val provincia = first.getString("provincia").orEmpty()
+            listOf("$calle $numero".trim(), localidad, provincia)
+                .filter { it.isNotBlank() }
+                .joinToString(", ")
+                .ifBlank { null }
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error obteniendo dirección del cliente $clientId: ${e.message}")
+            null
+        }
     }
 
     // ── Sincronizar conversaciones desde Firestore ─────────────────────────────
@@ -1117,19 +1147,30 @@ class ChatRepository @Inject constructor(
         service: String = "",
         chatId: String
     ) {
-        bookedAppointmentDao.insertAppointment(
-            BookedAppointmentEntity(
-                id = "appt_$messageId",
-                clientId = clientId,
-                clientName = clientName,
+        // Si hay un turno RESCHEDULED del mismo chat, actualizarlo con la nueva fecha
+        val rescheduled = bookedAppointmentDao.getRescheduledByChatId(chatId)
+        if (rescheduled != null) {
+            bookedAppointmentDao.updateDateTimeStatus(
+                id = rescheduled.id,
                 date = date,
                 time = time,
-                service = service,
-                status = "CONFIRMED",
-                chatId = chatId,
-                createdAt = System.currentTimeMillis()
+                status = "CONFIRMED"
             )
-        )
+        } else {
+            bookedAppointmentDao.insertAppointment(
+                BookedAppointmentEntity(
+                    id = "appt_$messageId",
+                    clientId = clientId,
+                    clientName = clientName,
+                    date = date,
+                    time = time,
+                    service = service,
+                    status = "CONFIRMED",
+                    chatId = chatId,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        }
     }
 
     // ── Enviar comprobante de turno confirmado ──────────────────────────────────
@@ -1191,6 +1232,50 @@ class ChatRepository @Inject constructor(
             messageDao.markAsSynced(message.messageId)
         } catch (e: Exception) {
             Log.e("ChatRepo", "Error sending receipt: ${e.message}")
+        }
+        return message
+    }
+
+    suspend fun sendRescheduleNoticeMessage(
+        conversationId: String,
+        myUserId: String,
+        originalDate: String,
+        originalTime: String
+    ): MessageEntity {
+        val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
+        val message = MessageEntity(
+            messageId = UUID.randomUUID().toString(),
+            conversationId = conversationId,
+            text = "Turno reprogramado",
+            timestamp = System.currentTimeMillis(),
+            isFromCurrentUser = true,
+            messageType = "RESCHEDULE_NOTICE",
+            appointmentDate = originalDate,
+            appointmentTime = originalTime
+        )
+        messageDao.insertMessage(message)
+        conversationDao.updateLastMessage(conversationId, "Turno reprogramado", message.timestamp, "RESCHEDULE_NOTICE")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Turno reprogramado", message.timestamp)
+        try {
+            val data = hashMapOf(
+                "messageId" to message.messageId,
+                "chatId" to conversationId,
+                "senderId" to myUserId,
+                "receiverId" to receiverId,
+                "text" to "Turno reprogramado",
+                "type" to "RESCHEDULE_NOTICE",
+                "timestamp" to message.timestamp,
+                "appointmentDate" to originalDate,
+                "appointmentTime" to originalTime,
+                "isRead" to false,
+                "isDelivered" to false
+            )
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(message.messageId)
+                .setValue(data).await()
+            messageDao.markAsSynced(message.messageId)
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error sending reschedule notice: ${e.message}")
         }
         return message
     }

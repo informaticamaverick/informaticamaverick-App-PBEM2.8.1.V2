@@ -102,7 +102,8 @@ data class Message(
         BUDGET,
         CALENDAR_INVITE,
         APPOINTMENT_REQUEST,
-        APPOINTMENT_RECEIPT
+        APPOINTMENT_RECEIPT,
+        RESCHEDULE_NOTICE
     }
 
     /**
