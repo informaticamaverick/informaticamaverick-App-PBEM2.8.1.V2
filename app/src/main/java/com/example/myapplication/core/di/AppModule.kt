@@ -6,10 +6,12 @@ import com.example.myapplication.data.local.BudgetDao
 import com.example.myapplication.data.local.CalendarDao
 import com.example.myapplication.data.local.CategoryDao
 import com.example.myapplication.data.local.ChatDao
+import com.example.myapplication.data.local.FastCategoryDao
 import com.example.myapplication.data.local.ProviderDao
 import com.example.myapplication.data.local.UserDao
 import com.example.myapplication.data.repository.CategoryRepository
 import com.example.myapplication.data.repository.ChatRepository
+import com.example.myapplication.data.repository.FastRepository
 import com.example.myapplication.data.repository.ProviderRepository
 import com.example.myapplication.presentation.util.NotificationHelper
 import com.google.firebase.auth.FirebaseAuth
@@ -77,9 +79,23 @@ object AppModule {
         return database.calendarDao()
     }
 
+    @Provides
+    @Singleton
+    fun provideFastCategoryDao(db: AppDatabase): FastCategoryDao = db.fastCategoryDao()
+
     // ----------------------------------------------------------
     // SECCIÓN 3: PROVEEDORES DE REPOSITORIOS Y UTILIDADES
     // ----------------------------------------------------------
+
+    @Provides
+    @Singleton
+    fun provideFastRepository(
+        dao: ProviderDao,
+        fastCategoryDao: FastCategoryDao,
+        firestore: FirebaseFirestore
+    ): FastRepository {
+        return FastRepository(dao, fastCategoryDao, firestore)
+    }
 
     @Provides
     @Singleton
@@ -113,6 +129,7 @@ object AppModule {
     fun provideChatRepository(
         chatDao: ChatDao,
         budgetDao: BudgetDao,
+        calendarDao: CalendarDao,
         firestore: FirebaseFirestore,
         database: FirebaseDatabase,
         auth: FirebaseAuth,
@@ -122,6 +139,7 @@ object AppModule {
         return ChatRepository(
             chatDao = chatDao,
             budgetDao = budgetDao,
+            calendarDao = calendarDao,
             firestore = firestore,
             database = database,
             auth = auth,

@@ -145,15 +145,14 @@ fun BeActionsBar(
     shouldShowBottomBar: Boolean = true,
     toolboxKey: String = "default",
     showOnlyDefault: Boolean = false,
-    leadingContent: @Composable (() -> Unit)? = null,
     isToolbarStable: Boolean = true // 🔥 AHORA SE RECIBE DEL COREÓGRAFO (BeAssistantViewModel)
 ) {
     val filteredActions = remember(actions, showOnlyDefault) {
         actions.filter { it.isVisible && it.isDefault == showOnlyDefault }
     }
 
-    // 🔥 MODIFICACIÓN: La barra es visible si hay acciones o contenido
-    val actuallyVisible = isVisible && (filteredActions.isNotEmpty() || leadingContent != null)
+    // 🔥 MODIFICACIÓN: La barra es visible si hay acciones
+    val actuallyVisible = isVisible && filteredActions.isNotEmpty()
     val isProfileContext = toolboxKey.startsWith("profile")
 
     // ==================================================================================
@@ -244,20 +243,6 @@ fun BeActionsBar(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
 
-                            if (leadingContent != null) {
-                                item(key = "leading_tool") {
-                                    Box(modifier = Modifier.animateItem()) {
-                                        AnimatedVisibility(
-                                            visible = true,
-                                            enter = if (isToolbarStable) slideInVertically { it } + fadeIn() else fadeIn(),
-                                            exit = slideOutVertically { it } + fadeOut()
-                                        ) {
-                                            leadingContent()
-                                        }
-                                    }
-                                }
-                            }
-
                             items(filteredActions, key = { it.id }) { action ->
                                 Box(modifier = Modifier.animateItem()) {
                                     AnimatedVisibility(
@@ -299,10 +284,9 @@ fun BeSmallActionsBuilder(
     actions: List<BeSmallActionModel>,
     shouldShowBottomBar: Boolean = true,
     toolboxKey: String = "default",
-    leadingContent: @Composable (() -> Unit)? = null,
     isToolbarStable: Boolean = true
 ) {
-    BeActionsBar(isVisible = isVisible, actions = actions, shouldShowBottomBar = shouldShowBottomBar, toolboxKey = toolboxKey, showOnlyDefault = false, leadingContent = leadingContent, isToolbarStable = isToolbarStable)
+    BeActionsBar(isVisible = isVisible, actions = actions, shouldShowBottomBar = shouldShowBottomBar, toolboxKey = toolboxKey, showOnlyDefault = false, isToolbarStable = isToolbarStable)
 }
 
 @Composable
@@ -311,10 +295,9 @@ fun BeDefaultActionsBand(
     actions: List<BeSmallActionModel>,
     shouldShowBottomBar: Boolean = true,
     toolboxKey: String = "default",
-    leadingContent: @Composable (() -> Unit)? = null,
     isToolbarStable: Boolean = true
 ) {
-    BeActionsBar(isVisible = isVisible, actions = actions, shouldShowBottomBar = shouldShowBottomBar, toolboxKey = toolboxKey, showOnlyDefault = true, leadingContent = leadingContent, isToolbarStable = isToolbarStable)
+    BeActionsBar(isVisible = isVisible, actions = actions, shouldShowBottomBar = shouldShowBottomBar, toolboxKey = toolboxKey, showOnlyDefault = true, isToolbarStable = isToolbarStable)
 }
 
 

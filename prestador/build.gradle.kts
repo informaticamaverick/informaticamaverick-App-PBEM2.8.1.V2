@@ -42,6 +42,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -130,7 +131,4 @@ dependencies {
     
     // Image Loading
     implementation(libs.coil.compose)
-
-    // Coil para cargar imagenes
-    implementation("io.coil-kt:coil-compose:2.5.0")
 }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,11 +25,16 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBackIos
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -62,7 +68,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import com.example.myapplication.presentation.client.BeSearchReaction
+//import com.example.myapplication.presentation.client.BeSearchReaction
 import androidx.compose.ui.window.Popup
 import com.example.myapplication.presentation.components.Utilidades.CyberColorsV3
 import com.example.myapplication.presentation.components.Utilidades.MenuCP
@@ -93,7 +99,8 @@ data class BeMessage(
     val bubbleColor: Color,
     val textColor: Color = Color(0xFF05070A),
     val emotion: BeEmotion = BeEmotion.NORMAL,
-    val isCentered: Boolean = false
+    val isCentered: Boolean = false,
+    val categories: List<com.example.myapplication.data.local.CategoryEntity> = emptyList() // NUEVO: Categorías para búsqueda rápida
 )
 
 // --- Paleta ROG Local para evitar conflictos si no están en scope ---
@@ -111,6 +118,7 @@ fun BeAssistantSearchFab(
     // Estados sincronizados con BeBrainViewModel
     isSearchActive: Boolean = false,
     searchQuery: String = "", 
+    activeConversationalMessage: BeMessage? = null, // NUEVO
     contextMessages: List<BeMessage> = emptyList(),
     isDormido: Boolean = false,
     currentActions: List<BeSmallActionModel> = emptyList(),
@@ -122,10 +130,6 @@ fun BeAssistantSearchFab(
     // NUEVOS ESTADOS CENTRALIZADOS (HUB)
     state: BeState = BeState.IDLE,
     currentTipIndex: Int = 0,
-    // ESTADOS PARA LA HERRAMIENTA DE UBICACIÓN
-    isLocationExpanded: Boolean = false, // Indica si la tarjeta de ubicación está expandida
-    onToggleLocationExpand: (Boolean) -> Unit = {}, // Callback para cerrar al tocar fuera
-    locationToolContent: @Composable (() -> Unit)? = null,
     // Callbacks de acción
     onSearchQueryChange: (String) -> Unit = {},
     onSearchSubmitted: () -> Unit = {}, // Callback para Easter Egg
@@ -138,7 +142,7 @@ fun BeAssistantSearchFab(
     onSetState: (BeState) -> Unit = {},
     resetTrigger: Int = 0,
     // NUEVO: Reacción de búsqueda desde BeInteractionViewModel
-    searchReaction: BeSearchReaction? = null,
+    //searchReaction: BeSearchReaction? = null,
     onReactionActionClick: (String) -> Unit = {},
     onReactionResultClick: (Any) -> Unit = {},
     onReactionCloseClick: () -> Unit = {},
@@ -160,6 +164,13 @@ fun BeAssistantSearchFab(
     onUpdatePosition: (Float, Float) -> Unit = { _, _ -> },
     onSetDragging: (Boolean) -> Unit = {}
 ) {
+
+    // 🔥 PAGER STATE PARA TIPS INFINITOS (USAMOS INT.MAX_VALUE / 2 COMO OFFSET INICIAL)
+    val totalTips = contextMessages.size.coerceAtLeast(1)
+    val pagerState = rememberPagerState(
+        initialPage = (Int.MAX_VALUE / 2) - (Int.MAX_VALUE / 2 % totalTips),
+        pageCount = { if (contextMessages.isEmpty()) 0 else Int.MAX_VALUE }
+    )
 
     // 🔥 PADDING DINÁMICO ANIMADO (Para sincronización con Nav Bar)
     val animatedBeBottomPadding by animateDpAsState(
@@ -314,19 +325,19 @@ fun BeAssistantSearchFab(
     // ==========================================================================================
     Box(
         modifier = modifier.fillMaxSize()
-            .zIndex(if (isDragging || state == BeState.TALKING || isSearchActive || isLocationExpanded) 200f else 100f),
+            .zIndex(if (isDragging || state == BeState.TALKING || isSearchActive) 200f else 100f),
         contentAlignment = if (isSearchActive) Alignment.TopEnd else Alignment.BottomEnd
     ) {
         // --- CAPA 0: SCRIM GLOBAL (CIERRE POR TOQUE EXTERNO) ---
         AnimatedVisibility(
-            visible = showSmallActions || isLocationExpanded,
+            visible = showSmallActions,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(if (isLocationExpanded) Color.Black.copy(alpha = 0.45f) else Color.Transparent)
+                    .background(Color.Transparent)
                     .then(
                         if (!isMultiSelectionActive) {
                             Modifier.clickable(
@@ -334,7 +345,6 @@ fun BeAssistantSearchFab(
                                 interactionSource = remember { MutableInteractionSource() }
                             ) {
                                 if (showSmallActions) onToggleActions() // Cerrar panel herramientas
-                                if (isLocationExpanded) onToggleLocationExpand(false) // Cerrar tarjeta ubicación
                             }
                         } else {
                             Modifier
@@ -386,27 +396,90 @@ fun BeAssistantSearchFab(
                 )
             }
         }
+        // ==========================================================================================
+        // --- SECCIÓN: BURBUJAS DE DIÁLOGO CÓMIC (NUEVO V5) ---
+        // ==========================================================================================
 
-        // --- CAPA 3: BE SEARCH (MODO COMPACTO) ---
-        if (isSearchActive && searchReaction != null && !isBubbleMuted) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .zIndex(150f)
+        // 1. BURBUJA SUPERIOR (MODO BÚSQUEDA ACTIVA)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(top = 108.dp, end = 4.dp, start = 4.dp) // Debajo de la barra de búsqueda y Be
+                .zIndex(400f)
+        ) {
+            BeTopBubble(
+                isVisible = isSearchActive && activeConversationalMessage != null,
+                onCloseClick = onReactionCloseClick, // Usamos el callback correcto para cerrar la reacción/respuesta
+                borderColor = activeConversationalMessage?.bubbleColor ?: ElectricCyanColor
             ) {
-                BeSearchBubble(
-                    isVisible = true,
-                    reaction = searchReaction,
-                    onActionClick = { id ->
-                        onReactionActionClick(id ?: searchReaction.actionId ?: "")
-                    },
-                    onResultClick = onReactionResultClick,
-                    onCloseClick = onReactionCloseClick
-                )
+                activeConversationalMessage?.let { msg ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(msg.icon, fontSize = 18.sp)
+                        Spacer(Modifier.width(8.dp))
+                        BubbleM3Typography.Title("Be Assistant", color = msg.bubbleColor)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    BubbleM3Typography.Body(msg.text)
+                    
+                    if (msg.actionText != null) {
+                        Spacer(Modifier.height(12.dp))
+                        ActionChip(
+                            item = ControlItemLite(
+                                label = msg.actionText,
+                                color = msg.bubbleColor
+                            ),
+                            onClick = onBubbleActionClick
+                        )
+                    }
+
+                    // --- SECCIÓN: CATEGORÍAS ENCONTRADAS (MODO FAST) ---
+                    if (msg.categories.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.foundation.lazy.LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            item {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    msg.categories.forEach { category ->
+                                        ActionChip(
+                                            item = ControlItemLite(
+                                                label = category.name,
+                                                emoji = category.icon,
+                                                color = msg.bubbleColor
+                                            ),
+                                            onClick = { 
+                                                // Emitimos la acción de la categoría seleccionada
+                                                onReactionActionClick("cat_${category.name.lowercase().trim()}") 
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
+        // 2. BURBUJA INFERIOR (MODO IDLE / TIPS)
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = animatedBeBottomPadding + 45.dp, end = 4.dp, start = 4.dp)
+                .zIndex(400f)
+        ) {
+            BeBottomBubble(
+                isVisible = !isSearchActive && state == BeState.TALKING && contextMessages.isNotEmpty(),
+                onCloseClick = { onSetState(BeState.IDLE) },
+                messages = contextMessages,
+                pagerState = pagerState,
+                onActionClick = onBubbleActionClick
+            )
+        }
+
+        // --- CAPA 3: BE SEARCH (MODO COMPACTO) ---
         // ==========================================================================================
         // --- SECCIÓN 1: CAPA DE HERRAMIENTAS Y CONTROLES DE BASE ---
         // ==========================================================================================
@@ -418,23 +491,59 @@ fun BeAssistantSearchFab(
                     .align(Alignment.BottomEnd),
                 contentAlignment = Alignment.CenterEnd
             ) {
+                // --- SECCIÓN: ORQUESTACIÓN DE ACCIONES TÁCTICAS (HUD V7) ---
+                // Si estamos en Chat y la multiselección está activa, inyectamos las herramientas aquí directamente
+                // para asegurar que el flujo visual sea consistente con el diseño Maverick.
+                val chatMultiSelectActions = remember {
+                    listOf(
+                        BeSmallActionModel(
+                            id = "chat_cancel",
+                            icon = Icons.Default.Close,
+                            label = "CERRAR",
+                            tint = Color.Red
+                        ),
+                        BeSmallActionModel(id = "divider_v1", icon = Icons.Default.Remove, label = ""),
+                        BeSmallActionModel(
+                            id = "chat_select_all",
+                            icon = Icons.Default.SelectAll,
+                            label = "TODOS",
+                            tint = Color(0xFF2197F5) // MaverickBlue
+                        ),
+                        BeSmallActionModel(id = "divider_v2", icon = Icons.Default.Remove, label = ""),
+                        BeSmallActionModel(
+                            id = "chat_delete_multi",
+                            icon = Icons.Default.Delete,
+                            label = "ELIMINAR",
+                            tint = Color.Red
+                        )
+                    )
+                }
+
+                val finalActions = remember(currentActions, isMultiSelectionActive, toolboxKey) {
+                    if (isMultiSelectionActive && (toolboxKey.startsWith("chat") || toolboxKey.startsWith("conversaciones"))) {
+                        chatMultiSelectActions.map { action ->
+                            action.copy(onClick = { onReactionActionClick(action.id) })
+                        }
+                    } else {
+                        currentActions
+                    }
+                }
+
                 val derivedToolboxKey = "${toolboxKey}_${isMultiSelectionActive}"
 
                 BeSmallActionsBuilder(
                     isVisible = showSmallActions && !isSearchActive,
-                    actions = currentActions,
+                    actions = finalActions,
                     shouldShowBottomBar = shouldShowBottomBar,
                     toolboxKey = derivedToolboxKey,
-                    leadingContent = null,
                     isToolbarStable = isToolbarStable
                 )
 
                 BeDefaultActionsBand(
                     isVisible = !showSmallActions && !isSearchActive,
-                    actions = currentActions,
+                    actions = finalActions,
                     shouldShowBottomBar = shouldShowBottomBar,
                     toolboxKey = derivedToolboxKey,
-                    leadingContent = locationToolContent,
                     isToolbarStable = isToolbarStable
                 )
 
@@ -711,21 +820,6 @@ fun BeAssistantSearchFab(
                     ) {
                         Text(text = currentMessage.icon, fontSize = 16.sp)
                     }
-                }
-
-                // --- BURBUJA DE CONTEXTO / COMIC (MODO NORMAL) ---
-                if (!isSearchActive) {
-                    BeAssistantBubble(
-                        isVisible = state == BeState.TALKING && contextMessages.isNotEmpty(),
-                        messages = contextMessages,
-                        currentIndex = currentTipIndex,
-                        onCloseClick = { onSetState(BeState.IDLE) },
-                        onPageSelected = { index ->
-                            if (index > currentTipIndex) onNextTip()
-                            else if (index < currentTipIndex) onPrevTip()
-                        },
-                        onActionClick = { onSetState(BeState.IDLE); onBubbleActionClick() }
-                    )
                 }
 
                 // --- BADGE DE CONVERSACIÓN MAVERICK ---

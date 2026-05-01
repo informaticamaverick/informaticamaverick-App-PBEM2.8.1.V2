@@ -3,7 +3,6 @@ package com.example.myapplication.presentation.client
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +44,7 @@ import com.example.myapplication.data.local.CalendarEventEntity
 import com.example.myapplication.data.local.EventType
 import com.example.myapplication.data.local.VisitStatus
 import com.example.myapplication.presentation.components.*
+import com.example.myapplication.presentation.components.BeSmallActionModel
 import com.example.myapplication.presentation.components.Utilidades.MaverickTacticalButton
 import com.example.myapplication.presentation.profile.ProfileViewModel
 import com.example.myapplication.ui.theme.MyApplicationTheme
@@ -71,16 +71,79 @@ fun CalendarScreen(
     onBack: () -> Unit,
     onChatClick: (String) -> Unit = {},
     viewModel: CalendarViewModel = hiltViewModel(),
-    profileViewModel: ProfileViewModel = hiltViewModel() // 🔥 USAMOS EL NUEVO CEREBRO
+    profileViewModel: ProfileViewModel = hiltViewModel(),
+    beBrainViewModel: BeBrainViewModel = hiltViewModel(),
 ) {
-    val dbEvents by viewModel.allEvents.collectAsStateWithLifecycle()
+    val filteredEvents by viewModel.filteredEvents.collectAsStateWithLifecycle()
+    val daysWithEvents by viewModel.daysWithEvents.collectAsStateWithLifecycle()
+    val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
+
     val userState by profileViewModel.userState.collectAsStateWithLifecycle()
     val currentUserId = userState?.email ?: "user_demo_66"
 
+    // --- 1. SINCRONIZACIÓN CON EL ASISTENTE BE ---
+    LaunchedEffect(Unit) {
+        beBrainViewModel.onRouteChanged("calendar")
+    }
+
+    // --- 2. CONFIGURACIÓN DE LA CAJA DE HERRAMIENTAS (TOOLBOX) ---
+    val calendarActions = remember {
+        listOf(
+            BeSmallActionModel(
+                id = "add_event",
+                icon = Icons.Default.Add,
+                label = "Nuevo",
+                emoji = "➕",
+                isDefault = true
+            ),
+            BeSmallActionModel(
+                id = "clean_history",
+                icon = Icons.Default.DeleteSweep,
+                label = "Limpiar",
+                emoji = "🧹",
+                isDefault = false
+            ),
+            BeSmallActionModel(
+                id = "refresh_calendar",
+                icon = Icons.Default.Refresh,
+                label = "Refrescar",
+                emoji = "🔄",
+                isDefault = false
+            )
+        )
+    }
+
+    DisposableEffect(Unit) {
+        beBrainViewModel.setCustomActions(calendarActions)
+        onDispose {
+            beBrainViewModel.setCustomActions(emptyList())
+        }
+    }
+
+    // --- 3. ESCUCHA DE EVENTOS DE ACCIÓN (BE ACTIONS) ---
+    LaunchedEffect(Unit) {
+        beBrainViewModel.actionEvent.collect { actionId ->
+            when (actionId) {
+                "add_event" -> {
+                    // Implementar lógica para añadir evento a futuro
+                }
+                "clean_history" -> {
+                    // Implementar lógica para limpiar historial a futuro
+                }
+                "refresh_calendar" -> {
+                    // Acción de refresco
+                }
+            }
+        }
+    }
+
     CalendarScreenContent(
-        events = dbEvents,
+        filteredEvents = filteredEvents,
+        daysWithEvents = daysWithEvents,
+        selectedDate = selectedDate,
         onBack = onBack,
         onChatClick = onChatClick,
+        onDateChange = { viewModel.updateSelectedDate(it) },
         onCancelEvent = { event ->
             viewModel.cancelEvent(event, currentUserId)
         },
@@ -97,26 +160,19 @@ fun CalendarScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreenContent(
-    events: List<CalendarEventEntity>,
+    filteredEvents: List<CalendarEventEntity>,
+    daysWithEvents: Set<String>,
+    selectedDate: Calendar,
     onBack: () -> Unit,
     onChatClick: (String) -> Unit,
+    onDateChange: (Calendar) -> Unit,
     onCancelEvent: (CalendarEventEntity) -> Unit,
     onRescheduleEvent: (CalendarEventEntity) -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    // --- ESTADOS NAVEGACIÓN Y BÚSQUEDA ---
-    var isSearchActive by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-
-    // --- ESTADOS PANEL TÁCTICO FAB ---
-    var isFabExpanded by remember { mutableStateOf(false) }
-    var activeFilters by remember { mutableStateOf(setOf<String>()) }
-
     // --- ESTADOS DEL CALENDARIO ---
     var currentDate by remember { mutableStateOf(Calendar.getInstance()) }
-    var selectedDate by remember { mutableStateOf(Calendar.getInstance()) }
-    var isExpandedList by remember { mutableStateOf(true) } // Controla la lista de eventos
     var isCalendarExpanded by remember { mutableStateOf(false) } // Por defecto arranca oculto
 
     // --- ESTADOS DE MODALES ---
@@ -132,75 +188,23 @@ fun CalendarScreenContent(
     }
 
     val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val selectedDateStr = dateFormat.format(selectedDate.time)
-/**
-    // --- DEFINICIÓN DE CATEGORÍAS TÁCTICAS ---
-    val dynamicCategoriesForPanel = listOf(
-        ControlItem("Visitas", Icons.Default.Build, "🛠️", Color(0xFF2197F5), "cat_visita"),
-        ControlItem("Turnos", Icons.Default.Event, "📅", Color(0xFF9B51E0), "cat_turno"),
-        ControlItem("Envíos", Icons.Default.LocalShipping, "🚛", Color(0xFF10B981), "cat_envio")
-    )
-**/
-    // --- LÓGICA DE FILTRADO Y ORDENAMIENTO (APLICADO A DATOS DE ROOM) ---
-    val filteredEvents = remember(events, activeFilters, searchQuery, selectedDateStr) {
-        var result = events.filter { it.date == selectedDateStr }
-
-        // Búsqueda por texto
-        if (searchQuery.isNotEmpty()) {
-            result = result.filter {
-                it.title.contains(searchQuery, ignoreCase = true) ||
-                        it.provider.contains(searchQuery, ignoreCase = true) ||
-                        it.address.contains(searchQuery, ignoreCase = true)
-            }
-        }
-
-        // Filtros de Estado
-        val showConfirmed = activeFilters.contains("filter_verif")
-        val showPending = activeFilters.contains("filter_fast")
-        if (showConfirmed && !showPending) result = result.filter { it.status == VisitStatus.CONFIRMED }
-        else if (showPending && !showConfirmed) result = result.filter { it.status == VisitStatus.PENDING }
-
-        // Filtros de Tipo
-        val showVisitas = activeFilters.contains("cat_visita")
-        val showTurnos = activeFilters.contains("cat_turno")
-        val showEnvios = activeFilters.contains("cat_envio")
-        if (showVisitas || showTurnos || showEnvios) {
-            result = result.filter {
-                (showVisitas && it.type == EventType.VISIT) ||
-                        (showTurnos && it.type == EventType.APPOINTMENT) ||
-                        (showEnvios && it.type == EventType.SHIPPING)
-            }
-        }
-
-        // Ordenamiento (Prioriza hora)
-        result = when {
-            activeFilters.contains("sort_precio_desc") -> result.sortedByDescending { it.time }
-            activeFilters.contains("sort_nombre_asc") -> result.sortedBy { it.provider }
-            else -> result.sortedBy { it.time }
-        }
-        result
-    }
-
-    val daysWithEvents = events.filter { it.status != VisitStatus.CANCELLED }.map { it.date }.toSet()
 
     Box(modifier = Modifier.fillMaxSize().background(DarkBg)) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                if (!isSearchActive) {
-                    // ==========================================================================================
-                    // --- 🏗️ SECCIÓN: CABECERA DINÁMICA MAVERICK (REEMPLAZO DE TOPAPPBAR) ---
-                    // ==========================================================================================
-                    BarraCabezera(
-                        title = "Mi Agenda",
-                        subtitle = "Control de visitas y turnos",
-                        emoji = "📅",
-                        onBack = onBack,
-                        onInfoClick = { isCalendarExpanded = !isCalendarExpanded },
-                        collapseFraction = collapseFraction,
-                        accentColor = Color(0xFF2197F5)
-                    )
-                }
+                // ==========================================================================================
+                // --- 🏗️ SECCIÓN: CABECERA DINÁMICA MAVERICK (REEMPLAZO DE TOPAPPBAR) ---
+                // ==========================================================================================
+                BarraCabezera(
+                    title = "Mi Agenda",
+                    subtitle = "Control de visitas y turnos",
+                    emoji = "📅",
+                    onBack = onBack,
+                    onInfoClick = { isCalendarExpanded = !isCalendarExpanded },
+                    collapseFraction = collapseFraction,
+                    accentColor = Color(0xFF2197F5)
+                )
             }
         ) { paddingValues ->
             val safePadding = PaddingValues(
@@ -250,10 +254,10 @@ fun CalendarScreenContent(
                                     currentDate = currentDate,
                                     selectedDate = selectedDate,
                                     daysWithEvents = daysWithEvents,
-                                    events = events,
+                                    events = filteredEvents,
                                     dateFormat = dateFormat,
                                     onDayClick = { day ->
-                                        selectedDate = Calendar.getInstance().apply { time = currentDate.time; set(Calendar.DAY_OF_MONTH, day) }
+                                        onDateChange(Calendar.getInstance().apply { time = currentDate.time; set(Calendar.DAY_OF_MONTH, day) })
                                     }
                                 )
                             }
@@ -811,9 +815,12 @@ fun CalendarScreenPreview() {
         )
 
         CalendarScreenContent(
-            events = dummyEvents,
+            filteredEvents = dummyEvents,
+            daysWithEvents = dummyEvents.map { it.date }.toSet(),
+            selectedDate = Calendar.getInstance(),
             onBack = {},
             onChatClick = {},
+            onDateChange = {},
             onCancelEvent = {},
             onRescheduleEvent = {}
         )

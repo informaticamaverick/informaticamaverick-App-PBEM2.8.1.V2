@@ -44,21 +44,25 @@ import com.example.myapplication.data.local.UserEntity
 import com.example.myapplication.data.model.ServiceDisplayModel
 import com.example.myapplication.data.model.ProviderType
 import com.example.myapplication.presentation.components.Utilidades.*
-import com.example.myapplication.presentation.components.MenuFiltros
 import com.example.myapplication.presentation.components.BotonFiltroSuscritosPremium
 import com.example.myapplication.presentation.components.ControlItem
 import com.example.myapplication.presentation.components.BotonVista
 import com.example.myapplication.presentation.components.PrestadorCardV3
+import android.widget.Toast
 import com.example.myapplication.presentation.components.MoldeBarraMenu
 import com.example.myapplication.presentation.components.LocationPopup
+import com.example.myapplication.presentation.components.LocationSelector
 import com.example.myapplication.presentation.components.AddressInfo
 import com.example.myapplication.presentation.components.toLocationOption
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import com.example.myapplication.presentation.components.BarraCabezera
 import com.example.myapplication.presentation.components.FavoritePinBadge
+import com.example.myapplication.presentation.components.Utilidades.CPCyberColors
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 private val MaverickBlue = Color(0xFF2197F5)
 
@@ -83,25 +87,19 @@ fun ResultBusquedaCategoriaScreen(
     // ==================================================================================
     val userState by beViewModel.userState.collectAsStateWithLifecycle()
 
-    // 🔥 Sincronizamos los proveedores del Obrero al Cerebro (Puente)
-    val unifiedServices by providerViewModel.unifiedServices.collectAsStateWithLifecycle()
-    LaunchedEffect(unifiedServices) {
-        beViewModel.syncProviders(unifiedServices)
-    }
-
-    // 🔥 Sincronizamos las categorías del Obrero al Cerebro (Puente)
-    val allRawCategories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
-    LaunchedEffect(allRawCategories) {
-        beViewModel.syncAllCategories(allRawCategories)
-    }
-
     // ==================================================================================
     // --- 🧠 SUBSECCIÓN: ESTADOS MAESTROS PARA LA UI (DESDE EL CEREBRO) ---
     // ==================================================================================
-    val allCategories by beViewModel.allCategories.collectAsStateWithLifecycle()
-    val searchQuery by beViewModel.searchQuery.collectAsStateWithLifecycle()
+    val allCategories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
     val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
     val availableAddressInfosBrain by beViewModel.availableAddressInfos.collectAsStateWithLifecycle()
+
+    // Sincronización del Cerebro: Mantenemos al BeBrain informado del catálogo cargado
+    LaunchedEffect(allCategories) {
+        if (allCategories.isNotEmpty()) {
+            beViewModel.hydrateCategories(allCategories)
+        }
+    }
 
     // ==================================================================================
     // --- 📊 SUBSECCIÓN: TRABAJO SUCIO DE PRESTADORES (DEL OBRERO PROVIDER) ---
@@ -117,12 +115,8 @@ fun ResultBusquedaCategoriaScreen(
     LaunchedEffect(activeAddress) {
         activeAddress?.let { addr ->
             // 1. Actualizamos la posición en el Obrero para cálculos de distancia
-            providerViewModel.setUserLocation(
-                lat = addr.lat,
-                lon = addr.lng,
-                locality = addr.locality,
-                zipCode = addr.postalCode
-            )
+            // Ya no es necesario, el Obrero observa al Coordinador directamente.
+
             // 2. 🔥 FILTRO ACTIVO: Forzamos la recarga de datos con el nuevo código postal
             providerViewModel.refreshData(categoryName, addr.postalCode)
         }
@@ -131,7 +125,7 @@ fun ResultBusquedaCategoriaScreen(
     LaunchedEffect(categoryName) { providerViewModel.onCategorySelected(categoryName) }
     
     // Sincronización de la búsqueda de Be hacia el Obrero de Proveedores
-    LaunchedEffect(searchQuery) { providerViewModel.onSearchQueryChanged(searchQuery) }
+    // Ya no es necesario, el Obrero observa al Coordinador directamente.
 
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -152,14 +146,13 @@ fun ResultBusquedaCategoriaScreen(
             }
             
             // 3. Esperamos a que el Obrero (ViewModel) termine la carga pesada
-            // Damos un pequeño margen para que el estado de carga se propague
             delay(300) 
             while(providerViewModel.isLoading.value) {
                 delay(200)
             }
             
             // 4. Finalizamos animación
-            delay(400) // Delay estético para suavidad "Instagram-style"
+            delay(400)
             isRefreshing = false
         }
     }
@@ -206,30 +199,39 @@ fun ResultBusquedaCategoriaScreen(
         },
         // ✅ CORRECCIÓN: El botón de GPS ahora notifica al Cerebro para actualizar el contexto
         onUpdateGps = { beViewModel.triggerAction("refresh_gps") },
-        beViewModel = beViewModel // Pasamos el beViewModel para escuchar acciones
+        beBrainActionEvent = beViewModel.actionEvent // Pasamos el flujo de acciones en lugar del ViewModel completo
     )
 
     // ==================================================================================
-    // --- 🧠 ESCUCHA DE ACCIONES DEL CEREBRO (ORQUESTACIÓN) ---
+    // --- 🧠 ESCUCHA DE ACCIONES DEL CEREBRO (ORQUESTACIÓN DE GPS) ---
     // ==================================================================================
     LaunchedEffect(Unit) {
         beViewModel.actionEvent.collect { actionId ->
             when (actionId) {
                 "refresh_gps" -> {
-                    // El Cerebro ordena al Obrero de Ubicación ejecutar el cálculo
-                    ubicacionViewModel.ejecutarCalculoUbicacionGps(context) { _, _, loc, calle, num, cp, lat, lng ->
-                        val freshGpsAddress = AddressInfo(
-                            id = "gps_current",
-                            companyOrUserName = "Mi Ubicación",
-                            branchName = "GPS Tracker",
-                            streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else "Ubicación detectada",
-                            locality = loc,
-                            postalCode = cp,
-                            isCompany = false,
-                            lat = lat,
-                            lng = lng
-                        )
-                        beViewModel.updateAddressFromGps(freshGpsAddress)
+                    // --- 🛰️ SECCIÓN: VALIDACIÓN Y EJECUCIÓN GPS ---
+                    if (ubicacionViewModel.isGpsHabilitado(context)) {
+                        // El Cerebro ordena al Obrero de Ubicación ejecutar el cálculo
+                        ubicacionViewModel.ejecutarCalculoUbicacionGps(context) { pais, prov, loc, calle, num, cp, lat, lng ->
+                            val freshGpsAddress = AddressInfo(
+                                id = "gps_current",
+                                companyOrUserName = "Mi Ubicación",
+                                branchName = "GPS Tracker",
+                                streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else "Ubicación detectada",
+                                locality = loc,
+                                province = prov,
+                                country = pais,
+                                postalCode = cp,
+                                isCompany = false,
+                                lat = lat,
+                                lng = lng
+                            )
+                            // Notificamos al Cerebro para actualizar la fuente de verdad global
+                            beViewModel.updateAddressFromGps(freshGpsAddress)
+                        }
+                    } else {
+                        // Notificación de advertencia si el sensor está apagado
+                        Toast.makeText(context, "⚠️ El GPS está desactivado. Actívalo para actualizar tu ubicación.", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -266,7 +268,7 @@ fun ResultBusquedaCategoriaContent(
     user: UserEntity?,
     onAddressSelected: (AddressInfo) -> Unit,
     onUpdateGps: () -> Unit,
-    beViewModel: BeBrainViewModel // Necesario para el trigger de la lupa
+    beBrainActionEvent: Flow<String> // Flujo de acciones decoupled para permitir Previews
 ) {
     // ------------------------------------------------------------------------------
 
@@ -279,34 +281,21 @@ fun ResultBusquedaCategoriaContent(
     // ==================================================================================
     var isLocationCardVisible by remember { mutableStateOf(true) }
 
-    // Escuchar el evento de la lupa desde el BeBrainViewModel
+    // Escuchar el evento de la lupa desde el flujo de acciones
     LaunchedEffect(Unit) {
-        beViewModel.actionEvent.collect { actionId ->
+        beBrainActionEvent.collect { actionId ->
             if (actionId == "toggle_location_card") {
                 isLocationCardVisible = !isLocationCardVisible
             }
         }
     }
-    
-    // ==================================================================================
-    // --- 🚫 SECCIÓN: CONTROL DE APERTURA DEL POPUP (SOLICITUD USUARIO) ---
-    // ==================================================================================
-    // Se ha comentado la auto-expansión para que el popup de ubicación NO se abra solo al entrar.
-    // Ahora solo se mostrará cuando el usuario toque la tarjeta de ubicación.
-    /*
-    LaunchedEffect(Unit) {
-        if (activeAddress == null) {
-            delay(500)
-            isLocationExpanded = true
-        }
-    }
-    */
+
 
     val selectedCategory = remember(allCategories, categoryName) {
         allCategories.find { it.name.equals(categoryName, ignoreCase = true) }
     }
     val categoryColor = remember(selectedCategory) {
-        if (selectedCategory != null) CategoryVisuals.getColorFor(selectedCategory.superCategory).let { Color(it) } else MaverickBlue
+        if (selectedCategory != null) Color(CategoryVisuals.getColorFor(selectedCategory.superCategory)) else MaverickBlue
     }
 
     val refinementOptions = remember {
@@ -435,24 +424,37 @@ fun ResultBusquedaCategoriaContent(
             // Componente Selector Flotante (Posicionado abajo a la izquierda, junto al asistente)
             // ==================================================================================
             // --- 📏 AJUSTE: ANCHO Y ALTO PERSONALIZADO PARA RESULTADOS DE BÚSQUEDA ---
-            // Se ajusta el ancho a 220dp y el alto a 85dp para coincidir con el asistente.
+            // Se ajusta el ancho a 280dp y el alto a 80dp para coincidir con el asistente.
             // ==================================================================================
-            Box(
+            AnimatedVisibility(
+                visible = isLocationCardVisible,
+                enter = fadeIn() + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally(),
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 1.dp, bottom = 12.dp)
-                    .width(220.dp) // Ancho ajustado según solicitud
-                    .height(85.dp) // Alto ajustado para igualar barra de herramientas del asistente
+                    .padding(start = 4.dp, bottom = 1.dp)
+                    .width(280.dp) // Ancho ajustado según solicitud
+                    .height(80.dp) // Alto ajustado para igualar barra de herramientas del asistente
             ) {
-                ResultBusquedaLocationTool(
-                    activeAddress = activeAddress,
-                    availableAddresses = availableAddresses,
+                // USAMOS EL MOLDE INDEPENDIENTE DE TarjetasHomeScreenCabecera.kt
+                LocationSelector(
                     user = user,
-                    onAddressSelected = onAddressSelected,
-                    onUpdateGps = onUpdateGps,
-                    isExpanded = isLocationExpanded,
-                    onToggleExpand = { isLocationExpanded = it },
-                    isVisible = isLocationCardVisible // Pasamos visibilidad
+                    currentLocation = activeAddress?.toLocationOption() 
+                        ?: LocationOption.Gps(address = "Buscando...", locality = "Ubicación"),
+                    onRefresh = onUpdateGps,
+                    onLocationSelected = { option ->
+                        // Sincronizamos con el Cerebro usando el ID real
+                        val targetId = when (option) {
+                            is LocationOption.Gps -> "gps_current"
+                            is LocationOption.Personal -> option.id
+                            is LocationOption.Business -> option.id
+                        }
+                        val matched = availableAddresses.find { it.id == targetId }
+                        matched?.let { onAddressSelected(it) }
+                    },
+                    brush = Brush.verticalGradient(
+                        listOf(Color(0xFF1A1A24).copy(alpha = 0.9f), Color(0xFF0D0D12).copy(alpha = 1f))
+                    )
                 )
             }
 
@@ -460,176 +462,6 @@ fun ResultBusquedaCategoriaContent(
         }
     }
 }
-//=============================================================================
-// --- 📍 SECCIÓN: COMPONENTES DE UBICACIÓN FLOTANTE (ADAPTACIÓN V5) ---
-// ==================================================================================
-
-@Composable
-fun ResultBusquedaLocationTool(
-    activeAddress: AddressInfo?,
-    availableAddresses: List<AddressInfo>,
-    user: UserEntity?,
-    onAddressSelected: (AddressInfo) -> Unit,
-    onUpdateGps: () -> Unit,
-    isExpanded: Boolean,
-    onToggleExpand: (Boolean) -> Unit,
-    isVisible: Boolean // Propiedad para controlar visibilidad externa
-) {
-    val brush = Brush.verticalGradient(
-        listOf(Color(0xFF1A1A24).copy(alpha = 0.9f), Color(0xFF0D0D12).copy(alpha = 1f))
-    )
-
-    val currentLocation = activeAddress?.toLocationOption() 
-        ?: LocationOption.Gps(address = "Buscando...", locality = "Ubicación")
-
-    // Lógica de líneas (reutilizada de LocationSelector para consistencia visual)
-    val (linea1, linea2, linea3) = when (currentLocation) {
-        is LocationOption.Gps -> Triple(
-            "UBICACIÓN ACTUAL", 
-            currentLocation.address.ifBlank { "Buscando..." }, 
-            "${currentLocation.locality}, ${currentLocation.province}".trim().removeSuffix(",")
-        )
-        is LocationOption.Personal -> Triple("MI CASA / PERSONAL", "${currentLocation.address} ${currentLocation.number}", currentLocation.locality)
-        is LocationOption.Business -> Triple(currentLocation.companyName.uppercase(), currentLocation.branchName, "${currentLocation.address} ${currentLocation.number}")
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        // ==================================================================================
-        // --- 🃏 TARJETA DE INFORMACIÓN DE UBICACIÓN ---
-        // Se oculta/muestra mediante animación basada en 'isVisible' (controlada por la lupa).
-        // ==================================================================================
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = fadeIn() + expandHorizontally(),
-            exit = fadeOut() + shrinkHorizontally()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(brush)
-                    .clickable { onToggleExpand(true) }
-                    .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                    .padding(start = 12.dp, top = 4.dp, bottom = 6.dp, end = 40.dp), // Espacio para el botón de GPS
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.Center) {
-                    Text(text = linea1, fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color(0xFF22D3EE), letterSpacing = 1.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(text = linea2, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(text = linea3, fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-
-        // ==================================================================================
-        // --- 🔘 BOTÓN DE ACTUALIZACIÓN GPS (RESTAURADO) ---
-        // Este botón mantiene su función original de actualizar el GPS.
-        // Solo es visible si la tarjeta está visible.
-        // ==================================================================================
-        AnimatedVisibility(
-            visible = isVisible,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (-4).dp, y = (4).dp)
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF0D1117).copy(alpha = 0.8f))
-                    .border(1.dp, Color(0xFF22D3EE).copy(alpha = 0.5f), CircleShape)
-                    .clickable { onUpdateGps() }, // Restaurada función original de GPS
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MyLocation, 
-                    contentDescription = "Refresh GPS", 
-                    tint = Color(0xFF22D3EE), 
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
-    }
-
-    if (isExpanded) {
-        Dialog(
-            onDismissRequest = { onToggleExpand(false) },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            var animateIn by remember { mutableStateOf(false) }
-            val scope = rememberCoroutineScope()
-            LaunchedEffect(Unit) { animateIn = true }
-
-            fun closeWithAnimation() {
-                animateIn = false
-                scope.launch {
-                    delay(300)
-                    onToggleExpand(false)
-                }
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(0.6f))
-                    .clickable(remember { MutableInteractionSource() }, null) { closeWithAnimation() }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 80.dp, start = 16.dp, end = 16.dp)
-                        .fillMaxWidth()
-                        .clickable(enabled = false) {}
-                ) {
-                    AnimatedVisibility(
-                        visible = animateIn,
-                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-                    ) {
-                        LocationPopup(
-                            user = user,
-                            onClose = { closeWithAnimation() },
-                            onRefresh = { onUpdateGps(); closeWithAnimation() },
-                            onLocationSelected = { loc ->
-                                // 🔥 CORRECCIÓN: Extraemos el ID del objeto seleccionado en el popup
-                                val targetId = when (loc) {
-                                    is LocationOption.Gps -> "gps_current"
-                                    is LocationOption.Personal -> loc.id
-                                    is LocationOption.Business -> loc.id
-                                }
-                                
-                                // Buscamos la dirección en el listado local usando el ID (Fuente de Verdad)
-                                val matched = availableAddresses.find { it.id == targetId }
-                                matched?.let { onAddressSelected(it) }
-                                closeWithAnimation()
-                            },
-                            currentLocation = currentLocation
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** HELPER: Envuelve los botones originales para añadir la etiqueta inferior */
-@Composable
-fun ActionColumnWithLabel(
-    label: String, 
-    active: Boolean, 
-    spacing: Dp = 4.dp,
-    fontSize: TextUnit = 7.sp,
-    content: @Composable () -> Unit
-) {
-    val color = if (active) Color.White else Color.Gray
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        content()
-        Spacer(Modifier.height(spacing))
-        Text(text = label, fontSize = fontSize, fontWeight = FontWeight.Bold, color = color)
-    }
-}
-
 // ==================================================================================
 // --- SECCIÓN: COMPONENTES DE SEPARACIÓN GEOGRÁFICA ---
 // ==================================================================================
@@ -637,7 +469,7 @@ fun ActionColumnWithLabel(
 @Composable
 fun ProximityDivider(text: String, emoji: String, color: Color, isExpanded: Boolean, onToggle: () -> Unit) {
     val rotation by animateFloatAsState(if (isExpanded) 180f else 0f, label = "arrow")
-    Row(modifier = Modifier.fillMaxWidth().clickable { onToggle() }.padding(vertical = 12.dp, horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = Modifier.fillMaxWidth().clickable { onToggle() }.padding(vertical = 12.dp, horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Surface(color = color.copy(alpha = 0.1f), shape = CircleShape, border = BorderStroke(1.dp, color.copy(0.2f)), modifier = Modifier.size(32.dp)) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) { Text(text = emoji, fontSize = 18.sp) }
         }
@@ -669,7 +501,7 @@ fun ProviderListContent(
         LazyVerticalGrid(
             columns = GridCells.Fixed(3), 
             state = gridState, // <--- CONECTAMOS EL ESTADO
-            contentPadding = PaddingValues(top = 6.dp, start = 2.dp, end = 2.dp, bottom = 80.dp), 
+            contentPadding = PaddingValues(top = 6.dp, start = 1.dp, end = 2.dp, bottom = 50.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp), 
             verticalArrangement = Arrangement.spacedBy(8.dp), 
             modifier = Modifier.fillMaxSize()
@@ -867,7 +699,7 @@ fun ResultBusquedaCategoriaScreenPreview() {
             user = null,
             onAddressSelected = {},
             onUpdateGps = {},
-            beViewModel = hiltViewModel() // O un mock
+            beBrainActionEvent = emptyFlow() // Preview amigable
         )
     }
 }

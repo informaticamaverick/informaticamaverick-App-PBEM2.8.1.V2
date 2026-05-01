@@ -145,13 +145,14 @@ class LoginViewModel @Inject constructor(
 
             val result = authRepository.signInWithGoogle(idToken)
 
-            result.onSuccess { user ->
+            result.onSuccess { (user, googleProfile) ->
                 _userName.value = user.displayName ?: "Usuario"
 
-                // --- CHEQUEO DE PERFIL Y DIRECCIÓN ---
-                // Ahora delegamos la decisión de navegación final al Cerebro o la centralizamos aquí
-                // pero informamos éxito al UI state.
-                checkProfileAndNavigate(user.uid)
+                // --- INICIALIZACIÓN DE USUARIO NUEVO (Si no existe en Room/Firestore) ---
+                // El refreshUserFromRemote en checkProfileAndNavigate nos dirá si ya existe.
+                // Pero si es un registro limpio, inicializamos con los datos enriquecidos.
+                
+                checkProfileAndNavigate(user.uid, user, googleProfile)
 
             }.onFailure { error ->
                 _uiState.update {
@@ -168,7 +169,11 @@ class LoginViewModel @Inject constructor(
      * Lógica centralizada para decidir a dónde enviar al usuario tras el login.
      * AHORA FUERZA LA DESCARGA DE DATOS DESDE FIREBASE.
      */
-    private suspend fun checkProfileAndNavigate(uid: String) {
+    private suspend fun checkProfileAndNavigate(
+        uid: String, 
+        userBase: com.example.myapplication.data.model.User? = null,
+        googleProfile: Map<String, Any?>? = null
+    ) {
         try {
             // --- 1. SINCRONIZACIÓN FORZADA ---
             // Descargamos los datos completos de Firestore a Room antes de verificar el estado
@@ -179,20 +184,17 @@ class LoginViewModel @Inject constructor(
             val profileExists = authRepository.checkUserProfileExists(uid)
             _hasProfile.value = profileExists
 
-            if (profileExists) {
-                // 3. Verificamos que tenga al menos una dirección con Código Postal en Room (Sincronizado)
-                // Usamos flow.firstOrNull para obtener el dato actual de Room
-                val currentUserData = userRepository.userProfile.firstOrNull()
-                val hasZipCode = currentUserData?.personalAddresses?.any { it.codigoPostal.isNotBlank() } ?: false
-
-                if (hasZipCode) {
-                    _navigationTarget.value = "main_screen"
-                } else {
-                    _navigationTarget.value = "perfil_cliente_edit"
-                }
-            } else {
-                _navigationTarget.value = "perfil_cliente_edit"
+            if (!profileExists && userBase != null) {
+                // Si el perfil no existe en Firestore, lo inicializamos localmente y sincronizamos
+                Log.d("LoginViewModel", "🆕 Inicializando nuevo usuario de Google...")
+                userRepository.initializeNewUserFromGoogle(userBase, googleProfile)
+                _hasProfile.value = true
             }
+
+            // --- 3. DECISIÓN DE NAVEGACIÓN (MAVERICK V5) ---
+            // Ya NO forzamos perfil_cliente_edit si no tiene dirección.
+            // Siempre vamos a la main_screen, y el Cerebro decidirá si mostrar el popup de dirección.
+            _navigationTarget.value = "main_screen"
 
             _uiState.update {
                 it.copy(isLoading = false, isLoginSuccess = true)

@@ -1,29 +1,22 @@
 package com.example.myapplication.presentation.client
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.data.local.CategoryEntity
+import com.example.myapplication.data.utils.SearchUtils.wordStartsWithSmart
+import com.example.myapplication.data.utils.SearchUtils.prepareForSearch
 import com.example.myapplication.presentation.components.CompactCategoryCard
-import com.example.myapplication.presentation.components.SheetActionButton
 import com.example.myapplication.presentation.components.SheetEmergenteVertical
 import com.example.myapplication.ui.theme.MyApplicationTheme
 
@@ -35,7 +28,6 @@ fun SuperCategoryDetailsPanel(
 ) {
     val selectedSuperCategory by beViewModel.selectedSuperCategory.collectAsStateWithLifecycle()
     val searchQuery by beViewModel.searchQuery.collectAsStateWithLifecycle()
-    val searchResults by beViewModel.searchResults.collectAsStateWithLifecycle()
     val isVisible = selectedSuperCategory != null
 
     LaunchedEffect(isVisible) {
@@ -54,7 +46,6 @@ fun SuperCategoryDetailsPanel(
     SuperCategoryDetailsPanelContent(
         selectedSuperCategory = selectedSuperCategory,
         searchQuery = searchQuery,
-        searchResults = searchResults,
         onClose = { beViewModel.selectSuperCategory(null) },
         onCategoryClick = onCategoryClick,
         onToggleCategoryFavorite = { category -> categoryViewModel.toggleCategoryFavorite(category) }
@@ -65,7 +56,6 @@ fun SuperCategoryDetailsPanel(
 fun SuperCategoryDetailsPanelContent(
     selectedSuperCategory: SuperCategory?,
     searchQuery: String,
-    searchResults: BeBrainViewModel.SearchResult,
     onClose: () -> Unit,
     onCategoryClick: (String) -> Unit,
     onToggleCategoryFavorite: (CategoryEntity) -> Unit = {}
@@ -108,8 +98,13 @@ fun SuperCategoryDetailsPanelContent(
         ) {
             // --- 📊 CONTENIDO: GRILLA DE CATEGORÍAS ---
             currentSuperCat?.let { superCat ->
-                val displayItems = remember(superCat.items, searchResults, searchQuery) {
-                    if (searchQuery.isEmpty()) superCat.items else searchResults.categories
+                val displayItems = remember(superCat.items, searchQuery) {
+                    if (searchQuery.isEmpty()) {
+                        superCat.items
+                    } else {
+                        val normQuery = searchQuery.prepareForSearch()
+                        superCat.items.filter { it.name.wordStartsWithSmart(normQuery) }.sortedBy { it.name.lowercase() }
+                    }
                 }
 
                 LazyVerticalGrid(
@@ -149,7 +144,6 @@ fun SuperCategoryDetailsPanelPreview() {
             SuperCategoryDetailsPanelContent(
                 selectedSuperCategory = sampleSuperCategory,
                 searchQuery = "",
-                searchResults = BeBrainViewModel.SearchResult.Empty,
                 onClose = {},
                 onCategoryClick = {}
             )

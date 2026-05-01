@@ -20,10 +20,9 @@ class AuthRepository @Inject constructor(
 
     /**
      * Inicia sesión con Google. 
-     * La sincronización y creación del perfil se delega a UserRepository 
-     * para mantener una única fuente de verdad.
+     * Retorna un Result con el User y los datos adicionales del perfil de Google.
      */
-    suspend fun signInWithGoogle(idToken: String): Result<User> {
+    suspend fun signInWithGoogle(idToken: String): Result<Pair<User, Map<String, Any?>?>> {
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
             val authResult = auth.signInWithCredential(credential).await()
@@ -36,7 +35,10 @@ class AuthRepository @Inject constructor(
                 photoUrl = firebaseUser.photoUrl?.toString() ?: ""
             )
 
-            Result.success(user)
+            // Extraemos info adicional del perfil de Google (name, last name, etc)
+            val additionalInfo = authResult.additionalUserInfo?.profile
+
+            Result.success(Pair(user, additionalInfo))
         } catch (e: Exception) {
             Log.e("AuthRepository", "Error en signInWithGoogle: ${e.message}")
             Result.failure(e)

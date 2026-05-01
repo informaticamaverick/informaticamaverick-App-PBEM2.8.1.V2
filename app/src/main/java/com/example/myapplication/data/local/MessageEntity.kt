@@ -39,6 +39,21 @@ data class MessageEntity(
     val appointmentTime: String? = null,
     val appointmentStatus: String? = null, // PENDING, ACCEPTED, REJECTED
 
+    // 🔥 [NUEVO] Campos para invitaciones de calendario (CALENDAR_INVITE)
+    val calendarStartDate: String? = null,
+    val calendarEndDate: String? = null,
+    val availabilityJson: String? = null,
+    val bookedSlotsJson: String? = null,
+    val calendarInviteMessageId: String? = null,
+
+    // 🔥 [NUEVO] Campos para comprobantes de turno (APPOINTMENT_RECEIPT)
+    val receiptService: String? = null,
+    val receiptProviderName: String? = null,
+    val receiptIsTechnician: Boolean? = null,
+    val receiptProfession: String? = null,
+    val receiptAddress: String? = null,
+    val receiptCode: String? = null,
+
     // --- METADATOS ---
     val timestamp: Long = System.currentTimeMillis(),
 

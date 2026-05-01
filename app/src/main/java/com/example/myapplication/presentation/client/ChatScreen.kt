@@ -1,168 +1,425 @@
 package com.example.myapplication.presentation.client
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
-import com.example.myapplication.data.repository.ChatRepository
-import com.example.myapplication.presentation.util.NotificationHelper
-import com.example.myapplication.ui.theme.getAppColors
+import com.example.myapplication.presentation.components.*
+import com.example.myapplication.ui.theme.*
 import com.example.myapplication.presentation.profile.ProfileViewModel
-import com.example.myapplication.data.local.AppDatabase
 import com.example.myapplication.presentation.util.ChatIdHelper
-//import com.example.myapplication.utils.ChatIdHelper
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.firestore.FirebaseFirestore
-// import com.google.firebase.storage.FirebaseStorage // [ELIMINADO] Estrategia Zero Cost
+import androidx.compose.ui.tooling.preview.Preview
 
+/**
+ * GRAN ORQUESTADOR DE CHAT
+ * Maneja la transición entre la Lista de Chats y la Conversación Activa.
+ */
 @Composable
 fun ChatScreen(
     onBack: () -> Unit,
     initialProviderId: String? = null,
     navController: NavHostController? = null,
     onInConversationChange: (Boolean) -> Unit = {},
-    providerViewModel: ProviderViewModel = hiltViewModel(),
-    profileViewModel: ProfileViewModel = hiltViewModel()
+    profileViewModel: ProfileViewModel = hiltViewModel(),
+    beBrainViewModel: BeBrainViewModel = hiltViewModel(),
+    chatListViewModel: ChatListViewModel = hiltViewModel()
+) {
+    // [REGLA DE ORO] Suscripción a Datos Procesados (UI)
+    // Usamos variables de estado sin delegar para garantizar acceso a la referencia estable en corrutinas
+    val chattingProvidersState = chatListViewModel.chattingProviders.collectAsStateWithLifecycle()
+    val chattingProviders by chattingProvidersState
+    
+    val profileState by profileViewModel.uiState.collectAsStateWithLifecycle()
+    val unreadCountsMap by beBrainViewModel.unreadCountsMap.collectAsStateWithLifecycle()
+
+    // Estados de multiselección y acciones de Be
+    val isMultiSelectMode by chatListViewModel.isMultiSelectionActive.collectAsStateWithLifecycle()
+    
+    val selectedIdsState = chatListViewModel.selectedProviderIds.collectAsStateWithLifecycle()
+    val selectedIds by selectedIdsState
+
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+    // Sincronización de Multiselección con el Cerebro (BeBrain)
+    LaunchedEffect(isMultiSelectMode, selectedIds) {
+        beBrainViewModel.syncMultiSelection(isMultiSelectMode, selectedIds)
+    }
+
+    // [PASO CRÍTICO] Sincronización del Contexto de Be y Acciones Dinámicas
+    LaunchedEffect(Unit) {
+        beBrainViewModel.onRouteChanged("chat_list")
+    }
+
+    // --- SECCIÓN: ACCIONES DINÁMICAS DE BE (TOOLBOX) ---
+    // Dependiendo de si estamos en multiselección o no, inyectamos diferentes herramientas
+    LaunchedEffect(isMultiSelectMode) {
+        if (isMultiSelectMode) {
+            val multiActions = listOf(
+                BeSmallActionModel(
+                    id = "cancel",
+                    icon = Icons.Default.Close,
+                    label = "Cancelar",
+                    emoji = "❌",
+                    isDefault = true,
+                    onClick = { beBrainViewModel.triggerAction("cancel") }
+                ),
+                BeSmallActionModel(
+                    id = "select_all",
+                    icon = Icons.Default.SelectAll,
+                    label = "Todo",
+                    emoji = "✅",
+                    isDefault = true,
+                    onClick = { beBrainViewModel.triggerAction("select_all") }
+                ),
+                BeSmallActionModel(
+                    id = "delete_multi",
+                    icon = Icons.Default.Delete,
+                    label = "Eliminar",
+                    emoji = "🗑️",
+                    tint = Color.Red,
+                    isDefault = true,
+                    onClick = { beBrainViewModel.triggerAction("delete_multi") }
+                )
+            )
+            beBrainViewModel.setCustomActions(multiActions)
+        } else {
+            // Registramos el botón de Presupuestos Recibidos por defecto cuando no hay multiselección
+            val chatActions = listOf(
+                BeSmallActionModel(
+                    id = "goto_direct_budgets",
+                    icon = Icons.AutoMirrored.Filled.Message,
+                    label = "Presupuestos",
+                    emoji = "📩",
+                    tint = Color(0xFF2197F5), // MaverickBlue
+                    isDefault = true,
+                    onClick = { beBrainViewModel.triggerAction("goto_direct_budgets") }
+                )
+            )
+            beBrainViewModel.setCustomActions(chatActions)
+        }
+    }
+
+    // Capturar Acciones de BeBrain y delegar al ViewModel de Lista (OBRERO)
+    LaunchedEffect(Unit) {
+        beBrainViewModel.actionEvent.collect { actionId ->
+            when (actionId) {
+                // SECCIÓN: Navegación desde el HUD de Be
+                "goto_direct_budgets" -> navController?.navigate("chat_presupuestos_recibidos")
+
+                // SECCIÓN: Acciones de multiselección de chats
+                // Usamos .value para asegurar que obtenemos el dato más fresco del flujo
+                "select_all" -> chatListViewModel.selectAll(chattingProvidersState.value.map { it.uid })
+                "delete_multi" -> if (selectedIdsState.value.isNotEmpty()) showDeleteConfirmDialog = true
+                "cancel" -> chatListViewModel.updateMultiSelection(false)
+                else -> { /* Manejar otras acciones si es necesario */ }
+            }
+        }
+    }
+
+    // 🔥 NUEVO: Limpieza al destruir la pantalla o al salir de multiselección
+    DisposableEffect(Unit) {
+        onDispose {
+            // Avisamos al cerebro que esta pantalla ya no controla las acciones personalizadas
+            // Esto es crucial para que la barra de Be se limpie al salir de la pantalla
+            beBrainViewModel.setCustomActions(emptyList())
+            beBrainViewModel.syncMultiSelection(false, emptySet()) // También reseteamos la multiselección
+        }
+    }
+
+    ChatScreenContent(
+        allProviders = chattingProviders,
+        profileState = profileState,
+        unreadCountsMap = unreadCountsMap,
+        onBack = onBack,
+        initialProviderId = initialProviderId,
+        navController = navController,
+        onInConversationChange = onInConversationChange,
+        beBrainViewModel = beBrainViewModel,
+        chatListViewModel = chatListViewModel,
+        isMultiSelectMode = isMultiSelectMode,
+        selectedIds = selectedIds,
+        showDeleteConfirmDialog = showDeleteConfirmDialog,
+        onDismissDeleteDialog = { showDeleteConfirmDialog = false },
+        onConfirmDelete = { 
+            chatListViewModel.deleteSelectedChats()
+            showDeleteConfirmDialog = false
+        },
+        onRouteChanged = { beBrainViewModel.onRouteChanged("chat_list") }
+    )
+}
+
+/**
+ * UI CONTENEDOR: Orquestador de Chat sin acoplamiento fuerte a ViewModels de datos.
+ */
+@Composable
+fun ChatScreenContent(
+    allProviders: List<com.example.myapplication.data.model.Provider>,
+    profileState: com.example.myapplication.presentation.profile.ProfileUiState,
+    unreadCountsMap: Map<String, Int>,
+    onBack: () -> Unit,
+    initialProviderId: String? = null,
+    navController: NavHostController? = null,
+    onInConversationChange: (Boolean) -> Unit = {},
+    beBrainViewModel: BeBrainViewModel? = null,
+    chatListViewModel: ChatListViewModel? = null,
+    isMultiSelectMode: Boolean = false,
+    selectedIds: Set<String> = emptySet(),
+    showDeleteConfirmDialog: Boolean = false,
+    onDismissDeleteDialog: () -> Unit = {},
+    onConfirmDelete: () -> Unit = {},
+    onRouteChanged: () -> Unit
 ) {
     val appColors = getAppColors()
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // 1. CARGAMOS DATOS GENERALES
-    val allProviders by providerViewModel.providers.collectAsStateWithLifecycle()
-    val profileState by profileViewModel.uiState.collectAsStateWithLifecycle()
-
-    // 2. [CORRECCIÓN] ESTADO DE NAVEGACIÓN LOCAL CON SANITIZACIÓN
-    // Si el id es el placeholder literal "{providerId}", lo tratamos como null para mostrar la lista
-    var activeChatId by remember { 
+    
+    // Estado de navegación local
+    var activeProviderId by remember { 
         mutableStateOf(if (initialProviderId == "{providerId}") null else initialProviderId) 
     }
 
-    // Ocultar barra de navegación al entrar en conversación, restaurar al salir
-    LaunchedEffect(activeChatId) {
-        onInConversationChange(activeChatId != null)
+    // --- SECCIÓN: CARGA DE PROVEEDOR FALLBACK ---
+    // Si el providerId no está en la lista de 'chattingProviders' (porque es un chat nuevo),
+    // lo buscamos a través del ViewModel (OBRERO).
+    val fallbackProvider by if (activeProviderId != null && allProviders.none { it.uid == activeProviderId }) {
+        chatListViewModel?.getProviderById(activeProviderId!!)?.collectAsStateWithLifecycle(initialValue = null) ?: remember { mutableStateOf(null) }
+    } else {
+        remember { mutableStateOf(null) }
     }
 
-    // Restaurar barra al abandonar el ChatScreen completamente
-    DisposableEffect(Unit) {
-        onDispose { onInConversationChange(false) }
+    // Efecto de visibilidad de la barra inferior
+    LaunchedEffect(activeProviderId) {
+        onInConversationChange(activeProviderId != null)
     }
 
     BackHandler {
-        if (activeChatId != null) activeChatId = null else onBack()
+        if (activeProviderId != null) activeProviderId = null else onBack()
     }
 
     if (profileState.isLoading || profileState.uid.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = appColors.accentBlue)
         }
-        //LaunchedEffect(Unit) { profileViewModel.loadUserProfile() }
     } else {
         val currentUserId = profileState.uid
-        val chatRepository = remember {
-            val db = AppDatabase.getDatabase(context, scope)
-            ChatRepository(
-                db.chatDao(),
-                db.budgetDao(),
-                FirebaseFirestore.getInstance(),
-                FirebaseDatabase.getInstance(),
-                //FirebaseStorage.getInstance(),
-                FirebaseAuth.getInstance(),
-                context,
-                NotificationHelper(context)
-            )
-        }
 
-        /* [MOVIDO A BEBRAINVIEWMODEL]
-        DisposableEffect(currentUserId) {
-            chatRepository.startGlobalListening(currentUserId)
-            onDispose {
-                chatRepository.stopGlobalListening()
-            }
-        }
-        */
-
-        // 🔥 [CORRECCIÓN] OBTENER CONTEOS DE NO LEÍDOS
-        val unreadCountsList by chatRepository.getUnreadCountsPerChat(currentUserId)
-            .collectAsStateWithLifecycle(initialValue = emptyList())
-
-        val unreadMap = remember(unreadCountsList) {
-            unreadCountsList.associate { it.chatId to it.count }
-        }
-
-        val lastMessageList by chatRepository.getLastMessagePerChat(currentUserId)
-            .collectAsStateWithLifecycle(initialValue = emptyList())
-        val lastMessageMap = remember(lastMessageList) {
-            lastMessageList.associateBy { it.chatId }
-        }
-
-        // 4. LÓGICA DE VISTAS (MODERNIZADA)
-        if (activeChatId == null) {
-            // VISTA A: BANDEJA DE ENTRADA
-            val activeChatIds by chatRepository.getActiveChatIds(currentUserId)
-                .collectAsStateWithLifecycle(initialValue = emptyList())
-
-            // 🔥 [CORRECCIÓN] ORDENAR POR RECIENCIA
-            val myChats = remember(allProviders, activeChatIds) {
-                activeChatIds.mapNotNull { id ->
-                    allProviders.find { it.uid == id }
-                }
-            }
-
-            ChatListView(
-                providersList = myChats,
-                allCategories = emptyList(),
-                unreadCounts = unreadMap,
-                lastMessages = lastMessageMap,
+        if (activeProviderId == null) {
+            ChatListContent(
+                providersList = allProviders,
                 currentUserId = currentUserId,
-                onChatClick = { selectedId -> activeChatId = selectedId },
+                unreadCountsMap = unreadCountsMap,
+                onChatClick = { activeProviderId = it },
                 onBack = onBack,
                 appColors = appColors,
-                navController = navController
+                navController = navController,
+                onRouteChanged = onRouteChanged,
+                beBrainViewModel = beBrainViewModel,
+                chatListViewModel = chatListViewModel,
+                isMultiSelectMode = isMultiSelectMode,
+                selectedIds = selectedIds
             )
         } else {
-            // VISTA B: CONVERSACIÓN ESPECÍFICA
-            val provider = allProviders.find { it.uid == activeChatId }
+            val provider = allProviders.find { it.uid == activeProviderId } ?: fallbackProvider
 
             if (provider != null) {
+                // [REGLA DE ORO] Generamos el chatId consistente
                 val chatId = ChatIdHelper.generateChat(currentUserId, provider.uid)
-                val legacyChatId = "chat_${currentUserId}_${provider.uid}"
-                val chatIds = listOf(chatId, legacyChatId).distinct()
-
-                // 🔥 [NUEVO] MARCAR COMO LEÍDO AL ENTRAR
+                
+                // Usamos hiltViewModel con una key para que cada chat tenga su propia instancia
+                val chatViewModel: ChatViewModel = hiltViewModel(key = chatId)
+                
+                // [PASO CRÍTICO] Inicializamos el ViewModel con el chatId generado
                 LaunchedEffect(chatId) {
-                    chatRepository.markChatsAsRead(chatIds, currentUserId)
+                    chatViewModel.initialize(chatId)
                 }
-
-                val chatViewModel: ChatViewModel = viewModel(
-                    key = chatId,
-                    factory = ChatViewModelFactory(
-                        repository = chatRepository,
-                        chatId = chatId,
-                        currentUserId = currentUserId,
-                        receiverId = provider.uid,
-                        context = context
+                
+                if (beBrainViewModel != null) {
+                    ChatConversationScreen(
+                        provider = provider,
+                        viewModel = chatViewModel,
+                        onBack = { activeProviderId = null },
+                        appColors = appColors,
+                        beBrainViewModel = beBrainViewModel
                     )
-                )
-
-                ChatConversationView(
-                    provider = provider,
-                    viewModel = chatViewModel,
-                    onBack = { activeChatId = null },
-                    appColors = appColors
-                )
+                }
             }
+        }
+
+        // --- SECCIÓN: DIÁLOGOS GLOBALES DE CHAT ---
+        if (showDeleteConfirmDialog) {
+            AlertDialog(
+                onDismissRequest = onDismissDeleteDialog,
+                title = { Text("Eliminar chats") },
+                text = { Text("¿Estás seguro de que deseas eliminar las ${selectedIds.size} conversaciones seleccionadas? Esta acción no se puede deshacer.") },
+                confirmButton = {
+                    TextButton(onClick = onConfirmDelete) {
+                        Text("Eliminar", color = Color.Red)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = onDismissDeleteDialog) {
+                        Text("Cancelar")
+                    }
+                },
+                containerColor = appColors.surfaceColor, // Corregido: surfaceColor en lugar de cardSurface
+                titleContentColor = Color.White,
+                textContentColor = Color.LightGray
+            )
         }
     }
 }
 
+/**
+ * UI PURA: Lista de Chats
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatListContent(
+    providersList: List<com.example.myapplication.data.model.Provider>,
+    currentUserId: String,
+    unreadCountsMap: Map<String, Int>,
+    onChatClick: (String) -> Unit,
+    onBack: () -> Unit,
+    appColors: AppColors,
+    navController: NavHostController? = null,
+    onRouteChanged: () -> Unit,
+    beBrainViewModel: BeBrainViewModel? = null,
+    chatListViewModel: ChatListViewModel? = null,
+    isMultiSelectMode: Boolean = false,
+    selectedIds: Set<String> = emptySet()
+) {
+    val listState = rememberLazyListState()
+
+    val collapseFraction by remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f
+            else (listState.firstVisibleItemScrollOffset.toFloat() / 250f).coerceIn(0f, 1f)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        onRouteChanged()
+    }
+
+    val activeFilters by beBrainViewModel?.activeFilters?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptySet()) }
+    val availableFilters by beBrainViewModel?.availableFilters?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
+
+    Box(modifier = Modifier.fillMaxSize().background(appColors.backgroundColor)) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                BarraCabezera(
+                    title = "Mensajes",
+                    subtitle = "Bandeja de Entrada",
+                    emoji = "💬",
+                    onBack = onBack,
+                    collapseFraction = collapseFraction,
+                    accentColor = Color(0xFF2197F5),
+                    onInfoClick = {}
+                )
+            }
+        ) { paddingValues ->
+            MoldeBarraMenu(
+                modifier = Modifier.padding(paddingValues),
+                itemCount = providersList.size,
+                labelCountMain = "CHATS",
+                labelCountSub = "Conversaciones",
+                showSuscritos = false,
+                showCercania = false,
+                showVista = false,
+                customActions = {
+                    // --- SECCIÓN: ACCIONES DE CABECERA (PANTALLA TONTA) ---
+                    // Solo mantenemos el botón de filtros según requerimiento.
+                    // Las acciones de multiselección ahora viven en el asistente Be.
+                    MenuFiltros(
+                        activeFilters = activeFilters,
+                        dynamicCategories = emptyList(),
+                        refinementFilters = availableFilters,
+                        onAction = { beBrainViewModel?.toggleFilter(it) },
+                        onApply = {},
+                        onClearFilters = { beBrainViewModel?.clearFilters() }
+                    )
+                },
+                content = {
+                    if (providersList.isEmpty()) {
+                        EmptyChatPlaceholder()
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                            contentPadding = PaddingValues(top = 10.dp, bottom = 100.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(providersList, key = { it.uid }) { provider ->
+                                val providerId = provider.uid
+                                val isSelected = selectedIds.contains(providerId)
+
+                                UnifiedChatListItem(
+                                    provider = provider,
+                                    unreadCount = unreadCountsMap[ChatIdHelper.generateChat(currentUserId, providerId)] ?: 0,
+                                    isSelected = isSelected,
+                                    isMultiSelectMode = isMultiSelectMode,
+                                    onClick = { 
+                                        if (isMultiSelectMode) chatListViewModel?.toggleSelection(providerId)
+                                        else onChatClick(providerId) 
+                                    },
+                                    onLongClick = {
+                                        if (!isMultiSelectMode) chatListViewModel?.updateMultiSelection(true)
+                                        chatListViewModel?.toggleSelection(providerId)
+                                    },
+                                    onAvatarClick = { navController?.navigate("perfil_prestador/${providerId}") }
+                                )
+                            }
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun EmptyChatPlaceholder() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.AutoMirrored.Filled.Message, null, tint = Color.Gray.copy(alpha = 0.3f), modifier = Modifier.size(64.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("No tienes conversaciones activas", color = Color.Gray)
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ChatScreenPreview() {
+    val sampleProvider = com.example.myapplication.data.model.fake.PrestadorSampleDataFalso.generateMaverickProvider().toDomain()
+    val sampleProviders = listOf(sampleProvider)
+    val sampleProfileState = com.example.myapplication.presentation.profile.ProfileUiState(
+        uid = "user_demo_66",
+        displayName = "Demo User",
+        isLoading = false
+    )
+    val sampleUnreadCounts = mapOf(ChatIdHelper.generateChat("user_demo_66", sampleProvider.uid) to 3)
+
+    MyApplicationTheme {
+        ChatScreenContent(
+            allProviders = sampleProviders,
+            profileState = sampleProfileState,
+            unreadCountsMap = sampleUnreadCounts,
+            onBack = {},
+            beBrainViewModel = null,
+            onRouteChanged = {}
+        )
+    }
+}

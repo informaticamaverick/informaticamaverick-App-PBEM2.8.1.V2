@@ -25,6 +25,9 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import com.example.myapplication.data.repository.UserRepository
+import com.example.myapplication.data.repository.AppActionCoordinator
+import kotlinx.coroutines.flow.map
 import java.util.Calendar
 import java.util.Locale
 import javax.inject.Inject
@@ -90,7 +93,9 @@ data class ProviderWithDistance(
  * Libera al Cerebro (BeBrain) de procesos intensivos de datos.
  */
 @HiltViewModel
-class UbicacionClimaViewModel @Inject constructor() : ViewModel() {
+class UbicacionClimaViewModel @Inject constructor(
+    private val coordinator: AppActionCoordinator
+) : ViewModel() {
 
     // ======================================================================================
     // --- 1. ESTADOS DE PROCESAMIENTO ---
@@ -98,62 +103,21 @@ class UbicacionClimaViewModel @Inject constructor() : ViewModel() {
     private val _isCargando = MutableStateFlow(false)
     val isCargando = _isCargando.asStateFlow()
 
-    // --- Lista de direcciones procesadas y formateadas para la UI ---
-    private val _userAddressesRaw = MutableStateFlow<List<AddressInfo>>(emptyList())
-    val availableAddressInfos: StateFlow<List<AddressInfo>> = _userAddressesRaw.asStateFlow()
-
-    /** 
-     * TRABAJO SUCIO: Mapea el UserEntity a una lista de AddressInfo enriquecida.
-     * Se encarga de iterar por todas las sucursales y direcciones personales.
-     */
-    fun updateAddressList(user: UserEntity?) {
-        if (user == null) {
-            _userAddressesRaw.value = emptyList()
-            return
-        }
-        val list = mutableListOf<AddressInfo>()
-        
-        // 1. Mapeo de Direcciones Personales
-        user.personalAddresses.forEach { addr ->
-            list.add(AddressInfo(
-                id = addr.id,
-                companyOrUserName = user.displayName,
-                branchName = addr.label.ifEmpty { "Mi Ubicación" },
-                streetAndNumber = "${addr.calle} ${addr.numero}",
-                locality = addr.localidad,
-                province = addr.provincia,
-                country = "Argentina", 
-                postalCode = addr.codigoPostal,
-                isCompany = false,
-                lat = addr.latitude,
-                lng = addr.longitude
-            ))
-        }
-        
-        // 2. Mapeo de Direcciones de Empresas y sus Sucursales
-        user.companies.forEach { company ->
-            company.branches.forEach { branch ->
-                list.add(AddressInfo(
-                    id = branch.id,
-                    companyOrUserName = company.name,
-                    branchName = branch.name,
-                    streetAndNumber = "${branch.address.calle} ${branch.address.numero}",
-                    locality = branch.address.localidad,
-                    province = branch.address.provincia,
-                    country = "Argentina",
-                    postalCode = branch.address.codigoPostal,
-                    isCompany = true,
-                    lat = branch.address.latitude,
-                    lng = branch.address.longitude
-                ))
-            }
-        }
-        _userAddressesRaw.value = list
-    }
-
     // ======================================================================================
     // --- 2. TRABAJO SUCIO: COORDENADAS A DIRECCIÓN (REVERSE GEOCODING) ---
     // ======================================================================================
+
+    /**
+     * TRABAJO SUCIO: Verifica si el sensor GPS del dispositivo está encendido.
+     */
+    fun isGpsHabilitado(context: Context): Boolean {
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        return try {
+            locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     @SuppressLint("MissingPermission")
     fun ejecutarCalculoUbicacionGps(
@@ -169,6 +133,12 @@ class UbicacionClimaViewModel @Inject constructor() : ViewModel() {
             lng: Double
         ) -> Unit = { _, _, _, _, _, _, _, _ -> }
     ) {
+        // Validación previa: Si el GPS está apagado, no intentamos el cálculo y podemos notificar
+        if (!isGpsHabilitado(context)) {
+            // Podríamos emitir un estado de error o simplemente retornar
+            return
+        }
+
         viewModelScope.launch {
             _isCargando.value = true
             try {
@@ -180,6 +150,21 @@ class UbicacionClimaViewModel @Inject constructor() : ViewModel() {
                     _longitude.value = location.longitude
                     obtenerDireccionDesdeCoordenadas(context, location.latitude, location.longitude) { pais, prov, loc, calle, num, cp, lat, lng ->
                         _locationName.value = if (calle.isNotBlank()) "$calle $num".trim() else loc
+                        
+                        val freshGpsAddress = AddressInfo(
+                            id = "gps_current",
+                            companyOrUserName = "Mi Ubicación",
+                            branchName = "GPS Tracker",
+                            streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else "Ubicación detectada",
+                            locality = loc,
+                            province = prov,
+                            country = pais,
+                            postalCode = cp,
+                            isCompany = false,
+                            lat = lat,
+                            lng = lng
+                        )
+                        coordinator.updateAddressFromGps(freshGpsAddress)
                         
                         onResultado(pais, prov, loc, calle, num, cp, lat, lng)
                     }
@@ -376,17 +361,25 @@ class UbicacionClimaViewModel @Inject constructor() : ViewModel() {
                     hourly = "temperature_2m,relativehumidity_2m,windspeed_10m",
                     daily = "temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum,windspeed_10m_max"
                 )
-                _temperature.value = "${response.current_weather.temperature.toInt()}°C"
-                _weatherEmoji.value = getWeatherEmoji(response.current_weather.weathercode)
-                _weatherDescription.value = getWeatherDescription(response.current_weather.weathercode)
+                val temp = "${response.current_weather.temperature.toInt()}°C"
+                val emoji = getWeatherEmoji(response.current_weather.weathercode)
+                val desc = getWeatherDescription(response.current_weather.weathercode)
+                
+                _temperature.value = temp
+                _weatherEmoji.value = emoji
+                _weatherDescription.value = desc
                 _windSpeed.value = "${response.current_weather.windspeed?.toInt() ?: 0} km/h"
 
                 val currentHumidity = response.hourly?.relativehumidity_2m?.firstOrNull()
                 _humidity.value = "${currentHumidity ?: 0}%"
+                
+                // SINCRONIZACIÓN GLOBAL VIA COORDINATOR
+                coordinator.updateWeather(temp, emoji, desc)
 
             } catch (e: Exception) {
                 // Valores por defecto en caso de error
                 _temperature.value = "24°C"; _weatherEmoji.value = "☀️"; _weatherDescription.value = "Despejado"
+                coordinator.updateWeather("24°C", "☀️", "Despejado")
             }
         }
     }

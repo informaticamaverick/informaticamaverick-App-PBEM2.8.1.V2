@@ -1,6 +1,6 @@
 package com.example.myapplication.presentation.client
 
-import android.content.Context
+// import android.content.Context // SE QUITA POR ESTAR FUERA DE USO
 import android.net.Uri
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+import com.example.myapplication.data.repository.AppActionCoordinator
 import com.example.myapplication.presentation.registry.BeDictionary
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.flow.collectLatest
@@ -73,6 +74,7 @@ sealed class Screen(val route: String, val title: String) {
     object PerfilPrestador : Screen("perfil_prestador/{providerId}", "Perfil del Prestador")
     object PerfilCliente : Screen("perfil_cliente", "Mi Perfil")
     object ResultBusqueda : Screen("result_busqueda/{category}", "Resultados de Búsqueda")
+    object ChatPresupuestosRecibidos : Screen("chat_presupuestos_recibidos", "Presupuestos Recibidos")
     object Fast : Screen("fast", "Maverick FAST")
     object Login : Screen("login", "Iniciar Sesión")
 }
@@ -89,14 +91,18 @@ fun AppNavigation(
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
     simulationViewModel: SimulationViewModel = hiltViewModel(),
-    ubicacionObrero: UbicacionClimaViewModel = hiltViewModel(),
-    beAssistantViewModel: BeAssistantViewModel = hiltViewModel()
+    beAssistantViewModel: BeAssistantViewModel = hiltViewModel(),
+    conversacionObrero: BeConversacionViewModel = hiltViewModel()
 ) {
+    // REGLA DE ORO: Obtenemos el Coordinator (Mediador) directamente del Cerebro para actuar como SSOT.
+    val coordinator = hudViewModel.coordinator
+
     // --- ESTADOS DEL CEREBRO (UI Y HUD) ---
     val showBe by hudViewModel.showBe.collectAsStateWithLifecycle()
     val isSearchActive by hudViewModel.isSearchActive.collectAsStateWithLifecycle()
     val searchQueries by hudViewModel.searchQuery.collectAsStateWithLifecycle()
     val beMessages by hudViewModel.beMessages.collectAsStateWithLifecycle()
+    val activeConversationalMessage by hudViewModel.activeConversationalMessage.collectAsStateWithLifecycle()
     val currentActions by hudViewModel.currentActions.collectAsStateWithLifecycle()
     val isBottomBarVisible by hudViewModel.isBottomBarVisible.collectAsStateWithLifecycle()
     val beState by hudViewModel.beState.collectAsStateWithLifecycle()
@@ -107,32 +113,25 @@ fun AppNavigation(
     val resetBeTrigger by hudViewModel.resetBePositionTrigger.collectAsStateWithLifecycle()
     val isMultiSelectionActive by hudViewModel.isMultiSelectionActive.collectAsStateWithLifecycle()
     val toolboxKey by hudViewModel.toolboxKey.collectAsStateWithLifecycle()
-    val showLocationTool by hudViewModel.showLocationTool.collectAsStateWithLifecycle()
-    val user by hudViewModel.userState.collectAsStateWithLifecycle()
+    // val showLocationTool by hudViewModel.showLocationTool.collectAsStateWithLifecycle() // ELIMINADO POR REDUNDANCIA
 
-    // --- ESTADOS DE PROVEEDORES Y CATEGORÍAS ---
+    // --- ESTADOS DE PROVEEDORES Y CATEGORÍAS (SSOT) ---
+    // Según las Reglas de Oro, estos ViewModels ya observan al Coordinator internamente.
     val favorites by providerViewModel.favoriteServices.collectAsStateWithLifecycle()
     val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
+
+    // --- ESTADOS DE NOTIFICACIÓN DESDE EL COORDINADOR / CEREBRO ---
+    val isBubbleMuted by hudViewModel.isBubbleMuted.collectAsStateWithLifecycle()
+    val hasNewMessage by hudViewModel.hasNewMessage.collectAsStateWithLifecycle()
 
     // --- ESTADOS DEL COREÓGRAFO (BE ASSISTANT VM) ---
     val beOffsetX by beAssistantViewModel.offsetX.collectAsStateWithLifecycle()
     val beOffsetY by beAssistantViewModel.offsetY.collectAsStateWithLifecycle()
     val isBeDragging by beAssistantViewModel.isDragging.collectAsStateWithLifecycle()
     val dynamicBeBottomPadding by beAssistantViewModel.beBottomPadding.collectAsStateWithLifecycle()
+    val isToolbarStable by beAssistantViewModel.isToolbarStable.collectAsStateWithLifecycle()
 
-    // 🔥 SINCRONIZACIÓN CEREBRO -> OBRERO 🔥
-    // Cuando el usuario cambia en el cerebro, el obrero debe re-mapear las direcciones.
-    LaunchedEffect(user) {
-        ubicacionObrero.updateAddressList(user)
-    }
-
-    // 🔥 SINCRONIZACIÓN CEREBRO -> COREÓGRAFO 🔥
-    // Sincronizamos la mirada de Be con su estado emocional (Brain) y si está durmiendo.
-    LaunchedEffect(beState, isDormido) {
-        beAssistantViewModel.updateMirada(beState, isDormido)
-    }
-
-    // Sincronizamos el padding inferior dinámico de Be según la visibilidad de las barras.
+    // Sincronización el padding inferior dinámico de Be según la visibilidad de las barras.
     LaunchedEffect(isBottomBarVisible, isSearchActive) {
         beAssistantViewModel.updateLayout(isBottomBarVisible, isSearchActive)
     }
@@ -142,72 +141,70 @@ fun AppNavigation(
         beAssistantViewModel.notifyToolboxChanged()
     }
 
-    // 🔥 NUEVO: OBRERO DE INTERACCIÓN REACTIVA (BE) 🔥
-    val beInteractionViewModel: BeInteractionViewModel = hiltViewModel()
-    val searchReaction by beInteractionViewModel.currentReaction.collectAsStateWithLifecycle()
-    val searchMenuOptions by beInteractionViewModel.searchMenuOptions.collectAsStateWithLifecycle()
-    val selectedOptionIds by beInteractionViewModel.selectedOptionIds.collectAsStateWithLifecycle()
+    // 🔥 SINCRONIZACIÓN CEREBRO <-> OBRERO DE CONVERSACIÓN 🔥
+    // (La sincronización de contexto ahora ocurre internamente en los ViewModels vía Reglas de Oro)
 
-    // --- SINCRONIZACIÓN DE RECURSOS PARA LA BÚSQUEDA REACTIVA ---
-    val availableFilters by hudViewModel.availableFilters.collectAsStateWithLifecycle()
-    val availableSorts by hudViewModel.availableSortOptions.collectAsStateWithLifecycle()
-    val dynamicCategories by hudViewModel.dynamicCategories.collectAsStateWithLifecycle()
-
-    LaunchedEffect(availableFilters, availableSorts, dynamicCategories) {
-        beInteractionViewModel.syncResources(
-            filters = availableFilters,
-            sorts = availableSorts,
-            categories = dynamicCategories
-        )
+    // 1. Sincronizar Mensajes de Contexto (Tips) -> Cerebro
+    val obreroBeMessages by conversacionObrero.contextMessages.collectAsStateWithLifecycle()
+    LaunchedEffect(obreroBeMessages) {
+        hudViewModel.syncConversationalMessages(obreroBeMessages)
     }
-
-    // 🔥 CONEXIÓN CEREBRO -> LÓBULO FRONTAL 🔥
-    LaunchedEffect(hudViewModel) {
-        beInteractionViewModel.setBeBrain(hudViewModel)
+    // 2. Sincronizar Respuesta Activa (Búsqueda) -> Cerebro
+    val obreroActiveResponse by conversacionObrero.activeResponse.collectAsStateWithLifecycle()
+    LaunchedEffect(obreroActiveResponse) {
+        hudViewModel.syncActiveResponse(obreroActiveResponse)
+    }
+    // 3. Limpiar respuesta al cerrar búsqueda
+    LaunchedEffect(isSearchActive) {
+        if (!isSearchActive) {
+            conversacionObrero.clearActiveResponse()
+        }
     }
 
     AppNavigationContent(
         initialTarget = initialTarget,
         beViewModel = hudViewModel,
+        coordinator = hudViewModel.coordinator, // Pasamos el Maestro de Intenciones
         beAssistantViewModel = beAssistantViewModel, // Pasamos el coreógrafo
-        beInteractionViewModel = beInteractionViewModel, // Pasamos el nuevo ViewModel
-        searchReaction = searchReaction,
-        searchMenuOptions = searchMenuOptions,
-        selectedOptionIds = selectedOptionIds,
         showBe = showBe,
         isSearchActive = isSearchActive,
-        searchQuery = searchQueries, 
+        searchQuery = searchQueries,
         beMessages = beMessages,
         beState = beState,
         currentTipIndex = currentTipIndex,
         isDormido = isDormido,
         showBeTools = showBeTools,
-        requestKeyboard = requestKeyboard, 
+        requestKeyboard = requestKeyboard,
         currentActions = currentActions,
         isBottomBarVisible = isBottomBarVisible,
-        resetBePositionTrigger = resetBeTrigger, 
-        isMultiSelectionActive = isMultiSelectionActive, 
-        toolboxKey = toolboxKey, 
-        showLocationTool = showLocationTool,
+        resetBePositionTrigger = resetBeTrigger,
+        isMultiSelectionActive = isMultiSelectionActive,
+        toolboxKey = toolboxKey,
+        // showLocationTool = showLocationTool, // ELIMINADO
         // Estados de animación de Be
         beOffsetX = beOffsetX,
         beOffsetY = beOffsetY,
         isBeDragging = isBeDragging,
         dynamicBeBottomPadding = dynamicBeBottomPadding,
+        isToolbarStable = isToolbarStable, // PASAMOS ESTADO DE ESTABILIDAD
         onRouteChanged = { hudViewModel.onRouteChanged(it) },
         onBeClick = { hudViewModel.onBeClick() },
         onBeLongClick = { hudViewModel.onBeLongClick() },
         onBeDoubleClick = { hudViewModel.onBeDoubleClick() },
-        onSearchQueryChange = { 
-            hudViewModel.updateSearchQuery(it)
-            beInteractionViewModel.processSearchQuery(it) // Notificamos al obrero de interacción
+        onSearchQueryChange = {
+            // REGLA DE ORO: Las intenciones de búsqueda van directo al Coordinator.
+            coordinator.updateSearchQuery(it)
+            hudViewModel.setResultadoVisible(it.isNotEmpty()) // BeBrain solo maneja la visual
         },
         onSimulateFiveDirectBudgets = { simulationViewModel.simulateFiveDirectBudgetsToChat() },
         onSimulateTenderResponses = { simulationViewModel.simulateTenderResponsesForEachActive() },
         onSimulateMassiveProviders = { cats, zip, count -> simulationViewModel.simulateMassiveProviders(cats, zip, count) },
         onMigrateCategories = { simulationViewModel.uploadCategoriesToFirestore() },
-        favorites = favorites, 
-        allCategories = categories
+        activeConversationalMessage = activeConversationalMessage, // PASAMOS EL MENSAJE ACTIVO
+        favorites = favorites,
+        allCategories = categories,
+        isBubbleMuted = isBubbleMuted,
+        hasNewMessage = hasNewMessage
     )
 }
 
@@ -216,11 +213,8 @@ fun AppNavigation(
 fun AppNavigationContent(
     initialTarget: String? = null,
     beViewModel: BeBrainViewModel,
+    coordinator: AppActionCoordinator, // NUEVO: Mediador SSOT
     beAssistantViewModel: BeAssistantViewModel, // NUEVO
-    beInteractionViewModel: BeInteractionViewModel, // NUEVO
-    searchReaction: BeSearchReaction?, // NUEVO
-    searchMenuOptions: List<ControlItem>, // NUEVO
-    selectedOptionIds: Set<String>, // NUEVO
     showBe: Boolean,
     isSearchActive: Boolean,
     searchQuery: String,
@@ -229,20 +223,24 @@ fun AppNavigationContent(
     currentTipIndex: Int,
     isDormido: Boolean,
     showBeTools: Boolean,
+    activeConversationalMessage: BeMessage?, // NUEVO
     requestKeyboard: Boolean, 
     currentActions: List<BeSmallActionModel>,
     favorites: List<ServiceDisplayModel> = emptyList(),
     allCategories: List<CategoryEntity> = emptyList(),
+    isBubbleMuted: Boolean = false,
+    hasNewMessage: Boolean = false,
     isBottomBarVisible: Boolean,
     resetBePositionTrigger: Int, 
     isMultiSelectionActive: Boolean, 
     toolboxKey: String, 
-    showLocationTool: Boolean,
+    // showLocationTool: Boolean, // ELIMINADO
     // Estados de animación de Be
     beOffsetX: Float,
     beOffsetY: Float,
     isBeDragging: Boolean,
     dynamicBeBottomPadding: Dp,
+    isToolbarStable: Boolean = true, // NUEVO
     onRouteChanged: (String?) -> Unit,
     onBeClick: () -> Unit,
     onBeLongClick: () -> Unit,
@@ -281,14 +279,14 @@ fun AppNavigationContent(
         }
     }
 
-    var isLocationExpanded by remember { mutableStateOf(false) }
+    // var isLocationExpanded by remember { mutableStateOf(false) } // ELIMINADO POR REDUNDANCIA
 
     // ==================================================================================
     // --- 🚫 SECCIÓN: CONTROL DE AUTO-EXPANSIÓN DE UBICACIÓN ---
     // ==================================================================================
     // Se ha eliminado la auto-expansión en la ruta de resultados de búsqueda para
     // evitar que el popup se abra solo al entrar.
-    LaunchedEffect(currentRoute) { 
+    LaunchedEffect(currentRoute) {
         onRouteChanged(currentRoute)
     }
     val showFavoritesPanel by beViewModel.showFavoritesPanel.collectAsStateWithLifecycle()
@@ -303,10 +301,12 @@ fun AppNavigationContent(
     AppNavigationStateless(
         navController = navController,
         currentRoute = currentRoute,
+        coordinator = coordinator, // PASAMOS EL MEDIADOR
         showBe = showBe,
         isSearchActive = isSearchActive,
         searchQuery = searchQuery,
         beMessages = beMessages,
+        activeConversationalMessage = activeConversationalMessage, // PASAMOS EL MENSAJE ACTIVO
         beState = beState,
         currentTipIndex = currentTipIndex,
         isDormido = isDormido,
@@ -319,10 +319,11 @@ fun AppNavigationContent(
         resetBePositionTrigger = resetBePositionTrigger,
         isMultiSelectionActive = isMultiSelectionActive,
         toolboxKey = toolboxKey,
-        showLocationTool = showLocationTool,
-        isLocationExpanded = isLocationExpanded,
         showFavoritesPanel = showFavoritesPanel,
         showProviderSimDialog = showProviderSimDialog,
+        isBubbleMuted = isBubbleMuted,
+        hasNewMessage = hasNewMessage,
+        isToolbarStable = isToolbarStable, // NUEVO
         // Estados de animación de Be
         beOffsetX = beOffsetX,
         beOffsetY = beOffsetY,
@@ -334,30 +335,22 @@ fun AppNavigationContent(
         onBeLongClick = onBeLongClick,
         onBeDoubleClick = onBeDoubleClick,
         onSearchQueryChange = onSearchQueryChange,
-        onSearchSubmitted = { 
-            // El Cerebro procesa el texto llamando al Obrero para determinar la reacción
-            beViewModel.onSearchSubmitted(beInteractionViewModel)
-        },
-        onToggleLocationExpand = { isLocationExpanded = it },
+        onSearchSubmitted = { beViewModel.onSearchSubmitted() },
         onDismissSimDialog = { beViewModel.setShowProviderSimDialog(false) },
         onConfirmSimDialog = { cats, zip, count -> beViewModel.setShowProviderSimDialog(false); onSimulateMassiveProviders(cats, zip, count) },
         onMigrateCategories = onMigrateCategories,
         onSetBeState = { beViewModel.setBeState(it) },
         onNextTip = { beViewModel.nextTip() },
         onPrevTip = { beViewModel.prevTip() },
-        onBubbleActionClick = { 
+        onBubbleActionClick = {
             // Si el mensaje actual es el del Huevo de Pascua (detectado por el icono ❤️)
             if (beMessages.getOrNull(currentTipIndex)?.icon == "❤️") {
-                beInteractionViewModel.resetEasterEgg() // El Obrero limpia su estado
+                // beInteractionViewModel.resetEasterEgg() // El Obrero limpia su estado
                 beViewModel.onEasterEggLinkClick()     // El Cerebro limpia la UI
             }
         },
-        beViewModel = beViewModel,
-        beInteractionViewModel = beInteractionViewModel, // Pasamos el nuevo ViewModel
-        searchReaction = searchReaction, // Pasamos la reacción
-        searchMenuOptions = searchMenuOptions, // Pasamos las opciones
-        selectedOptionIds = selectedOptionIds // Pasamos los IDs seleccionados
-    )
+        beViewModel = beViewModel
+        )
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -365,6 +358,7 @@ fun AppNavigationContent(
 fun AppNavigationStateless(
     navController: NavHostController,
     currentRoute: String?,
+    coordinator: AppActionCoordinator? = null, // NUEVO
     showBe: Boolean,
     isSearchActive: Boolean,
     searchQuery: String,
@@ -373,6 +367,7 @@ fun AppNavigationStateless(
     currentTipIndex: Int,
     isDormido: Boolean,
     showBeTools: Boolean,
+    activeConversationalMessage: BeMessage?, // NUEVO
     requestKeyboard: Boolean,
     currentActions: List<BeSmallActionModel>,
     favorites: List<ServiceDisplayModel> = emptyList(),
@@ -381,10 +376,11 @@ fun AppNavigationStateless(
     resetBePositionTrigger: Int,
     isMultiSelectionActive: Boolean,
     toolboxKey: String,
-    showLocationTool: Boolean,
-    isLocationExpanded: Boolean,
     showFavoritesPanel: Boolean,
     showProviderSimDialog: Boolean,
+    isBubbleMuted: Boolean = false,
+    hasNewMessage: Boolean = false,
+    isToolbarStable: Boolean = true, // NUEVO
     // Estados de animación de Be
     beOffsetX: Float = 0f,
     beOffsetY: Float = 0f,
@@ -397,7 +393,7 @@ fun AppNavigationStateless(
     onBeDoubleClick: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearchSubmitted: () -> Unit = {},
-    onToggleLocationExpand: (Boolean) -> Unit,
+    onToggleLocationExpand: (Boolean) -> Unit = {},
     onDismissSimDialog: () -> Unit,
     onConfirmSimDialog: (List<String>, String, Int) -> Unit,
     onMigrateCategories: () -> Unit = {},
@@ -406,10 +402,6 @@ fun AppNavigationStateless(
     onPrevTip: () -> Unit,
     onBubbleActionClick: () -> Unit = {},
     beViewModel: BeBrainViewModel? = null,
-    beInteractionViewModel: BeInteractionViewModel? = null, // NUEVO
-    searchReaction: BeSearchReaction? = null, // NUEVO
-    searchMenuOptions: List<ControlItem> = emptyList(), // NUEVO
-    selectedOptionIds: Set<String> = emptySet(), // NUEVO
     navHostContent: @Composable (PaddingValues) -> Unit = { innerPadding ->
         // ==========================================================================================
         // --- 🛠️ SECCIÓN: CONFIGURACIÓN DE ANIMACIONES DE NAVEGACIÓN (MAVERICK STYLE) ---
@@ -420,7 +412,7 @@ fun AppNavigationStateless(
         val mainEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
             val initialIndex = getRouteIndex(initialState.destination.route, navItems)
             val targetIndex = getRouteIndex(targetState.destination.route, navItems)
-            
+
             if (initialIndex != -1 && targetIndex != -1) {
                 if (targetIndex > initialIndex) {
                     slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(500, easing = EaseInOutQuart))
@@ -431,12 +423,11 @@ fun AppNavigationStateless(
                 fadeIn(tween(400))
             }
         }
-
         // --- TRANSICIÓN DE SALIDA: DESLIZAMIENTO LATERAL SEGÚN ÍNDICE ---
         val mainExitTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition = {
             val initialIndex = getRouteIndex(initialState.destination.route, navItems)
             val targetIndex = getRouteIndex(targetState.destination.route, navItems)
-            
+
             if (initialIndex != -1 && targetIndex != -1) {
                 if (targetIndex > initialIndex) {
                     slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(500, easing = EaseInOutQuart))
@@ -447,7 +438,6 @@ fun AppNavigationStateless(
                 fadeOut(tween(400))
             }
         }
-
         // ==========================================================================================
         // --- 🌌 NAVHOST Y ESTRUCTURA DE PANTALLAS ---
         // ==========================================================================================
@@ -455,13 +445,13 @@ fun AppNavigationStateless(
             NavHost(navController = navController, startDestination = Screen.Home.route, modifier = Modifier.fillMaxSize()) {
                 // HOME: Ahora usa transiciones explícitas para evitar el "pop" visual al volver
                 composable(
-                    route = Screen.Home.route, 
-                    enterTransition = mainEnterTransition, 
+                    route = Screen.Home.route,
+                    enterTransition = mainEnterTransition,
                     exitTransition = mainExitTransition
                 ) {
                     HomeScreenComplete(navController = navController, beViewModel = beViewModel ?: hiltViewModel())
                 }
-                
+
                 composable(route = Screen.Chat.route, arguments = listOf(navArgument("providerId") { type = NavType.StringType; nullable = true; defaultValue = null }), enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { backStackEntry ->
                     val providerId = backStackEntry.arguments?.getString("providerId")
                     // ==========================================================================================
@@ -472,45 +462,54 @@ fun AppNavigationStateless(
                     ChatScreen(
                         onBack = { navController.popBackStack() }, 
                         initialProviderId = providerId,
+                        navController = navController, // 🔥 PASAMOS EL NAVCONTROLLER
+                        beBrainViewModel = beViewModel ?: hiltViewModel(), // 🔥 FIJO: Pasamos el Cerebro Global o generamos uno si es null
                         onInConversationChange = { isInConversation ->
                             beViewModel?.setBottomBarVisible(!isInConversation)
                         }
                     )
                 }
-                
+
                 composable(route = Screen.Calendar.route, enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { CalendarScreen(onBack = { navController.popBackStack() }) }
-                
+
                 composable(route = Screen.Promo.route, enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { PromoScreen(navController = navController, onBack = { navController.popBackStack() }) }
-                
+
                 composable(route = Screen.CrearLicitacion.route) { CrearLicScreen(onBack = { navController.popBackStack() }) }
-                
+
                 composable(route = Screen.PerfilCliente.route) { PerfilUsuarioScreen(onNavigateBack = { navController.popBackStack() }, onLogout = { }, beViewModel = beViewModel ?: hiltViewModel()) }
-                
+
                 composable(route = Screen.ResultBusqueda.route, arguments = listOf(navArgument("category") { type = NavType.StringType })) { backStackEntry ->
                     val category = backStackEntry.arguments?.getString("category") ?: ""
                     ResultBusquedaCategoriaScreen(categoryName = category, onBack = { navController.popBackStack() }, onNavigateToProviderProfile = { pid -> navController.navigate("perfil_prestador/$pid") }, onNavigateToChat = { pid -> navController.navigate("chat?providerId=$pid") }, beViewModel = beViewModel ?: hiltViewModel())
                 }
-                
+
                 composable(route = Screen.PerfilPrestador.route, arguments = listOf(navArgument("providerId") { type = NavType.StringType })) { backStackEntry ->
                     val providerId = backStackEntry.arguments?.getString("providerId") ?: ""
                     PerfilPrestadorCliente(providerId = providerId, onBack = { navController.popBackStack() })
                 }
-                
+
+                composable(route = Screen.ChatPresupuestosRecibidos.route) {
+                    ChatPresupuestoRecibidosScreen(
+                        onBack = { navController.popBackStack() },
+                        onChatClick = { pid -> navController.navigate("chat?providerId=$pid") },
+                        beBrainViewModel = beViewModel ?: hiltViewModel()
+                    )
+                }
+
                 composable(route = Screen.Fast.route) { FastScreen(navController = navController, bottomPadding = innerPadding) }
-                
+
                 composable(
-                    route = Screen.Presupuestos.route, 
-                    enterTransition = mainEnterTransition, 
+                    route = Screen.Presupuestos.route,
+                    enterTransition = mainEnterTransition,
                     exitTransition = mainExitTransition
                 ) {
                     PresupuestosScreen(
-                        hiltViewModel(),
-                        hiltViewModel(),
-                        beViewModel ?: hiltViewModel(),
-                        beInteractionViewModel ?: hiltViewModel(),
-                        { pid -> navController.navigate("chat?providerId=$pid") },
-                        { navController.popBackStack() },
-                        innerPadding
+                        viewModel = hiltViewModel(),
+                        categoryViewModel = hiltViewModel(),
+                        beBrainViewModel = beViewModel ?: hiltViewModel(),
+                        onChatClick = { pid -> navController.navigate("chat?providerId=$pid") },
+                        onBack = { navController.popBackStack() },
+                        bottomPadding = innerPadding
                     )
                 }
             }
@@ -518,9 +517,9 @@ fun AppNavigationStateless(
     }
 ) {
     val navItems = listOf(Screen.Home, Screen.Presupuestos, Screen.Chat, Screen.Calendar, Screen.Promo)
-    
+
     // --- SECCIÓN: CÁLCULO DE VISIBILIDAD DE BARRA INFERIOR ---
-    // Se elimina la exclusión explícita del ChatRoute para permitir que la barra se muestre 
+    // Se elimina la exclusión explícita del ChatRoute para permitir que la barra se muestre
     // en la lista de conversaciones. La visibilidad ahora depende dinámicamente de beViewModel.
     val isMainRoute = currentRoute?.split("?")?.first() in navItems.map { it.route.split("?").first() }
     val shouldShowBottomBar = isMainRoute && isBottomBarVisible
@@ -536,11 +535,11 @@ fun AppNavigationStateless(
                 AnimatedVisibility(
                     visible = shouldShowBottomBar && !isSearchActive,
                     enter = slideInVertically(
-                        initialOffsetY = { it }, 
+                        initialOffsetY = { it },
                         animationSpec = tween(durationMillis = 400)
                     ) + fadeIn(),
                     exit = slideOutVertically(
-                        targetOffsetY = { it }, 
+                        targetOffsetY = { it },
                         animationSpec = tween(durationMillis = 300)
                     ) + fadeOut()
                 ) {
@@ -550,42 +549,22 @@ fun AppNavigationStateless(
         ) { innerPadding ->
             navHostContent(innerPadding)
         }
-
-        /** 
-         * BeResultadoScreen deshabilitada en favor de BeSearchBubble integrada en BeAssistant.
-         * Se conserva el archivo pero se quita la llamada.
-         if (beViewModel != null) {
-            BeResultadoScreen(
-                viewModel = beViewModel,
-                onClose = onCloseResultado,
-                onProviderClick = onProviderClick,
-                allCategories = allCategories,
-                modifier = Modifier.zIndex(400f), 
-                onCategoryClick = onCategoryClick,
-                onSuperCategoryClick = onSuperCategoryClick
-            )
-        }
-        **/
-
         AnimatedVisibility(
             visible = showBe,
-            modifier = Modifier.zIndex(500f) 
+            modifier = Modifier.zIndex(1100f) // 🔥 AUMENTADO: Para estar sobre la Nav Bar (950f)
         ) {
             val beVerticalBias by animateFloatAsState(
                 targetValue = when {
                     isSearchActive -> -1f
                     isDormido -> 0f // Modo hibernación: Mitad de la pantalla
                     else -> 1f
-                }, 
+                },
                 label = "v_bias"
             )
-            
-            // 🔥 DETERMINAMOS EL PADDING REAL: 
+
+            // 🔥 DETERMINAMOS EL PADDING REAL:
             // Si la barra de navegación no se muestra, el padding debe ser 0 para que Be "caiga" al borde.
             val targetBePadding = if (shouldShowBottomBar && !isSearchActive) dynamicBeBottomPadding else 0.dp
-
-            val isBubbleMuted by beViewModel?.isBubbleMuted?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
-            val hasNewMessage by beViewModel?.hasNewMessage?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
 
             Box(
                 modifier = Modifier
@@ -596,7 +575,7 @@ fun AppNavigationStateless(
                     modifier = Modifier.align(BiasAlignment(horizontalBias = 1f, verticalBias = beVerticalBias)),
                     isSearchActive = isSearchActive,
                     searchQuery = searchQuery,
-                    searchReaction = searchReaction,
+                    activeConversationalMessage = activeConversationalMessage, // NUEVO
                     contextMessages = beMessages,
                     state = beState,
                     currentTipIndex = currentTipIndex,
@@ -610,8 +589,6 @@ fun AppNavigationStateless(
                     isMultiSelectionActive = isMultiSelectionActive,
                     shouldShowBottomBar = shouldShowBottomBar,
                     toolboxKey = toolboxKey,
-                    isLocationExpanded = isLocationExpanded,
-                    onToggleLocationExpand = onToggleLocationExpand,
                     offsetX = beOffsetX,
                     offsetY = beOffsetY,
                     isDragging = isBeDragging,
@@ -621,23 +598,13 @@ fun AppNavigationStateless(
                     hasNewMessage = hasNewMessage,
                     onToggleBubbleMute = { beViewModel?.toggleBubbleMute() },
                     onReactionActionClick = { actionId ->
+                        // REGLA DE ORO: Las reacciones también se orquestan vía Coordinator si es necesario,
+                        // pero aquí usamos BeBrain para limpiar la UI.
                         beViewModel?.triggerAction(actionId)
-                        if (actionId.startsWith("filter_") || actionId.startsWith("cat_")) {
-                            beViewModel?.toggleFilter(actionId)
-                        }
-                        beInteractionViewModel?.clearReaction()
-                        beViewModel?.updateSearchQuery("")
+                        beViewModel?.clearActiveResponse()
+                        coordinator?.updateSearchQuery("")
                     },
-                    onReactionCloseClick = { beInteractionViewModel?.clearReaction() },
-                    locationToolContent = {
-                        AnimatedVisibility(
-                            visible = showLocationTool && currentRoute?.contains("fast") == true,
-                            enter = expandHorizontally() + fadeIn(),
-                            exit = shrinkHorizontally() + fadeOut()
-                        ) {
-                            // Contenido
-                        }
-                    },
+                    onReactionCloseClick = { beViewModel?.clearActiveResponse() },
                     onToggleSearch = onBeClick,
                     onToggleActions = onBeLongClick,
                     onToggleSleep = onBeDoubleClick,
@@ -646,10 +613,9 @@ fun AppNavigationStateless(
                     onPrevTip = onPrevTip,
                     beBottomPadding = targetBePadding, // 🔥 PASAMOS EL PADDING CALCULADO
                     onBubbleActionClick = onBubbleActionClick,
-                    searchMenuOptions = searchMenuOptions,
-                    onMenuOptionClick = { optionId -> beInteractionViewModel?.onMenuOptionClick(optionId) },
-                    selectedOptionIds = selectedOptionIds
-                )
+                    onMenuOptionClick = { optionId -> /* beInteractionViewModel?.onMenuOptionClick(optionId) */ },
+                    isToolbarStable = isToolbarStable // 🔥 PASAMOS ESTADO DE ESTABILIDAD
+                    )
             }
         }
 
@@ -686,8 +652,8 @@ fun AppHUDShell(
 
 @Composable
 fun AppBottomNavigationBar(
-    navController: NavHostController, 
-    allItems: List<Screen>, 
+    navController: NavHostController,
+    allItems: List<Screen>,
     currentRoute: String?,
     beViewModel: BeBrainViewModel? = null // Recibimos el cerebro para las notificaciones
 ) {
@@ -697,12 +663,9 @@ fun AppBottomNavigationBar(
     val navBarHeight = 62.dp // Altura reducida de 76.dp a 62.dp
     val navigationInsets = WindowInsets.navigationBars.asPaddingValues()
     val bottomPadding = navigationInsets.calculateBottomPadding()
-    
+
     // --- ESTADOS DE NOTIFICACIÓN DESDE EL CEREBRO ---
     val hasChatNotif by beViewModel?.hasChatNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
-    //val hasBudgetNotif by beViewModel?.hasBudgetNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
-    //val hasCalendarNotif by beViewModel?.hasCalendarNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
-   // val hasPromoNotif by beViewModel?.hasPromoNotifications?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(false) }
 
     // Forma con cortes en las esquinas superiores (estilo MoldeBarraMenu)
     val barShape = CutCornerShape(topStart = 12.dp, topEnd = 12.dp)
@@ -720,7 +683,7 @@ fun AppBottomNavigationBar(
                 val path = Path()
                 val strokeWidth = 1.dp.toPx()
                 val cornerSize = 12.dp.toPx()
-                
+
                 // Pre-calculamos el path para evitar crearlo en cada frame
                 path.reset()
                 path.moveTo(0f, cornerSize)
@@ -760,27 +723,25 @@ fun AppBottomNavigationBar(
             allItems.forEach { screen ->
                 val isSelected = currentRoute?.startsWith(screen.route.split("?").first()) == true
                 val scope = rememberCoroutineScope()
-                
+
                 // --- LÓGICA DE BADGE: DETERMINAR SI ESTE TAB TIENE NOTIFICACIONES ---
                 val hasNotification = when (screen) {
                     is Screen.Chat -> hasChatNotif
-                    //is Screen.Presupuestos -> hasBudgetNotif
-                    //is Screen.Calendar -> hasCalendarNotif
-                    //is Screen.Promo -> hasPromoNotif
+
                     else -> false
                 }
 
                 // ==========================================================================================
                 // 🛠️ SECCIÓN 3: CONFIGURACIÓN DE ANIMACIONES Y BOTONES
                 // ==========================================================================================
-                
+
                 // --- EFECTO DE ANCHO DINÁMICO ---
                 val animatedWidth by animateDpAsState(
                     targetValue = if (isSelected) 100.dp else 52.dp,
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
                     label = "nav_width"
                 )
-                
+
                 Box(
                     modifier = Modifier
                         .width(animatedWidth)
@@ -801,7 +762,7 @@ fun AppBottomNavigationBar(
                                     // CORRECCIÓN: Si es Chat, navegamos a la ruta base para evitar el placeholder {providerId}
                                     // ==========================================================================================
                                     val destination = if (screen is Screen.Chat) "chat" else screen.route
-                                    
+
                                     navController.navigate(destination) {
                                         popUpTo(navController.graph.findStartDestination().id) {
                                             saveState = true
@@ -873,6 +834,7 @@ fun AppNavigationPreview() {
         AppNavigationStateless(
             navController = navController,
             currentRoute = Screen.Home.route,
+            coordinator = null,
             showBe = true,
             isSearchActive = false,
             searchQuery = "",
@@ -881,19 +843,16 @@ fun AppNavigationPreview() {
             currentTipIndex = 0,
             isDormido = false,
             showBeTools = false,
+            activeConversationalMessage = null,
             requestKeyboard = false,
             currentActions = listOf(BeSmallActionModel("fast", Icons.Default.FlashOn, "Fast", emoji = "⚡", isDefault = true)),
             favorites = emptyList(),
             allCategories = listOf(
-                //CategoryEntity(name = "Informatica", icon = "💻", color = 0xFF22D3EE, superCategory = "Tecnología", superCategoryIcon = "📂", providerIds = emptyList(), imageUrl = null, isNew = false, isNewPrestador = false, isAd = false),
-                //CategoryEntity(name = "Electricidad", icon = "⚡", color = 0xFFFACC15, superCategory = "Hogar", superCategoryIcon = "📂", providerIds = emptyList(), imageUrl = null, isNew = false, isNewPrestador = false, isAd = false)
             ),
             isBottomBarVisible = true,
             resetBePositionTrigger = 0,
             isMultiSelectionActive = false,
             toolboxKey = "home_default",
-            showLocationTool = false,
-            isLocationExpanded = false,
             showFavoritesPanel = false,
             showProviderSimDialog = false,
             onBeClick = {},

@@ -1,13 +1,11 @@
 package com.example.myapplication.data.local
 
 import android.content.Context
-import androidx.compose.ui.graphics.toArgb
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.example.myapplication.data.local.SembradoServiciosInicia
 import com.example.myapplication.data.model.fake.PrestadorSampleDataFalso
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -25,9 +23,10 @@ import kotlinx.coroutines.launch
         TenderEntity::class,    // Tabla de Licitaciones (Pedidos del cliente)
         BudgetEntity::class,    // Tabla de Presupuestos (Ofertas de prestadores)
         MessageEntity::class,    // Tabla de Mensajes (Historial de Chat)
-        CalendarEventEntity::class // Tabla de Eventos del Calendario (NUEVO)
+        CalendarEventEntity::class, // Tabla de Eventos del Calendario (NUEVO)
+        FastCategoryEntity::class // Tabla de Categorías de Acceso Rápido (NUEVO)
     ],
-    version = 28, // priorizarEmpresa added to ProviderEntity
+    version = 29, // 🔥 [INCREMENTADO] Se agregó la tabla fast_category_usage
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -39,7 +38,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun budgetDao(): BudgetDao
     abstract fun chatDao(): ChatDao
-    abstract fun calendarDao(): CalendarDao // NUEVO
+    abstract fun calendarDao(): CalendarDao
+    abstract fun fastCategoryDao(): FastCategoryDao // NUEVO
 
     companion object {
         @Volatile
@@ -79,8 +79,7 @@ abstract class AppDatabase : RoomDatabase() {
                     val categoryDao = database.categoryDao()
                     val providerDao = database.providerDao()
                     val budgetDao = database.budgetDao()
-                    val chatDao = database.chatDao()
-                    val calendarDao = database.calendarDao() // Instanciamos el nuevo DAO
+                    // val calendarDao = database.calendarDao() // Instanciamos el nuevo DAO
 
 
                     // ===================================================
@@ -115,8 +114,8 @@ abstract class AppDatabase : RoomDatabase() {
                         budgetDao.insertTender(tender)
                     }
 
-                    // 5. CARGA DE AGENDA / EVENTOS DE CALENDARIO (CORREGIDO)
-                    calendarDao.insertAllEvents(seedData.calendarEvents)
+                    // 5. CARGA DE AGENDA / EVENTOS DE CALENDARIO (DESACTIVADO PARA USAR DATOS REALES)
+                    // calendarDao.insertAllEvents(seedData.calendarEvents)
 
                     // 6. CARGA DE PRESUPUESTOS (DESACTIVADO POR USUARIO)
                     // seedData.budgets.forEach { budget ->

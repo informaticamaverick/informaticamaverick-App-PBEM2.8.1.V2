@@ -467,10 +467,10 @@ class ChatRepository @Inject constructor(
                 val isOwn = senderId == myUserId
                 val msgId = snapshot.child("messageId").getValue(String::class.java) ?: snapshot.key ?: return
                 val msgType = snapshot.child("type").getValue(String::class.java) ?: "TEXT"
-                
+
                 var resolvedImageUrl: String? = null
                 var localImagePath: String? = null
-                
+
                 if (msgType == "IMAGE") {
                     val base64 = snapshot.child("content").getValue(String::class.java)
                         ?: snapshot.child("imageUrl").getValue(String::class.java)
@@ -481,7 +481,7 @@ class ChatRepository @Inject constructor(
                         resolvedImageUrl = base64
                     }
                 }
-                
+
                 val resolvedAudioUrl: String? = if (msgType == "AUDIO") {
                     val base64 = snapshot.child("audioUrl").getValue(String::class.java)
                         ?: snapshot.child("content").getValue(String::class.java)
@@ -499,14 +499,14 @@ class ChatRepository @Inject constructor(
                 val parsedDate  = visitParts?.getOrNull(1) ?: snapshot.child("appointmentDate").getValue(String::class.java)
                 val parsedTime  = visitParts?.getOrNull(2) ?: snapshot.child("appointmentTime").getValue(String::class.java)
                 val parsedNotes = visitParts?.getOrNull(3) ?: rawText
-                
+
                 val msg = MessageEntity(
                     messageId = msgId,
                     conversationId = conversationId,
                     text = if (visitParts != null) parsedNotes else rawText,
                     timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis(),
                     isFromCurrentUser = isOwn,
-                    messageType = if (msgType == "VISIT") "APPOINTMENT" else msgType,
+                    messageType = if (msgType == "VISIT") "APPOINTMENT_REQUEST" else msgType,
                     audioUrl = resolvedAudioUrl,
                     imageUrl = resolvedImageUrl,
                     imageLocalPath = localImagePath, // Ruta local guardada
@@ -551,14 +551,14 @@ class ChatRepository @Inject constructor(
                             )
                             Log.d("ChatRepo", "Conversación creada en startListening: $conversationId")
                         }
-                        
+
                         val existsInRoom = messageDao.getMessageById(msgId) != null
                         messageDao.insertMessage(msg)
                         val isNewMessage = msg.timestamp >= listeningStartAt - 5_000
                         if (!isOwn && !existsInRoom) {
                             conversationDao.incrementUnreadCount(conversationId)
                             val senderName = conversationDao.getConversationById(conversationId)?.userName ?: senderId
-                            
+
                             notificationHelper.showChatNotification(
                                 senderId = senderId,
                                 senderName = senderName,
@@ -566,7 +566,7 @@ class ChatRepository @Inject constructor(
                                 appointmentStatus = msg.appointmentStatus,
                                 appointmentTitle = msg.appointmentTitle
                             )
-                            
+
                             val (nTitulo, nMensaje, nTipo) = when (msgType) {
                                 "AUDIO" -> Triple(senderName, " Te envió un audio", TipoNotificacion.MENSAJE)
                                 "IMAGE" -> Triple(senderName, " Te envió un imagen", TipoNotificacion.MENSAJE)
@@ -583,7 +583,7 @@ class ChatRepository @Inject constructor(
                                 }
                                 else -> Triple(senderName, " Nuevo mensaje", TipoNotificacion.MENSAJE)
                             }
-                            
+
                             notificacionRepository.guardar(
                                 NotificacionItem(
                                     tipo = nTipo,
@@ -594,16 +594,16 @@ class ChatRepository @Inject constructor(
                                     accionRoute = "open_chat/$senderId"
                                 )
                             )
-                            
+
                             try {
                                 messagesRef.child(msgId).child("isDelivered").setValue(true)
                             } catch (e: Exception) {
                                 Log.e("ChatRepo", "Error marcando isDelivered: ${e.message}")
                             }
                         }
-                        
+
                         conversationDao.updateLastMessage(conversationId, msg.text ?: "", msg.timestamp, "TEXT")
-                        
+
                         if (isOwn) {
                             val isReadNow = snapshot.child("isRead").getValue(Boolean::class.java) ?: false
                             if (isReadNow) messageDao.markAsRead(msg.messageId)
@@ -678,7 +678,7 @@ class ChatRepository @Inject constructor(
     }
 
     fun observeUserOnline(userId: String):
-    kotlinx.coroutines.flow.Flow<Boolean> = callbackFlow {
+            kotlinx.coroutines.flow.Flow<Boolean> = callbackFlow {
         val ref = database.reference.child("users").child(userId).child("online")
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -770,11 +770,11 @@ class ChatRepository @Inject constructor(
                         // 1. Siempre re-fetchear si el nombre parece un ID crudo o está vacío
                         val storedName = existing?.userName ?: ""
                         val nameSeemsBad = storedName.isBlank()
-                            || storedName == otherUserId
-                            || storedName == "Cliente"
-                            || storedName.length > 20 && storedName.none { it == ' ' } // UID largo sin espacios
-                            || storedName.matches(Regex("^[A-Za-z0-9_-]{20,}$"))       // UID alfanumérico largo
-                            || storedName.matches(Regex("^[A-Za-z]+-?[A-Za-z]+-?\\d+$")) // P-Jar-0
+                                || storedName == otherUserId
+                                || storedName == "Cliente"
+                                || storedName.length > 20 && storedName.none { it == ' ' } // UID largo sin espacios
+                                || storedName.matches(Regex("^[A-Za-z0-9_-]{20,}$"))       // UID alfanumérico largo
+                                || storedName.matches(Regex("^[A-Za-z]+-?[A-Za-z]+-?\\d+$")) // P-Jar-0
                         var displayName = storedName.takeIf { !nameSeemsBad } ?: otherUserId
                         var freshAvatarUrl: String? = existing?.userAvatarUrl
 
@@ -818,7 +818,7 @@ class ChatRepository @Inject constructor(
                             isLocked = existing?.isLocked ?: false,
                             isSynced = true
                         )
-                        
+
                         if (existing == null) {
                             // Eliminar duplicado si ya existe una conv con el mismo userId pero distinto ID
                             val duplicate = conversationDao.getConversationByUserId(otherUserId)
@@ -829,7 +829,7 @@ class ChatRepository @Inject constructor(
                             conversationDao.insertConversation(conversation)
                         } else {
                             // Solo actualizar si algo relevante cambió para evitar loops de recomposición
-                            if (existing.lastMessage != conversation.lastMessage || 
+                            if (existing.lastMessage != conversation.lastMessage ||
                                 existing.lastMessageTimestamp != conversation.lastMessageTimestamp ||
                                 existing.userName != conversation.userName ||
                                 existing.userAvatarUrl != conversation.userAvatarUrl) {
@@ -876,7 +876,7 @@ class ChatRepository @Inject constructor(
                 for (msg in unreadMessages) {
                     // 1. Marcar como leído en RTDB
                     messagesRef.child(msg.messageId).child("isRead").setValue(true)
-                    
+
                     // 2. [LIMPIEZA AUTOMÁTICA] Borrar contenido pesado (Base64) una vez leído
                     // Mantiene el costo de almacenamiento en RTDB en CERO
                     if (msg.messageType == "IMAGE" || msg.messageType == "AUDIO") {
@@ -936,7 +936,7 @@ class ChatRepository @Inject constructor(
     // ── Listener global para notificaciones (RTDB) ────────────────────────────
     fun startGlobalListening(myUserId: String) {
         val listeningStartAt = System.currentTimeMillis()
-        
+
         // No reiniciar todo si ya está escuchando Firestore
         if (globalListener != null) return
 
@@ -944,9 +944,9 @@ class ChatRepository @Inject constructor(
             .whereArrayContains("participants", myUserId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
-                
+
                 val currentChatIds = snapshot.documents.map { it.id }.toSet()
-                
+
                 // Remover listeners de chats que ya no están en la lista
                 val toRemove = globalRtdbListeners.keys.filter { it !in currentChatIds }
                 toRemove.forEach { convId ->
@@ -957,7 +957,7 @@ class ChatRepository @Inject constructor(
 
                 for (chatDoc in snapshot.documents) {
                     val conversationId = chatDoc.id
-                    
+
                     // Solo agregar si no tenemos ya un listener para este chat
                     if (globalRtdbListeners.containsKey(conversationId)) continue
 
@@ -997,7 +997,7 @@ class ChatRepository @Inject constructor(
                                         val rawContent = snap.child("content").getValue(String::class.java) ?: ""
                                         var localImagePath: String? = null
                                         var localAudioPath: String? = null
-                                        
+
                                         if (msgType == "IMAGE" && rawContent.isNotEmpty() && !rawContent.startsWith("http")) {
                                             localImagePath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "IMG_", ".webp")
                                         } else if (msgType == "AUDIO" && rawContent.isNotEmpty() && !rawContent.startsWith("http")) {
@@ -1010,8 +1010,10 @@ class ChatRepository @Inject constructor(
                                             text = snap.child("text").getValue(String::class.java) ?: "",
                                             timestamp = msgTimestamp,
                                             isFromCurrentUser = false,
-                                            messageType = if (msgType == "VISIT") "APPOINTMENT" else msgType,
+                                            messageType = if (msgType == "VISIT") "APPOINTMENT_REQUEST" else msgType,
                                             appointmentTitle = appointmentTitle,
+                                            appointmentDate = snap.child("appointmentDate").getValue(String::class.java),
+                                            appointmentTime = snap.child("appointmentTime").getValue(String::class.java),
                                             appointmentStatus = appointmentStatus,
                                             imageLocalPath = localImagePath,
                                             audioLocalPath = localAudioPath,
@@ -1022,11 +1024,11 @@ class ChatRepository @Inject constructor(
                                         conversationDao.updateLastMessage(conversationId, msg.text ?: "", msgTimestamp, msgType)
                                         conversationDao.incrementUnreadCount(conversationId)
                                     }
-                                    
+
                                     // 3. Notificar
                                     if (!isNewMessage) return@launch
                                     if (!notifiedMessageIds.add(msgId)) return@launch
-                                    
+
                                     val senderName = conversationDao.getConversationById(conversationId)?.userName ?: senderId
                                     notificationHelper.showChatNotification(
                                         senderId = senderId,
@@ -1035,7 +1037,7 @@ class ChatRepository @Inject constructor(
                                         appointmentStatus = appointmentStatus,
                                         appointmentTitle = appointmentTitle
                                     )
-                                    
+
                                     val (gTitulo, gMensaje, gTipo) = when (msgType) {
                                         "AUDIO" -> Triple(senderName, " Te envió un audio", TipoNotificacion.MENSAJE)
                                         "IMAGE" -> Triple(senderName, " Te envió una imagen", TipoNotificacion.MENSAJE)
@@ -1052,7 +1054,7 @@ class ChatRepository @Inject constructor(
                                         }
                                         else -> Triple(senderName, " Nuevo mensaje", TipoNotificacion.MENSAJE)
                                     }
-                                    
+
                                     notificacionRepository.guardar(
                                         NotificacionItem(
                                             tipo = gTipo,

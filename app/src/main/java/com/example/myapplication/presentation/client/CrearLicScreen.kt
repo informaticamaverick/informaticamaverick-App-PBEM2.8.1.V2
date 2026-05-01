@@ -2,6 +2,7 @@ package com.example.myapplication.presentation.client
 
 import android.app.DatePickerDialog
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -33,6 +34,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -200,9 +202,38 @@ fun CrearLicUIContent(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris -> selectedImages = selectedImages + uris }
 
+    // --- CÁMARA LAUNCHER Y PERMISOS (REGLA DE ORO: Captura a resolución completa) ---
+    val tempPhotoUri = remember {
+        val photoFile = java.io.File(context.cacheDir, "tender_photo_${System.currentTimeMillis()}.jpg")
+        androidx.core.content.FileProvider.getUriForFile(context, "com.example.myapplication.provider", photoFile)
+    }
+
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap -> /* Proceso de bitmap */ }
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            selectedImages = selectedImages + tempPhotoUri
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            cameraLauncher.launch(tempPhotoUri)
+        } else {
+            Toast.makeText(context, "Se requiere permiso de cámara para tomar fotos", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun handleCameraClick() {
+        val hasPermission = ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            cameraLauncher.launch(tempPhotoUri)
+        } else {
+            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+        }
+    }
 
     // 🔥 SINCRONIZACIÓN: Si Be tiene una ubicación guardada, la cargamos automáticamente
     LaunchedEffect(locationFromBrain) {
@@ -553,7 +584,7 @@ fun CrearLicUIContent(
                         }
 
                         OutlinedButton(
-                            onClick = { cameraLauncher.launch(null) },
+                            onClick = { handleCameraClick() },
                             modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(1.dp, Color(0xFFE91E63).copy(alpha = 0.5f)),

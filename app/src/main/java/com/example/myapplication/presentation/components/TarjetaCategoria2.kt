@@ -170,17 +170,9 @@ fun CompactCategoryCard(
                         .blur(5.dp)
                         .background(baseColor.copy(alpha = 0.9f))
                 )
-
-
-
-
-
-
-
                 // ==========================================================================================
                 // SECCIÓN: EMOJI CENTRAL (SOMBRA Y PRINCIPAL)
                 // ==========================================================================================
-                
                 // EMOJI CENTRAL: SOMBRA PROYECTADA (Silueta negra desfasada para efecto real)
                 Text(
                     text = item.icon,
@@ -208,7 +200,6 @@ fun CompactCategoryCard(
                 // ==========================================================================================
                 // SECCIÓN: BADGES (NOTIFICACIÓN, FAVORITO E INFORMACIÓN) - SUPERPUESTOS AL EMOJI
                 // ==========================================================================================
-                
                 // 1. BADGE DE NOTIFICACIÓN (Extremo Izquierdo Superior)
                 // Se muestra si la categoría es nueva, tiene nuevos prestadores o es publicidad
                 if (item.isNew || item.isNewPrestador || item.isAd) {
@@ -456,6 +447,122 @@ fun CategoryBadgeItem(icon: String, tooltip: String, isExpanded: Boolean, onTogg
 }
 
 // ==========================================================================================
+// ------------------------ NUEVA TARJETA CATEGORIA MINI BENTO GLASS (FAST SCREEN) ---
+// ==========================================================================================
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun MiniCompactCategoryCard(
+    item: CategoryEntity,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val baseColor = Color(CategoryVisuals.getColorFor(item.superCategory))
+
+    Box(
+        modifier = Modifier
+            .size(width = 85.dp, height = 110.dp)
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+    ) {
+        Card(
+            shape = RoundedCornerShape(6.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            border = BorderStroke(1.dp, if (isSelected) Color(0xFF22D3EE) else Color.White.copy(alpha = 0.15f)),
+            elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 2.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // FONDO: Saturado Mate (Top) -> Negro Mate (Bottom)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    if (isSelected) baseColor else baseColor.copy(alpha = 0.6f),
+                                    Color(0xFF080A0F)
+                                ),
+                                startY = 0f,
+                                endY = 300f
+                            )
+                        )
+                )
+                // CAPA DE DIFUMINADO SUPERIOR
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.6f)
+                        .blur(4.dp)
+                        .background(baseColor.copy(alpha = if (isSelected) 0.8f else 0.4f))
+                )
+
+                // EMOJI CENTRAL: SOMBRA
+                Text(
+                    text = item.icon,
+                    fontSize = 44.sp,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .offset(y = (-10).dp)
+                        .graphicsLayer {
+                            alpha = 0.8f
+                            colorFilter = ColorFilter.tint(Color.Black)
+                        }
+                        .blur(1.5.dp)
+                )
+
+                // EMOJI CENTRAL: PRINCIPAL
+                Text(
+                    text = item.icon,
+                    fontSize = 44.sp,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .offset(y = (-12).dp)
+                )
+
+                // SECCIÓN INFERIOR: TEXTO
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(34.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = if (isSelected) 0.6f else 0.3f),
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(horizontal = 1.dp)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(horizontal = 2.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AutoSizeText(
+                            text = item.name.uppercase(),
+                            modifier = Modifier.fillMaxWidth(),
+                            color = if (isSelected) Color.White else Color.Gray,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.8.sp
+                            ),
+                            textAlign = TextAlign.Center,
+                            maxLines = 2
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==========================================================================================
 // ------------------- TARJETA CATEGORIA HORIZONTAL--------------------------------
 // ==========================================================================================
 @OptIn(ExperimentalFoundationApi::class)
@@ -611,7 +718,6 @@ fun CompactCategoryCardHorizontal(
         // ==========================================================================================
         // SECCIÓN: BADGES SUPERIORES (NOTIFICACIÓN Y FAVORITO)
         // ==========================================================================================
-
         // 1. BADGE DE NOTIFICACIÓN (Extremo Izquierdo Superior)
         // Se muestra si la categoría es nueva, tiene nuevos prestadores o es publicidad
         if (item.isNew || item.isNewPrestador || item.isAd) {
@@ -744,16 +850,20 @@ fun BentoSuperCategoryCard(
                             )
                         )
                     ))
-                // Iconos internos difuminados
+                // Iconos internos difuminados (Optimizado: Reemplazado LazyVerticalGrid por Row/Column estático)
                 Box(modifier = Modifier
                     .fillMaxSize()
-                    .blur(radius = 20.dp)
-                    .alpha(0.35f)) {
-                    LazyVerticalGrid(GridCells.Fixed(2), userScrollEnabled = false) {
-                        items(items = superCategory.items, key = { it.name }) { item ->
-                            Text(item.icon, fontSize = 70.sp, modifier = Modifier
-                                .padding(4.dp)
-                                .alpha(0.5f))
+                    .blur(radius = 16.dp) // Reducido levemente para mejorar performance
+                    .alpha(0.25f)) {
+                    val bgItems = superCategory.items.take(4) // Máximo 4 para el fondo
+                    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceAround) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                            bgItems.getOrNull(0)?.let { Text(it.icon, fontSize = 60.sp) }
+                            bgItems.getOrNull(1)?.let { Text(it.icon, fontSize = 60.sp) }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                            bgItems.getOrNull(2)?.let { Text(it.icon, fontSize = 60.sp) }
+                            bgItems.getOrNull(3)?.let { Text(it.icon, fontSize = 60.sp) }
                         }
                     }
                 }

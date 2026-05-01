@@ -142,7 +142,6 @@ fun PerfilUsuarioScreen(
         showConfirmDelete = true
     }
 
-    LaunchedEffect(currentUser) { beViewModel.updateProfile(currentUser) }
     LaunchedEffect(Unit) { beViewModel.setHUDContext(HUDContext.PROFILE) }
 
     val profileBeActions by viewModel.beActions.collectAsStateWithLifecycle()
