@@ -74,6 +74,15 @@ interface ConversationDao {
     @Query("SELECT * FROM conversations WHERE isLocked = 1 ORDER BY lastMessageTimestamp DESC")
     fun getLockedConversations(): Flow<List<ConversationEntity>>
 
+    @Query("""
+        SELECT * FROM conversations 
+        WHERE (:companyId IS NULL) 
+           OR (:companyId = 'personal' AND companyId IS NULL) 
+           OR (companyId = :companyId) 
+        ORDER BY lastMessageTimestamp DESC
+    """)
+    fun getConversationsByCompany(companyId: String?): Flow<List<ConversationEntity>>
+
     //BUSQUEDA
     @Query("SELECT * FROM conversations WHERE userName LIKE '%' || :query || '%' OR lastMessage LIKE '%' || :query || '%' ORDER BY lastMessageTimestamp DESC")
     suspend fun searchConversations(query: String): List<ConversationEntity>

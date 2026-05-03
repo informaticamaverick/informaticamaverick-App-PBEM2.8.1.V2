@@ -31,6 +31,9 @@ interface CategoryDao {
     suspend fun getCount(): Int
 
     // [NUEVO] Limpiar tabla para sincronización total
+    @Query("SELECT * FROM categories_table WHERE name = :name")
+    suspend fun getCategoryByName(name: String): CategoryEntity?
+
     @Query("DELETE FROM categories_table")
     suspend fun deleteAll()
 

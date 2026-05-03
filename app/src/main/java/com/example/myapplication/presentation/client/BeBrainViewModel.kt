@@ -712,9 +712,34 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     // --- SENSOR DE CONTEXTO ---
     // ======================================================================================
+    
+    /**
+     * Mapea un contexto específico a su categoría principal (Top-Level).
+     * Esto evita que se limpien las herramientas al navegar entre sub-secciones.
+     */
+    private fun getTopLevelContext(context: HUDContext): HUDContext {
+        return when (context) {
+            HUDContext.BUDGETS, 
+            HUDContext.BUDGETS_TENDERS, 
+            HUDContext.BUDGETS_DIRECT, 
+            HUDContext.TENDER_DETAILS -> HUDContext.BUDGETS
+            HUDContext.CHAT -> HUDContext.CHAT
+            HUDContext.HOME -> HUDContext.HOME
+            HUDContext.PROFILE -> HUDContext.PROFILE
+            HUDContext.SEARCH_RESULTS -> HUDContext.SEARCH_RESULTS
+            HUDContext.FAST -> HUDContext.FAST
+            HUDContext.CALENDAR -> HUDContext.CALENDAR
+            else -> HUDContext.UNKNOWN
+        }
+    }
+
     fun onRouteChanged(route: String?) {
         val currentRoute = route ?: return
+        
+        // --- EVITAR DUPLICADOS ---
+        if (_lastRoute == currentRoute) return
         _lastRoute = currentRoute
+        
         val newContext = when {
             currentRoute.contains("home") -> HUDContext.HOME
             currentRoute.contains("presupuestos") -> HUDContext.BUDGETS
@@ -725,33 +750,50 @@ class BeBrainViewModel @Inject constructor(
             currentRoute.contains("fast") -> HUDContext.FAST
             else -> HUDContext.UNKNOWN
         }
-        if (currentContext.value != newContext) {
-            coordinator.updateHUDContext(newContext)
-            _customActions.value = emptyList()
-            
-            // --- SECCIÓN: CONTROL DE VISIBILIDAD POR CONTEXTO ---
-            // En HUD V5, permitimos que la barra sea visible por defecto. 
-            // Reseteamos el flag de ocultación forzada al cambiar de pantalla.
-            _isBottomBarForcedHidden.value = false
-            _isBottomBarVisible.value = true
+
+        val oldContext = currentContext.value
+        if (oldContext != newContext) {
+            // --- SECCIÓN: LIMPIEZA INTELIGENTE ---
+            // Solo limpiamos acciones personalizadas si cambiamos de área funcional (Top-Level)
+            if (getTopLevelContext(oldContext) != getTopLevelContext(newContext)) {
+                _customActions.value = emptyList()
+                coordinator.updateHUDContext(newContext)
+                
+                // En HUD V5, permitimos que la barra sea visible por defecto. 
+                // Reseteamos el flag de ocultación forzada al cambiar de área funcional.
+                _isBottomBarForcedHidden.value = false
+                _isBottomBarVisible.value = true
+            }
 
             // 🔥 RESET: Cerramos búsqueda al cambiar de pantalla para evitar desincronización
             if (_isSearchActive.value) {
                 cerrarBeAssistantCompleto()
             }
-
-            // 🔥 Por defecto, en resultados de búsqueda y FAST, la herramienta de ubicación está ON
-           // _showLocationTool.value = (newContext == HUDContext.SEARCH_RESULTS || newContext == HUDContext.FAST)
         }
+
         _showBe.value = !(currentRoute == "login" || currentRoute == "register" || currentRoute == "startup")
-        _isResultadoVisible.value = false; _showBeTools.value = false
-        updateActionsForContext(newContext); updateBeContextMessages(currentRoute); updateToolboxKey()
+        _isResultadoVisible.value = false
+        _showBeTools.value = false
+        
+        updateActionsForContext(newContext)
+        updateBeContextMessages(currentRoute)
+        updateToolboxKey()
     }
 
     fun setHUDContext(context: HUDContext) {
-        if ((currentContext.value == HUDContext.HOME || currentContext.value == HUDContext.CHAT || currentContext.value == HUDContext.CALENDAR) && context != currentContext.value) return
-        if (currentContext.value != context) { cerrarBeAssistantCompleto(); clearFilters() }
-        coordinator.updateHUDContext(context); updateActionsForContext(context); updateToolboxKey()
+        val current = currentContext.value
+        // Si el contexto actual es igual al nuevo, no hacemos nada
+        if (current == context) return
+
+        // REGLA: Solo cerramos Be y limpiamos filtros si cambiamos de área funcional (Top-Level)
+        if (getTopLevelContext(current) != getTopLevelContext(context)) {
+            cerrarBeAssistantCompleto()
+            clearFilters()
+        }
+        
+        coordinator.updateHUDContext(context)
+        updateActionsForContext(context)
+        updateToolboxKey()
     }
 
     private fun updateActionsForContext(context: HUDContext) {
@@ -813,7 +855,10 @@ class BeBrainViewModel @Inject constructor(
         updateActionsForContext(currentContext.value); updateToolboxKey()
     }
 
-    fun setCustomActions(actions: List<BeSmallActionModel>) { if (currentContext.value != HUDContext.HOME) { _customActions.value = actions; updateActionsForContext(currentContext.value) } }
+    fun setCustomActions(actions: List<BeSmallActionModel>) { 
+        _customActions.value = actions
+        updateActionsForContext(currentContext.value) 
+    }
     fun toggleMultiSelection() {
         val newState = !_isMultiSelectionActive.value
         _isMultiSelectionActive.value = newState

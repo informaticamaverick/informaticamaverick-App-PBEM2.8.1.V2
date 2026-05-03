@@ -78,7 +78,13 @@ class ChatRepository @Inject constructor(
     }
 
     // ── Enviar mensaje de texto ────────────────────────────────────────────────
-    suspend fun sendMessage(conversationId: String, text: String, myUserId: String): MessageEntity {
+    suspend fun sendMessage(
+        conversationId: String, 
+        text: String, 
+        myUserId: String,
+        companyId: String? = null,
+        categoryId: String? = null
+    ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val message = MessageEntity(
             messageId = UUID.randomUUID().toString(),
@@ -86,7 +92,9 @@ class ChatRepository @Inject constructor(
             text = text,
             timestamp = System.currentTimeMillis(),
             isFromCurrentUser = true,
-            messageType = "TEXT"
+            messageType = "TEXT",
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, text, message.timestamp, "TEXT")
@@ -104,7 +112,9 @@ class ChatRepository @Inject constructor(
                     "type" to "TEXT",
                     "timestamp" to message.timestamp,
                     "isRead" to false,
-                    "isDelivered" to false
+                    "isDelivered" to false,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(message.messageId)
         } catch (e: Exception) {
@@ -117,7 +127,9 @@ class ChatRepository @Inject constructor(
     suspend fun sendBudgetMessage(
         conversationId: String,
         myUserId: String,
-        pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
+        pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity,
+        companyId: String? = null,
+        categoryId: String? = null
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val budgetJson = org.json.JSONObject().apply {
@@ -133,6 +145,7 @@ class ChatRepository @Inject constructor(
             put("notas", pres.notas)
             put("validezDias", pres.validezDias)
             put("titulo", pres.tituloTrabajo)
+            put("companyName", pres.providerCompanyName) // 🔥 Enviamos el nombre legible de la empresa
         }.toString()
         val message = MessageEntity(
             messageId = UUID.randomUUID().toString(),
@@ -141,7 +154,9 @@ class ChatRepository @Inject constructor(
             timestamp = System.currentTimeMillis(),
             isFromCurrentUser = true,
             messageType = "BUDGET",
-            budgetDataJson = budgetJson
+            budgetDataJson = budgetJson,
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Presupuesto ${pres.numeroPresupuesto}", message.timestamp, "BUDGET")
@@ -160,7 +175,9 @@ class ChatRepository @Inject constructor(
                     "isRead" to false,
                     "isDelivered" to false,
                     "budgetDataJson" to budgetJson,
-                    "categorias" to pres.categorias
+                    "categorias" to pres.categorias,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(message.messageId)
         } catch (e: Exception) {
@@ -170,7 +187,13 @@ class ChatRepository @Inject constructor(
     }
 
     // ── Enviar imagen ──────────────────────────────────────────────────────────
-    suspend fun sendImageMessage(conversationId: String, imageBase64: String, senderId: String) {
+    suspend fun sendImageMessage(
+        conversationId: String, 
+        imageBase64: String, 
+        senderId: String,
+        companyId: String? = null,
+        categoryId: String? = null
+    ) {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
         val timestamp = System.currentTimeMillis()
@@ -186,7 +209,9 @@ class ChatRepository @Inject constructor(
             isFromCurrentUser = true,
             messageType = "IMAGE",
             imageLocalPath = localPath,
-            imageUrl = "[Imagen]"
+            imageUrl = "[Imagen]",
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "[Imagen]", timestamp, "IMAGE")
@@ -205,7 +230,9 @@ class ChatRepository @Inject constructor(
                     "type" to "IMAGE",
                     "timestamp" to timestamp,
                     "isRead" to false,
-                    "isDelivered" to false
+                    "isDelivered" to false,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 ))
             messageDao.markAsSynced(messageId)
         } catch (e: Exception) {
@@ -218,7 +245,9 @@ class ChatRepository @Inject constructor(
         conversationId: String,
         latitude: Double,
         longitude: Double,
-        senderId: String
+        senderId: String,
+        companyId: String? = null,
+        categoryId: String? = null
     ) {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -231,7 +260,9 @@ class ChatRepository @Inject constructor(
             isFromCurrentUser = true,
             messageType = "LOCATION",
             latitude = latitude,
-            longitude = longitude
+            longitude = longitude,
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Ubicacion compartida", timestamp, "LOCATION")
@@ -251,7 +282,9 @@ class ChatRepository @Inject constructor(
                     "longitude" to longitude,
                     "timestamp" to timestamp,
                     "isRead" to false,
-                    "isDelivered" to false
+                    "isDelivered" to false,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(messageId)
         } catch (e: Exception) {
@@ -264,7 +297,9 @@ class ChatRepository @Inject constructor(
         conversationId: String,
         audioPath: String,
         durationSeconds: Int,
-        senderId: String
+        senderId: String,
+        companyId: String? = null,
+        categoryId: String? = null
     ) {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -289,7 +324,9 @@ class ChatRepository @Inject constructor(
             messageType = "AUDIO",
             audioUrl = audioPath,
             audioLocalPath = audioPath,
-            audioDuration = durationSeconds
+            audioDuration = durationSeconds,
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "[Audio]", timestamp, "AUDIO")
@@ -308,7 +345,9 @@ class ChatRepository @Inject constructor(
                     "type" to "AUDIO",
                     "timestamp" to timestamp,
                     "isRead" to false,
-                    "isDelivered" to false
+                    "isDelivered" to false,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(messageId)
             Log.d("ChatRepo", "Audio enviado a RTDB desde prestador")
@@ -325,7 +364,9 @@ class ChatRepository @Inject constructor(
         title: String,
         date: String,
         time: String,
-        notes: String
+        notes: String,
+        companyId: String? = null,
+        categoryId: String? = null
     ) {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -341,7 +382,9 @@ class ChatRepository @Inject constructor(
             appointmentTitle = title,
             appointmentDate = date,
             appointmentTime = time,
-            appointmentStatus = "PENDING"
+            appointmentStatus = "PENDING",
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Propuesta de turno: $date $time", timestamp, "APPOINTMENT")
@@ -364,7 +407,9 @@ class ChatRepository @Inject constructor(
                     "appointmentTitle" to title,
                     "appointmentDate" to date,
                     "appointmentTime" to time,
-                    "appointmentStatus" to "PENDING"
+                    "appointmentStatus" to "PENDING",
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(messageId)
             Log.d("ChatRepo", "Appointment enviado a RTDB")
@@ -382,6 +427,10 @@ class ChatRepository @Inject constructor(
         endDate: String,
         availabilityJson: String,
         bookedSlotsJson: String,
+        companyId: String? = null,
+        categoryId: String? = null,
+        appointmentType: String? = null,
+        providerAddress: String? = null
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -396,7 +445,11 @@ class ChatRepository @Inject constructor(
             calendarStartDate = startDate,
             calendarEndDate = endDate,
             availabilityJson = availabilityJson,
-            bookedSlotsJson = bookedSlotsJson
+            bookedSlotsJson = bookedSlotsJson,
+            companyId = companyId,
+            categoryId = categoryId,
+            appointmentType = appointmentType,
+            providerAddress = providerAddress
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Calendario de disponibilidad", timestamp, "CALENDAR_INVITE")
@@ -417,7 +470,11 @@ class ChatRepository @Inject constructor(
                     "calendarStartDate" to startDate,
                     "calendarEndDate" to endDate,
                     "availabilityJson" to availabilityJson,
-                    "bookedSlotsJson" to bookedSlotsJson
+                    "bookedSlotsJson" to bookedSlotsJson,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId,
+                    "appointmentType" to appointmentType,
+                    "providerAddress" to providerAddress
                 )).await()
             messageDao.markAsSynced(messageId)
         } catch (e: Exception) {
@@ -519,6 +576,8 @@ class ChatRepository @Inject constructor(
                     appointmentTime = parsedTime,
                     appointmentStatus = snapshot.child("appointmentStatus").getValue(String::class.java)
                         ?: if (msgType == "VISIT") "PENDING" else null,
+                    appointmentType = snapshot.child("appointmentType").getValue(String::class.java),
+                    providerAddress = snapshot.child("providerAddress").getValue(String::class.java),
                     rejectionReason = snapshot.child("rejectionReason").getValue(String::class.java),
                     budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java),
                     calendarStartDate = snapshot.child("calendarStartDate").getValue(String::class.java),
@@ -844,6 +903,9 @@ class ChatRepository @Inject constructor(
     fun getConversationsByProvider(providerId: String): Flow<List<ConversationEntity>> =
         conversationDao.getAllConversations()
 
+    fun getConversationsByCompany(companyId: String?): Flow<List<ConversationEntity>> =
+        conversationDao.getConversationsByCompany(companyId)
+
     fun getMessagesByConversation(conversationId: String): Flow<List<MessageEntity>> =
         messageDao.getMessagesByConversation(conversationId)
 
@@ -1015,6 +1077,8 @@ class ChatRepository @Inject constructor(
                                             appointmentDate = snap.child("appointmentDate").getValue(String::class.java),
                                             appointmentTime = snap.child("appointmentTime").getValue(String::class.java),
                                             appointmentStatus = appointmentStatus,
+                                            appointmentType = snap.child("appointmentType").getValue(String::class.java),
+                                            providerAddress = snap.child("providerAddress").getValue(String::class.java),
                                             imageLocalPath = localImagePath,
                                             audioLocalPath = localAudioPath,
                                             imageUrl = if (localImagePath != null) "[Imagen]" else null,
@@ -1145,7 +1209,9 @@ class ChatRepository @Inject constructor(
         isTechnician: Boolean,
         profession: String?,
         address: String?,
-        code: String
+        code: String,
+        companyId: String? = null,
+        categoryId: String? = null
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val message = MessageEntity(
@@ -1162,7 +1228,9 @@ class ChatRepository @Inject constructor(
             receiptIsTechnician = isTechnician,
             receiptProfession = profession,
             receiptAddress = address,
-            receiptCode = code
+            receiptCode = code,
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Turno confirmado", message.timestamp, "APPOINTMENT_RECEIPT")
@@ -1185,7 +1253,9 @@ class ChatRepository @Inject constructor(
                 "receiptAddress" to (address ?: ""),
                 "receiptCode" to code,
                 "isRead" to false,
-                "isDelivered" to false
+                "isDelivered" to false,
+                "companyId" to companyId,
+                "categoryId" to categoryId
             )
             database.reference.child("chats").child(conversationId)
                 .child("messages").child(message.messageId)

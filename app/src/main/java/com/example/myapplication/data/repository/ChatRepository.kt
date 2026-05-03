@@ -154,9 +154,10 @@ class ChatRepository @Inject constructor(
 
                         var budgetSavedId: String? = null
                         val budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java)
+                        val categorias = snapshot.child("categorias").getValue(String::class.java)
                         
                         if (type == MessageType.BUDGET && budgetDataJson != null) {
-                            budgetSavedId = parseAndSaveBudget(budgetDataJson, msgId, myUid, senderId, snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis())
+                            budgetSavedId = parseAndSaveBudget(budgetDataJson, msgId, myUid, senderId, snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis(), categorias)
                         }
 
                         val entity = MessageEntity(
@@ -180,6 +181,8 @@ class ChatRepository @Inject constructor(
                             appointmentDate = appointmentDate,
                             appointmentTime = appointmentTime,
                             appointmentStatus = appointmentStatus,
+                            appointmentType = snapshot.child("appointmentType").getValue(String::class.java),
+                            providerAddress = snapshot.child("providerAddress").getValue(String::class.java),
                             calendarStartDate = snapshot.child("calendarStartDate").getValue(String::class.java),
                             calendarEndDate = snapshot.child("calendarEndDate").getValue(String::class.java),
                             availabilityJson = snapshot.child("availabilityJson").getValue(String::class.java),
@@ -317,11 +320,12 @@ class ChatRepository @Inject constructor(
                                 }
 
                                 val appointmentStatus = snapshot.child("appointmentStatus").getValue(String::class.java)
+                                val categorias = snapshot.child("categorias").getValue(String::class.java)
                                 
                                 var budgetSavedId: String? = null
                                 val budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java)
                                 if (type == MessageType.BUDGET && budgetDataJson != null) {
-                                    budgetSavedId = parseAndSaveBudget(budgetDataJson, msgId, myUserId, senderId, msgTimestamp)
+                                    budgetSavedId = parseAndSaveBudget(budgetDataJson, msgId, myUserId, senderId, msgTimestamp, categorias)
                                 }
 
                                 val entity = MessageEntity(
@@ -338,6 +342,8 @@ class ChatRepository @Inject constructor(
                                     durationSeconds = snapshot.child("durationSeconds").getValue(Long::class.java)?.toInt(),
                                     relatedId = budgetSavedId ?: snapshot.child("relatedId").getValue(String::class.java),
                                     appointmentStatus = appointmentStatus,
+                                    appointmentType = snapshot.child("appointmentType").getValue(String::class.java),
+                                    providerAddress = snapshot.child("providerAddress").getValue(String::class.java),
                                     appointmentDate = snapshot.child("appointmentDate").getValue(String::class.java),
                                     appointmentTime = snapshot.child("appointmentTime").getValue(String::class.java),
                                     calendarStartDate = snapshot.child("calendarStartDate").getValue(String::class.java),
@@ -447,6 +453,9 @@ class ChatRepository @Inject constructor(
     fun getActiveChatIds(myUserId: String): Flow<List<String>> =
         chatDao.getActiveConversationIds(myUserId)
 
+    fun getActiveChatSummaries(myUserId: String): Flow<List<com.example.myapplication.data.local.ChatSummary>> =
+        chatDao.getActiveChatSummaries(myUserId)
+
     fun getOpenTendersByCategory(category: String): Flow<List<TenderEntity>> =
         budgetDao.getOpenTendersByCategory(category)
 
@@ -500,10 +509,17 @@ class ChatRepository @Inject constructor(
                 "longitude" to message.longitude,
                 "locationAddress" to message.locationAddress,
                 "durationSeconds" to message.durationSeconds,
-                "relatedId" to message.relatedId
+                "relatedId" to message.relatedId,
+                "companyId" to message.companyId,
+                "categoryId" to message.categoryId,
+                "appointmentType" to message.appointmentType,
+                "providerAddress" to message.providerAddress,
+                "appointmentDate" to message.appointmentDate,
+                "appointmentTime" to message.appointmentTime
             )
+            // [SINCRONIZACIÓN] Asegurar que el estado del turno se envíe correctamente
             if (message.type == MessageType.VISIT) {
-                msgData["appointmentStatus"] = "PENDING"
+                msgData["appointmentStatus"] = message.appointmentStatus ?: "PENDING"
             }
             database.reference
                 .child("chats").child(message.chatId)
@@ -614,7 +630,7 @@ class ChatRepository @Inject constructor(
     /**
      * ── Helper centralizado para parsear y guardar presupuestos ──────────────────
      */
-    private suspend fun parseAndSaveBudget(rawJson: String, msgId: String, myUid: String, senderId: String, timestamp: Long): String? {
+    private suspend fun parseAndSaveBudget(rawJson: String, msgId: String, myUid: String, senderId: String, timestamp: Long, categoriasSibling: String?): String? {
         return try {
             val obj = org.json.JSONObject(rawJson)
             
@@ -645,7 +661,9 @@ class ChatRepository @Inject constructor(
                 budgetId = msgId,
                 clientId = myUid,
                 providerId = senderId,
-                providerName = senderId,
+                providerName = senderId, // Fallback
+                providerCompanyName = obj.optString("companyName").ifBlank { null },
+                category = (obj.optString("categorias").ifBlank { null } ?: categoriasSibling)?.split(",")?.firstOrNull(),
                 items = parseItems(obj.optString("items")),
                 services = parseService(obj.optString("servicios")),
                 subtotal = obj.optDouble("subtotal", 0.0),
@@ -664,16 +682,15 @@ class ChatRepository @Inject constructor(
         }
     }
 
-    /**
-     * 🔥 [NUEVO] Persiste una cita confirmada en el calendario local del cliente 🔥
-     */
     private suspend fun saveToCalendar(message: MessageEntity, myUserId: String, providerPhotoUrl: String? = null) {
         try {
             val date = message.appointmentDate ?: return
             val time = message.appointmentTime ?: ""
 
-            // Determinar tipo de evento
+            // Determinar tipo de evento prioritariamente por appointmentType
             val eventType = when {
+                message.appointmentType == "TECHNICAL_VISIT" -> EventType.VISIT
+                message.appointmentType == "LOCAL_APPOINTMENT" -> EventType.APPOINTMENT
                 message.type == MessageType.APPOINTMENT_RECEIPT && (message.receiptIsTechnician == true) -> EventType.VISIT
                 message.type == MessageType.APPOINTMENT_RECEIPT -> EventType.APPOINTMENT
                 else -> EventType.VISIT
@@ -682,10 +699,10 @@ class ChatRepository @Inject constructor(
             // Identificar quién es el prestador
             val providerId = if (message.senderId == myUserId) message.receiverId else message.senderId
 
-            // Extraer datos del remitente si no vienen en el recibo
+            // Extraer datos del remitente
             var providerName = message.receiptProviderName
             var title = message.receiptService
-            var address = message.receiptAddress
+            var address = message.providerAddress ?: message.receiptAddress
 
             if (providerName == null) {
                 // Si no es un recibo formal, buscamos el nombre del remitente en Firestore
@@ -700,12 +717,19 @@ class ChatRepository @Inject constructor(
                 }
             }
 
-            if (title == null) {
-                title = if (message.type == MessageType.VISIT) message.content else "Servicio contratado"
+            if (title == null || title.length > 30 && title.contains("-")) {
+                // Si el título es nulo o parece un ID, usamos el contenido del mensaje (que trae la nota del turno)
+                title = if (message.type == MessageType.VISIT && !message.content.contains("|")) {
+                    message.content 
+                } else if (message.receiptService != null) {
+                    message.receiptService
+                } else {
+                    eventType.label
+                }
             }
 
-            if (address == null) {
-                address = message.locationAddress ?: "A convenir"
+            if (address == null || address == "A convenir") {
+                address = message.providerAddress ?: message.receiptAddress ?: message.locationAddress ?: "A convenir"
             }
 
             // 🔥 [REGLA DE ORO] Intentar obtener la foto del proveedor si no está en el mensaje

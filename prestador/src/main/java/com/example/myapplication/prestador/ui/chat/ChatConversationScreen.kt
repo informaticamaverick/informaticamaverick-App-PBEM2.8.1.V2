@@ -161,6 +161,8 @@ fun ChatConversationScreen(
                 else ->
                     Message.AppointmentProposalStatus.PENDING
             },
+            appointmentType = entity.appointmentType,
+            providerAddress = entity.providerAddress,
             rejectionReason = entity.rejectionReason,
             timestamp = entity.timestamp,
             isFromCurrentUser = entity.isFromCurrentUser,
@@ -673,6 +675,8 @@ fun ChatConversationScreen(
                                 onAccept = if (message.type == Message.MessageType.APPOINTMENT_REQUEST &&
                                     message.appointmentStatus == Message.AppointmentProposalStatus.PENDING) {
                                     { serviceTitle ->
+                                        val isVisit = message.appointmentType == "TECHNICAL_VISIT"
+                                        val finalAddr = if (isVisit) message.providerAddress else (provider?.address?.fullString())
                                         chatViewModel.respondToAppointmentRequest(
                                             messageId = message.id,
                                             clientName = userName,
@@ -683,7 +687,7 @@ fun ChatConversationScreen(
                                             serviceType = provider?.serviceType ?: "PROFESSIONAL",
                                             doesHomeVisits = provider?.doesHomeVisits ?: false,
                                             profession = provider?.profesion,
-                                            providerAddress = provider?.address?.fullString(),
+                                            providerAddress = finalAddr,
                                             accepted = true
                                         )
                                     }
@@ -866,12 +870,14 @@ fun ChatConversationScreen(
             SendCalendarDialog(
                 providerId = providerId,
                 onDismiss = { showSendCalendarDialog = false },
-                onSend = { startDate, endDate, availabilityJson, bookedSlotsJson ->
+                onSend = { startDate, endDate, availabilityJson, bookedSlotsJson, type, addr ->
                     chatViewModel.sendCalendarInvite(
                         startDate = startDate,
                         endDate = endDate,
                         availabilityJson = availabilityJson,
-                        bookedSlotsJson = bookedSlotsJson
+                        bookedSlotsJson = bookedSlotsJson,
+                        appointmentType = type,
+                        providerAddress = addr
                     )
                     showSendCalendarDialog = false
                     coroutineScope.launch { listState.animateScrollToItem(0) }
@@ -1188,6 +1194,8 @@ fun ChatConversationScreen(
                 else ->
                     Message.AppointmentProposalStatus.PENDING
             },
+            appointmentType = entity.appointmentType,
+            providerAddress = entity.providerAddress,
             rejectionReason = entity.rejectionReason,
             timestamp = entity.timestamp,
             isFromCurrentUser = entity.isFromCurrentUser,
@@ -1700,6 +1708,8 @@ fun ChatConversationScreen(
                                 onAccept = if (message.type == Message.MessageType.APPOINTMENT_REQUEST &&
                                     message.appointmentStatus == Message.AppointmentProposalStatus.PENDING) {
                                     { serviceTitle ->
+                                        val isVisit = message.appointmentType == "TECHNICAL_VISIT"
+                                        val finalAddr = if (isVisit) message.providerAddress else (provider?.address?.fullString())
                                         chatViewModel.respondToAppointmentRequest(
                                             messageId = message.id,
                                             clientName = userName,
@@ -1710,7 +1720,7 @@ fun ChatConversationScreen(
                                             serviceType = provider?.serviceType ?: "PROFESSIONAL",
                                             doesHomeVisits = provider?.doesHomeVisits ?: false,
                                             profession = provider?.profesion,
-                                            providerAddress = provider?.address?.fullString(),
+                                            providerAddress = finalAddr,
                                             accepted = true
                                         )
                                     }

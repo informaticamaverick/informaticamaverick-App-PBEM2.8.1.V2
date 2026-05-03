@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
         CalendarEventEntity::class, // Tabla de Eventos del Calendario (NUEVO)
         FastCategoryEntity::class // Tabla de Categorías de Acceso Rápido (NUEVO)
     ],
-    version = 29, // 🔥 [INCREMENTADO] Se agregó la tabla fast_category_usage
+    version = 30, // 🔥 [INCREMENTADO] Se agregaron campos a CalendarEventEntity
     exportSchema = false
 )
 @TypeConverters(Converters::class)

@@ -89,7 +89,8 @@ fun PresupuestosScreen(
     // 🔥 REGLA DE ORO 4: Sincronización del Contexto de Be
     LaunchedEffect(Unit) {
         beBrainViewModel.onRouteChanged("presupuestos")
-        viewModel.setContext(HUDContext.BUDGETS_TENDERS)
+        beBrainViewModel.setHUDContext(HUDContext.BUDGETS_TENDERS) // Sincronizamos Cerebro
+        viewModel.setContext(HUDContext.BUDGETS_TENDERS) // Sincronizamos Obrero
     }
 
     // --- SECCIÓN: SINCRONIZACIÓN DE BÚSQUEDA Y ASISTENTE (Be) ---

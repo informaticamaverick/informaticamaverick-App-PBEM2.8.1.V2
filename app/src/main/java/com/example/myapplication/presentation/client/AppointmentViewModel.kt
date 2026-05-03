@@ -29,6 +29,7 @@ import javax.inject.Inject
 class AppointmentViewModel @Inject constructor(
     private val repository: AppointmentRepository,
     private val calendarRepository: CalendarRepository,
+    private val categoryRepository: com.example.myapplication.data.repository.CategoryRepository,
     private val auth: FirebaseAuth,
     private val database: FirebaseDatabase
 ) : ViewModel() {
@@ -78,7 +79,9 @@ class AppointmentViewModel @Inject constructor(
         time: String? = null,
         title: String? = null,
         providerName: String? = null,
-        providerPhotoUrl: String? = null
+        providerPhotoUrl: String? = null,
+        categoryName: String? = null,
+        categoryEmoji: String? = null
     ) {
         val newStatus = if (accept) "ACCEPTED" else "REJECTED"
         val appointmentStatus = if (accept) AppointmentStatus.ACCEPTED else AppointmentStatus.REJECTED
@@ -112,16 +115,38 @@ class AppointmentViewModel @Inject constructor(
                     // --- 🏗️ SECCIÓN: SINCRONIZACIÓN CON CALENDARIO LOCAL (ZERO COST) ---
                     // Creamos el evento en Room inmediatamente para que el usuario lo vea en su agenda
                     try {
+                        // Resolvemos el emoji y el nombre si no viene dado o si es un ID
+                        val categoryEntity = if (categoryName != null) {
+                            categoryRepository.getCategoryByName(categoryName)
+                        } else null
+
+                        val resolvedName = categoryEntity?.name ?: categoryName
+                        val resolvedEmoji = categoryEmoji ?: categoryEntity?.icon
+
+                        // Limpiamos el título: si trae un pipe '|', el primero suele ser un ID, el segundo el nombre humano.
+                        val cleanTitle = if (title?.contains("|") == true) {
+                            title.split("|").lastOrNull()?.trim() ?: title
+                        } else {
+                            title ?: "Cita confirmada"
+                        }
+
                         val calendarEvent = CalendarEventEntity(
                             id = "evt_$messageId",
                             date = convertFormat(date), // Asegurar formato yyyy-MM-dd
                             time = time,
-                            type = if (title?.contains("técnica", ignoreCase = true) == true) EventType.VISIT else EventType.APPOINTMENT,
-                            title = title ?: "Cita confirmada",
+                            type = when {
+                                cleanTitle.contains("técnica", ignoreCase = true) == true -> EventType.VISIT
+                                cleanTitle.contains("envío", ignoreCase = true) == true -> EventType.SHIPPING
+                                cleanTitle.contains("flete", ignoreCase = true) == true -> EventType.SHIPPING
+                                else -> EventType.APPOINTMENT
+                            },
+                            title = cleanTitle,
                             provider = providerName ?: "Prestador",
                             providerId = appointmentId, // Vinculamos con el ID de la cita
                             address = "Ver detalles en Chat",
                             status = VisitStatus.CONFIRMED,
+                            categoryName = resolvedName,
+                            categoryEmoji = resolvedEmoji,
                             providerPhotoUrl = providerPhotoUrl
                         )
                         calendarRepository.addEvent(calendarEvent)

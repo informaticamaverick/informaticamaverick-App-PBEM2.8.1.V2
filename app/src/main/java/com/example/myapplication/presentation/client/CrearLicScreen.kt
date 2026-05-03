@@ -9,6 +9,8 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -67,28 +69,30 @@ fun CrearLicScreen(
     //val allCategories by categoryViewModel.categories.collectAsState()
     val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
 
-    CrearLicContent(
-        onBack = onBack,
-        onSuccess = onSuccess,
-        userState = userState,
-        allCategories = categories,
-        beViewModel = beViewModel, // 🔥 Pasamos el cerebro al contenido
-        onCreateTender = { title, description, category, startDate, endDate, requiresVisit, requiresPayment, requiresGuarantee, requiresDoc, location, images ->
-            budgetViewModel.createTender(
-                title = title,
-                description = description,
-                category = category,
-                startDate = startDate,
-                endDate = endDate,
-                requiresVisit = requiresVisit,
-                requiresPaymentMethod = requiresPayment,
-                requiresWorkGuarantee = requiresGuarantee,
-                requiresProviderDoc = requiresDoc,
-                location = location,
-                imageUrls = images.map { it.toString() }
-            )
-        }
-    )
+    Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } }) {
+        CrearLicContent(
+            onBack = onBack,
+            onSuccess = onSuccess,
+            userState = userState,
+            allCategories = categories,
+            beViewModel = beViewModel, // 🔥 Pasamos el cerebro al contenido
+            onCreateTender = { title, description, category, startDate, endDate, requiresVisit, requiresPayment, requiresGuarantee, requiresDoc, location, images ->
+                budgetViewModel.createTender(
+                    title = title,
+                    description = description,
+                    category = category,
+                    startDate = startDate,
+                    endDate = endDate,
+                    requiresVisit = requiresVisit,
+                    requiresPaymentMethod = requiresPayment,
+                    requiresWorkGuarantee = requiresGuarantee,
+                    requiresProviderDoc = requiresDoc,
+                    location = location,
+                    imageUrls = images.map { it.toString() }
+                )
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

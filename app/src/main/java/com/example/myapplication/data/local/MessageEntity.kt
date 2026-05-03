@@ -38,6 +38,10 @@ data class MessageEntity(
     val appointmentDate: String? = null,
     val appointmentTime: String? = null,
     val appointmentStatus: String? = null, // PENDING, ACCEPTED, REJECTED
+    val appointmentType: String? = null,   // 🔥 [NUEVO] TECHNICAL_VISIT o LOCAL_APPOINTMENT
+    val providerAddress: String? = null,   // 🔥 [NUEVO] Dirección del local del prestador
+    val companyId: String? = null,         // 🔥 [NUEVO] Contexto Multi-Perfil
+    val categoryId: String? = null,        // 🔥 [NUEVO] Rubro del servicio
 
     // 🔥 [NUEVO] Campos para invitaciones de calendario (CALENDAR_INVITE)
     val calendarStartDate: String? = null,

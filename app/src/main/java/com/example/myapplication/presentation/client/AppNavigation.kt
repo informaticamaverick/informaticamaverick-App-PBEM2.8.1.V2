@@ -474,7 +474,11 @@ fun AppNavigationStateless(
 
                 composable(route = Screen.Promo.route, enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { PromoScreen(navController = navController, onBack = { navController.popBackStack() }) }
 
-                composable(route = Screen.CrearLicitacion.route) { CrearLicScreen(onBack = { navController.popBackStack() }) }
+                composable(
+                    route = Screen.CrearLicitacion.route,
+                    enterTransition = { slideInVertically(initialOffsetY = { it }, animationSpec = tween(500)) },
+                    exitTransition = { slideOutVertically(targetOffsetY = { it }, animationSpec = tween(400)) }
+                ) { CrearLicScreen(onBack = { navController.popBackStack() }) }
 
                 composable(route = Screen.PerfilCliente.route) { PerfilUsuarioScreen(onNavigateBack = { navController.popBackStack() }, onLogout = { }, beViewModel = beViewModel ?: hiltViewModel()) }
 
@@ -488,7 +492,11 @@ fun AppNavigationStateless(
                     PerfilPrestadorCliente(providerId = providerId, onBack = { navController.popBackStack() })
                 }
 
-                composable(route = Screen.ChatPresupuestosRecibidos.route) {
+                composable(
+                    route = Screen.ChatPresupuestosRecibidos.route,
+                    enterTransition = { slideInVertically(initialOffsetY = { it }, animationSpec = tween(500)) },
+                    exitTransition = { slideOutVertically(targetOffsetY = { it }, animationSpec = tween(400)) }
+                ) {
                     ChatPresupuestoRecibidosScreen(
                         onBack = { navController.popBackStack() },
                         onChatClick = { pid -> navController.navigate("chat?providerId=$pid") },
@@ -754,22 +762,29 @@ fun AppBottomNavigationBar(
                         .clip(RoundedCornerShape(24.dp))
                         .background(BentoDarkGlassBackground.copy(alpha = if (isSelected) 0.85f else 0.2f))
                         .shakeClick {
-                            if (!isSelected) {
-                                scope.launch {
-                                    // ==========================================================================================
-                                    // --- 🛠️ SECCIÓN: LÓGICA DE NAVEGACIÓN OPTIMIZADA ---
-                                    // Se asegura de mantener el estado y realizar transiciones limpias.
-                                    // CORRECCIÓN: Si es Chat, navegamos a la ruta base para evitar el placeholder {providerId}
-                                    // ==========================================================================================
-                                    val destination = if (screen is Screen.Chat) "chat" else screen.route
+                            scope.launch {
+                                // ==========================================================================================
+                                // --- 🛠️ SECCIÓN: LÓGICA DE NAVEGACIÓN OPTIMIZADA (V2) ---
+                                // Se asegura de mantener el estado y realizar transiciones limpias.
+                                // ==========================================================================================
+                                
+                                // 1. Normalizamos la ruta de destino y la actual
+                                val targetBase = screen.route.split("?").first().split("/").first()
+                                val currentBase = currentRoute?.split("?")?.first()?.split("/")?.first()
 
-                                    navController.navigate(destination) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                // 2. Si ya estamos en la pantalla base, NO disparamos navegación redundante
+                                if (targetBase == currentBase) return@launch
+
+                                // 3. Ejecutamos la navegación con limpieza de stack Maverick
+                                val destination = if (screen is Screen.Chat) "chat" else screen.route
+                                
+                                navController.navigate(destination) {
+                                    // Al ir a una pestaña principal, limpiamos el stack hasta el inicio
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
                                     }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
                             }
                         },

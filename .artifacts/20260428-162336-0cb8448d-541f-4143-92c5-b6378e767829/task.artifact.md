@@ -1,0 +1,21 @@
+# Tareas de Unificación y Minimización de Módulo de Chat
+
+- [x] Reestructuración de Orquestación
+	- [x] Modificar `ChatScreen.kt` para ser el único punto de entrada
+	- [x] Integrar lógica de lista de chats directamente en `ChatScreen`
+	- [x] Eliminar `ChatListView.kt`
+- [x] Consolidación de Librería de UI
+	- [x] Fusionar `ChatComponentes.kt` y `ChatListComponents.kt` ➔ `ChatComponents.kt`
+- [x] Renombramiento de Pantallas
+	- [x] Renombrar `ChatConversationView.kt` ➔ `ChatConversationScreen.kt`
+- [x] Centralización en ViewModel
+	- [x] Asegurar que el ViewModel maneje el estado de navegación (activeChatId)
+- [x] Limpieza y Previews
+	- [x] Borrar archivos obsoletos físicamente
+	- [x] Crear Previews para `ChatConversationScreen` y `ChatScreen`
+	- [x] Eliminar lógica de Firebase de las pantallas tontas
+- [/] Corrección de Errores y "Regla de Oro"
+	- [x] Investigar error de mensajes no mostrados (chatId vacío)
+	- [/] Implementar inicialización manual en `ChatViewModel`
+	- [ ] Activar limpieza de Firebase (Zero Cost Policy) via `markAsRead`
+	- [ ] Validar flujo completo (Lista -> Chat -> Enviar)

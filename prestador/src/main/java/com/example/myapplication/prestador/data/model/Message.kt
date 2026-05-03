@@ -70,6 +70,8 @@ data class Message(
     val appointmentDate: String? = null,
     val appointmentTime: String? = null,
     val appointmentStatus: AppointmentProposalStatus? = null,
+    val appointmentType: String? = null,   // 🔥 [NUEVO]
+    val providerAddress: String? = null,   // 🔥 [NUEVO]
     val rejectionReason: String? = null,
     val calendarInviteMessageId: String? = null, //ID del CALENDAR_INVITE de origen
 

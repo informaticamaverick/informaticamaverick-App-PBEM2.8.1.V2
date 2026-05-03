@@ -31,6 +31,8 @@ import androidx.compose.ui.tooling.preview.Preview
 fun ChatScreen(
     onBack: () -> Unit,
     initialProviderId: String? = null,
+    initialCompanyId: String? = null,
+    initialCategoryId: String? = null,
     navController: NavHostController? = null,
     onInConversationChange: (Boolean) -> Unit = {},
     profileViewModel: ProfileViewModel = hiltViewModel(),
@@ -39,8 +41,8 @@ fun ChatScreen(
 ) {
     // [REGLA DE ORO] Suscripción a Datos Procesados (UI)
     // Usamos variables de estado sin delegar para garantizar acceso a la referencia estable en corrutinas
-    val chattingProvidersState = chatListViewModel.chattingProviders.collectAsStateWithLifecycle()
-    val chattingProviders by chattingProvidersState
+    val chattingThreadsState = chatListViewModel.chattingThreads.collectAsStateWithLifecycle()
+    val chattingThreads by chattingThreadsState
     
     val profileState by profileViewModel.uiState.collectAsStateWithLifecycle()
     val unreadCountsMap by beBrainViewModel.unreadCountsMap.collectAsStateWithLifecycle()
@@ -61,6 +63,19 @@ fun ChatScreen(
     // [PASO CRÍTICO] Sincronización del Contexto de Be y Acciones Dinámicas
     LaunchedEffect(Unit) {
         beBrainViewModel.onRouteChanged("chat_list")
+        // Registramos el botón de Presupuestos Recibidos por defecto al iniciar
+        val chatActions = listOf(
+            BeSmallActionModel(
+                id = "goto_direct_budgets",
+                icon = Icons.AutoMirrored.Filled.Message,
+                label = "Presupuestos",
+                emoji = "📩",
+                tint = Color(0xFF2197F5), // MaverickBlue
+                isDefault = true,
+                onClick = { beBrainViewModel.triggerAction("goto_direct_budgets") }
+            )
+        )
+        beBrainViewModel.setCustomActions(chatActions)
     }
 
     // --- SECCIÓN: ACCIONES DINÁMICAS DE BE (TOOLBOX) ---
@@ -96,7 +111,7 @@ fun ChatScreen(
             )
             beBrainViewModel.setCustomActions(multiActions)
         } else {
-            // Registramos el botón de Presupuestos Recibidos por defecto cuando no hay multiselección
+            // Restauramos las acciones por defecto del chat (Presupuestos Recibidos)
             val chatActions = listOf(
                 BeSmallActionModel(
                     id = "goto_direct_budgets",
@@ -121,7 +136,7 @@ fun ChatScreen(
 
                 // SECCIÓN: Acciones de multiselección de chats
                 // Usamos .value para asegurar que obtenemos el dato más fresco del flujo
-                "select_all" -> chatListViewModel.selectAll(chattingProvidersState.value.map { it.uid })
+                "select_all" -> chatListViewModel.selectAll(chattingThreadsState.value.map { it.chatId })
                 "delete_multi" -> if (selectedIdsState.value.isNotEmpty()) showDeleteConfirmDialog = true
                 "cancel" -> chatListViewModel.updateMultiSelection(false)
                 else -> { /* Manejar otras acciones si es necesario */ }
@@ -140,11 +155,13 @@ fun ChatScreen(
     }
 
     ChatScreenContent(
-        allProviders = chattingProviders,
+        allThreads = chattingThreads,
         profileState = profileState,
         unreadCountsMap = unreadCountsMap,
         onBack = onBack,
         initialProviderId = initialProviderId,
+        initialCompanyId = initialCompanyId,
+        initialCategoryId = initialCategoryId,
         navController = navController,
         onInConversationChange = onInConversationChange,
         beBrainViewModel = beBrainViewModel,
@@ -161,16 +178,15 @@ fun ChatScreen(
     )
 }
 
-/**
- * UI CONTENEDOR: Orquestador de Chat sin acoplamiento fuerte a ViewModels de datos.
- */
 @Composable
 fun ChatScreenContent(
-    allProviders: List<com.example.myapplication.data.model.Provider>,
+    allThreads: List<ChatThread>,
     profileState: com.example.myapplication.presentation.profile.ProfileUiState,
     unreadCountsMap: Map<String, Int>,
     onBack: () -> Unit,
     initialProviderId: String? = null,
+    initialCompanyId: String? = null,
+    initialCategoryId: String? = null,
     navController: NavHostController? = null,
     onInConversationChange: (Boolean) -> Unit = {},
     beBrainViewModel: BeBrainViewModel? = null,
@@ -188,11 +204,17 @@ fun ChatScreenContent(
     var activeProviderId by remember { 
         mutableStateOf(if (initialProviderId == "{providerId}") null else initialProviderId) 
     }
+    var activeCompanyId by remember {
+        mutableStateOf(if (initialCompanyId == "{companyId}") null else initialCompanyId)
+    }
+    var activeCategoryId by remember {
+        mutableStateOf(if (initialCategoryId == "{categoryId}") null else initialCategoryId)
+    }
 
     // --- SECCIÓN: CARGA DE PROVEEDOR FALLBACK ---
-    // Si el providerId no está en la lista de 'chattingProviders' (porque es un chat nuevo),
+    // Si el providerId no está en la lista de 'chattingThreads' (porque es un chat nuevo),
     // lo buscamos a través del ViewModel (OBRERO).
-    val fallbackProvider by if (activeProviderId != null && allProviders.none { it.uid == activeProviderId }) {
+    val fallbackProvider by if (activeProviderId != null && allThreads.none { it.provider.uid == activeProviderId }) {
         chatListViewModel?.getProviderById(activeProviderId!!)?.collectAsStateWithLifecycle(initialValue = null) ?: remember { mutableStateOf(null) }
     } else {
         remember { mutableStateOf(null) }
@@ -204,7 +226,11 @@ fun ChatScreenContent(
     }
 
     BackHandler {
-        if (activeProviderId != null) activeProviderId = null else onBack()
+        if (activeProviderId != null) {
+            activeProviderId = null
+            activeCompanyId = null
+            activeCategoryId = null
+        } else onBack()
     }
 
     if (profileState.isLoading || profileState.uid.isEmpty()) {
@@ -216,10 +242,14 @@ fun ChatScreenContent(
 
         if (activeProviderId == null) {
             ChatListContent(
-                providersList = allProviders,
+                threadsList = allThreads,
                 currentUserId = currentUserId,
                 unreadCountsMap = unreadCountsMap,
-                onChatClick = { activeProviderId = it },
+                onChatClick = { thread -> 
+                    activeProviderId = thread.provider.uid
+                    activeCompanyId = thread.companyId
+                    activeCategoryId = thread.categoryId
+                },
                 onBack = onBack,
                 appColors = appColors,
                 navController = navController,
@@ -230,25 +260,35 @@ fun ChatScreenContent(
                 selectedIds = selectedIds
             )
         } else {
-            val provider = allProviders.find { it.uid == activeProviderId } ?: fallbackProvider
+            val provider = allThreads.find { it.provider.uid == activeProviderId }?.provider ?: fallbackProvider
 
             if (provider != null) {
                 // [REGLA DE ORO] Generamos el chatId consistente
-                val chatId = ChatIdHelper.generateChat(currentUserId, provider.uid)
+                val chatId = ChatIdHelper.generateChat(currentUserId, provider.uid, activeCompanyId)
                 
                 // Usamos hiltViewModel con una key para que cada chat tenga su propia instancia
                 val chatViewModel: ChatViewModel = hiltViewModel(key = chatId)
                 
                 // [PASO CRÍTICO] Inicializamos el ViewModel con el chatId generado
                 LaunchedEffect(chatId) {
-                    chatViewModel.initialize(chatId)
+                    chatViewModel.initialize(
+                        chatId = chatId,
+                        companyId = activeCompanyId,
+                        categoryId = activeCategoryId
+                    )
                 }
                 
                 if (beBrainViewModel != null) {
                     ChatConversationScreen(
                         provider = provider,
+                        companyId = activeCompanyId,
+                        categoryId = activeCategoryId,
                         viewModel = chatViewModel,
-                        onBack = { activeProviderId = null },
+                        onBack = { 
+                            activeProviderId = null
+                            activeCompanyId = null
+                            activeCategoryId = null
+                        },
                         appColors = appColors,
                         beBrainViewModel = beBrainViewModel
                     )
@@ -286,10 +326,10 @@ fun ChatScreenContent(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListContent(
-    providersList: List<com.example.myapplication.data.model.Provider>,
+    threadsList: List<ChatThread>,
     currentUserId: String,
     unreadCountsMap: Map<String, Int>,
-    onChatClick: (String) -> Unit,
+    onChatClick: (ChatThread) -> Unit,
     onBack: () -> Unit,
     appColors: AppColors,
     navController: NavHostController? = null,
@@ -332,7 +372,7 @@ fun ChatListContent(
         ) { paddingValues ->
             MoldeBarraMenu(
                 modifier = Modifier.padding(paddingValues),
-                itemCount = providersList.size,
+                itemCount = threadsList.size,
                 labelCountMain = "CHATS",
                 labelCountSub = "Conversaciones",
                 showSuscritos = false,
@@ -352,7 +392,7 @@ fun ChatListContent(
                     )
                 },
                 content = {
-                    if (providersList.isEmpty()) {
+                    if (threadsList.isEmpty()) {
                         EmptyChatPlaceholder()
                     } else {
                         LazyColumn(
@@ -361,24 +401,24 @@ fun ChatListContent(
                             contentPadding = PaddingValues(top = 10.dp, bottom = 100.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            items(providersList, key = { it.uid }) { provider ->
-                                val providerId = provider.uid
-                                val isSelected = selectedIds.contains(providerId)
+                            items(threadsList, key = { it.chatId }) { thread ->
+                                val threadId = thread.chatId
+                                val isSelected = selectedIds.contains(threadId)
 
                                 UnifiedChatListItem(
-                                    provider = provider,
-                                    unreadCount = unreadCountsMap[ChatIdHelper.generateChat(currentUserId, providerId)] ?: 0,
+                                    thread = thread,
+                                    unreadCount = unreadCountsMap[threadId] ?: 0,
                                     isSelected = isSelected,
                                     isMultiSelectMode = isMultiSelectMode,
                                     onClick = { 
-                                        if (isMultiSelectMode) chatListViewModel?.toggleSelection(providerId)
-                                        else onChatClick(providerId) 
+                                        if (isMultiSelectMode) chatListViewModel?.toggleSelection(threadId)
+                                        else onChatClick(thread)
                                     },
                                     onLongClick = {
                                         if (!isMultiSelectMode) chatListViewModel?.updateMultiSelection(true)
-                                        chatListViewModel?.toggleSelection(providerId)
+                                        chatListViewModel?.toggleSelection(threadId)
                                     },
-                                    onAvatarClick = { navController?.navigate("perfil_prestador/${providerId}") }
+                                    onAvatarClick = { navController?.navigate("perfil_prestador/${thread.provider.uid}") }
                                 )
                             }
                         }
@@ -404,21 +444,28 @@ fun EmptyChatPlaceholder() {
 @Composable
 fun ChatScreenPreview() {
     val sampleProvider = com.example.myapplication.data.model.fake.PrestadorSampleDataFalso.generateMaverickProvider().toDomain()
-    val sampleProviders = listOf(sampleProvider)
+    val sampleThread = ChatThread(
+        chatId = "c1",
+        provider = sampleProvider,
+        companyId = null,
+        categoryId = "Sistemas",
+        lastMessage = "Hola!",
+        lastTimestamp = System.currentTimeMillis()
+    )
+    val sampleThreads = listOf(sampleThread)
     val sampleProfileState = com.example.myapplication.presentation.profile.ProfileUiState(
         uid = "user_demo_66",
         displayName = "Demo User",
         isLoading = false
     )
-    val sampleUnreadCounts = mapOf(ChatIdHelper.generateChat("user_demo_66", sampleProvider.uid) to 3)
+    val sampleUnreadCounts = mapOf("c1" to 3)
 
     MyApplicationTheme {
         ChatScreenContent(
-            allProviders = sampleProviders,
+            allThreads = sampleThreads,
             profileState = sampleProfileState,
             unreadCountsMap = sampleUnreadCounts,
             onBack = {},
-            beBrainViewModel = null,
             onRouteChanged = {}
         )
     }

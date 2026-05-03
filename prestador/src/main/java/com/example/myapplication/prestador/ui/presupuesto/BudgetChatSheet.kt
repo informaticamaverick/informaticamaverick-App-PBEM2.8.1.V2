@@ -228,7 +228,7 @@ fun BudgetChatSheet(
             id = "pres_chat_${System.currentTimeMillis()}",
             numeroPresupuesto = (if (isProfessional) "C-%03d" else "P-%03d").format(presupuestos.size + 1),
             clienteId = userId,
-            prestadorId = "prestador_demo",
+            prestadorId = providerId,
             fecha = java.time.LocalDate.now().toString(),
             validezDias = validity.toIntOrNull() ?: 7,
             subtotal = subtotal,
@@ -242,7 +242,8 @@ fun BudgetChatSheet(
             honorariosJson = honorariosJson,
             gastosJson = gastosJson,
             impuestosJson = impuestosJson,
-            categorias = provider?.categories?.joinToString(",") ?: ""
+            categorias = provider?.categories?.joinToString(",") ?: "",
+            providerCompanyName = providerDisplayName
         )
     }
 

@@ -16,7 +16,6 @@ interface ChatDao {
     @Query("SELECT * FROM messages WHERE chatId IN (:chatIds) ORDER BY timestamp ASC")
     fun getMessagesForChats(chatIds: List<String>): Flow<List<MessageEntity>>
 
-    // Inserta o actualiza un mensaje
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity)
 
@@ -45,6 +44,19 @@ interface ChatDao {
         ) GROUP BY userId ORDER BY MAX(lastMsg) DESC
     """)
     fun getActiveConversationIds(myUserId: String): Flow<List<String>>
+
+    // Obtener un resumen de las conversaciones activas (ordenadas por el mensaje más reciente)
+    @Query("""
+        SELECT chatId, 
+               CASE WHEN senderId = :myUserId THEN receiverId ELSE senderId END as userId,
+               companyId, categoryId, content as lastMessage, timestamp as lastTimestamp
+        FROM messages m1
+        WHERE (senderId = :myUserId OR receiverId = :myUserId)
+        AND timestamp = (SELECT MAX(timestamp) FROM messages m2 WHERE m2.chatId = m1.chatId)
+        GROUP BY chatId
+        ORDER BY lastTimestamp DESC
+    """)
+    fun getActiveChatSummaries(myUserId: String): Flow<List<ChatSummary>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllMessages(messages: List<MessageEntity>)
@@ -95,5 +107,14 @@ data class ChatLastMessage(
     val lastMessage: String,
     val lastTimestamp: Long,
     val lastSenderId: String
+)
+
+data class ChatSummary(
+    val chatId: String,
+    val userId: String,
+    val companyId: String?,
+    val categoryId: String?,
+    val lastMessage: String,
+    val lastTimestamp: Long
 )
 
