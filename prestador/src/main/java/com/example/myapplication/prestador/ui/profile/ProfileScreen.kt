@@ -624,11 +624,27 @@ fun ProfileScreen(
                                     val fusedClient = com.google.android.gms.location.LocationServices
                                         .getFusedLocationProviderClient(localContext)
                                     @Suppress("MissingPermission")
-                                    val loc = fusedClient.lastLocation.await()
+                                    var loc = fusedClient.lastLocation.await()
+                                    if (loc == null) {
+                                        loc = fusedClient.getCurrentLocation(
+                                            com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                                            null
+                                        ).await()
+                                    }
                                     if (loc != null) {
                                         val geocoder = android.location.Geocoder(localContext, java.util.Locale.getDefault())
-                                        @Suppress("DEPRECATION")
-                                        val addrs = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+                                        val addrs: List<android.location.Address>? =
+                                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                                kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                                                    geocoder.getFromLocation(loc.latitude, loc.longitude, 1, object : android.location.Geocoder.GeocodeListener {
+                                                        override fun onGeocode(results: MutableList<android.location.Address>) { cont.resume(results) }
+                                                        override fun onError(errorMessage: String?) { cont.resume(emptyList()) }
+                                                    })
+                                                }
+                                            } else {
+                                                @Suppress("DEPRECATION")
+                                                geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+                                            }
                                         if (!addrs.isNullOrEmpty()) {
                                             val a = addrs[0]
                                             if (!a.thoroughfare.isNullOrBlank()) localCalle = a.thoroughfare!!
@@ -812,8 +828,18 @@ fun ProfileScreen(
                                             try {
                                                 val geocoder = android.location.Geocoder(localContext, java.util.Locale.getDefault())
                                                 val query = "$localCalle $localNumero, $localLocalidad, $localProvincia, Argentina"
-                                                @Suppress("DEPRECATION")
-                                                val results = geocoder.getFromLocationName(query, 1)
+                                                val results: List<android.location.Address>? =
+                                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                                        kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                                                            geocoder.getFromLocationName(query, 1, object : android.location.Geocoder.GeocodeListener {
+                                                                override fun onGeocode(r: MutableList<android.location.Address>) { cont.resume(r) }
+                                                                override fun onError(errorMessage: String?) { cont.resume(emptyList()) }
+                                                            })
+                                                        }
+                                                    } else {
+                                                        @Suppress("DEPRECATION")
+                                                        geocoder.getFromLocationName(query, 1)
+                                                    }
                                                 if (!results.isNullOrEmpty()) {
                                                     val r = results[0]
                                                     geocodedLat = r.latitude

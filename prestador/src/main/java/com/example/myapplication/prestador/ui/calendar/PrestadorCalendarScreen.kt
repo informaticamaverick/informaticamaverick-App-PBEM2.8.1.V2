@@ -364,17 +364,18 @@ fun PrestadorCalendarScreen(
                 onGoToChat = { clientId, clientName ->
                     onNavigateToChat(clientId, clientName, "", "", "")
                 },
-                onCancel = { id, chatId, date, time ->
+                onCancel = { id, chatId, date, time, reason ->
                     calendarViewModel.cancelAppointment(id)
-                    chatViewModel.sendCancellationNotice(chatId, date, time)
+                    chatViewModel.sendCancellationNotice(chatId, date, time, reason)
                 },
                 onComplete = { id, chatId, date, time ->
                     calendarViewModel.completeAppointment(id)
                     chatViewModel.sendCompletionNotice(chatId, date, time)
                 },
-                onReschedule = { id, chatId, date, time ->
+                onReschedule = { id, chatId, date, time, clientId, clientName ->
                     calendarViewModel.rescheduleAppointment(id)
                     chatViewModel.sendRescheduleNotice(chatId, date, time)
+                    onNavigateToChat(clientId, clientName, date, time, "RESCHEDULE")
                 }
             )
         }
@@ -614,9 +615,9 @@ fun AppointmentsList(
     onExpandClick: () -> Unit,
     onNavigateToClientePerfil: (clientId: String) -> Unit = {},
     onGoToChat: (clientId: String, clientName: String) -> Unit = { _, _ -> },
-    onCancel: (id: String, chatId: String, date: String, time: String) -> Unit = { _, _, _, _ -> },
+    onCancel: (id: String, chatId: String, date: String, time: String, reason: String) -> Unit = { _, _, _, _, _ -> },
     onComplete: (id: String, chatId: String, date: String, time: String) -> Unit = { _, _, _, _ -> },
-    onReschedule: (id: String, chatId: String, date: String, time: String) -> Unit = { _, _, _, _ -> }
+    onReschedule: (id: String, chatId: String, date: String, time: String, clientId: String, clientName: String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
     val colors = getPrestadorColors()
     val dateFormat = SimpleDateFormat("d 'de' MMMM", Locale.getDefault())
@@ -802,9 +803,9 @@ fun AppointmentCard(
     serviceTypeConfig: ServiceTypeConfig,
     onNavigateToClientePerfil: (clientId: String) -> Unit = {},
     onGoToChat: (clientId: String, clientName: String) -> Unit = { _, _ -> },
-    onCancel: (id: String, chatId: String, date: String, time: String) -> Unit = { _, _, _, _ -> },
+    onCancel: (id: String, chatId: String, date: String, time: String, reason: String) -> Unit = { _, _, _, _, _ -> },
     onComplete: (id: String, chatId: String, date: String, time: String) -> Unit = { _, _, _, _ -> },
-    onReschedule: (id: String, chatId: String, date: String, time: String) -> Unit = { _, _, _, _ -> }
+    onReschedule: (id: String, chatId: String, date: String, time: String, clientId: String, clientName: String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
     val colors = getPrestadorColors()
     Surface(
@@ -876,7 +877,7 @@ fun AppointmentCard(
                         AppointmentStatus.PENDING      -> Color(0xFFF59E0B).copy(alpha = 0.1f)
                         AppointmentStatus.CANCELLED    -> Color(0xFFEF4444).copy(alpha = 0.1f)
                         AppointmentStatus.COMPLETED    -> Color(0xFF6366F1).copy(alpha = 0.1f)
-                        AppointmentStatus.RESCHEDULED  -> Color(0xFFFF6B35).copy(alpha = 0.1f)
+                        AppointmentStatus.RESCHEDULED  -> Color(0xFF059669).copy(alpha = 0.1f)
                     }
                 ) {
                     Text(
@@ -894,7 +895,7 @@ fun AppointmentCard(
                             AppointmentStatus.PENDING     -> Color(0xFFF59E0B)
                             AppointmentStatus.CANCELLED   -> Color(0xFFEF4444)
                             AppointmentStatus.COMPLETED   -> Color(0xFF6366F1)
-                            AppointmentStatus.RESCHEDULED -> Color(0xFFFF6B35)
+                            AppointmentStatus.RESCHEDULED -> Color(0xFF059669)
                         },
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
@@ -917,6 +918,7 @@ fun AppointmentCard(
                     HorizontalDivider(color = colors.surfaceElevated)
 
                     var showCancelDialog by remember { mutableStateOf(false) }
+                    var cancelReason by remember { mutableStateOf("") }
                     var showCompleteDialog by remember { mutableStateOf(false) }
                     var showRescheduleDialog by remember { mutableStateOf(false) }
 
@@ -1045,6 +1047,44 @@ fun AppointmentCard(
 
                                         Spacer(modifier = Modifier.height(14.dp))
 
+                                        //Motivos rapidos
+                                        val motivos = listOf("Horario no disponible", "Problema personal", "Fuerza mayor", "Otro")
+                                        Text("Motivo (obligatorio):", fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                                            color = colors.textPrimary)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        motivos.forEach { motivo ->
+                                            val selected = cancelReason == motivo
+                                            Surface(
+                                                shape = RoundedCornerShape(20.dp),
+                                                color = if (selected) Color(0xFFEF4444) else Color(
+                                                    0xFFEF4444
+                                                ).copy(alpha = 0.08f),
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    Color(0xFFEF4444).copy(alpha = if (selected) 1f else 0.3f)
+                                                ),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 3.dp)
+                                                    .clickable { cancelReason = motivo }
+                                            ) {
+                                                Text(
+                                                    text = motivo,
+                                                    fontSize = 13.sp,
+                                                    color = if (selected) Color.White else Color(
+                                                        0xFFEF4444
+                                                    ),
+                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                    modifier = Modifier.padding(
+                                                        horizontal = 14.dp,
+                                                        vertical = 8.dp
+                                                    )
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+
                                         Text(
                                             text = "Esta acción no se puede deshacer. El cliente recibirá un mensaje automático notificando la cancelación.",
                                             fontSize = 13.sp,
@@ -1066,9 +1106,13 @@ fun AppointmentCard(
                                             }
                                             Button(
                                                 onClick = {
-                                                    onCancel(appointment.id, appointment.chatId, appointment.date, appointment.time)
-                                                    showCancelDialog = false
+                                                    if (cancelReason.isNotEmpty()) {
+                                                        onCancel(appointment.id, appointment.chatId, appointment.date, appointment.time, cancelReason)
+                                                        cancelReason = ""
+                                                        showCancelDialog = false
+                                                    }
                                                 },
+                                                enabled = cancelReason.isNotEmpty(),
                                                 modifier = Modifier.weight(1f),
                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
                                                 shape = RoundedCornerShape(10.dp)
@@ -1193,7 +1237,7 @@ fun AppointmentCard(
                                             ) { Text("Volver", color = colors.textPrimary) }
                                             Button(
                                                 onClick = {
-                                                    onReschedule(appointment.id, appointment.chatId, appointment.date, appointment.time)
+                                                    onReschedule(appointment.id, appointment.chatId, appointment.date, appointment.time, appointment.clientId, appointment.clientName)
                                                     showRescheduleDialog = false
                                                 },
                                                 modifier = Modifier.weight(1f),
@@ -1212,9 +1256,6 @@ fun AppointmentCard(
     }
 }
 
-/**
- * Diálogo de confirmación para cancelar cita
- */
 // Función helper para generar color único basado en clientId
 private fun generateColorFromId(clientId: String): Color {
     val colors = listOf(

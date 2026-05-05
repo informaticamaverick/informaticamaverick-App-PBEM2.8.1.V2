@@ -81,6 +81,7 @@ data class Message(
     val receiptAddress: String? = null,
     val receiptCode: String? = null,
     val receiptIsTechnician: Boolean = false,
+    val receiptPrioritizeCompany: Boolean = false,
 
     //Metadatos
     val isRead: Boolean = false,
@@ -98,12 +99,17 @@ data class Message(
         AUDIO,
         LOCATION,
         DOCUMENT,
-        APPOINTMENT,
+        VISIT,
         BUDGET,
+        TENDER,
+        SYSTEM,
         CALENDAR_INVITE,
+        APPOINTMENT,
         APPOINTMENT_REQUEST,
         APPOINTMENT_RECEIPT,
-        RESCHEDULE_NOTICE
+        RESCHEDULE_NOTICE,
+        COMPLETION_NOTICE,
+        CANCELLATION_NOTICE
     }
 
     /**

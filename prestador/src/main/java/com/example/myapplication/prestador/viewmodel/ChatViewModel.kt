@@ -26,8 +26,7 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val myUserId =
-        FirebaseAuth.getInstance().currentUser?.uid ?:
-        ""
+        FirebaseAuth.getInstance().currentUser?.uid ?: ""
     private var currentConversationId = ""
 
     private val _isLoading =
@@ -65,7 +64,10 @@ class ChatViewModel @Inject constructor(
     private var typingObserveJob: kotlinx.coroutines.Job? = null
 
     fun observeClientTyping(chatId: String, clientId: String) {
-        android.util.Log.d("TYPING_VM", "observeClientTyping llamado chatId=$chatId clientId=$clientId")
+        android.util.Log.d(
+            "TYPING_VM",
+            "observeClientTyping llamado chatId=$chatId clientId=$clientId"
+        )
         typingObserveJob?.cancel()
         typingObserveJob = viewModelScope.launch {
             android.util.Log.d("TYPING_VM", "coroutine iniciada, colectando flow...")
@@ -82,12 +84,16 @@ class ChatViewModel @Inject constructor(
     }
 
     fun
-            loadMessagesByConversation(conversationId:
-                                       String) {
+            loadMessagesByConversation(
+        conversationId:
+        String
+    ) {
         currentConversationId = conversationId
 
-        repository.startListening(conversationId,
-            myUserId)
+        repository.startListening(
+            conversationId,
+            myUserId
+        )
         viewModelScope.launch {
             try {
                 _isLoading.value = true
@@ -127,12 +133,15 @@ class ChatViewModel @Inject constructor(
 
     fun sendMessage(text: String) {
         if (text.isBlank() ||
-            currentConversationId.isEmpty()) return
+            currentConversationId.isEmpty()
+        ) return
         viewModelScope.launch {
             try {
 
-                repository.sendMessage(currentConversationId,
-                    text, myUserId)
+                repository.sendMessage(
+                    currentConversationId,
+                    text, myUserId
+                )
             } catch (e: Exception) {
                 _errorMessage.value = "Error al enviar mensaje: ${e.message}"
             }
@@ -159,10 +168,11 @@ class ChatViewModel @Inject constructor(
         if (conversationId.isEmpty()) return
         viewModelScope.launch {
             try {
-                repository.sendMessage(
+                repository.sendCompletionNoticeMessage(
                     conversationId = conversationId,
-                    text = "✅ Tu turno del $date a las $time fue completado. ¡Gracias!",
-                    myUserId = myUserId
+                    myUserId = myUserId,
+                    originalDate = date,
+                    originalTime = time
                 )
             } catch (e: Exception) {
                 _errorMessage.value = "Error al notificar completado: ${e.message}"
@@ -170,20 +180,24 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun sendCancellationNotice(conversationId: String, date: String, time: String) {
+    fun sendCancellationNotice(conversationId: String, date: String, time: String, reason: String = "") {
         if (conversationId.isEmpty()) return
         viewModelScope.launch {
             try {
-                repository.sendMessage(
+                repository.sendCancellationNoticeMessage(
                     conversationId = conversationId,
-                    text = "❌ Tu turno del $date a las $time fue cancelado por el prestador.",
-                    myUserId = myUserId
+                    myUserId = myUserId,
+                    originalDate = date,
+                    originalTime = time,
+                    reason = reason
                 )
             } catch (e: Exception) {
-                _errorMessage.value = "Error al modificar cancelacion: ${e.message}"
+                _errorMessage.value = "Error al enviar cancelación ${e.message}"
             }
         }
     }
+
+
 
     fun sendBudgetMessage(pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity) {
         if (currentConversationId.isEmpty())
@@ -426,6 +440,7 @@ class ChatViewModel @Inject constructor(
         doesHomeVisits: Boolean = false,
         profession: String? = null,
         providerAddress: String? = null,
+        prioritizeCompany: Boolean = false,
         accepted: Boolean,
         rejectionReason: String? = null
     ) {
@@ -478,7 +493,8 @@ class ChatViewModel @Inject constructor(
                             doesHomeVisits = doesHomeVisits,
                             profession = profession,
                             providerAddress = providerAddress,
-                            clientAddress = clientAddress
+                            clientAddress = clientAddress,
+                            prioritizeCompany = prioritizeCompany
                         )
                         repository.sendAppointmentReceiptMessage(
                             conversationId = currentConversationId,
@@ -490,7 +506,8 @@ class ChatViewModel @Inject constructor(
                             isTechnician = receipt.isTechnician,
                             profession = receipt.profession,
                             address = receipt.address,
-                            code = receipt.code
+                            code = receipt.code,
+                            prioritizeCompany = receipt.prioritizeCompany
                         )
                     } catch (e: Exception) {
                         android.util.Log.e("ChatVM", "❌ Error enviando comprobante: ${e.message}", e)
@@ -507,7 +524,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-     private data class ReceiptData(
+    private data class ReceiptData(
         val date: String,
         val time: String,
         val service: String,
@@ -515,7 +532,8 @@ class ChatViewModel @Inject constructor(
         val isTechnician: Boolean,
         val profession: String?,
         val address: String?,
-        val code: String
+        val code: String,
+        val prioritizeCompany: Boolean = false
     )
 
     private fun buildAppointmentReceipt(
@@ -527,7 +545,8 @@ class ChatViewModel @Inject constructor(
         doesHomeVisits: Boolean,
         profession: String?,
         providerAddress: String?,
-        clientAddress: String? = null
+        clientAddress: String? = null,
+        prioritizeCompany: Boolean = false
     ): ReceiptData {
         val isTechnician = serviceType == "TECHNICAL" || doesHomeVisits
         val dateFormatted = formatDateForDisplay(date)
@@ -548,7 +567,8 @@ class ChatViewModel @Inject constructor(
             isTechnician = isTechnician,
             profession = if (!profession.isNullOrBlank()) profession else null,
             address = if (!address.isNullOrBlank()) address else null,
-            code = code
+            code = code,
+            prioritizeCompany = prioritizeCompany
         )
     }
 

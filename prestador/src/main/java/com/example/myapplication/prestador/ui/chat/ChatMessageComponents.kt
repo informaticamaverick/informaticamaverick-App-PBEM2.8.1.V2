@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Tag
@@ -70,7 +71,11 @@ import java.util.*
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.modifier.modifierLocalProvider
 import androidx.compose.ui.window.Dialog
@@ -93,7 +98,9 @@ fun MessageBubble(
         message.type == Message.MessageType.CALENDAR_INVITE ||
         message.type == Message.MessageType.APPOINTMENT_REQUEST ||
         message.type == Message.MessageType.APPOINTMENT_RECEIPT ||
-        message.type == Message.MessageType.RESCHEDULE_NOTICE) {
+        message.type == Message.MessageType.RESCHEDULE_NOTICE ||
+        message.type == Message.MessageType.COMPLETION_NOTICE ||
+        message.type == Message.MessageType.CANCELLATION_NOTICE) {
         Color.Transparent
     } else if (isFromCurrentUser) {
         colors.primaryOrange
@@ -138,7 +145,9 @@ fun MessageBubble(
                     message.type == Message.MessageType.CALENDAR_INVITE ||
                     message.type == Message.MessageType.APPOINTMENT_REQUEST ||
                     message.type == Message.MessageType.APPOINTMENT_RECEIPT ||
-                    message.type == Message.MessageType.RESCHEDULE_NOTICE) Modifier else Modifier.padding(
+                    message.type == Message.MessageType.RESCHEDULE_NOTICE ||
+                    message.type == Message.MessageType.COMPLETION_NOTICE ||
+                    message.type == Message.MessageType.CANCELLATION_NOTICE) Modifier else Modifier.padding(
                         start = 12.dp,
                         end = 12.dp,
                         top = 8.dp,
@@ -249,6 +258,7 @@ fun MessageBubble(
                             profession = message.receiptProfession,
                             address = message.receiptAddress,
                             code = message.receiptCode,
+                            prioritizeCompany = message.receiptPrioritizeCompany,
                             isFromCurrentUser = isFromCurrentUser
                         )
                     }
@@ -259,6 +269,30 @@ fun MessageBubble(
                             isFromCurrentUser = isFromCurrentUser
                         )
                     }
+                    Message.MessageType.COMPLETION_NOTICE -> {
+                        CompletionNoticeBubble(
+                            originalDate = message.appointmentDate ?: "",
+                            originalTime = message.appointmentTime ?: "",
+                            isFromCurrentUser = isFromCurrentUser
+                        )
+                    }
+                    Message.MessageType.CANCELLATION_NOTICE -> {
+                        CancellationNoticeBubble(
+                            originalDate = message.appointmentDate ?: "",
+                            originalTime = message.appointmentTime ?: "",
+                            reason = message.rejectionReason ?: "",
+                            isFromCurrentUser = isFromCurrentUser
+                        )
+                    }
+                    Message.MessageType.VISIT,
+                    Message.MessageType.TENDER,
+                    Message.MessageType.SYSTEM -> {
+                        Text(
+                            text = message.text ?: "",
+                            color = textColor,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
 
                 // Timestamp y estado (excepto para AUDIO y BUDGET que tienen su propio layout)
@@ -266,7 +300,9 @@ fun MessageBubble(
                     message.type != Message.MessageType.CALENDAR_INVITE &&
                     message.type != Message.MessageType.APPOINTMENT_REQUEST &&
                     message.type != Message.MessageType.APPOINTMENT_RECEIPT &&
-                    message.type != Message.MessageType.RESCHEDULE_NOTICE) {
+                    message.type != Message.MessageType.RESCHEDULE_NOTICE &&
+                    message.type != Message.MessageType.COMPLETION_NOTICE &&
+                    message.type != Message.MessageType.CANCELLATION_NOTICE) {
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Row(
@@ -1355,6 +1391,7 @@ fun AppointmentReceiptBubble(
     profession: String? = null,
     address: String? = null,
     code: String? = null,
+    prioritizeCompany: Boolean = false,
     isFromCurrentUser: Boolean
 ) {
     val colors = getPrestadorColors()
@@ -1391,10 +1428,16 @@ fun AppointmentReceiptBubble(
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
-            // Profesional
+            // Profesional o Empresa según configuración
             if (providerName.isNotBlank()) {
-                val profValue = if (!profession.isNullOrBlank()) "$providerName . $profession" else providerName
-                ReceiptInfoRow(icon = Icons.Default.Person, label = "Profesional", value = profValue, colors = colors)
+                if (prioritizeCompany) {
+                    // Mostrar como Empresa
+                    ReceiptInfoRow(icon = Icons.Default.Business, label = "Empresa", value = providerName, colors = colors)
+                } else {
+                    // Mostrar como Profesional independiente
+                    val profValue = if (!profession.isNullOrBlank()) "$providerName · $profession" else providerName
+                    ReceiptInfoRow(icon = Icons.Default.Person, label = "Profesional", value = profValue, colors = colors)
+                }
                 Spacer(modifier = Modifier.height(4.dp))
             }
 
@@ -1523,7 +1566,7 @@ fun RescheduleNoticeBubble(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Turno reprogramado",
+                    text = "Tu turno será reprogramado",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = colors.textPrimary
@@ -1559,12 +1602,187 @@ fun RescheduleNoticeBubble(
                 color = Color(0xFFFF6B35).copy(alpha = 0.08f)
             ) {
                 Text(
-                    text = "Recibirás nuevos horarios disponibles para elegir.",
+                    text = "El prestador necesita cambiar la fecha. Pronto recibirás nuevos horarios disponibles para elegir.",
                     fontSize = 11.sp,
                     color = Color(0xFFFF6B35),
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                     lineHeight = 14.sp
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun CancellationNoticeBubble(
+    originalDate: String,
+    originalTime: String,
+    reason: String,
+    isFromCurrentUser: Boolean
+) {
+    val colors = getPrestadorColors()
+    val formattedDate = remember(originalDate) {
+        try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val displaySdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+            displaySdf.format(sdf.parse(originalDate)!!)
+        } catch (e: Exception) { originalDate }
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isFromCurrentUser) Color(0xFFEF4444).copy(alpha = 0.08f) else colors.surfaceElevated,
+        border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.6f)),
+        modifier = Modifier.widthIn(min = 200.dp, max = 300.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Cancel,
+                    contentDescription = null,
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Turno cancelado",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = colors.textPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            HorizontalDivider(color = Color(0xFFEF4444).copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (formattedDate.isNotBlank()) {
+                ReceiptInfoRow(
+                    icon = Icons.Default.CalendarToday,
+                    label = "Fecha",
+                    value = formattedDate,
+                    colors = colors
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            if (originalTime.isNotBlank()) {
+                ReceiptInfoRow(
+                    icon = Icons.Default.AccessTime,
+                    label = "Hora",
+                    value = originalTime,
+                    colors = colors
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            if (reason.isNotBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFEF4444).copy(alpha = 0.08f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Motivo: $reason",
+                            fontSize = 11.sp,
+                            color = Color(0xFFEF4444),
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CompletionNoticeBubble(
+    originalDate: String,
+    originalTime: String,
+    isFromCurrentUser: Boolean
+) {
+    val colors = getPrestadorColors()
+    val formattedDate = remember(originalDate) {
+        try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val displaySdf = java.text.SimpleDateFormat("dd//MM/yyyy", java.util.Locale.getDefault())
+            displaySdf.format(sdf.parse(originalDate)!!)
+        } catch (e: Exception) { originalDate }
+    }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (isFromCurrentUser) Color(0xFF059669).copy(alpha = 0.08f) else colors.surfaceElevated,
+        border = BorderStroke(1.dp, Color(0xFF059669).copy(alpha = 0.6f)),
+        modifier = Modifier.widthIn(min = 200.dp, max = 300.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = Color(0xFF059669),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Turno completado",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = colors.textPrimary
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            HorizontalDivider(color = Color(0xFF059669).copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(8.dp))
+            if (formattedDate.isNotBlank()) {
+                ReceiptInfoRow(
+                    icon = Icons.Default.CalendarToday,
+                    label = "Fecha",
+                    value = formattedDate,
+                    colors = colors
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+            if (originalTime.isNotBlank()) {
+                ReceiptInfoRow(
+                    icon = Icons.Default.AccessTime,
+                    label = "Hora",
+                    value = originalTime,
+                    colors = colors
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFF059669).copy(alpha = 0.08f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = Color(0xFF059669),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "El cliente recibirá una solicitud de calificación.",
+                        fontSize = 11.sp,
+                        color = Color(0xFF059669),
+                        lineHeight = 14.sp
+                    )
+                }
             }
         }
     }

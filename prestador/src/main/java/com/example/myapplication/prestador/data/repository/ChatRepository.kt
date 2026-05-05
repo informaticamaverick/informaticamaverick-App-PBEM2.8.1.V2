@@ -506,8 +506,7 @@ class ChatRepository @Inject constructor(
                     text = if (visitParts != null) parsedNotes else rawText,
                     timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis(),
                     isFromCurrentUser = isOwn,
-                    messageType = if (msgType == "VISIT") "APPOINTMENT" else msgType,
-                    audioUrl = resolvedAudioUrl,
+                    messageType = if (msgType == "VISIT") "APPOINTMENT_REQUEST" else msgType,
                     imageUrl = resolvedImageUrl,
                     imageLocalPath = localImagePath, // Ruta local guardada
                     audioDuration = snapshot.child("audioDuration").getValue(Long::class.java)?.toInt(),
@@ -532,6 +531,7 @@ class ChatRepository @Inject constructor(
                     receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
                     receiptCode = snapshot.child("receiptCode").getValue(String::class.java),
                     receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java) ?: false,
+                    receiptPrioritizeCompany = snapshot.child("receiptPrioritizeCompany").getValue(Boolean::class.java) ?: false,
                 )
                 scope.launch {
                     try {
@@ -1040,7 +1040,7 @@ class ChatRepository @Inject constructor(
                                             text = snap.child("text").getValue(String::class.java) ?: "",
                                             timestamp = msgTimestamp,
                                             isFromCurrentUser = false,
-                                            messageType = if (msgType == "VISIT") "APPOINTMENT" else msgType,
+                                            messageType = if (msgType == "VISIT") "APPOINTMENT_REQUEST" else msgType,
                                             appointmentTitle = appointmentTitle,
                                             appointmentStatus = appointmentStatus,
                                             imageLocalPath = localImagePath,
@@ -1184,7 +1184,8 @@ class ChatRepository @Inject constructor(
         isTechnician: Boolean,
         profession: String?,
         address: String?,
-        code: String
+        code: String,
+        prioritizeCompany: Boolean = false
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val message = MessageEntity(
@@ -1201,7 +1202,8 @@ class ChatRepository @Inject constructor(
             receiptIsTechnician = isTechnician,
             receiptProfession = profession,
             receiptAddress = address,
-            receiptCode = code
+            receiptCode = code,
+            receiptPrioritizeCompany = prioritizeCompany
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Turno confirmado", message.timestamp, "APPOINTMENT_RECEIPT")
@@ -1223,6 +1225,7 @@ class ChatRepository @Inject constructor(
                 "receiptProfession" to (profession ?: ""),
                 "receiptAddress" to (address ?: ""),
                 "receiptCode" to code,
+                "receiptPrioritizeCompany" to prioritizeCompany,
                 "isRead" to false,
                 "isDelivered" to false
             )
@@ -1246,7 +1249,7 @@ class ChatRepository @Inject constructor(
         val message = MessageEntity(
             messageId = UUID.randomUUID().toString(),
             conversationId = conversationId,
-            text = "Turno reprogramado",
+            text = "Tu turno será reprogramado",
             timestamp = System.currentTimeMillis(),
             isFromCurrentUser = true,
             messageType = "RESCHEDULE_NOTICE",
@@ -1254,15 +1257,15 @@ class ChatRepository @Inject constructor(
             appointmentTime = originalTime
         )
         messageDao.insertMessage(message)
-        conversationDao.updateLastMessage(conversationId, "Turno reprogramado", message.timestamp, "RESCHEDULE_NOTICE")
-        updateConversationMetadata(conversationId, myUserId, receiverId, "Turno reprogramado", message.timestamp)
+        conversationDao.updateLastMessage(conversationId, "Tu turno será reprogramado", message.timestamp, "RESCHEDULE_NOTICE")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Tu turno será reprogramado", message.timestamp)
         try {
             val data = hashMapOf(
                 "messageId" to message.messageId,
                 "chatId" to conversationId,
                 "senderId" to myUserId,
                 "receiverId" to receiverId,
-                "text" to "Turno reprogramado",
+                "text" to "Tu turno será reprogramado",
                 "type" to "RESCHEDULE_NOTICE",
                 "timestamp" to message.timestamp,
                 "appointmentDate" to originalDate,
@@ -1276,6 +1279,99 @@ class ChatRepository @Inject constructor(
             messageDao.markAsSynced(message.messageId)
         } catch (e: Exception) {
             Log.e("ChatRepo", "Error sending reschedule notice: ${e.message}")
+        }
+        return message
+    }
+
+    suspend fun sendCancellationNoticeMessage(
+        conversationId: String,
+        myUserId: String,
+        originalDate: String,
+        originalTime: String,
+        reason: String
+    ): MessageEntity {
+        val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
+        val message = MessageEntity(
+            messageId = UUID.randomUUID().toString(),
+            conversationId = conversationId,
+            text = "Turno cancelado",
+            timestamp = System.currentTimeMillis(),
+            isFromCurrentUser = true,
+            messageType = "CANCELLATION_NOTICE",
+            appointmentDate = originalDate,
+            appointmentTime = originalTime,
+            rejectionReason = reason
+
+        )
+
+        messageDao.insertMessage(message)
+        conversationDao.updateLastMessage(conversationId, "Turno cancelado", message.timestamp, "CANCELLATION:NOTICE")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Turno cancelado", message.timestamp)
+        try {
+            val data = hashMapOf(
+                "messageId" to message.messageId,
+                "chatId" to conversationId,
+                "senderId" to myUserId,
+                "receiverId" to receiverId,
+                "text" to "Turno cancelado",
+                "type" to "CANCELLATION_NOTICE",
+                "timestamp" to message.timestamp,
+                "appointmentDate" to originalDate,
+                "appointmentTime" to originalTime,
+                "rejectionReason" to reason,
+                "isRead" to false,
+                "isDelivered" to false
+            )
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(message.messageId)
+                .setValue(data).await()
+            messageDao.markAsSynced(message.messageId)
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error sending cancellation notice: ${e.message}")
+        }
+        return message
+    }
+
+    suspend fun sendCompletionNoticeMessage(
+        conversationId: String,
+        myUserId: String,
+        originalDate: String,
+        originalTime: String
+    ): MessageEntity {
+        val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
+        val message = MessageEntity(
+            messageId = UUID.randomUUID().toString(),
+            conversationId = conversationId,
+            text = "Turno completado",
+            timestamp = System.currentTimeMillis(),
+            isFromCurrentUser = true,
+            messageType = "COMPLETION_NOTICE",
+            appointmentDate = originalDate,
+            appointmentTime = originalTime
+        )
+        messageDao.insertMessage(message)
+        conversationDao.updateLastMessage(conversationId, "Turno completado", message.timestamp, "COMPLETION_NOTICE")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Turno completado", message.timestamp)
+        try {
+            val data = hashMapOf(
+                "messageId" to message.messageId,
+                "chatId" to conversationId,
+                "senderId" to myUserId,
+                "receiverId" to receiverId,
+                "text" to "Turno completado",
+                "type" to "COMPLETION_NOTICE",
+                "timestamp" to message.timestamp,
+                "appointmentDate" to originalDate,
+                "appointmentTime" to originalTime,
+                "isRead" to false,
+                "isDelivered" to false
+            )
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(message.messageId)
+                .setValue(data).await()
+            messageDao.markAsSynced(message.messageId)
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error sending completion notice: ${e.message}")
         }
         return message
     }

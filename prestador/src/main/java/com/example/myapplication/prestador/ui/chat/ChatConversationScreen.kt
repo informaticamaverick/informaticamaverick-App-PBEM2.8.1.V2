@@ -141,6 +141,8 @@ fun ChatConversationScreen(
             "APPOINTMENT_REQUEST" -> Message.MessageType.APPOINTMENT_REQUEST
             "APPOINTMENT_RECEIPT" -> Message.MessageType.APPOINTMENT_RECEIPT
             "RESCHEDULE_NOTICE" -> Message.MessageType.RESCHEDULE_NOTICE
+            "COMPLETION_NOTICE" -> Message.MessageType.COMPLETION_NOTICE
+            "CANCELLATION_NOTICE" -> Message.MessageType.CANCELLATION_NOTICE
             else -> Message.MessageType.TEXT
         }
         val budgetObj = if (type == Message.MessageType.BUDGET && entity.budgetDataJson != null) {
@@ -195,7 +197,8 @@ fun ChatConversationScreen(
             receiptProfession = entity.receiptProfession,
             receiptAddress = entity.receiptAddress,
             receiptCode = entity.receiptCode,
-            receiptIsTechnician = entity.receiptIsTechnician
+            receiptIsTechnician = entity.receiptIsTechnician,
+            receiptPrioritizeCompany = entity.receiptPrioritizeCompany
         )
     }.toList() }
 
@@ -698,6 +701,7 @@ fun ChatConversationScreen(
                                             doesHomeVisits = provider?.doesHomeVisits ?: false,
                                             profession = provider?.profesion,
                                             providerAddress = provider?.address?.fullString(),
+                                            prioritizeCompany = provider?.priorizarEmpresa ?: false,
                                             accepted = true
                                         )
                                     }
