@@ -70,6 +70,8 @@ data class Message(
     val appointmentDate: String? = null,
     val appointmentTime: String? = null,
     val appointmentStatus: AppointmentProposalStatus? = null,
+    val appointmentType: String? = null,   // 🔥 [NUEVO]
+    val providerAddress: String? = null,   // 🔥 [NUEVO]
     val rejectionReason: String? = null,
     val calendarInviteMessageId: String? = null, //ID del CALENDAR_INVITE de origen
 
@@ -82,6 +84,10 @@ data class Message(
     val receiptCode: String? = null,
     val receiptIsTechnician: Boolean = false,
     val receiptPrioritizeCompany: Boolean = false,
+    val categoryId: String? = null,
+    //Solicitudes de presupuesto del cliente (BUDGET_REQUEST)
+    val budgetRequestDescription: String? = null,
+    val budgetRequestClientAddress: String? = null,
 
     //Metadatos
     val isRead: Boolean = false,
@@ -109,7 +115,8 @@ data class Message(
         APPOINTMENT_RECEIPT,
         RESCHEDULE_NOTICE,
         COMPLETION_NOTICE,
-        CANCELLATION_NOTICE
+        CANCELLATION_NOTICE,
+        BUDGET_REQUEST
     }
 
     /**

@@ -53,6 +53,7 @@ data class PresupuestoEntity(
     val firestoreId: String? = null,
     val syncedAt: Long? = null,
     val categorias: String = "",
+    val providerCompanyName: String? = null, // 🔥 [NUEVO] Nombre legible de la empresa
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

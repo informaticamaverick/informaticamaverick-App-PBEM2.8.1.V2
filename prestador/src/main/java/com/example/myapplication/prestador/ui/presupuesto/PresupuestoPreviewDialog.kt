@@ -72,7 +72,8 @@ fun BudgetPreviewPDFDialog(
     providerAddress: String = "",
     isProfessional: Boolean = false,
     presupuestoNumero: String = "",
-    tituloTrabajo: String = ""
+    tituloTrabajo: String = "",
+    category: String = ""
 ){
     val coroutineScope = rememberCoroutineScope()
     val captureLayer = rememberGraphicsLayer()
@@ -223,7 +224,7 @@ fun BudgetPreviewPDFDialog(
                             HorizontalDivider(color = Slate200)
 
                             // Datos Cliente
-                            A4ClientInfoSection(prestador, clientName, clientCompany, clientAddress, providerName, providerAddress, isProfessional, tituloTrabajo)
+                            A4ClientInfoSection(prestador, clientName, clientCompany, clientAddress, providerName, providerAddress, isProfessional, tituloTrabajo, category = category)
 
                             // Tabla de items
                             A4ItemsTable(displayItems)
@@ -424,7 +425,8 @@ fun A4ClientInfoSection(prestador: ProviderEntity,
                         isProfessional: Boolean = false,
                         tituloTrabajo: String = "",
                         providerPhone: String = "",
-                        providerEmail: String = "") {
+                        providerEmail: String = "",
+                        category: String = "") {
     // Nombre a mostrar: empresa si tiene, sino nombre completo
     val displayName = providerName.ifBlank {
         prestador.nombreEmpresa ?: "${prestador.name} ${prestador.apellido}".trim()
@@ -476,12 +478,32 @@ fun A4ClientInfoSection(prestador: ProviderEntity,
                 if (!clientCompany.isNullOrBlank()) {
                     Text(clientCompany, fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
                 }
+                if (!clientAddress.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.LocationOn, null, tint = Slate400, modifier = Modifier.size(10.dp).padding(top = 1.dp))
+                        Text(clientAddress, fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
+                    }
+                }
                 HorizontalDivider(color = Slate300, thickness = 1.dp, modifier = Modifier.padding(top = 4.dp))
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(if (isProfessional) "CONSULTA / SERVICIO" else "TRABAJO / PROYECTO", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Slate400)
                 Text(tituloTrabajo.ifBlank { if (isProfessional) "Servicio profesional" else "Proyecto de servicio" }, fontSize = 11.sp, color = Slate800, lineHeight = 14.sp)
+                if (category.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.Category, null, tint = Slate400, modifier = Modifier.size(10.dp))
+                        Text(
+                            category.uppercase(),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Slate600,
+                            letterSpacing = 0.3.sp
+                        )
+                    }
+                }
                 HorizontalDivider(color = Slate300, thickness = 1.dp, modifier = Modifier.padding(top = 4.dp))
             }
         }

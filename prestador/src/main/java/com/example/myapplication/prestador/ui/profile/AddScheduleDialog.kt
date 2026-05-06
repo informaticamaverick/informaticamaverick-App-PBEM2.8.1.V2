@@ -31,11 +31,13 @@ import com.example.myapplication.prestador.data.local.entity.toDayName
 fun AddScheduleDialog(
     schedule: AvailabilityScheduleEntity?,
     onDismiss: () -> Unit,
-    onConfirm: (days: List<Int>, startTime: String, endTime: String, duration: Int, worksByAppointment: Boolean) -> Unit,
-    colors: com.example.myapplication.prestador.ui.theme.PrestadorColors
+    onConfirm: (days: List<Int>, startTime: String, endTime: String, duration: Int, worksByAppointment: Boolean, scheduleType: String) -> Unit,
+    colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
+    hasPhysicalLocation: Boolean = false
 ) {
     var selectedDays by remember { mutableStateOf(setOf(schedule?.dayOfWeek ?: 1)) }
     var worksByAppointment by remember { mutableStateOf(schedule?.worksByAppointment ?: true) }
+    var scheduleType by remember { mutableStateOf(schedule?.scheduleType ?: com.example.myapplication.prestador.data.local.entity.ScheduleType.TECHNICAL_VISIT.name) }
 
     var customDurationText by remember {
         mutableStateOf(schedule?.appointmentDuration?.takeIf { it > 0 }?.toString() ?: "")
@@ -77,6 +79,34 @@ fun AddScheduleDialog(
                     color = colors.textPrimary
                 )
                 Spacer(modifier = Modifier.height(20.dp))
+                // Selector de tipo de servicio - solo si tiene local fisico
+                if (hasPhysicalLocation) {
+                    Text(text = "Tipo de horario", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = scheduleType == com.example.myapplication.prestador.data.local.entity.ScheduleType.TECHNICAL_VISIT.name,
+                            onClick = { scheduleType = com.example.myapplication.prestador.data.local.entity.ScheduleType.TECHNICAL_VISIT.name},
+                            label = { Text("🔧 Visita Técnica", fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = colors.primaryOrange,
+                                selectedLabelColor = androidx.compose.ui.graphics.Color.White
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = scheduleType == com.example.myapplication.prestador.data.local.entity.ScheduleType.LOCAL_APPOINTMENT.name ,
+                            onClick = { scheduleType = com.example.myapplication.prestador.data.local.entity.ScheduleType.LOCAL_APPOINTMENT.name },
+                            label = { Text("🏪 Turno en Local", fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = colors.primaryOrange,
+                                selectedLabelColor = androidx.compose.ui.graphics.Color.White
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
                 Text(text = "Dia de la semana", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -198,7 +228,7 @@ fun AddScheduleDialog(
                             val endTime = "${endTimeState.hour.toString().padStart(2,'0')}:${endTimeState.minute.toString().padStart(2,'0')}"
                             val duration = if (!worksByAppointment) 0
                                            else customDurationText.toIntOrNull() ?: 0
-                            onConfirm(selectedDays.sorted(), startTime, endTime, duration, worksByAppointment)
+                            onConfirm(selectedDays.sorted(), startTime, endTime, duration, worksByAppointment, scheduleType)
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange)

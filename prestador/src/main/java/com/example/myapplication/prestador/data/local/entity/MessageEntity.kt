@@ -67,6 +67,10 @@ data class MessageEntity(
     val appointmentDate: String? = null,
     val appointmentTime: String? = null,
     val appointmentStatus: String? = null, // PENDING, CONFIRMED, REJECTED
+    val appointmentType: String? = null,   // 🔥 [NUEVO] TECHNICAL_VISIT o LOCAL_APPOINTMENT
+    val providerAddress: String? = null,   // 🔥 [NUEVO] Dirección del local del prestador
+    val companyId: String? = null,         // 🔥 [NUEVO] Contexto Multi-Perfil
+    val categoryId: String? = null,        // 🔥 [NUEVO] Rubro del servicio
     val rejectionReason: String? = null,
     //Campos para presupuestos
     val budgetDataJson: String? = null,
@@ -89,5 +93,8 @@ data class MessageEntity(
     
     // Estado de sincronización
     val isSynced: Boolean = false,
-    val syncError: String? = null
+    val syncError: String? = null,
+    //Campos de para la solicitud de presupuesto
+    val budgetRequestDescription: String? = null,
+    val budgetRequestClientAddress: String? = null,
 )

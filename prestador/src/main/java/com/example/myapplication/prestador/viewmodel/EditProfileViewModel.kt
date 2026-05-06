@@ -191,14 +191,24 @@ class EditProfileViewModel @Inject constructor(
 
     fun loadProfile() {
         viewModelScope.launch {
-            _profileState.value = ProfileState.Loading
+            val userId = auth.currentUser?.uid ?: run {
+                _profileState.value = ProfileState.Error("Usuario no autenticado")
+                return@launch
+            }
+            // 1. Mostrar datos de Room inmediatamente (sin flash de Loading)
+            val cached = providerRepository.getProviderByIdOnce(userId)
+            if (cached != null) {
+                _profileState.value = ProfileState.Success(cached)
+            } else {
+                _profileState.value = ProfileState.Loading
+            }
+            // 2. Refrescar desde Firebase en segundo plano
             try {
-                val userId = auth.currentUser?.uid ?: throw Exception("Usuario no autenticado")
-                
-                // Siempre cargar desde Firebase para garantizar datos frescos
                 loadFromFirebase(userId)
             } catch (e: Exception) {
-                _profileState.value = ProfileState.Error(e.message ?: "Error al cargar perfil")
+                if (_profileState.value is ProfileState.Loading) {
+                    _profileState.value = ProfileState.Error(e.message ?: "Error al cargar perfil")
+                }
             }
         }
     }
@@ -249,6 +259,25 @@ class EditProfileViewModel @Inject constructor(
                         pais = str(ubicacion, "pais") ?: "Argentina",
                         codigoPostal = str(ubicacion, "codigoPostal") ?: ""
                     ))
+                }
+
+                // Agregar dirección del local/taller si turnosEnLocal está activo
+                if (bool(localMap, "turnosEnLocal")) {
+                    val localCalle = str(localMap, "direccionLocal") ?: ""
+                    val localProvincia = str(localMap, "provinciaLocal") ?: ""
+                    val localCp = str(localMap, "codigoPostalLocal") ?: ""
+                    if (localCalle.isNotBlank() || localProvincia.isNotBlank()) {
+                        addressesList.removeIf { it.id == "local" }
+                        addressesList.add(AddressProvider(
+                            id = "local",
+                            calle = localCalle,
+                            numero = "",
+                            localidad = "",
+                            provincia = localProvincia,
+                            pais = "Argentina",
+                            codigoPostal = localCp
+                        ))
+                    }
                 }
 
                 // 2. Empresas y Sucursales
@@ -355,9 +384,11 @@ class EditProfileViewModel @Inject constructor(
 
                     works24h = doc.getBoolean("atencionUrgencias") ?: bool(modalidad, "atencionUrgencias"),
                     doesHomeVisits = doc.getBoolean("vaDomicilio") ?: bool(modalidad, "vaDomicilio"),
-                    hasPhysicalLocation = bool(localMap, "turnosEnLocal"),
+                    hasPhysicalLocation = (localMap?.get("turnosEnLocal") as? Boolean)
+                        ?: doc.getBoolean("turnosEnLocal")
+                        ?: false,
                     doesShipping = doc.getBoolean("envios") ?: bool(modalidad, "envios"),
-                    acceptsAppointments = doc.getBoolean("turnosEnLocal") ?: bool(localMap, "turnosEnLocal"),
+                    acceptsAppointments = bool(localMap, "turnosEnLocal"),
                     
                     isVerified = doc.getBoolean("verificado") ?: doc.getBoolean("isVerified") ?: false,
 
@@ -491,7 +522,7 @@ class EditProfileViewModel @Inject constructor(
                     doesHomeVisits = vaDomicilio ?: currentProvider.doesHomeVisits,
                     hasPhysicalLocation = turnosEnLocal ?: currentProvider.hasPhysicalLocation,
                     doesShipping = envios ?: currentProvider.doesShipping,
-                    acceptsAppointments = turnosEnLocal ?: currentProvider.acceptsAppointments,
+                    acceptsAppointments = currentProvider.acceptsAppointments,
                     hasCompanyProfile = tieneEmpresa ?: currentProvider.hasCompanyProfile,
                     doesService = doesService ?: currentProvider.doesService,
                     doesProduct = doesProduct ?: currentProvider.doesProduct,
@@ -873,14 +904,16 @@ class EditProfileViewModel @Inject constructor(
         }
 
         val fcm = FirebaseMessaging.getInstance()
+        // 🔥 [VALIDACIÓN DE FLUJO] Normalización idéntica a la App Cliente
         val cleanCp = cp.normalizeForTopic()
 
-        Log.d("FCM_TOPIC", "Iniciando sincronización para CP: $cleanCp (Premium: $isSubscribed)")
+        Log.d("FCM_FLOW", "Sincronizando Topics para Prestador - CP: $cleanCp (Premium: $isSubscribed)")
 
         categories.forEach { cat ->
             val cleanCat = cat.normalizeForTopic()
-            // 🔥 CORRECCIÓN: Aseguramos consistencia: "tender_{cp}_{category}"
             val topicName = "tender_${cleanCp}_$cleanCat"
+            
+            Log.d("FCM_FLOW", "Procesando Tópico: $topicName")
 
             // ─── SECCIÓN: LÓGICA DE SUSCRIPCIÓN (Premium Incentives) ─────────────────────
             // Mantenemos la suscripción activa si es premium.

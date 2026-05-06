@@ -5,6 +5,8 @@ import androidx.room.PrimaryKey
 import androidx.room.ForeignKey
 import androidx.room.Index
 
+enum class ScheduleType { TECHNICAL_VISIT, LOCAL_APPOINTMENT }
+
 /**
  * Entidad de base de datos: Availability Schedule
  * Guarda los horarios de disponibilidad para profesionales con sistema de agenda
@@ -28,8 +30,9 @@ data class AvailabilityScheduleEntity(
     val dayOfWeek: Int,              // 1=Lunes, 7=Domingo
     val startTime: String,           // Formato "HH:mm" ej: "09:00"
     val endTime: String,             // Formato "HH:mm" ej: "18:00"
-    val appointmentDuration: Int, // Duración de cada turno en minutos (Personalizable)
+    val appointmentDuration: Int,    // Duración de cada turno en minutos (Personalizable)
     val worksByAppointment: Boolean = true, // Si trabaja con sistema de turnos
+    val scheduleType: String = ScheduleType.TECHNICAL_VISIT.name, // TECHNICAL_VISIT | LOCAL_APPOINTMENT
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()

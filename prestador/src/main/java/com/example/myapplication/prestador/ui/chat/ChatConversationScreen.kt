@@ -143,6 +143,7 @@ fun ChatConversationScreen(
             "RESCHEDULE_NOTICE" -> Message.MessageType.RESCHEDULE_NOTICE
             "COMPLETION_NOTICE" -> Message.MessageType.COMPLETION_NOTICE
             "CANCELLATION_NOTICE" -> Message.MessageType.CANCELLATION_NOTICE
+            "BUDGET_REQUEST" -> Message.MessageType.BUDGET_REQUEST
             else -> Message.MessageType.TEXT
         }
         val budgetObj = if (type == Message.MessageType.BUDGET && entity.budgetDataJson != null) {
@@ -167,6 +168,8 @@ fun ChatConversationScreen(
                 else ->
                     Message.AppointmentProposalStatus.PENDING
             },
+            appointmentType = entity.appointmentType,
+            providerAddress = entity.providerAddress,
             rejectionReason = entity.rejectionReason,
             timestamp = entity.timestamp,
             isFromCurrentUser = entity.isFromCurrentUser,
@@ -198,7 +201,10 @@ fun ChatConversationScreen(
             receiptAddress = entity.receiptAddress,
             receiptCode = entity.receiptCode,
             receiptIsTechnician = entity.receiptIsTechnician,
-            receiptPrioritizeCompany = entity.receiptPrioritizeCompany
+            receiptPrioritizeCompany = entity.receiptPrioritizeCompany,
+            categoryId = entity.categoryId,
+            budgetRequestDescription = entity.budgetRequestDescription,
+            budgetRequestClientAddress = entity.budgetRequestClientAddress
         )
     }.toList() }
 
@@ -218,6 +224,7 @@ fun ChatConversationScreen(
     // Estados para adjuntos y grabación
     var showAttachMenu by remember { mutableStateOf(false) }
     var showSendCalendarDialog by remember { mutableStateOf(false) }
+    var pendingAppointmentType by remember { mutableStateOf("TECHNICAL_VISIT") }
     var isRecording by remember { mutableStateOf(false) }
     var recordingTime by remember { mutableStateOf(0) }
 
@@ -233,6 +240,7 @@ fun ChatConversationScreen(
 
     // Estado del sheet de presupuesto
     var showBudgetSheet by remember { mutableStateOf(false) }
+    var budgetRequestMessage by remember { mutableStateOf<Message?>(null) }
 
     // Presupuesto a visualizar al hacer clic en "Ver presupuesto"
     var presupuestoMsgToView by remember { mutableStateOf<Message?>(null) }
@@ -279,7 +287,7 @@ fun ChatConversationScreen(
         onDispose {
             try { mediaRecorder?.stop() } catch (_: Exception) {}
             try { mediaRecorder?.release() } catch (_: Exception) {}
-                mediaRecorder = null
+            mediaRecorder = null
         }
     }
 
@@ -683,6 +691,7 @@ fun ChatConversationScreen(
                             MessageBubble(
                                 message = message,
                                 isFromCurrentUser = message.isFromCurrentUser,
+                                clientName = userName,
                                 onVerPresupuesto = if (message.type == Message.MessageType.BUDGET) {
                                     { presupuestoMsgToView = message }
                                 } else null,
@@ -690,6 +699,8 @@ fun ChatConversationScreen(
                                 onAccept = if (message.type == Message.MessageType.APPOINTMENT_REQUEST &&
                                     message.appointmentStatus == Message.AppointmentProposalStatus.PENDING) {
                                     { serviceTitle ->
+                                        val isVisit = message.appointmentType == "TECHNICAL_VISIT"
+                                        val finalAddr = if (isVisit) message.providerAddress else (provider?.address?.fullString())
                                         chatViewModel.respondToAppointmentRequest(
                                             messageId = message.id,
                                             clientName = userName,
@@ -701,9 +712,18 @@ fun ChatConversationScreen(
                                             doesHomeVisits = provider?.doesHomeVisits ?: false,
                                             profession = provider?.profesion,
                                             providerAddress = provider?.address?.fullString(),
-                                            prioritizeCompany = provider?.priorizarEmpresa ?: false,
+                                            appointmentType = message.appointmentType ?: "TECHNICAL_VISIT",
+                                            serviceCategory = message.categoryId
+                                                ?: provider?.categories?.firstOrNull(),
                                             accepted = true
                                         )
+                                    }
+                                } else null,
+
+                                onCreateBudgetFromRequest = if (message.type == Message.MessageType.BUDGET_REQUEST) {
+                                    {
+                                        budgetRequestMessage = message
+                                        showBudgetSheet = true
                                     }
                                 } else null,
 
@@ -871,10 +891,17 @@ fun ChatConversationScreen(
                                 showAttachMenu = false
                                 showBudgetSheet = true
                             },
-                            onScheduleClick = {
+                            onScheduleVisitClick = {
                                 showAttachMenu = false
+                                pendingAppointmentType = "TECHNICAL_VISIT"
+                                showSendCalendarDialog = true
+                            },
+                            onScheduleLocalClick = {
+                                showAttachMenu = false
+                                pendingAppointmentType = "LOCAL_APPOINTMENT"
                                 showSendCalendarDialog = true
                             }
+
                         )
                     }
                 }
@@ -884,12 +911,19 @@ fun ChatConversationScreen(
                     SendCalendarDialog(
                         providerId = providerId,
                         onDismiss = { showSendCalendarDialog = false },
-                        onSend = { startDate, endDate, availabilityJson, bookedSlotsJson ->
+                        hasPhysicalLocation = provider?.hasPhysicalLocation ?: false,
+                        tieneEmpresa = provider?.hasCompanyProfile ?: false,
+                        initialAppointmentType = pendingAppointmentType,
+                        showTypePicker = false,
+                        onSend = { startDate, endDate, availabilityJson, bookedSlotsJson, appointmentType, providerAddress, serviceCategory ->
                             chatViewModel.sendCalendarInvite(
                                 startDate = startDate,
                                 endDate = endDate,
                                 availabilityJson = availabilityJson,
-                                bookedSlotsJson = bookedSlotsJson
+                                bookedSlotsJson = bookedSlotsJson,
+                                appointmentType = appointmentType,
+                                providerAddress = providerAddress,
+                                serviceCategory = serviceCategory
                             )
                             showSendCalendarDialog = false
                             coroutineScope.launch { listState.animateScrollToItem(0) }
@@ -903,7 +937,8 @@ fun ChatConversationScreen(
                         userId = userId,
                         userName = userName,
                         providerId = effectiveProviderId,
-                        onDismiss = { showBudgetSheet = false }
+                        initialClientAddress = budgetRequestMessage?.budgetRequestClientAddress,
+                        onDismiss = { showBudgetSheet = false; budgetRequestMessage = null }
                     )
                 }
 
@@ -964,38 +999,7 @@ fun ChatConversationScreen(
                                     amount = p[1].toDoubleOrNull() ?: 0.0
                                 ) else null
                             }
-/**
-                        val prestador = remember(
-                            msg.id,
-                            provider?.id,
-                            providerDisplayName,
-                            providerDisplayAddress
-                        ) {
 
-
-                            provider?.toPrestadorProfileFalso(businessEntity)
-                                ?: PPrestadorProfileFalso(
-                                    id = effectiveProviderId.ifBlank { "demo" },
-                                    name = providerDisplayName.ifBlank { "Prestador" },
-                                    lastName = "",
-                                    profileImageUrl = "",
-                                    bannerImageUrl = null,
-                                    rating = 0f,
-                                    isVerified = false,
-                                    isOnline = false,
-                                    services = emptyList(),
-                                    companyName = null,
-                                    address = providerDisplayAddress,
-                                    email = "",
-                                    doesHomeVisits = false,
-                                    hasPhysicalLocation = false,
-                                    works24h = false,
-                                    galleryImages = emptyList(),
-                                    isFavorite = false,
-                                    isSubscribed = false
-                                )
-                        }
-**/
 
 
 // 1. Mapea el objeto real directamente a la estructura que espera el Dialog
@@ -1037,5 +1041,3 @@ val prestador = remember(provider, businessEntity) {
                 }
             }
         }
-
-

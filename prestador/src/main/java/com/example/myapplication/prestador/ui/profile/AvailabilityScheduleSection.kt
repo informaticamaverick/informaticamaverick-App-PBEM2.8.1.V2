@@ -27,6 +27,7 @@ import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
 @Composable
 fun AvailabilityScheduleSection(
     colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
+    hasPhysicalLocation: Boolean = false,
     viewModel: AvailabilityViewModel = hiltViewModel()
 ) {
     val schedules by viewModel.schedules.collectAsState()
@@ -228,7 +229,7 @@ fun AvailabilityScheduleSection(
                 showAddDialog = false
                 scheduleToEdit = null
             },
-            onConfirm = { days, startTime, endTime, duration, worksByAppointment ->
+            onConfirm = { days, startTime, endTime, duration, worksByAppointment, scheduleType ->
                 if (scheduleToEdit != null) {
                     viewModel.updateSchedule(
                         scheduleToEdit!!.copy(
@@ -236,16 +237,18 @@ fun AvailabilityScheduleSection(
                             startTime = startTime,
                             endTime = endTime,
                             appointmentDuration = duration,
-                            worksByAppointment = worksByAppointment
+                            worksByAppointment = worksByAppointment,
+                            scheduleType = scheduleType
                         )
                     )
                 } else {
                     days.forEach { day ->
-                        viewModel.addSchedule(day, startTime, endTime, duration, worksByAppointment)
+                        viewModel.addSchedule(day, startTime, endTime, duration, worksByAppointment, scheduleType)
                     }
                 }
             },
-            colors = colors
+            colors = colors,
+            hasPhysicalLocation = hasPhysicalLocation
         )
     }
     

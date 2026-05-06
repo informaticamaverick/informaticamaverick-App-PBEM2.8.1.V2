@@ -28,6 +28,8 @@ data class ConversationEntity(
     //Información del trabajo/servicio
     val serviceType: String? = null,
     val jobDescription: String? = null,
+    val companyId: String? = null,
+    val categoryId: String? = null,
 
     //Último mensaje
     val lastMessage: String? = null,

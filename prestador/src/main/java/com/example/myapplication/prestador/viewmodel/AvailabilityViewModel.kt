@@ -54,7 +54,8 @@ class AvailabilityViewModel @Inject constructor(
         startTime: String,
         endTime: String,
         appointmentDuration: Int,
-        worksByAppointment: Boolean = true
+        worksByAppointment: Boolean = true,
+        scheduleType: String = com.example.myapplication.prestador.data.local.entity.ScheduleType.TECHNICAL_VISIT.name
     ) {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
@@ -93,6 +94,7 @@ class AvailabilityViewModel @Inject constructor(
                     endTime = endTime,
                     appointmentDuration = if (worksByAppointment) appointmentDuration else 0,
                     worksByAppointment = worksByAppointment,
+                    scheduleType = scheduleType,
                     isActive = true,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()

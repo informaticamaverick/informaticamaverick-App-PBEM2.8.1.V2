@@ -27,6 +27,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.net.Uri
+import android.text.SpannedString
 import com.example.myapplication.prestador.data.local.dao.BookedAppointmentDao
 import com.google.firebase.database.ChildEvent
 import com.google.firebase.database.ValueEventListener
@@ -78,7 +79,13 @@ class ChatRepository @Inject constructor(
     }
 
     // ── Enviar mensaje de texto ────────────────────────────────────────────────
-    suspend fun sendMessage(conversationId: String, text: String, myUserId: String): MessageEntity {
+    suspend fun sendMessage(
+        conversationId: String,
+        text: String,
+        myUserId: String,
+        companyId: String? = null,
+        categoryId: String? = null
+    ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val message = MessageEntity(
             messageId = UUID.randomUUID().toString(),
@@ -86,7 +93,9 @@ class ChatRepository @Inject constructor(
             text = text,
             timestamp = System.currentTimeMillis(),
             isFromCurrentUser = true,
-            messageType = "TEXT"
+            messageType = "TEXT",
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, text, message.timestamp, "TEXT")
@@ -104,7 +113,9 @@ class ChatRepository @Inject constructor(
                     "type" to "TEXT",
                     "timestamp" to message.timestamp,
                     "isRead" to false,
-                    "isDelivered" to false
+                    "isDelivered" to false,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(message.messageId)
         } catch (e: Exception) {
@@ -117,7 +128,9 @@ class ChatRepository @Inject constructor(
     suspend fun sendBudgetMessage(
         conversationId: String,
         myUserId: String,
-        pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
+        pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity,
+        companyId: String? = null,
+        categoryId: String? = null
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val budgetJson = org.json.JSONObject().apply {
@@ -133,6 +146,7 @@ class ChatRepository @Inject constructor(
             put("notas", pres.notas)
             put("validezDias", pres.validezDias)
             put("titulo", pres.tituloTrabajo)
+            put("companyName", pres.providerCompanyName) // 🔥 Enviamos el nombre legible de la empresa
         }.toString()
         val message = MessageEntity(
             messageId = UUID.randomUUID().toString(),
@@ -141,7 +155,9 @@ class ChatRepository @Inject constructor(
             timestamp = System.currentTimeMillis(),
             isFromCurrentUser = true,
             messageType = "BUDGET",
-            budgetDataJson = budgetJson
+            budgetDataJson = budgetJson,
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Presupuesto ${pres.numeroPresupuesto}", message.timestamp, "BUDGET")
@@ -160,7 +176,9 @@ class ChatRepository @Inject constructor(
                     "isRead" to false,
                     "isDelivered" to false,
                     "budgetDataJson" to budgetJson,
-                    "categorias" to pres.categorias
+                    "categorias" to pres.categorias,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(message.messageId)
         } catch (e: Exception) {
@@ -170,7 +188,13 @@ class ChatRepository @Inject constructor(
     }
 
     // ── Enviar imagen ──────────────────────────────────────────────────────────
-    suspend fun sendImageMessage(conversationId: String, imageBase64: String, senderId: String) {
+    suspend fun sendImageMessage(
+        conversationId: String,
+        imageBase64: String,
+        senderId: String,
+        companyId: String? = null,
+        categoryId: String? = null
+    ) {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
         val timestamp = System.currentTimeMillis()
@@ -186,7 +210,9 @@ class ChatRepository @Inject constructor(
             isFromCurrentUser = true,
             messageType = "IMAGE",
             imageLocalPath = localPath,
-            imageUrl = "[Imagen]"
+            imageUrl = "[Imagen]",
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "[Imagen]", timestamp, "IMAGE")
@@ -205,7 +231,9 @@ class ChatRepository @Inject constructor(
                     "type" to "IMAGE",
                     "timestamp" to timestamp,
                     "isRead" to false,
-                    "isDelivered" to false
+                    "isDelivered" to false,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 ))
             messageDao.markAsSynced(messageId)
         } catch (e: Exception) {
@@ -218,7 +246,9 @@ class ChatRepository @Inject constructor(
         conversationId: String,
         latitude: Double,
         longitude: Double,
-        senderId: String
+        senderId: String,
+        companyId: String? = null,
+        categoryId: String? = null
     ) {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -231,7 +261,9 @@ class ChatRepository @Inject constructor(
             isFromCurrentUser = true,
             messageType = "LOCATION",
             latitude = latitude,
-            longitude = longitude
+            longitude = longitude,
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Ubicacion compartida", timestamp, "LOCATION")
@@ -251,7 +283,9 @@ class ChatRepository @Inject constructor(
                     "longitude" to longitude,
                     "timestamp" to timestamp,
                     "isRead" to false,
-                    "isDelivered" to false
+                    "isDelivered" to false,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(messageId)
         } catch (e: Exception) {
@@ -264,7 +298,9 @@ class ChatRepository @Inject constructor(
         conversationId: String,
         audioPath: String,
         durationSeconds: Int,
-        senderId: String
+        senderId: String,
+        companyId: String? = null,
+        categoryId: String? = null
     ) {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -289,7 +325,9 @@ class ChatRepository @Inject constructor(
             messageType = "AUDIO",
             audioUrl = audioPath,
             audioLocalPath = audioPath,
-            audioDuration = durationSeconds
+            audioDuration = durationSeconds,
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "[Audio]", timestamp, "AUDIO")
@@ -308,7 +346,9 @@ class ChatRepository @Inject constructor(
                     "type" to "AUDIO",
                     "timestamp" to timestamp,
                     "isRead" to false,
-                    "isDelivered" to false
+                    "isDelivered" to false,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(messageId)
             Log.d("ChatRepo", "Audio enviado a RTDB desde prestador")
@@ -325,7 +365,9 @@ class ChatRepository @Inject constructor(
         title: String,
         date: String,
         time: String,
-        notes: String
+        notes: String,
+        companyId: String? = null,
+        categoryId: String? = null
     ) {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -341,7 +383,9 @@ class ChatRepository @Inject constructor(
             appointmentTitle = title,
             appointmentDate = date,
             appointmentTime = time,
-            appointmentStatus = "PENDING"
+            appointmentStatus = "PENDING",
+            companyId = companyId,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Propuesta de turno: $date $time", timestamp, "APPOINTMENT")
@@ -364,7 +408,9 @@ class ChatRepository @Inject constructor(
                     "appointmentTitle" to title,
                     "appointmentDate" to date,
                     "appointmentTime" to time,
-                    "appointmentStatus" to "PENDING"
+                    "appointmentStatus" to "PENDING",
+                    "companyId" to companyId,
+                    "categoryId" to categoryId
                 )).await()
             messageDao.markAsSynced(messageId)
             Log.d("ChatRepo", "Appointment enviado a RTDB")
@@ -382,6 +428,11 @@ class ChatRepository @Inject constructor(
         endDate: String,
         availabilityJson: String,
         bookedSlotsJson: String,
+        companyId: String? = null,
+        categoryId: String? = null,
+        appointmentType: String? = null,
+        providerAddress: String? = null,
+        serviceCategory: String = ""
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -396,7 +447,11 @@ class ChatRepository @Inject constructor(
             calendarStartDate = startDate,
             calendarEndDate = endDate,
             availabilityJson = availabilityJson,
-            bookedSlotsJson = bookedSlotsJson
+            bookedSlotsJson = bookedSlotsJson,
+            companyId = companyId,
+            categoryId = categoryId,
+            appointmentType = appointmentType,
+            providerAddress = providerAddress
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Calendario de disponibilidad", timestamp, "CALENDAR_INVITE")
@@ -417,7 +472,12 @@ class ChatRepository @Inject constructor(
                     "calendarStartDate" to startDate,
                     "calendarEndDate" to endDate,
                     "availabilityJson" to availabilityJson,
-                    "bookedSlotsJson" to bookedSlotsJson
+                    "bookedSlotsJson" to bookedSlotsJson,
+                    "companyId" to companyId,
+                    "categoryId" to categoryId,
+                    "appointmentType" to appointmentType,
+                    "providerAddress" to providerAddress,
+                    "serviceCategory" to serviceCategory
                 )).await()
             messageDao.markAsSynced(messageId)
         } catch (e: Exception) {
@@ -463,14 +523,18 @@ class ChatRepository @Inject constructor(
         val listeningStartAt = System.currentTimeMillis()
         messageChildListener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousKey: String?) {
-                val senderId = snapshot.child("senderId").getValue(String::class.java) ?: return
+                val senderId = snapshot.child("senderId").getValue(String::class.java)
+                    ?: return
                 val isOwn = senderId == myUserId
-                val msgId = snapshot.child("messageId").getValue(String::class.java) ?: snapshot.key ?: return
-                val msgType = snapshot.child("type").getValue(String::class.java) ?: "TEXT"
-                
+                if (isOwn) return  // ya insertado por sendMessage, evitar duplicado por race condition
+                val msgId = snapshot.child("messageId").getValue(String::class.java) ?:
+                snapshot.key ?: return
+                val msgType = snapshot.child("type").getValue(String::class.java) ?:
+                "TEXT"
+
                 var resolvedImageUrl: String? = null
                 var localImagePath: String? = null
-                
+
                 if (msgType == "IMAGE") {
                     val base64 = snapshot.child("content").getValue(String::class.java)
                         ?: snapshot.child("imageUrl").getValue(String::class.java)
@@ -481,7 +545,7 @@ class ChatRepository @Inject constructor(
                         resolvedImageUrl = base64
                     }
                 }
-                
+
                 val resolvedAudioUrl: String? = if (msgType == "AUDIO") {
                     val base64 = snapshot.child("audioUrl").getValue(String::class.java)
                         ?: snapshot.child("content").getValue(String::class.java)
@@ -499,7 +563,7 @@ class ChatRepository @Inject constructor(
                 val parsedDate  = visitParts?.getOrNull(1) ?: snapshot.child("appointmentDate").getValue(String::class.java)
                 val parsedTime  = visitParts?.getOrNull(2) ?: snapshot.child("appointmentTime").getValue(String::class.java)
                 val parsedNotes = visitParts?.getOrNull(3) ?: rawText
-                
+
                 val msg = MessageEntity(
                     messageId = msgId,
                     conversationId = conversationId,
@@ -518,6 +582,8 @@ class ChatRepository @Inject constructor(
                     appointmentTime = parsedTime,
                     appointmentStatus = snapshot.child("appointmentStatus").getValue(String::class.java)
                         ?: if (msgType == "VISIT") "PENDING" else null,
+                    appointmentType = snapshot.child("appointmentType").getValue(String::class.java),
+                    providerAddress = snapshot.child("providerAddress").getValue(String::class.java),
                     rejectionReason = snapshot.child("rejectionReason").getValue(String::class.java),
                     budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java),
                     calendarStartDate = snapshot.child("calendarStartDate").getValue(String::class.java),
@@ -526,12 +592,15 @@ class ChatRepository @Inject constructor(
                     bookedSlotsJson = snapshot.child("bookedSlotsJson").getValue(String::class.java),
                     calendarInviteMessageId = snapshot.child("calendarInviteMessageId").getValue(String::class.java),
                     receiptService = snapshot.child("receiptService").getValue(String::class.java),
+                    budgetRequestDescription = snapshot.child("budgetRequestDescription").getValue(String::class.java),
+                    budgetRequestClientAddress = snapshot.child("budgetRequestClientAddress").getValue(String::class.java),
                     receiptProviderName = snapshot.child("receiptProviderName").getValue(String::class.java),
                     receiptProfession = snapshot.child("receiptProfession").getValue(String::class.java),
                     receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
                     receiptCode = snapshot.child("receiptCode").getValue(String::class.java),
                     receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java) ?: false,
                     receiptPrioritizeCompany = snapshot.child("receiptPrioritizeCompany").getValue(Boolean::class.java) ?: false,
+                    categoryId = snapshot.child("categoryId").getValue(String::class.java),
                 )
                 scope.launch {
                     try {
@@ -557,14 +626,16 @@ class ChatRepository @Inject constructor(
                             )
                             Log.d("ChatRepo", "Conversación creada en startListening: $conversationId")
                         }
-                        
+
                         val existsInRoom = messageDao.getMessageById(msgId) != null
-                        messageDao.insertMessage(msg)
+                        if (!existsInRoom) {
+                            messageDao.insertMessage(msg)
+                        }
                         val isNewMessage = msg.timestamp >= listeningStartAt - 5_000
                         if (!isOwn && !existsInRoom) {
                             conversationDao.incrementUnreadCount(conversationId)
                             val senderName = conversationDao.getConversationById(conversationId)?.userName ?: senderId
-                            
+
                             notificationHelper.showChatNotification(
                                 senderId = senderId,
                                 senderName = senderName,
@@ -572,7 +643,7 @@ class ChatRepository @Inject constructor(
                                 appointmentStatus = msg.appointmentStatus,
                                 appointmentTitle = msg.appointmentTitle
                             )
-                            
+
                             val (nTitulo, nMensaje, nTipo) = when (msgType) {
                                 "AUDIO" -> Triple(senderName, " Te envió un audio", TipoNotificacion.MENSAJE)
                                 "IMAGE" -> Triple(senderName, " Te envió un imagen", TipoNotificacion.MENSAJE)
@@ -589,7 +660,7 @@ class ChatRepository @Inject constructor(
                                 }
                                 else -> Triple(senderName, " Nuevo mensaje", TipoNotificacion.MENSAJE)
                             }
-                            
+
                             notificacionRepository.guardar(
                                 NotificacionItem(
                                     tipo = nTipo,
@@ -600,16 +671,16 @@ class ChatRepository @Inject constructor(
                                     accionRoute = "open_chat/$senderId"
                                 )
                             )
-                            
+
                             try {
                                 messagesRef.child(msgId).child("isDelivered").setValue(true)
                             } catch (e: Exception) {
                                 Log.e("ChatRepo", "Error marcando isDelivered: ${e.message}")
                             }
                         }
-                        
+
                         conversationDao.updateLastMessage(conversationId, msg.text ?: "", msg.timestamp, "TEXT")
-                        
+
                         if (isOwn) {
                             val isReadNow = snapshot.child("isRead").getValue(Boolean::class.java) ?: false
                             if (isReadNow) messageDao.markAsRead(msg.messageId)
@@ -684,7 +755,7 @@ class ChatRepository @Inject constructor(
     }
 
     fun observeUserOnline(userId: String):
-    kotlinx.coroutines.flow.Flow<Boolean> = callbackFlow {
+            kotlinx.coroutines.flow.Flow<Boolean> = callbackFlow {
         val ref = database.reference.child("users").child(userId).child("online")
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -800,11 +871,11 @@ class ChatRepository @Inject constructor(
                         // 1. Siempre re-fetchear si el nombre parece un ID crudo o está vacío
                         val storedName = existing?.userName ?: ""
                         val nameSeemsBad = storedName.isBlank()
-                            || storedName == otherUserId
-                            || storedName == "Cliente"
-                            || storedName.length > 20 && storedName.none { it == ' ' } // UID largo sin espacios
-                            || storedName.matches(Regex("^[A-Za-z0-9_-]{20,}$"))       // UID alfanumérico largo
-                            || storedName.matches(Regex("^[A-Za-z]+-?[A-Za-z]+-?\\d+$")) // P-Jar-0
+                                || storedName == otherUserId
+                                || storedName == "Cliente"
+                                || storedName.length > 20 && storedName.none { it == ' ' } // UID largo sin espacios
+                                || storedName.matches(Regex("^[A-Za-z0-9_-]{20,}$"))       // UID alfanumérico largo
+                                || storedName.matches(Regex("^[A-Za-z]+-?[A-Za-z]+-?\\d+$")) // P-Jar-0
                         var displayName = storedName.takeIf { !nameSeemsBad } ?: otherUserId
                         var freshAvatarUrl: String? = existing?.userAvatarUrl
 
@@ -848,7 +919,7 @@ class ChatRepository @Inject constructor(
                             isLocked = existing?.isLocked ?: false,
                             isSynced = true
                         )
-                        
+
                         if (existing == null) {
                             // Eliminar duplicado si ya existe una conv con el mismo userId pero distinto ID
                             val duplicate = conversationDao.getConversationByUserId(otherUserId)
@@ -859,7 +930,7 @@ class ChatRepository @Inject constructor(
                             conversationDao.insertConversation(conversation)
                         } else {
                             // Solo actualizar si algo relevante cambió para evitar loops de recomposición
-                            if (existing.lastMessage != conversation.lastMessage || 
+                            if (existing.lastMessage != conversation.lastMessage ||
                                 existing.lastMessageTimestamp != conversation.lastMessageTimestamp ||
                                 existing.userName != conversation.userName ||
                                 existing.userAvatarUrl != conversation.userAvatarUrl) {
@@ -873,6 +944,9 @@ class ChatRepository @Inject constructor(
 
     fun getConversationsByProvider(providerId: String): Flow<List<ConversationEntity>> =
         conversationDao.getAllConversations()
+
+    fun getConversationsByCompany(companyId: String?): Flow<List<ConversationEntity>> =
+        conversationDao.getConversationsByCompany(companyId)
 
     fun getMessagesByConversation(conversationId: String): Flow<List<MessageEntity>> =
         messageDao.getMessagesByConversation(conversationId)
@@ -906,7 +980,7 @@ class ChatRepository @Inject constructor(
                 for (msg in unreadMessages) {
                     // 1. Marcar como leído en RTDB
                     messagesRef.child(msg.messageId).child("isRead").setValue(true)
-                    
+
                     // 2. [LIMPIEZA AUTOMÁTICA] Borrar contenido pesado (Base64) una vez leído
                     // Mantiene el costo de almacenamiento en RTDB en CERO
                     if (msg.messageType == "IMAGE" || msg.messageType == "AUDIO") {
@@ -966,7 +1040,7 @@ class ChatRepository @Inject constructor(
     // ── Listener global para notificaciones (RTDB) ────────────────────────────
     fun startGlobalListening(myUserId: String) {
         val listeningStartAt = System.currentTimeMillis()
-        
+
         // No reiniciar todo si ya está escuchando Firestore
         if (globalListener != null) return
 
@@ -974,9 +1048,9 @@ class ChatRepository @Inject constructor(
             .whereArrayContains("participants", myUserId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null) return@addSnapshotListener
-                
+
                 val currentChatIds = snapshot.documents.map { it.id }.toSet()
-                
+
                 // Remover listeners de chats que ya no están en la lista
                 val toRemove = globalRtdbListeners.keys.filter { it !in currentChatIds }
                 toRemove.forEach { convId ->
@@ -987,7 +1061,7 @@ class ChatRepository @Inject constructor(
 
                 for (chatDoc in snapshot.documents) {
                     val conversationId = chatDoc.id
-                    
+
                     // Solo agregar si no tenemos ya un listener para este chat
                     if (globalRtdbListeners.containsKey(conversationId)) continue
 
@@ -1027,7 +1101,7 @@ class ChatRepository @Inject constructor(
                                         val rawContent = snap.child("content").getValue(String::class.java) ?: ""
                                         var localImagePath: String? = null
                                         var localAudioPath: String? = null
-                                        
+
                                         if (msgType == "IMAGE" && rawContent.isNotEmpty() && !rawContent.startsWith("http")) {
                                             localImagePath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "IMG_", ".webp")
                                         } else if (msgType == "AUDIO" && rawContent.isNotEmpty() && !rawContent.startsWith("http")) {
@@ -1042,7 +1116,11 @@ class ChatRepository @Inject constructor(
                                             isFromCurrentUser = false,
                                             messageType = if (msgType == "VISIT") "APPOINTMENT_REQUEST" else msgType,
                                             appointmentTitle = appointmentTitle,
+                                            appointmentDate = snap.child("appointmentDate").getValue(String::class.java),
+                                            appointmentTime = snap.child("appointmentTime").getValue(String::class.java),
                                             appointmentStatus = appointmentStatus,
+                                            appointmentType = snap.child("appointmentType").getValue(String::class.java),
+                                            providerAddress = snap.child("providerAddress").getValue(String::class.java),
                                             imageLocalPath = localImagePath,
                                             audioLocalPath = localAudioPath,
                                             imageUrl = if (localImagePath != null) "[Imagen]" else null,
@@ -1052,11 +1130,11 @@ class ChatRepository @Inject constructor(
                                         conversationDao.updateLastMessage(conversationId, msg.text ?: "", msgTimestamp, msgType)
                                         conversationDao.incrementUnreadCount(conversationId)
                                     }
-                                    
+
                                     // 3. Notificar
                                     if (!isNewMessage) return@launch
                                     if (!notifiedMessageIds.add(msgId)) return@launch
-                                    
+
                                     val senderName = conversationDao.getConversationById(conversationId)?.userName ?: senderId
                                     notificationHelper.showChatNotification(
                                         senderId = senderId,
@@ -1065,7 +1143,7 @@ class ChatRepository @Inject constructor(
                                         appointmentStatus = appointmentStatus,
                                         appointmentTitle = appointmentTitle
                                     )
-                                    
+
                                     val (gTitulo, gMensaje, gTipo) = when (msgType) {
                                         "AUDIO" -> Triple(senderName, " Te envió un audio", TipoNotificacion.MENSAJE)
                                         "IMAGE" -> Triple(senderName, " Te envió una imagen", TipoNotificacion.MENSAJE)
@@ -1082,7 +1160,7 @@ class ChatRepository @Inject constructor(
                                         }
                                         else -> Triple(senderName, " Nuevo mensaje", TipoNotificacion.MENSAJE)
                                     }
-                                    
+
                                     notificacionRepository.guardar(
                                         NotificacionItem(
                                             tipo = gTipo,
@@ -1185,7 +1263,10 @@ class ChatRepository @Inject constructor(
         profession: String?,
         address: String?,
         code: String,
-        prioritizeCompany: Boolean = false
+        prioritizeCompany: Boolean = false,
+        companyId: String? = null,
+        categoryId: String? = null,
+        appointmentType: String = "TECHNICAL_VISIT"
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val message = MessageEntity(
@@ -1203,7 +1284,9 @@ class ChatRepository @Inject constructor(
             receiptProfession = profession,
             receiptAddress = address,
             receiptCode = code,
-            receiptPrioritizeCompany = prioritizeCompany
+            receiptPrioritizeCompany = prioritizeCompany,
+            appointmentType = appointmentType,
+            categoryId = categoryId
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, "Turno confirmado", message.timestamp, "APPOINTMENT_RECEIPT")
@@ -1226,8 +1309,11 @@ class ChatRepository @Inject constructor(
                 "receiptAddress" to (address ?: ""),
                 "receiptCode" to code,
                 "receiptPrioritizeCompany" to prioritizeCompany,
+                "appointmentType" to appointmentType,
                 "isRead" to false,
-                "isDelivered" to false
+                "isDelivered" to false,
+                "companyId" to companyId,
+                "categoryId" to categoryId
             )
             database.reference.child("chats").child(conversationId)
                 .child("messages").child(message.messageId)
@@ -1375,5 +1461,31 @@ class ChatRepository @Inject constructor(
         }
         return message
     }
+
+    suspend fun addBookedSlot(chatId: String, messageId: String, date: String, time: String) {
+        try {
+            val msgRef = database.reference
+                .child("chats").child(chatId).child("messages").child(messageId)
+
+            //Leer valor actual
+            val snapshot = msgRef.child("bookedSlotsJson").get().await()
+            val currentJson = snapshot.getValue(String::class.java) ?: "[]"
+
+            //Agregar nuevo slot
+            val newSlot = org.json.JSONObject().apply {
+                put("date", date)
+                put("time", time)
+            }
+
+            val array = org.json.JSONArray(currentJson)
+            array.put(newSlot)
+
+
+            msgRef.child("bookedSlotsJson").setValue(array.toString()).await()
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error al bloquear slot: ${e.message}")
+        }
+    }
+
 
 }

@@ -68,11 +68,19 @@ class MainActivity : ComponentActivity() {
             editProfileViewModel.profileState.collectLatest { state ->
                 if (state is ProfileState.Success) {
                     val provider = state.provider
-                    editProfileViewModel.syncTopics(
-                        cp = provider.address?.codigoPostal ?: provider.codigoPostal,
-                        categories = provider.categories,
-                        isSubscribed = provider.isSubscribed
-                    )
+                    // Recopilamos todas las combinaciones posibles para suscribir el dispositivo
+                    val allCp = (listOfNotNull(provider.address?.codigoPostal) + provider.addresses.map { it.codigoPostal }).filter { it.isNotBlank() }.distinct()
+                    val allCats = (provider.categories + provider.companies.flatMap { it.categories }).filter { it.isNotBlank() }.distinct()
+                    
+                    if (allCp.isNotEmpty() && allCats.isNotEmpty()) {
+                        allCp.forEach { cp ->
+                            editProfileViewModel.syncTopics(
+                                cp = cp,
+                                categories = allCats,
+                                isSubscribed = provider.isSubscribed
+                            )
+                        }
+                    }
                 }
             }
         }

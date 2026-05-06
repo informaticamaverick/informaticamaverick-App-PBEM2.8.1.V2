@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -83,29 +84,29 @@ fun MessageInputBar(
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val screenWidthPx = with(density) { screenWidth.toPx() }
     val coroutineScope = rememberCoroutineScope()
-    
+
     // Estados para cancelar grabación con animación
     var dragOffsetX by remember { mutableStateOf(0f) }
     var isDeleting by remember { mutableStateOf(false) } // Tapa abierta
     var deleteTriggered by remember { mutableStateOf(false) } // En vuelo
     var isDraggingMic by remember { mutableStateOf(false) } // Nuevo: detecta si estamos arrastrando
-    
+
     // Valores animados para el vuelo del micrófono
     val micTranslationX = remember { Animatable(0f) }
     val micTranslationY = remember { Animatable(0f) }
     val micRotation = remember { Animatable(0f) }
     val micScale = remember { Animatable(1f) }
     val micAlpha = remember { Animatable(1f) }
-    
+
     // Umbral de cancelación (en píxeles)
     val cancelThreshold = with(density) { -120.dp.toPx() }
-    
+
     // Estados para gestos de deslizar (legacy, pueden eliminarse después)
     var isDraggingToCancel by remember { mutableStateOf(false) }
     var isCancelling by remember { mutableStateOf(false) }
     var micSwallowed by remember { mutableStateOf(false) }
     var trashBounce by remember { mutableStateOf(false) }
-    
+
     // Funciones para manejar la grabación con animación
     fun startRecording() {
         deleteTriggered = false
@@ -128,19 +129,19 @@ fun MessageInputBar(
         deleteTriggered = true
         // Capturar la posición actual del drag
         val currentDragPosition = dragOffsetX
-        
+
         coroutineScope.launch {
             // Inicializar las animaciones desde donde está el mic actualmente
             micTranslationX.snapTo(currentDragPosition)
             micTranslationY.snapTo(0f)
-            
+
             // CÁLCULO CORRECTO:
             // El Row tiene: tacho (lado izq) | Spacer(1f) | texto(2f) | Spacer(1f) | mic (lado der)
             // Total weights = 4f, el mic está en el extremo derecho
-            // 
+            //
             // Posición del tacho desde el borde izquierdo:
             // - 16dp padding del Box (línea 388)
-            // - 8dp padding del tacho (línea 403)  
+            // - 8dp padding del tacho (línea 403)
             // - 16dp centro del tacho (32dp / 2, sin scale porque aún no escaló)
             // = 40dp desde el borde izquierdo de la pantalla
             //
@@ -150,10 +151,10 @@ fun MessageInputBar(
             // Distancia a recorrer = posición_mic - posición_tacho
             // = (screenWidth - 44dp) - 40dp = screenWidth - 84dp
             // Como usamos offset negativo: -(screenWidth - 84dp)
-            
+
             val trashCenterFromLeft = with(density) { (16.dp + 8.dp + 16.dp).toPx() }
             val micCenterFromRight = with(density) { (16.dp + 28.dp).toPx() } // padding + radio del mic
-            
+
             // Distancia total que debe recorrer el mic hacia la izquierda (negativa)
             val trashPositionX = -(screenWidthPx - trashCenterFromLeft - micCenterFromRight)
 
@@ -211,7 +212,7 @@ fun MessageInputBar(
             onCancelAudio()
             stopRecording()
             deleteTriggered = false
-            
+
             micTranslationX.snapTo(0f)
             micTranslationY.snapTo(0f)
             micRotation.snapTo(0f)
@@ -219,7 +220,7 @@ fun MessageInputBar(
             micAlpha.snapTo(1f)
         }
     }
-    
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -244,22 +245,22 @@ fun MessageInputBar(
     ) {
         val isTextEmpty = messageText.trim().isEmpty()
 
-            // Crossfade entre UI normal y UI de grabación
-            Crossfade(
-                targetState = isRecording,
-                label = "recordingState",
-                modifier = Modifier.align(Alignment.BottomStart)
-            ) { recording ->
-                if (!recording) {
-                    // UI NORMAL de input
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 8.dp, top = 8.dp, bottom = 8.dp,
-                                     end = if (isTextEmpty) 56.dp else 8.dp),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+        // Crossfade entre UI normal y UI de grabación
+        Crossfade(
+            targetState = isRecording,
+            label = "recordingState",
+            modifier = Modifier.align(Alignment.BottomStart)
+        ) { recording ->
+            if (!recording) {
+                // UI NORMAL de input
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, top = 8.dp, bottom = 8.dp,
+                            end = if (isTextEmpty) 56.dp else 8.dp),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     // Botón de adjuntar
                     IconButton(
                         onClick = onAttachClick,
@@ -271,7 +272,7 @@ fun MessageInputBar(
                             tint = Color(0xFFF97316)
                         )
                     }
-                    
+
                     // Campo de texto con botones integrados
                     Box(
                         modifier = Modifier
@@ -312,7 +313,7 @@ fun MessageInputBar(
                                 ),
                                 maxLines = 4
                             )
-                            
+
                             // Botón de cámara (solo visible cuando no hay texto)
                             AnimatedVisibility(
                                 visible = isTextEmpty,
@@ -337,7 +338,7 @@ fun MessageInputBar(
                                     )
                                 }
                             }
-                            
+
                             // Botón de enviar (solo cuando hay texto; el mic está fuera del Crossfade)
                             if (!isTextEmpty) {
                                 Box(
@@ -387,7 +388,7 @@ fun MessageInputBar(
                                 TrashCanIcon(isLidOpen = isDeleting, isRed = isDeleting)
                             }
                         }
-                        
+
                         // Texto de tiempo y "Desliza para cancelar"
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -412,9 +413,9 @@ fun MessageInputBar(
                                     .clip(CircleShape)
                                     .background(Color.Red.copy(alpha = alpha))
                             )
-                            
+
                             Spacer(modifier = Modifier.width(8.dp))
-                            
+
                             val mins = recordingTime / 60
                             val secs = recordingTime % 60
                             Text(
@@ -423,9 +424,9 @@ fun MessageInputBar(
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Light
                             )
-                            
+
                             Spacer(modifier = Modifier.width(16.dp))
-                            
+
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = null,
@@ -443,16 +444,16 @@ fun MessageInputBar(
                     }
                 }
             }
-        // ── Botón mic PERSISTENTE fuera del Crossfade ──────────────────────
-        // Un único pointer input que no se destruye al cambiar el estado de grabación
-        if (isTextEmpty || isRecording) {
+            // ── Botón mic PERSISTENTE fuera del Crossfade ──────────────────────
+            // Un único pointer input que no se destruye al cambiar el estado de grabación
+            if (isTextEmpty || isRecording) {
                 val currentTx = if (deleteTriggered) micTranslationX.value else dragOffsetX
                 val currentTy = if (deleteTriggered) micTranslationY.value else 0f
                 val currentRot = if (deleteTriggered) micRotation.value else 0f
                 val currentScale = if (deleteTriggered) micScale.value
-                    else if (isRecording) 1.5f else 1f
+                else if (isRecording) 1.5f else 1f
                 val currentAlpha = if (deleteTriggered) micAlpha.value
-                    else if (isRecording && dragOffsetX < -50) 0.6f else 1f
+                else if (isRecording && dragOffsetX < -50) 0.6f else 1f
 
                 Box(
                     modifier = Modifier
@@ -525,7 +526,8 @@ fun AttachmentOptionsMenu(
     onCameraClick: () -> Unit,
     onLocationClick: () -> Unit,
     onDocumentClick: () -> Unit,
-    onScheduleClick: () -> Unit
+    onScheduleVisitClick: () -> Unit,
+    onScheduleLocalClick: () -> Unit
 ) {
     // Menú de burbujas flotantes
     Column(
@@ -539,7 +541,7 @@ fun AttachmentOptionsMenu(
             color = Color(0xFFF97316),
             onClick = onDocumentClick
         )
-        
+
         // Ubicación
         AttachmentBubble(
             icon = Icons.Default.LocationOn,
@@ -547,14 +549,23 @@ fun AttachmentOptionsMenu(
             color = Color(0xFF10B981),
             onClick = onLocationClick
         )
-        
-        // Agendar Cita
+
+        // Visita Técnica
         AttachmentBubble(
             icon = Icons.Default.CalendarToday,
-            label = "Agendar Cita",
+            label = "Visita Técnica",
             color = Color(0xFF8B5CF6),
-            onClick = onScheduleClick
+            onClick = onScheduleVisitClick
         )
+
+        // Turno en local
+        AttachmentBubble(
+            icon = Icons.Default.Store,
+            label = "Turno en Local",
+            color = Color(0xFF6366f1),
+            onClick = onScheduleLocalClick
+        )
+
 
         // Imágenes
         AttachmentBubble(
@@ -626,7 +637,7 @@ fun TrashCanIcon(isLidOpen: Boolean, isRed: Boolean) {
 
     Canvas(modifier = Modifier.size(32.dp)) {
         val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-        
+
         // Cuerpo del tacho
         val bodyPath = Path().apply {
             moveTo(size.width * 0.25f, size.height * 0.3f)
@@ -636,7 +647,7 @@ fun TrashCanIcon(isLidOpen: Boolean, isRed: Boolean) {
             lineTo(size.width * 0.75f, size.height * 0.3f)
         }
         drawPath(bodyPath, color, style = stroke)
-        
+
         // Líneas verticales del cuerpo
         drawLine(color, Offset(size.width * 0.42f, size.height * 0.45f), Offset(size.width * 0.42f, size.height * 0.75f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
         drawLine(color, Offset(size.width * 0.58f, size.height * 0.45f), Offset(size.width * 0.58f, size.height * 0.75f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
@@ -644,29 +655,29 @@ fun TrashCanIcon(isLidOpen: Boolean, isRed: Boolean) {
         // Tapa (animada) - Usando transformaciones de canvas correctamente
         val pivotX = size.width * 0.15f
         val pivotY = size.height * 0.3f
-        
+
         // Guardar estado del canvas
         drawContext.canvas.save()
-        
+
         // Trasladar al punto de pivote
         drawContext.canvas.translate(pivotX, pivotY + lidTranslateY)
-        
+
         // Rotar alrededor del origen (que ahora es el punto de pivote)
         drawContext.canvas.rotate(lidRotation)
-        
+
         // Trasladar de vuelta
         drawContext.canvas.translate(-pivotX, -pivotY)
-        
+
         // Dibujar la tapa
         // Línea horizontal tapa
         drawLine(
-            color, 
-            start = Offset(size.width * 0.15f, size.height * 0.3f), 
-            end = Offset(size.width * 0.85f, size.height * 0.3f), 
-            strokeWidth = 2.dp.toPx(), 
+            color,
+            start = Offset(size.width * 0.15f, size.height * 0.3f),
+            end = Offset(size.width * 0.85f, size.height * 0.3f),
+            strokeWidth = 2.dp.toPx(),
             cap = StrokeCap.Round
         )
-        
+
         // Manija tapa
         val handlePath = Path().apply {
             moveTo(size.width * 0.4f, size.height * 0.3f)
@@ -676,8 +687,12 @@ fun TrashCanIcon(isLidOpen: Boolean, isRed: Boolean) {
             lineTo(size.width * 0.6f, size.height * 0.3f)
         }
         drawPath(handlePath, color, style = stroke)
-        
+
         // Restaurar estado del canvas
         drawContext.canvas.restore()
     }
 }
+
+
+
+

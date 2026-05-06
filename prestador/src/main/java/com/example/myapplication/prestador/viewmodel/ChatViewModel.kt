@@ -4,8 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.prestador.data.local.entity.ConversationEntity
 import com.example.myapplication.prestador.data.local.entity.MessageEntity
-import com.example.myapplication.prestador.data.model.Message
+import com.example.myapplication.prestador.data.local.entity.ProviderEntity
 import com.example.myapplication.prestador.data.repository.ChatRepository
+import com.example.myapplication.prestador.data.repository.ProviderRepository
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -22,12 +24,33 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val repository: ChatRepository,
+    private val providerRepository: ProviderRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
     private val myUserId =
         FirebaseAuth.getInstance().currentUser?.uid ?: ""
     private var currentConversationId = ""
+    private var currentCompanyId: String? = null
+    private var currentCategoryId: String? = null
+
+    private val _activeCompanyId = MutableStateFlow<String?>(null)
+    val activeCompanyId: StateFlow<String?> = _activeCompanyId.asStateFlow()
+
+    fun setActiveCompanyId(companyId: String?) {
+        _activeCompanyId.value = companyId
+    }
+
+    private val _providerProfile = MutableStateFlow<ProviderEntity?>(null)
+    val providerProfile: StateFlow<ProviderEntity?> = _providerProfile.asStateFlow()
+
+    fun loadProviderProfile(providerId: String) {
+        viewModelScope.launch {
+            providerRepository.getProviderById(providerId).collect {
+                _providerProfile.value = it
+            }
+        }
+    }
 
     private val _isLoading =
         MutableStateFlow(false)
@@ -70,38 +93,30 @@ class ChatViewModel @Inject constructor(
         )
         typingObserveJob?.cancel()
         typingObserveJob = viewModelScope.launch {
-            android.util.Log.d("TYPING_VM", "coroutine iniciada, colectando flow...")
             repository.observeClientTyping(chatId, clientId).collect {
-                android.util.Log.d("TYPING_VM", "isClientTyping = $it")
                 _isClientTyping.value = it
             }
         }
-        android.util.Log.d("TYPING_VM", "job lanzado: $typingObserveJob")
     }
 
-    fun loadConversationsByProvider(providerId: String) {
-        // Ahora usamos StateIn directamente sobre el Flow del repositorio
-    }
-
-    fun
-            loadMessagesByConversation(
-        conversationId:
-        String
-    ) {
+    fun loadMessagesByConversation(conversationId: String) {
         currentConversationId = conversationId
 
-        repository.startListening(
-            conversationId,
-            myUserId
-        )
+        repository.startListening(conversationId, myUserId)
         viewModelScope.launch {
             try {
                 _isLoading.value = true
+
+                // Cargar contexto de la conversación
+                val conv = repository.getConversationById(conversationId)
+                currentCompanyId = conv?.companyId
+                currentCategoryId = conv?.categoryId
+
                 repository.getMessagesByConversation(conversationId).collect { newList ->
                     _messages.value = newList
                 }
             } catch (e: Exception) {
-                _errorMessage.value = "Erroral cargar mensajes: ${e.message}"
+                _errorMessage.value = "Error al cargar mensajes: ${e.message}"
             } finally {
                 _isLoading.value = false
             }
@@ -117,7 +132,7 @@ class ChatViewModel @Inject constructor(
             repository.setTypingStatus(currentConversationId, myUserId, true)
             typingJob?.cancel()
             typingJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(3000)
+                delay(3000)
                 repository.setTypingStatus(currentConversationId, myUserId, false)
             }
         } else {
@@ -126,21 +141,16 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun setUserOnline(isOnline: Boolean) {
-        if (myUserId.isEmpty()) return
-        repository.setUserOnline(myUserId, isOnline)
-    }
-
     fun sendMessage(text: String) {
-        if (text.isBlank() ||
-            currentConversationId.isEmpty()
-        ) return
+        if (text.isBlank() || currentConversationId.isEmpty()) return
         viewModelScope.launch {
             try {
-
                 repository.sendMessage(
                     currentConversationId,
-                    text, myUserId
+                    text,
+                    myUserId,
+                    currentCompanyId,
+                    currentCategoryId
                 )
             } catch (e: Exception) {
                 _errorMessage.value = "Error al enviar mensaje: ${e.message}"
@@ -207,7 +217,9 @@ class ChatViewModel @Inject constructor(
                 repository.sendBudgetMessage(
                     conversationId = currentConversationId,
                     myUserId = myUserId,
-                    pres = pres
+                    pres = pres,
+                    companyId = currentCompanyId,
+                    categoryId = currentCategoryId
                 )
             } catch (e: Exception) {
                 _errorMessage.value = "Error al enviar presupuesto: ${e.message}"
@@ -225,9 +237,13 @@ class ChatViewModel @Inject constructor(
                         com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
                     } else null
                 } ?: return@launch
-                repository.sendImageMessage(currentConversationId, base64, myUserId)
-                
-                // Limpieza local de archivos temporales si es necesario
+                repository.sendImageMessage(
+                    currentConversationId,
+                    base64,
+                    myUserId,
+                    currentCompanyId,
+                    currentCategoryId
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -244,16 +260,15 @@ class ChatViewModel @Inject constructor(
                     conversationId = currentConversationId,
                     latitude = latitude,
                     longitude = longitude,
-                    senderId = myUserId
+                    senderId = myUserId,
+                    companyId = currentCompanyId,
+                    categoryId = currentCategoryId
                 )
-
             } catch (e: Exception) {
                 _errorMessage.value = "Error al enviar ubicacion: ${e.message}"
             }
         }
     }
-
-
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -328,7 +343,14 @@ class ChatViewModel @Inject constructor(
         pathToSend?.let { path ->
             viewModelScope.launch {
                 try {
-                    repository.sendAudioMessage(currentConversationId, path, duration, myUserId)
+                    repository.sendAudioMessage(
+                        currentConversationId,
+                        path,
+                        duration,
+                        myUserId,
+                        currentCompanyId,
+                        currentCategoryId
+                    )
                 } catch (e: Exception) {
                     _errorMessage.value = "Error al enviar audio: ${e.message}"
                 }
@@ -356,34 +378,23 @@ class ChatViewModel @Inject constructor(
         if (currentConversationId.isEmpty()) return
         viewModelScope.launch {
             try {
-                repository.sendAudioMessage(currentConversationId, audioPath, durationSeconds, myUserId)
+                repository.sendAudioMessage(
+                    currentConversationId,
+                    audioPath,
+                    durationSeconds,
+                    myUserId,
+                    currentCompanyId,
+                    currentCategoryId
+                )
             } catch (e: Exception) {
                 _errorMessage.value = "Error al enviar audio: ${e.message}"
             }
         }
     }
 
-
-
-    fun createConversation(conversation:
-                           ConversationEntity) {
+    fun markMessagesAsRead(conversationId: String) {
         viewModelScope.launch {
             try {
-
-                repository.saveConversation(conversation)
-                _successMessage.value =
-                    "Conversación creada"
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al crear conversación: ${e.message}"
-            }
-        }
-    }
-
-    fun markMessagesAsRead(conversationId:
-                           String) {
-        viewModelScope.launch {
-            try {
-
                 repository.markMessagesAsRead(conversationId)
             } catch (e: Exception) {
                 _errorMessage.value = "Error al marcar mensajes: ${e.message}"
@@ -408,7 +419,10 @@ class ChatViewModel @Inject constructor(
         startDate: String,        // "yyyy-MM-dd"
         endDate: String,          // "yyyy-MM-dd"
         availabilityJson: String, // JSON con las reglas de horario
-        bookedSlotsJson: String   // JSON con los slots ya ocupados
+        bookedSlotsJson: String,  // JSON con los slots ya ocupados
+        appointmentType: String,  // "TECHNICAL_VISIT" o "LOCAL_APPOINTMENT"
+        providerAddress: String?, // Dirección del local (opcional)
+        serviceCategory: String = ""
     ) {
         if (currentConversationId.isEmpty()) return
         viewModelScope.launch {
@@ -419,7 +433,12 @@ class ChatViewModel @Inject constructor(
                     startDate = startDate,
                     endDate = endDate,
                     availabilityJson = availabilityJson,
-                    bookedSlotsJson = bookedSlotsJson
+                    bookedSlotsJson = bookedSlotsJson,
+                    companyId = currentCompanyId,
+                    categoryId = currentCategoryId,
+                    appointmentType = appointmentType,
+                    providerAddress = providerAddress,
+                    serviceCategory = serviceCategory
                 )
             } catch (e: Exception) {
                 _errorMessage.value = "Error al enviar calendario:${e.message}"
@@ -440,7 +459,8 @@ class ChatViewModel @Inject constructor(
         doesHomeVisits: Boolean = false,
         profession: String? = null,
         providerAddress: String? = null,
-        prioritizeCompany: Boolean = false,
+        appointmentType: String = "TECHNICAL_VISIT",
+        serviceCategory: String? = null,
         accepted: Boolean,
         rejectionReason: String? = null
     ) {
@@ -460,7 +480,7 @@ class ChatViewModel @Inject constructor(
                     // Obtener clientId una sola vez
                     val conversation = repository.getConversationById(currentConversationId)
                     val clientId = conversation?.userId ?: ""
-                    val isTechnician = serviceType == "TECHNICAL" || doesHomeVisits
+                    val isTechnician = appointmentType != "LOCAL_APPOINTMENT" && (serviceType == "TECHNICAL" || doesHomeVisits)
 
                     // 2. Guardar en Room — independiente del comprobante para no perder el turno
                     try {
@@ -494,7 +514,7 @@ class ChatViewModel @Inject constructor(
                             profession = profession,
                             providerAddress = providerAddress,
                             clientAddress = clientAddress,
-                            prioritizeCompany = prioritizeCompany
+                            appointmentType = appointmentType
                         )
                         repository.sendAppointmentReceiptMessage(
                             conversationId = currentConversationId,
@@ -507,7 +527,9 @@ class ChatViewModel @Inject constructor(
                             profession = receipt.profession,
                             address = receipt.address,
                             code = receipt.code,
-                            prioritizeCompany = receipt.prioritizeCompany
+                            prioritizeCompany = receipt.prioritizeCompany,
+                            appointmentType = appointmentType,
+                            categoryId = serviceCategory?.takeIf { it.isNotBlank() } ?: currentCategoryId
                         )
                     } catch (e: Exception) {
                         android.util.Log.e("ChatVM", "❌ Error enviando comprobante: ${e.message}", e)
@@ -516,7 +538,28 @@ class ChatViewModel @Inject constructor(
                     // Si rechazó, enviar mensaje de rechazo
                     val motivo = if (!rejectionReason.isNullOrBlank()) "Motivo: $rejectionReason" else ""
                     val rejectText = "❌ No puedo atenderte el $date a las $time. $motivo Por favor elegí otro horario."
-                    repository.sendMessage(currentConversationId, rejectText, myUserId)
+                    repository.sendMessage(
+                        currentConversationId,
+                        rejectText,
+                        myUserId,
+                        currentCompanyId,
+                        currentCategoryId
+                    )
+                }
+
+                //3. Si aceptó, guardar en Room local del prestador
+                if (accepted) {
+                    val conversation = repository.getConversationById(currentConversationId)
+                    val clientId = conversation?.userId ?: ""
+                    repository.saveBookedAppointmet(
+                        messageId = messageId,
+                        clientId = clientId,
+                        clientName = clientName,
+                        date = date,
+                        time = time,
+                        service = service,
+                        chatId = currentConversationId
+                    )
                 }
             } catch (e: Exception) {
                 _errorMessage.value = "Error al responder solicitud:${e.message}"
@@ -546,9 +589,10 @@ class ChatViewModel @Inject constructor(
         profession: String?,
         providerAddress: String?,
         clientAddress: String? = null,
-        prioritizeCompany: Boolean = false
+        prioritizeCompany: Boolean = false,
+        appointmentType: String = "TECHNICAL_VISIT"
     ): ReceiptData {
-        val isTechnician = serviceType == "TECHNICAL" || doesHomeVisits
+        val isTechnician = appointmentType != "LOCAL_APPOINTMENT" && (serviceType == "TECHNICAL" || doesHomeVisits)
         val dateFormatted = formatDateForDisplay(date)
         val timeFormatted = if (time.isNotBlank()) "$time hs" else time
         val code = if (isTechnician) {
@@ -558,7 +602,8 @@ class ChatViewModel @Inject constructor(
         }
         // TECHNICAL → va al domicilio del cliente; PROFESSIONAL → consultorio del prestador
         val address = if (isTechnician) clientAddress else providerAddress
-        
+
+
         return ReceiptData(
             date = dateFormatted,
             time = timeFormatted,
@@ -573,7 +618,6 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun formatDateForDisplay(dateStr: String): String {
-        // Convierte "2026-05-07" → "Mié 07/05/2026"
         return try {
             val parts = dateStr.split("-")
             if (parts.size == 3) {
@@ -591,7 +635,6 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun getDayOfWeek(dateStr: String): String {
-        // "2026-05-07" → "Mié"
         return try {
             val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("es", "ES"))
             val date = sdf.parse(dateStr) ?: return ""

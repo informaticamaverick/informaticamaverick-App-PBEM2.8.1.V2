@@ -73,7 +73,10 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.RequestPage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
@@ -81,6 +84,9 @@ import androidx.compose.ui.modifier.modifierLocalProvider
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.work.WorkRequest
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.RequestPage
 
 @Composable
 fun MessageBubble(
@@ -90,7 +96,9 @@ fun MessageBubble(
     onVerPresupuesto: (() -> Unit)? = null,
     onImageClick: ((String?) -> Unit)? = null,
     onAccept: ((messageId: String) -> Unit)? = null,
-    onReject: ((messageId: String, reason: String?) -> Unit)? = null
+    onReject: ((messageId: String, reason: String?) -> Unit)? = null,
+    onCreateBudgetFromRequest: (() -> Unit)? = null,
+    clientName: String = ""
 ){
     val colors = getPrestadorColors()
     val bubbleColor = if (message.type == Message.MessageType.BUDGET ||
@@ -100,7 +108,8 @@ fun MessageBubble(
         message.type == Message.MessageType.APPOINTMENT_RECEIPT ||
         message.type == Message.MessageType.RESCHEDULE_NOTICE ||
         message.type == Message.MessageType.COMPLETION_NOTICE ||
-        message.type == Message.MessageType.CANCELLATION_NOTICE) {
+        message.type == Message.MessageType.CANCELLATION_NOTICE ||
+        message.type == Message.MessageType.BUDGET_REQUEST) {
         Color.Transparent
     } else if (isFromCurrentUser) {
         colors.primaryOrange
@@ -259,7 +268,9 @@ fun MessageBubble(
                             address = message.receiptAddress,
                             code = message.receiptCode,
                             prioritizeCompany = message.receiptPrioritizeCompany,
-                            isFromCurrentUser = isFromCurrentUser
+                            isFromCurrentUser = isFromCurrentUser,
+                            appointmentType = message.appointmentType ?: "TECHNICAL_VISIT",
+                            category = message.categoryId
                         )
                     }
                     Message.MessageType.RESCHEDULE_NOTICE -> {
@@ -284,6 +295,13 @@ fun MessageBubble(
                             isFromCurrentUser = isFromCurrentUser
                         )
                     }
+                    Message.MessageType.BUDGET_REQUEST -> {
+                        BudgetRequestBubble(
+                            message = message,
+                            clientName = clientName,
+                            onCreateBudget = { onCreateBudgetFromRequest?.invoke() }
+                        )
+                    }
                     Message.MessageType.VISIT,
                     Message.MessageType.TENDER,
                     Message.MessageType.SYSTEM -> {
@@ -302,7 +320,8 @@ fun MessageBubble(
                     message.type != Message.MessageType.APPOINTMENT_RECEIPT &&
                     message.type != Message.MessageType.RESCHEDULE_NOTICE &&
                     message.type != Message.MessageType.COMPLETION_NOTICE &&
-                    message.type != Message.MessageType.CANCELLATION_NOTICE) {
+                    message.type != Message.MessageType.CANCELLATION_NOTICE &&
+                    message.type != Message.MessageType.BUDGET_REQUEST) {
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Row(
@@ -1392,14 +1411,20 @@ fun AppointmentReceiptBubble(
     address: String? = null,
     code: String? = null,
     prioritizeCompany: Boolean = false,
-    isFromCurrentUser: Boolean
+    isFromCurrentUser: Boolean,
+    appointmentType: String = "TECHNICAL_VISIT",
+    category: String? = null
 ) {
     val colors = getPrestadorColors()
+    val isLocal = appointmentType == "LOCAL_APPOINTMENT"
+    val accentGreen = Color(0xFF4CAF50)
+    val accentBlue = Color(0xFF2197F5)
+    val accentColor = if (isLocal) accentBlue else accentGreen
     
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = if (isFromCurrentUser) colors.primaryOrange.copy(alpha = 0.15f) else colors.surfaceElevated,
-        border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.6f)),
+        color = accentColor.copy(alpha = 0.10f),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.6f)),
         modifier = Modifier.widthIn(min = 200.dp, max = 300.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -1408,7 +1433,7 @@ fun AppointmentReceiptBubble(
                 Icon(
                     imageVector = Icons.Default.Done,
                     contentDescription = null,
-                    tint = Color(0xFF4CAF50),
+                    tint = accentColor,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -1421,6 +1446,12 @@ fun AppointmentReceiptBubble(
             }
 
             Spacer(modifier = Modifier.height(6.dp))
+
+            // Categoría
+            if (!category.isNullOrBlank()) {
+                ReceiptInfoRow(icon = Icons.Default.Tag, label = "Categoría", value = category, colors = colors)
+                Spacer(modifier = Modifier.height(4.dp))
+            }
 
             // Servicio
             if (service.isNotBlank()) {
@@ -1470,20 +1501,20 @@ fun AppointmentReceiptBubble(
             // Código
             if (!code.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
-                HorizontalDivider(color = Color(0xFF4CAF50).copy(alpha = 0.3f))
+                HorizontalDivider(color = accentColor.copy(alpha = 0.3f))
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Tag,
                         contentDescription = null,
-                        tint = Color(0xFF4CAF50),
+                        tint = accentColor,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = code,
                         fontSize = 11.sp,
-                        color = Color(0xFF4CAF50),
+                        color = accentColor,
                         fontWeight = FontWeight.Bold,
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                     )
@@ -1783,6 +1814,128 @@ fun CompletionNoticeBubble(
                         lineHeight = 14.sp
                     )
                 }
+            }
+        }
+    }
+
+}
+
+@Composable
+fun BudgetRequestBubble(
+    message: Message,
+    clientName: String,
+    onCreateBudget: () -> Unit
+) {
+    val accentColor = Color(0xFF059669)
+    val bgColor = Color(0xFF022C22)
+
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+        Surface(
+            shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
+            color = bgColor,
+            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.7f)),
+            modifier = Modifier.widthIn(max = 300.dp)
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                // Header
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = accentColor.copy(alpha = 0.15f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.RequestPage,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.padding(4.dp).size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Solicitud de presupuesto",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color(0xFF34D399)
+                        )
+                        if (clientName.isNotBlank()) {
+                            Text(
+                                text = clientName,
+                                fontSize = 11.sp,
+                                color = Color.White.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = accentColor.copy(alpha = 0.2f)
+                )
+
+                // Descripción
+                if (!message.budgetRequestDescription.isNullOrBlank()) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier.size(14.dp).padding(top = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = message.budgetRequestDescription,
+                            fontSize = 13.sp,
+                            color = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                // Dirección
+                if (!message.budgetRequestClientAddress.isNullOrBlank()) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color(0xFF6EE7B7),
+                            modifier = Modifier.size(14.dp).padding(top = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = message.budgetRequestClientAddress,
+                            fontSize = 12.sp,
+                            color = Color(0xFF6EE7B7)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                // Botón - siempre visible
+                Button(
+                    onClick = onCreateBudget,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NoteAdd,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Crear Presupuesto", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+
+                // Timestamp
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(message.timestamp)),
+                    fontSize = 10.sp,
+                    color = Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.align(Alignment.End)
+                )
             }
         }
     }
