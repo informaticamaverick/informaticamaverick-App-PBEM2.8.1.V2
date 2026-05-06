@@ -143,67 +143,63 @@ fun EditProfileScreenUnified(
     // =========================================================================
     // SECCIÓN: OBSERVACIÓN DEL ESTADO (SSOT)
     // =========================================================================
-    LaunchedEffect(profileState) {
-        if (profileState is ProfileState.Success && !inicialized) {
-            inicialized= true
-            val p = (profileState as ProfileState.Success).provider
-            name = p.name ?: ""
-            apellido = p.apellido ?: ""
-            email = p.email ?: ""
-            phone = p.phone ?: ""
-            dniCuit = p.dniCuit ?: ""
-            val gPhoto = com.google.firebase.auth.FirebaseAuth.getInstance()
-                .currentUser?.photoUrl?.toString() ?: ""
-            imageUrl = if (p.imageUrl.isNullOrBlank()) gPhoto else
-                p.imageUrl!!
-            bannerImageUrl = p.bannerImageUrl ?: ""
-            description = p.description ?: ""
-            profesion = p.profesion ?: ""
-            tieneMatricula = p.tieneMatricula
-            matricula = p.matricula ?: ""
-            
-            // Dirección personal mapeada del objeto embebido AddressProvider
-            pais = p.pais ?: "Argentina"
-            provincia = p.provincia ?: ""
-            localidad = p.address?.localidad ?: ""
-            calle = p.address?.calle ?: ""
-            numero = p.address?.numero ?: ""
-            codigoPostal = p.codigoPostal ?: ""
-            address = p.address?.fullString() ?: ""
+    // Inicialización única: espera el primer Success y luego no vuelve a correr
+    LaunchedEffect(Unit) {
+        viewModel.profileState.collect { state ->
+            if (state is ProfileState.Success && !inicialized) {
+                inicialized = true
+                val p = state.provider
+                name = p.name ?: ""
+                apellido = p.apellido ?: ""
+                email = p.email ?: ""
+                phone = p.phone ?: ""
+                dniCuit = p.dniCuit ?: ""
+                val gPhoto = com.google.firebase.auth.FirebaseAuth.getInstance()
+                    .currentUser?.photoUrl?.toString() ?: ""
+                imageUrl = if (p.imageUrl.isNullOrBlank()) gPhoto else p.imageUrl!!
+                bannerImageUrl = p.bannerImageUrl ?: ""
+                description = p.description ?: ""
+                profesion = p.profesion ?: ""
+                tieneMatricula = p.tieneMatricula
+                matricula = p.matricula ?: ""
 
-            atencionUrgencias = p.atencionUrgencias
-            vaDomicilio = p.vaDomicilio
-            envios = p.envios
-            turnosEnLocal = p.turnosEnLocal
-            doesService = p.doesService
-            doesProduct = p.doesProduct
-            
-            direccionLocal = p.direccionLocal ?: ""
-            provinciaLocal = p.provinciaLocal ?: ""
-            codigoPostalLocal = p.codigoPostalLocal ?: ""
-            
-            tieneEmpresa = p.tieneEmpresa
-            trabajaConOtros = p.trabajaConOtros
-            
-            // Colecciones jerárquicas
-            val firstCompany = p.companies.firstOrNull()
+                pais = p.pais ?: "Argentina"
+                provincia = p.provincia ?: ""
+                localidad = p.address?.localidad ?: ""
+                calle = p.address?.calle ?: ""
+                numero = p.address?.numero ?: ""
+                codigoPostal = p.codigoPostal ?: ""
+                address = p.address?.fullString() ?: ""
 
-            nombreEmpresa = p.nombreEmpresa ?: ""
-            cuitEmpresa = p.cuitEmpresa ?: ""
-            // direccionEmpresa se usa como "razonSocial" en EmpresaUnificadaCard
-            direccionEmpresa = firstCompany?.razonSocial ?: ""
-            
-            horarioLocal = p.horarioLocal ?: ""
-            serviceType = ServiceType.fromString(p.serviceType)
-            
-            // Ranking y Stats
-            rating = p.rating.toDouble()
-            
-            horarioCasaCentral = firstCompany?.branches?.firstOrNull()?.workingHours ?: ""
-            tieneSucursales = (firstCompany?.branches?.size ?: 0) > 1
-            
-            galleryImages = try { org.json.JSONArray(p.galleryImages).toString() } catch(e: Exception) { "[]" }
-            categorias = try { org.json.JSONArray(p.categories).toString() } catch(e: Exception) { "[]" }
+                atencionUrgencias = p.atencionUrgencias
+                vaDomicilio = p.vaDomicilio
+                envios = p.envios
+                turnosEnLocal = p.turnosEnLocal
+                doesService = p.doesService
+                doesProduct = p.doesProduct
+
+                direccionLocal = p.direccionLocal ?: ""
+                provinciaLocal = p.provinciaLocal ?: ""
+                codigoPostalLocal = p.codigoPostalLocal ?: ""
+
+                tieneEmpresa = p.tieneEmpresa
+                trabajaConOtros = p.trabajaConOtros
+
+                val firstCompany = p.companies.firstOrNull()
+                nombreEmpresa = p.nombreEmpresa ?: ""
+                cuitEmpresa = p.cuitEmpresa ?: ""
+                direccionEmpresa = firstCompany?.razonSocial ?: ""
+
+                horarioLocal = p.horarioLocal ?: ""
+                serviceType = ServiceType.fromString(p.serviceType)
+
+                rating = p.rating.toDouble()
+                horarioCasaCentral = firstCompany?.branches?.firstOrNull()?.workingHours ?: ""
+                tieneSucursales = (firstCompany?.branches?.size ?: 0) > 1
+
+                galleryImages = try { org.json.JSONArray(p.galleryImages).toString() } catch(e: Exception) { "[]" }
+                categorias = try { org.json.JSONArray(p.categories).toString() } catch(e: Exception) { "[]" }
+            }
         }
     }
 
@@ -749,11 +745,6 @@ fun EditProfileScreenUnified(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable {
-                                                val newValue = !tieneEmpresa
-                                                tieneEmpresa = newValue
-                                                viewModel.updateProfile(tieneEmpresa = newValue)
-                                            }
                                             .padding(horizontal = 20.dp, vertical = 16.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -789,7 +780,11 @@ fun EditProfileScreenUnified(
                                             checked = tieneEmpresa,
                                             onCheckedChange = { newValue ->
                                                 tieneEmpresa = newValue
-                                                viewModel.updateProfile(tieneEmpresa = newValue)
+                                                if (!newValue) {
+                                                    viewModel.updateProfile(tieneEmpresa = false, priorizarEmpresa = false)
+                                                } else {
+                                                    viewModel.updateProfile(tieneEmpresa = true)
+                                                }
                                             },
                                             modifier = Modifier.scale(0.85f),
                                             colors = SwitchDefaults.colors(

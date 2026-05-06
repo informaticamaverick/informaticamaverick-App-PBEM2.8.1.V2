@@ -3,7 +3,9 @@
 import android.R
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,6 +49,7 @@ fun BudgetChatSheet(
     userId: String,
     userName: String,
     providerId: String, // ID del prestador real
+    initialClientAddress: String? = null,
     onDismiss: () -> Unit,
     viewModel: PresupuestoViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
@@ -76,6 +79,10 @@ fun BudgetChatSheet(
 
     // --- DATOS DEL CLIENTE ---
     var clienteData by remember { mutableStateOf<ClienteEntity?>(null) }
+    var overrideClientAddress by remember { mutableStateOf(initialClientAddress) }
+    LaunchedEffect(initialClientAddress) {
+        if (!initialClientAddress.isNullOrBlank()) overrideClientAddress = initialClientAddress
+    }
     LaunchedEffect(userId) {
         if (userId.isNotBlank())  {
             clienteData = viewModel.getClienteById(userId)
@@ -101,6 +108,13 @@ fun BudgetChatSheet(
     var tituloTrabajo by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var validity by remember { mutableStateOf("7") }
+
+    // --- CATEGORIA STATE ---
+    val providerCategories = remember(provider) { provider?.categories ?: emptyList() }
+    var selectedBudgetCategory by remember(providerCategories) {
+        mutableStateOf(providerCategories.firstOrNull() ?: "")
+    }
+    var budgetCategoryExpanded by remember { mutableStateOf(false) }
 
     // --- CALCULATED TOTALS ---
     val itemsBaseSubtotal = items.sumOf { it.unitPrice * it.quantity }
@@ -298,6 +312,84 @@ fun BudgetChatSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
+
+                // --- CATEGORIA SELECTOR ---
+                if (providerCategories.isNotEmpty()) {
+                    item {
+                        ExposedDropdownMenuBox(
+                            expanded = budgetCategoryExpanded,
+                            onExpandedChange = { budgetCategoryExpanded = it }
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor()
+                                    .clickable { budgetCategoryExpanded = true },
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.5.dp, colors.primaryOrange.copy(alpha = 0.5f)),
+                                color = colors.primaryOrange.copy(alpha = 0.05f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Category,
+                                        contentDescription = null,
+                                        tint = colors.primaryOrange,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            "Rubro / Categoría",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = colors.textSecondary
+                                        )
+                                        Text(
+                                            selectedBudgetCategory.ifBlank { "Seleccionar categoría" },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (selectedBudgetCategory.isBlank()) colors.textSecondary else colors.textPrimary
+                                        )
+                                    }
+                                    Icon(
+                                        if (budgetCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        tint = colors.primaryOrange,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            ExposedDropdownMenu(
+                                expanded = budgetCategoryExpanded,
+                                onDismissRequest = { budgetCategoryExpanded = false },
+                                containerColor = colors.surfaceColor
+                            ) {
+                                providerCategories.forEach { cat ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                cat,
+                                                fontWeight = if (cat == selectedBudgetCategory) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (cat == selectedBudgetCategory) colors.primaryOrange else colors.textPrimary
+                                            )
+                                        },
+                                        onClick = {
+                                            selectedBudgetCategory = cat
+                                            budgetCategoryExpanded = false
+                                        },
+                                        leadingIcon = {
+                                            if (cat == selectedBudgetCategory) {
+                                                Icon(Icons.Default.Check, null, tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
 
                 item {
                     Column(
@@ -809,7 +901,8 @@ fun BudgetChatSheet(
                     onDismiss()
                 },
                 clientName = userName,
-                clientAddress = clienteData?.direccion
+                clientAddress = overrideClientAddress ?: clienteData?.direccion,
+                category = selectedBudgetCategory
             )
         }
     }

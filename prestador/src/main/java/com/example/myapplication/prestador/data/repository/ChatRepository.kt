@@ -27,6 +27,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.net.Uri
+import android.text.SpannedString
 import com.example.myapplication.prestador.data.local.dao.BookedAppointmentDao
 import com.google.firebase.database.ChildEvent
 import com.google.firebase.database.ValueEventListener
@@ -79,8 +80,8 @@ class ChatRepository @Inject constructor(
 
     // ── Enviar mensaje de texto ────────────────────────────────────────────────
     suspend fun sendMessage(
-        conversationId: String, 
-        text: String, 
+        conversationId: String,
+        text: String,
         myUserId: String,
         companyId: String? = null,
         categoryId: String? = null
@@ -188,8 +189,8 @@ class ChatRepository @Inject constructor(
 
     // ── Enviar imagen ──────────────────────────────────────────────────────────
     suspend fun sendImageMessage(
-        conversationId: String, 
-        imageBase64: String, 
+        conversationId: String,
+        imageBase64: String,
         senderId: String,
         companyId: String? = null,
         categoryId: String? = null
@@ -430,7 +431,8 @@ class ChatRepository @Inject constructor(
         companyId: String? = null,
         categoryId: String? = null,
         appointmentType: String? = null,
-        providerAddress: String? = null
+        providerAddress: String? = null,
+        serviceCategory: String = ""
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val messageId = UUID.randomUUID().toString()
@@ -474,7 +476,8 @@ class ChatRepository @Inject constructor(
                     "companyId" to companyId,
                     "categoryId" to categoryId,
                     "appointmentType" to appointmentType,
-                    "providerAddress" to providerAddress
+                    "providerAddress" to providerAddress,
+                    "serviceCategory" to serviceCategory
                 )).await()
             messageDao.markAsSynced(messageId)
         } catch (e: Exception) {
@@ -520,10 +523,14 @@ class ChatRepository @Inject constructor(
         val listeningStartAt = System.currentTimeMillis()
         messageChildListener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousKey: String?) {
-                val senderId = snapshot.child("senderId").getValue(String::class.java) ?: return
+                val senderId = snapshot.child("senderId").getValue(String::class.java)
+                    ?: return
                 val isOwn = senderId == myUserId
-                val msgId = snapshot.child("messageId").getValue(String::class.java) ?: snapshot.key ?: return
-                val msgType = snapshot.child("type").getValue(String::class.java) ?: "TEXT"
+                if (isOwn) return  // ya insertado por sendMessage, evitar duplicado por race condition
+                val msgId = snapshot.child("messageId").getValue(String::class.java) ?:
+                snapshot.key ?: return
+                val msgType = snapshot.child("type").getValue(String::class.java) ?:
+                "TEXT"
 
                 var resolvedImageUrl: String? = null
                 var localImagePath: String? = null
@@ -564,7 +571,6 @@ class ChatRepository @Inject constructor(
                     timestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis(),
                     isFromCurrentUser = isOwn,
                     messageType = if (msgType == "VISIT") "APPOINTMENT_REQUEST" else msgType,
-                    audioUrl = resolvedAudioUrl,
                     imageUrl = resolvedImageUrl,
                     imageLocalPath = localImagePath, // Ruta local guardada
                     audioDuration = snapshot.child("audioDuration").getValue(Long::class.java)?.toInt(),
@@ -585,6 +591,16 @@ class ChatRepository @Inject constructor(
                     availabilityJson = snapshot.child("availabilityJson").getValue(String::class.java),
                     bookedSlotsJson = snapshot.child("bookedSlotsJson").getValue(String::class.java),
                     calendarInviteMessageId = snapshot.child("calendarInviteMessageId").getValue(String::class.java),
+                    receiptService = snapshot.child("receiptService").getValue(String::class.java),
+                    budgetRequestDescription = snapshot.child("budgetRequestDescription").getValue(String::class.java),
+                    budgetRequestClientAddress = snapshot.child("budgetRequestClientAddress").getValue(String::class.java),
+                    receiptProviderName = snapshot.child("receiptProviderName").getValue(String::class.java),
+                    receiptProfession = snapshot.child("receiptProfession").getValue(String::class.java),
+                    receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
+                    receiptCode = snapshot.child("receiptCode").getValue(String::class.java),
+                    receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java) ?: false,
+                    receiptPrioritizeCompany = snapshot.child("receiptPrioritizeCompany").getValue(Boolean::class.java) ?: false,
+                    categoryId = snapshot.child("categoryId").getValue(String::class.java),
                 )
                 scope.launch {
                     try {
@@ -612,7 +628,9 @@ class ChatRepository @Inject constructor(
                         }
 
                         val existsInRoom = messageDao.getMessageById(msgId) != null
-                        messageDao.insertMessage(msg)
+                        if (!existsInRoom) {
+                            messageDao.insertMessage(msg)
+                        }
                         val isNewMessage = msg.timestamp >= listeningStartAt - 5_000
                         if (!isOwn && !existsInRoom) {
                             conversationDao.incrementUnreadCount(conversationId)
@@ -804,6 +822,30 @@ class ChatRepository @Inject constructor(
         // Documento no existe en ninguna colección → usuario eliminado
         Log.w("ChatRepo", "⚠️ $userId no encontrado en usuarios ni providers")
         return null
+    }
+
+    // ── Dirección del cliente (para visitas técnicas) ──────────────────────────
+    suspend fun getClientMainAddress(clientId: String): String? {
+        return try {
+            val addressDocs = firestore
+                .collection("usuarios")
+                .document(clientId)
+                .collection("personalAddresses")
+                .get()
+                .await()
+            val first = addressDocs.documents.firstOrNull() ?: return null
+            val calle = first.getString("calle").orEmpty()
+            val numero = first.getString("numero").orEmpty()
+            val localidad = first.getString("localidad").orEmpty()
+            val provincia = first.getString("provincia").orEmpty()
+            listOf("$calle $numero".trim(), localidad, provincia)
+                .filter { it.isNotBlank() }
+                .joinToString(", ")
+                .ifBlank { null }
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error obteniendo dirección del cliente $clientId: ${e.message}")
+            null
+        }
     }
 
     // ── Sincronizar conversaciones desde Firestore ─────────────────────────────
@@ -1183,19 +1225,30 @@ class ChatRepository @Inject constructor(
         service: String = "",
         chatId: String
     ) {
-        bookedAppointmentDao.insertAppointment(
-            BookedAppointmentEntity(
-                id = "appt_$messageId",
-                clientId = clientId,
-                clientName = clientName,
+        // Si hay un turno RESCHEDULED del mismo chat, actualizarlo con la nueva fecha
+        val rescheduled = bookedAppointmentDao.getRescheduledByChatId(chatId)
+        if (rescheduled != null) {
+            bookedAppointmentDao.updateDateTimeStatus(
+                id = rescheduled.id,
                 date = date,
                 time = time,
-                service = service,
-                status = "CONFIRMED",
-                chatId = chatId,
-                createdAt = System.currentTimeMillis()
+                status = "CONFIRMED"
             )
-        )
+        } else {
+            bookedAppointmentDao.insertAppointment(
+                BookedAppointmentEntity(
+                    id = "appt_$messageId",
+                    clientId = clientId,
+                    clientName = clientName,
+                    date = date,
+                    time = time,
+                    service = service,
+                    status = "CONFIRMED",
+                    chatId = chatId,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        }
     }
 
     // ── Enviar comprobante de turno confirmado ──────────────────────────────────
@@ -1210,8 +1263,10 @@ class ChatRepository @Inject constructor(
         profession: String?,
         address: String?,
         code: String,
+        prioritizeCompany: Boolean = false,
         companyId: String? = null,
-        categoryId: String? = null
+        categoryId: String? = null,
+        appointmentType: String = "TECHNICAL_VISIT"
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val message = MessageEntity(
@@ -1229,7 +1284,8 @@ class ChatRepository @Inject constructor(
             receiptProfession = profession,
             receiptAddress = address,
             receiptCode = code,
-            companyId = companyId,
+            receiptPrioritizeCompany = prioritizeCompany,
+            appointmentType = appointmentType,
             categoryId = categoryId
         )
         messageDao.insertMessage(message)
@@ -1252,6 +1308,8 @@ class ChatRepository @Inject constructor(
                 "receiptProfession" to (profession ?: ""),
                 "receiptAddress" to (address ?: ""),
                 "receiptCode" to code,
+                "receiptPrioritizeCompany" to prioritizeCompany,
+                "appointmentType" to appointmentType,
                 "isRead" to false,
                 "isDelivered" to false,
                 "companyId" to companyId,
@@ -1266,5 +1324,168 @@ class ChatRepository @Inject constructor(
         }
         return message
     }
+
+    suspend fun sendRescheduleNoticeMessage(
+        conversationId: String,
+        myUserId: String,
+        originalDate: String,
+        originalTime: String
+    ): MessageEntity {
+        val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
+        val message = MessageEntity(
+            messageId = UUID.randomUUID().toString(),
+            conversationId = conversationId,
+            text = "Tu turno será reprogramado",
+            timestamp = System.currentTimeMillis(),
+            isFromCurrentUser = true,
+            messageType = "RESCHEDULE_NOTICE",
+            appointmentDate = originalDate,
+            appointmentTime = originalTime
+        )
+        messageDao.insertMessage(message)
+        conversationDao.updateLastMessage(conversationId, "Tu turno será reprogramado", message.timestamp, "RESCHEDULE_NOTICE")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Tu turno será reprogramado", message.timestamp)
+        try {
+            val data = hashMapOf(
+                "messageId" to message.messageId,
+                "chatId" to conversationId,
+                "senderId" to myUserId,
+                "receiverId" to receiverId,
+                "text" to "Tu turno será reprogramado",
+                "type" to "RESCHEDULE_NOTICE",
+                "timestamp" to message.timestamp,
+                "appointmentDate" to originalDate,
+                "appointmentTime" to originalTime,
+                "isRead" to false,
+                "isDelivered" to false
+            )
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(message.messageId)
+                .setValue(data).await()
+            messageDao.markAsSynced(message.messageId)
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error sending reschedule notice: ${e.message}")
+        }
+        return message
+    }
+
+    suspend fun sendCancellationNoticeMessage(
+        conversationId: String,
+        myUserId: String,
+        originalDate: String,
+        originalTime: String,
+        reason: String
+    ): MessageEntity {
+        val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
+        val message = MessageEntity(
+            messageId = UUID.randomUUID().toString(),
+            conversationId = conversationId,
+            text = "Turno cancelado",
+            timestamp = System.currentTimeMillis(),
+            isFromCurrentUser = true,
+            messageType = "CANCELLATION_NOTICE",
+            appointmentDate = originalDate,
+            appointmentTime = originalTime,
+            rejectionReason = reason
+
+        )
+
+        messageDao.insertMessage(message)
+        conversationDao.updateLastMessage(conversationId, "Turno cancelado", message.timestamp, "CANCELLATION:NOTICE")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Turno cancelado", message.timestamp)
+        try {
+            val data = hashMapOf(
+                "messageId" to message.messageId,
+                "chatId" to conversationId,
+                "senderId" to myUserId,
+                "receiverId" to receiverId,
+                "text" to "Turno cancelado",
+                "type" to "CANCELLATION_NOTICE",
+                "timestamp" to message.timestamp,
+                "appointmentDate" to originalDate,
+                "appointmentTime" to originalTime,
+                "rejectionReason" to reason,
+                "isRead" to false,
+                "isDelivered" to false
+            )
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(message.messageId)
+                .setValue(data).await()
+            messageDao.markAsSynced(message.messageId)
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error sending cancellation notice: ${e.message}")
+        }
+        return message
+    }
+
+    suspend fun sendCompletionNoticeMessage(
+        conversationId: String,
+        myUserId: String,
+        originalDate: String,
+        originalTime: String
+    ): MessageEntity {
+        val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
+        val message = MessageEntity(
+            messageId = UUID.randomUUID().toString(),
+            conversationId = conversationId,
+            text = "Turno completado",
+            timestamp = System.currentTimeMillis(),
+            isFromCurrentUser = true,
+            messageType = "COMPLETION_NOTICE",
+            appointmentDate = originalDate,
+            appointmentTime = originalTime
+        )
+        messageDao.insertMessage(message)
+        conversationDao.updateLastMessage(conversationId, "Turno completado", message.timestamp, "COMPLETION_NOTICE")
+        updateConversationMetadata(conversationId, myUserId, receiverId, "Turno completado", message.timestamp)
+        try {
+            val data = hashMapOf(
+                "messageId" to message.messageId,
+                "chatId" to conversationId,
+                "senderId" to myUserId,
+                "receiverId" to receiverId,
+                "text" to "Turno completado",
+                "type" to "COMPLETION_NOTICE",
+                "timestamp" to message.timestamp,
+                "appointmentDate" to originalDate,
+                "appointmentTime" to originalTime,
+                "isRead" to false,
+                "isDelivered" to false
+            )
+            database.reference.child("chats").child(conversationId)
+                .child("messages").child(message.messageId)
+                .setValue(data).await()
+            messageDao.markAsSynced(message.messageId)
+        } catch (e: Exception) {
+            Log.e("ChatRepo", "Error sending completion notice: ${e.message}")
+        }
+        return message
+    }
+
+    suspend fun addBookedSlot(chatId: String, messageId: String, date: String, time: String) {
+        try {
+            val msgRef = database.reference
+                .child("chats").child(chatId).child("messages").child(messageId)
+
+            //Leer valor actual
+            val snapshot = msgRef.child("bookedSlotsJson").get().await()
+            val currentJson = snapshot.getValue(String::class.java) ?: "[]"
+
+            //Agregar nuevo slot
+            val newSlot = org.json.JSONObject().apply {
+                put("date", date)
+                put("time", time)
+            }
+
+            val array = org.json.JSONArray(currentJson)
+            array.put(newSlot)
+
+
+            msgRef.child("bookedSlotsJson").setValue(array.toString()).await()
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error al bloquear slot: ${e.message}")
+        }
+    }
+
 
 }

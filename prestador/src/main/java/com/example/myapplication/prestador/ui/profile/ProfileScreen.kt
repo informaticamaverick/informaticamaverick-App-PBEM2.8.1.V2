@@ -65,27 +65,49 @@ fun ProfileScreen(
     val provider = (profileState as? ProfileState.Success)?.provider
     val horarios by scheduleVm.schedules.collectAsState()
     val listState = rememberLazyListState()
-    var showCompanyView by remember(provider) { mutableStateOf(
-        provider?.priorizarEmpresa == true && provider.companies.isNotEmpty()
-    )
+    var showCompanyView by remember { mutableStateOf(false) }
+    // Inicializar showCompanyView solo la primera vez que provider carga
+    LaunchedEffect(provider?.id) {
+        if (provider != null && !showCompanyView) {
+            showCompanyView = provider.hasCompanyProfile &&
+                provider.priorizarEmpresa == true &&
+                provider.companies.isNotEmpty()
+        }
     }
     var showServicioProviderDialog by remember { mutableStateOf(false) }
     var showHorariosDialog by remember { mutableStateOf(false) }
     var horarioToEdit by remember { mutableStateOf<com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity?>(null) }
     var showAddScheduleDialog by remember { mutableStateOf(false) }
     var showDeleteScheduleDialog by remember { mutableStateOf<List<com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity>?>(null) }
-    var editProviderDoesService by remember(provider) { mutableStateOf(provider?.doesService ?: false) }
-    var editProviderDoesProduct by remember(provider) { mutableStateOf(provider?.doesProduct ?: false) }
+    var editProviderDoesService by remember { mutableStateOf(provider?.doesService ?: false) }
+    var editProviderDoesProduct by remember { mutableStateOf(provider?.doesProduct ?: false) }
 
-    var editProviderWorks24h by remember(provider) { mutableStateOf(provider?.atencionUrgencias ?: false) }
-    var editProviderTurnosLocal by remember(provider) {
-        mutableStateOf(provider?.turnosEnLocal ?: false) }
-    var editProviderVaDomicilio by remember(provider) {
-        mutableStateOf(provider?.vaDomicilio ?: false) }
-    var editProviderEnvios by remember(provider) {
-        mutableStateOf(provider?.envios ?: false) }
-    var editProviderAcceptsTurnos by remember(provider) {
-        mutableStateOf(provider?.acceptsAppointments ?: false) }
+    var editProviderWorks24h by remember { mutableStateOf(provider?.atencionUrgencias ?: false) }
+    var editProviderTurnosLocal by remember { mutableStateOf(provider?.turnosEnLocal ?: false) }
+    var editProviderVaDomicilio by remember { mutableStateOf(provider?.vaDomicilio ?: false) }
+    var editProviderEnvios by remember { mutableStateOf(provider?.envios ?: false) }
+    var editProviderAcceptsTurnos by remember { mutableStateOf(provider?.acceptsAppointments ?: false) }
+
+    // Carga el perfil desde Firestore al entrar a la pantalla
+    LaunchedEffect(Unit) {
+        viewModel.loadProfile()
+    }
+
+    // Sincronizar toggles solo la primera vez que provider carga (Room es inmediato)
+    // providerInitialized evita que el refresh de Firebase en background pise cambios del usuario
+    val providerInitialized = remember { mutableStateOf(false) }
+    LaunchedEffect(provider) {
+        if (provider != null && !providerInitialized.value) {
+            providerInitialized.value = true
+            editProviderDoesService = provider.doesService
+            editProviderDoesProduct = provider.doesProduct
+            editProviderWorks24h = provider.atencionUrgencias
+            editProviderTurnosLocal = provider.turnosEnLocal
+            editProviderVaDomicilio = provider.vaDomicilio
+            editProviderEnvios = provider.envios
+            editProviderAcceptsTurnos = provider.acceptsAppointments
+        }
+    }
     // Local/taller
     var localDireccion by remember(provider) { mutableStateOf(provider?.direccionLocal ?: "") }
     var localProvincia by remember(provider) { mutableStateOf(provider?.provinciaLocal ?: "") }
@@ -507,7 +529,7 @@ fun ProfileScreen(
                             showAddScheduleDialog = false
                             horarioToEdit = null
                         },
-                        onConfirm = { days, startTime, endTime, duration, worksByAppointment ->
+                        onConfirm = { days, startTime, endTime, duration, worksByAppointment, scheduleType ->
                             if (horarioToEdit != null) {
                                 scheduleVm.updateSchedule(
                                     horarioToEdit!!.copy(
@@ -515,18 +537,20 @@ fun ProfileScreen(
                                         startTime = startTime,
                                         endTime = endTime,
                                         appointmentDuration = duration,
-                                        worksByAppointment = worksByAppointment
+                                        worksByAppointment = worksByAppointment,
+                                        scheduleType = scheduleType
                                     )
                                 )
                             } else {
                                 days.forEach { day ->
-                                    scheduleVm.addSchedule(day, startTime, endTime, duration, worksByAppointment)
+                                    scheduleVm.addSchedule(day, startTime, endTime, duration, worksByAppointment, scheduleType)
                                 }
                             }
                             showAddScheduleDialog = false
                             horarioToEdit = null
                         },
-                        colors = colors
+                        colors = colors,
+                        hasPhysicalLocation = editProviderTurnosLocal
                     )
                 }
                 // Dialog confirmar eliminación
@@ -599,9 +623,9 @@ fun ProfileScreen(
                     val localContext = androidx.compose.ui.platform.LocalContext.current
                     var localEditando by remember { mutableStateOf(false) }
                     var localGeoLoading by remember { mutableStateOf(false) }
-                    var localLocalidad by remember(provider) { mutableStateOf(provider.address?.localidad ?: "") }
-                    var localCalle by remember(provider) { mutableStateOf(provider.address?.calle ?: "") }
-                    var localNumero by remember(provider) { mutableStateOf(provider.address?.numero ?: "") }
+                    var localLocalidad by remember(provider) { mutableStateOf(provider?.addresses?.find { it.id == "local" }?.localidad ?: provider?.address?.localidad ?: "") }
+                    var localCalle by remember(provider) { mutableStateOf(provider?.addresses?.find { it.id == "local" }?.calle ?: provider?.address?.calle ?: "") }
+                    var localNumero by remember(provider) { mutableStateOf(provider?.addresses?.find { it.id == "local" }?.numero ?: provider?.address?.numero ?: "") }
                     var mostrarSugerenciasProvincia by remember { mutableStateOf(false) }
                     var mostrarSugerenciasLocalidad by remember { mutableStateOf(false) }
                     var geocodedLat by remember { mutableStateOf<Double?>(null) }
@@ -624,11 +648,27 @@ fun ProfileScreen(
                                     val fusedClient = com.google.android.gms.location.LocationServices
                                         .getFusedLocationProviderClient(localContext)
                                     @Suppress("MissingPermission")
-                                    val loc = fusedClient.lastLocation.await()
+                                    var loc = fusedClient.lastLocation.await()
+                                    if (loc == null) {
+                                        loc = fusedClient.getCurrentLocation(
+                                            com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                                            null
+                                        ).await()
+                                    }
                                     if (loc != null) {
                                         val geocoder = android.location.Geocoder(localContext, java.util.Locale.getDefault())
-                                        @Suppress("DEPRECATION")
-                                        val addrs = geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+                                        val addrs: List<android.location.Address>? =
+                                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                                kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                                                    geocoder.getFromLocation(loc.latitude, loc.longitude, 1, object : android.location.Geocoder.GeocodeListener {
+                                                        override fun onGeocode(results: MutableList<android.location.Address>) { cont.resumeWith(Result.success(results)) }
+                                                        override fun onError(errorMessage: String?) { cont.resumeWith(Result.success(emptyList())) }
+                                                    })
+                                                }
+                                            } else {
+                                                @Suppress("DEPRECATION")
+                                                geocoder.getFromLocation(loc.latitude, loc.longitude, 1)
+                                            }
                                         if (!addrs.isNullOrEmpty()) {
                                             val a = addrs[0]
                                             if (!a.thoroughfare.isNullOrBlank()) localCalle = a.thoroughfare!!
@@ -812,8 +852,18 @@ fun ProfileScreen(
                                             try {
                                                 val geocoder = android.location.Geocoder(localContext, java.util.Locale.getDefault())
                                                 val query = "$localCalle $localNumero, $localLocalidad, $localProvincia, Argentina"
-                                                @Suppress("DEPRECATION")
-                                                val results = geocoder.getFromLocationName(query, 1)
+                                                val results: List<android.location.Address>? =
+                                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                                                        kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                                                            geocoder.getFromLocationName(query, 1, object : android.location.Geocoder.GeocodeListener {
+                                                                override fun onGeocode(r: MutableList<android.location.Address>) { cont.resumeWith(Result.success(r)) }
+                                                                override fun onError(errorMessage: String?) { cont.resumeWith(Result.success(emptyList())) }
+                                                            })
+                                                        }
+                                                    } else {
+                                                        @Suppress("DEPRECATION")
+                                                        geocoder.getFromLocationName(query, 1)
+                                                    }
                                                 if (!results.isNullOrEmpty()) {
                                                     val r = results[0]
                                                     geocodedLat = r.latitude

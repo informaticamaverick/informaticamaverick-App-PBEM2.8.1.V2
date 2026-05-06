@@ -19,6 +19,12 @@ interface BookedAppointmentDao {
     @Query("UPDATE booked_appointments SET status = :status WHERE id = :id")
     suspend fun updateStatus(id: String, status: String)
 
+    @Query("UPDATE booked_appointments SET date = :date, time = :time, status = :status WHERE id = :id")
+    suspend fun updateDateTimeStatus(id: String, date: String, time: String, status: String)
+
+    @Query("SELECT * FROM booked_appointments WHERE chatId = :chatId AND status = 'RESCHEDULED' LIMIT 1")
+    suspend fun getRescheduledByChatId(chatId: String): BookedAppointmentEntity?
+
     @Query("DELETE FROM booked_appointments WHERE id = :id")
     suspend fun deleteById(id: String)
 }

@@ -75,7 +75,7 @@ data class ProviderEntity(
     val vaDomicilio: Boolean get() = doesHomeVisits
     val suscripto: Boolean get() = isSubscribed
     val favorito: Boolean get() = isFavorite
-    val tieneEmpresa: Boolean get() = hasCompanyProfile || companies.isNotEmpty()
+    val tieneEmpresa: Boolean get() = hasCompanyProfile
     val nombreEmpresa: String? get() = companies.firstOrNull()?.name
     val direccionEmpresa: String? get() = companies.firstOrNull()?.branches?.firstOrNull()?.address?.fullString()
     val cuitEmpresa: String? get() = companies.firstOrNull()?.cuit

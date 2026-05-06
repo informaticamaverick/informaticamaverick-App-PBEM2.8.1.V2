@@ -101,7 +101,10 @@ class ProviderRepository @Inject constructor(
                 "galleryImages" to provider.galleryImages,
                 "perfil" to perfilMap,
                 "hasCompanyProfile" to provider.hasCompanyProfile,
-                "empresa.priorizarEmpresa" to provider.priorizarEmpresa,
+                "empresa" to mapOf(
+                    "tieneEmpresa" to provider.hasCompanyProfile,
+                    "priorizarEmpresa" to provider.priorizarEmpresa
+                ),
                 "isOnline" to provider.isOnline,
                 "isSubscribed" to true, // Provisorio hasta que se desarrolle la logica del pago
                 "isVerified" to provider.isVerified,
@@ -115,11 +118,9 @@ class ProviderRepository @Inject constructor(
                 "atencionUrgencias" to provider.works24h,
                 "vaDomicilio" to provider.doesHomeVisits,
                 "envios" to provider.doesShipping,
-                "turnosEnLocal" to provider.hasPhysicalLocation,
-                "local" to mapOf(
-                    "turnosEnLocal" to provider.hasPhysicalLocation,
-                    "horarioLocal" to provider.workingHours
-                )
+                "turnosEnLocal" to provider.hasPhysicalLocation
+                // Nota: el mapa "local" (con dirección, horario, turnosEnLocal) solo se escribe
+                // desde EditProfileViewModel.updateProfile para evitar sobreescribir datos locales.
             )
 
             // ─── SECCIÓN: GENERACIÓN DE LISTA DE TÓPICOS (MatchKeys) ──────────────────────
@@ -242,6 +243,11 @@ class ProviderRepository @Inject constructor(
             // EJECUCIÓN ATÓMICA DEL LOTE
             batch.commit().await()
             Log.d(TAG, "✅ [REMOTO] Sincronización exitosa con WriteBatch.")
+            // Escribir local.turnosEnLocal por separado (update con dot-notation)
+            // batch.set con merge no hace deep-merge en sub-mapas anidados
+            firestore.collection("providers").document(uid)
+                .update("local.turnosEnLocal", provider.hasPhysicalLocation)
+                .await()
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ [FALLO] Error en sincronización: ${e.message}")

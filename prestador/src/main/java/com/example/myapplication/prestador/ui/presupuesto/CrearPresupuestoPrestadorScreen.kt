@@ -3,6 +3,7 @@
 import android.R
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -209,6 +210,13 @@ fun CrearPresupuestoPrestadorScreen(
     var clienteTelefono by remember { mutableStateOf("") }
     var clienteDireccion by remember { mutableStateOf("") }
     var selectedClienteId by remember { mutableStateOf<String?>(null) }
+
+    // --- CATEGORIA STATE ---
+    val providerCategories = remember(provider) { provider?.categories ?: emptyList() }
+    var selectedBudgetCategory by remember(providerCategories) {
+        mutableStateOf(providerCategories.firstOrNull() ?: "")
+    }
+    var budgetCategoryExpanded by remember { mutableStateOf(false) }
     //BUSCADOR INLINE (clientes del chat)
     var clienteQuery by remember { mutableStateOf("")}
     var clienteFieldFocused by remember { mutableStateOf(false) }
@@ -547,6 +555,96 @@ fun CrearPresupuestoPrestadorScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colors.textSecondary
                                 )
+                            }
+                        }
+                    }
+                }
+
+                // --- CATEGORIA SELECTOR ---
+                if (providerCategories.isNotEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
+                            shape = RoundedCornerShape(16.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    "Rubro / Categoría",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
+                                )
+                                ExposedDropdownMenuBox(
+                                    expanded = budgetCategoryExpanded,
+                                    onExpandedChange = { budgetCategoryExpanded = it }
+                                ) {
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .menuAnchor()
+                                            .clickable { budgetCategoryExpanded = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        border = BorderStroke(1.5.dp, colors.primaryOrange.copy(alpha = 0.5f)),
+                                        color = colors.primaryOrange.copy(alpha = 0.05f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Category,
+                                                contentDescription = null,
+                                                tint = colors.primaryOrange,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Text(
+                                                selectedBudgetCategory.ifBlank { "Seleccionar categoría" },
+                                                modifier = Modifier.weight(1f),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (selectedBudgetCategory.isBlank()) colors.textSecondary else colors.textPrimary
+                                            )
+                                            Icon(
+                                                if (budgetCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                contentDescription = null,
+                                                tint = colors.primaryOrange,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                    ExposedDropdownMenu(
+                                        expanded = budgetCategoryExpanded,
+                                        onDismissRequest = { budgetCategoryExpanded = false },
+                                        containerColor = colors.surfaceColor
+                                    ) {
+                                        providerCategories.forEach { cat ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        cat,
+                                                        fontWeight = if (cat == selectedBudgetCategory) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (cat == selectedBudgetCategory) colors.primaryOrange else colors.textPrimary
+                                                    )
+                                                },
+                                                onClick = {
+                                                    selectedBudgetCategory = cat
+                                                    budgetCategoryExpanded = false
+                                                },
+                                                leadingIcon = {
+                                                    if (cat == selectedBudgetCategory) {
+                                                        Icon(Icons.Default.Check, null, tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -930,7 +1028,8 @@ fun CrearPresupuestoPrestadorScreen(
                     providerName = providerDisplayName,
                     providerAddress = providerDisplayAnddress,
                     isProfessional = isProviderProfessional,
-                    presupuestoNumero = pendingPresupuesto?.numeroPresupuesto ?: ""
+                    presupuestoNumero = pendingPresupuesto?.numeroPresupuesto ?: "",
+                    category = selectedBudgetCategory
                 )
             }
             }

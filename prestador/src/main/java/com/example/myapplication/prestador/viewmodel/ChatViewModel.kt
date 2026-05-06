@@ -29,8 +29,7 @@ class ChatViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val myUserId =
-        FirebaseAuth.getInstance().currentUser?.uid ?:
-        ""
+        FirebaseAuth.getInstance().currentUser?.uid ?: ""
     private var currentConversationId = ""
     private var currentCompanyId: String? = null
     private var currentCategoryId: String? = null
@@ -58,11 +57,7 @@ class ChatViewModel @Inject constructor(
     val isLoading: StateFlow<Boolean> =
         _isLoading.asStateFlow()
 
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val conversations: StateFlow<List<ConversationEntity>> = _activeCompanyId
-        .flatMapLatest { companyId ->
-            repository.getConversationsByCompany(companyId)
-        }
+    val conversations: StateFlow<List<ConversationEntity>> = repository.getAllConversations()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _messages = MutableStateFlow<List<MessageEntity>>(emptyList())
@@ -92,6 +87,10 @@ class ChatViewModel @Inject constructor(
     private var typingObserveJob: kotlinx.coroutines.Job? = null
 
     fun observeClientTyping(chatId: String, clientId: String) {
+        android.util.Log.d(
+            "TYPING_VM",
+            "observeClientTyping llamado chatId=$chatId clientId=$clientId"
+        )
         typingObserveJob?.cancel()
         typingObserveJob = viewModelScope.launch {
             repository.observeClientTyping(chatId, clientId).collect {
@@ -107,12 +106,12 @@ class ChatViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                
+
                 // Cargar contexto de la conversación
                 val conv = repository.getConversationById(conversationId)
                 currentCompanyId = conv?.companyId
                 currentCategoryId = conv?.categoryId
-                
+
                 repository.getMessagesByConversation(conversationId).collect { newList ->
                     _messages.value = newList
                 }
@@ -148,7 +147,7 @@ class ChatViewModel @Inject constructor(
             try {
                 repository.sendMessage(
                     currentConversationId,
-                    text, 
+                    text,
                     myUserId,
                     currentCompanyId,
                     currentCategoryId
@@ -158,6 +157,57 @@ class ChatViewModel @Inject constructor(
             }
         }
     }
+
+    fun sendRescheduleNotice(conversationId: String, originalDate: String, originalTime: String) {
+        if (conversationId.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.sendRescheduleNoticeMessage(
+                    conversationId = conversationId,
+                    myUserId = myUserId,
+                    originalDate = originalDate,
+                    originalTime = originalTime
+                )
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al notificar reprogramación: ${e.message}"
+            }
+        }
+    }
+
+    fun sendCompletionNotice(conversationId: String, date: String, time: String) {
+        if (conversationId.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.sendCompletionNoticeMessage(
+                    conversationId = conversationId,
+                    myUserId = myUserId,
+                    originalDate = date,
+                    originalTime = time
+                )
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al notificar completado: ${e.message}"
+            }
+        }
+    }
+
+    fun sendCancellationNotice(conversationId: String, date: String, time: String, reason: String = "") {
+        if (conversationId.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                repository.sendCancellationNoticeMessage(
+                    conversationId = conversationId,
+                    myUserId = myUserId,
+                    originalDate = date,
+                    originalTime = time,
+                    reason = reason
+                )
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al enviar cancelación ${e.message}"
+            }
+        }
+    }
+
+
 
     fun sendBudgetMessage(pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity) {
         if (currentConversationId.isEmpty())
@@ -188,8 +238,8 @@ class ChatViewModel @Inject constructor(
                     } else null
                 } ?: return@launch
                 repository.sendImageMessage(
-                    currentConversationId, 
-                    base64, 
+                    currentConversationId,
+                    base64,
                     myUserId,
                     currentCompanyId,
                     currentCategoryId
@@ -294,9 +344,9 @@ class ChatViewModel @Inject constructor(
             viewModelScope.launch {
                 try {
                     repository.sendAudioMessage(
-                        currentConversationId, 
-                        path, 
-                        duration, 
+                        currentConversationId,
+                        path,
+                        duration,
                         myUserId,
                         currentCompanyId,
                         currentCategoryId
@@ -324,13 +374,14 @@ class ChatViewModel @Inject constructor(
     }
 
     fun sendAudioMessage(audioPath: String, durationSeconds: Int) {
+        // Mantenido por compatibilidad si se llama externamente, pero lo ideal es usar los métodos de arriba
         if (currentConversationId.isEmpty()) return
         viewModelScope.launch {
             try {
                 repository.sendAudioMessage(
-                    currentConversationId, 
-                    audioPath, 
-                    durationSeconds, 
+                    currentConversationId,
+                    audioPath,
+                    durationSeconds,
                     myUserId,
                     currentCompanyId,
                     currentCategoryId
@@ -354,6 +405,7 @@ class ChatViewModel @Inject constructor(
     fun deleteMessage(messageId: String) {
         viewModelScope.launch {
             try {
+
                 repository.deleteMessage(messageId)
             } catch (e: Exception) {
                 _errorMessage.value = "Error al eliminar mensaje: ${e.message}"
@@ -362,13 +414,15 @@ class ChatViewModel @Inject constructor(
     }
 
     // ── Enviar calendario de disponibilidad
+    // El prestador elige el rango de fechas y envía su disponibilidad al cliente
     fun sendCalendarInvite(
         startDate: String,        // "yyyy-MM-dd"
         endDate: String,          // "yyyy-MM-dd"
         availabilityJson: String, // JSON con las reglas de horario
         bookedSlotsJson: String,  // JSON con los slots ya ocupados
         appointmentType: String,  // "TECHNICAL_VISIT" o "LOCAL_APPOINTMENT"
-        providerAddress: String?  // Dirección del local (opcional)
+        providerAddress: String?, // Dirección del local (opcional)
+        serviceCategory: String = ""
     ) {
         if (currentConversationId.isEmpty()) return
         viewModelScope.launch {
@@ -383,7 +437,8 @@ class ChatViewModel @Inject constructor(
                     companyId = currentCompanyId,
                     categoryId = currentCategoryId,
                     appointmentType = appointmentType,
-                    providerAddress = providerAddress
+                    providerAddress = providerAddress,
+                    serviceCategory = serviceCategory
                 )
             } catch (e: Exception) {
                 _errorMessage.value = "Error al enviar calendario:${e.message}"
@@ -392,6 +447,7 @@ class ChatViewModel @Inject constructor(
     }
 
     // ── Responder a una solicitud de turno del cliente
+    // El prestador acepta o rechaza; se envía mensaje automático de texto
     fun respondToAppointmentRequest(
         messageId: String,
         clientName: String,
@@ -403,9 +459,10 @@ class ChatViewModel @Inject constructor(
         doesHomeVisits: Boolean = false,
         profession: String? = null,
         providerAddress: String? = null,
+        appointmentType: String = "TECHNICAL_VISIT",
+        serviceCategory: String? = null,
         accepted: Boolean,
-        rejectionReason: String? = null,
-        appointmentType: String? = null // 🔥 Agregado para discriminar correctamente
+        rejectionReason: String? = null
     ) {
         if (currentConversationId.isEmpty()) return
         viewModelScope.launch {
@@ -419,47 +476,78 @@ class ChatViewModel @Inject constructor(
                     rejectionReason = rejectionReason
                 )
 
-                // 2. Si aceptó, enviar comprobante visual
                 if (accepted) {
-                    val receipt = buildAppointmentReceipt(
-                        date = date,
-                        time = time,
-                        service = service,
-                        providerName = providerName,
-                        serviceType = serviceType,
-                        doesHomeVisits = doesHomeVisits,
-                        profession = profession,
-                        providerAddress = providerAddress,
-                        appointmentType = appointmentType // 🔥 Usamos el tipo original si está presente
-                    )
-                    repository.sendAppointmentReceiptMessage(
-                        conversationId = currentConversationId,
-                        myUserId = myUserId,
-                        date = receipt.date,
-                        time = receipt.time,
-                        service = receipt.service,
-                        providerName = receipt.providerName,
-                        isTechnician = receipt.isTechnician,
-                        profession = receipt.profession,
-                        address = receipt.address,
-                        code = receipt.code,
-                        companyId = currentCompanyId,
-                        categoryId = currentCategoryId
-                    )
+                    // Obtener clientId una sola vez
+                    val conversation = repository.getConversationById(currentConversationId)
+                    val clientId = conversation?.userId ?: ""
+                    val isTechnician = appointmentType != "LOCAL_APPOINTMENT" && (serviceType == "TECHNICAL" || doesHomeVisits)
+
+                    // 2. Guardar en Room — independiente del comprobante para no perder el turno
+                    try {
+                        repository.saveBookedAppointmet(
+                            messageId = messageId,
+                            clientId = clientId,
+                            clientName = clientName,
+                            date = date,
+                            time = time,
+                            service = service,
+                            chatId = currentConversationId
+                        )
+                        android.util.Log.d("ChatVM", "✅ Turno guardado en Room: $date $time - $service - clientId=$clientId")
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatVM", "❌ Error guardando turno en Room: ${e.message}", e)
+                        _errorMessage.value = "Error al guardar turno: ${e.message}"
+                    }
+
+                    // 3. Enviar comprobante visual (secundario — no afecta el guardado)
+                    try {
+                        val clientAddress = if (isTechnician && clientId.isNotBlank()) {
+                            repository.getClientMainAddress(clientId)
+                        } else null
+                        val receipt = buildAppointmentReceipt(
+                            date = date,
+                            time = time,
+                            service = service,
+                            providerName = providerName,
+                            serviceType = serviceType,
+                            doesHomeVisits = doesHomeVisits,
+                            profession = profession,
+                            providerAddress = providerAddress,
+                            clientAddress = clientAddress,
+                            appointmentType = appointmentType
+                        )
+                        repository.sendAppointmentReceiptMessage(
+                            conversationId = currentConversationId,
+                            myUserId = myUserId,
+                            date = receipt.date,
+                            time = receipt.time,
+                            service = receipt.service,
+                            providerName = receipt.providerName,
+                            isTechnician = receipt.isTechnician,
+                            profession = receipt.profession,
+                            address = receipt.address,
+                            code = receipt.code,
+                            prioritizeCompany = receipt.prioritizeCompany,
+                            appointmentType = appointmentType,
+                            categoryId = serviceCategory?.takeIf { it.isNotBlank() } ?: currentCategoryId
+                        )
+                    } catch (e: Exception) {
+                        android.util.Log.e("ChatVM", "❌ Error enviando comprobante: ${e.message}", e)
+                    }
                 } else {
                     // Si rechazó, enviar mensaje de rechazo
                     val motivo = if (!rejectionReason.isNullOrBlank()) "Motivo: $rejectionReason" else ""
                     val rejectText = "❌ No puedo atenderte el $date a las $time. $motivo Por favor elegí otro horario."
                     repository.sendMessage(
-                        currentConversationId, 
-                        rejectText, 
+                        currentConversationId,
+                        rejectText,
                         myUserId,
                         currentCompanyId,
                         currentCategoryId
                     )
                 }
 
-                // 3. Si aceptó, guardar en Room local del prestador
+                //3. Si aceptó, guardar en Room local del prestador
                 if (accepted) {
                     val conversation = repository.getConversationById(currentConversationId)
                     val clientId = conversation?.userId ?: ""
@@ -487,7 +575,8 @@ class ChatViewModel @Inject constructor(
         val isTechnician: Boolean,
         val profession: String?,
         val address: String?,
-        val code: String
+        val code: String,
+        val prioritizeCompany: Boolean = false
     )
 
     private fun buildAppointmentReceipt(
@@ -499,15 +588,11 @@ class ChatViewModel @Inject constructor(
         doesHomeVisits: Boolean,
         profession: String?,
         providerAddress: String?,
-        appointmentType: String? = null
+        clientAddress: String? = null,
+        prioritizeCompany: Boolean = false,
+        appointmentType: String = "TECHNICAL_VISIT"
     ): ReceiptData {
-        // 🔥 Lógica de discriminación mejorada: Prioriza el tipo de cita si viene especificado
-        val isTechnician = if (appointmentType != null) {
-            appointmentType == "TECHNICAL_VISIT"
-        } else {
-            serviceType == "TECHNICAL" || doesHomeVisits
-        }
-
+        val isTechnician = appointmentType != "LOCAL_APPOINTMENT" && (serviceType == "TECHNICAL" || doesHomeVisits)
         val dateFormatted = formatDateForDisplay(date)
         val timeFormatted = if (time.isNotBlank()) "$time hs" else time
         val code = if (isTechnician) {
@@ -515,6 +600,9 @@ class ChatViewModel @Inject constructor(
         } else {
             "#TRN-${date.replace("-", "")}-001"
         }
+        // TECHNICAL → va al domicilio del cliente; PROFESSIONAL → consultorio del prestador
+        val address = if (isTechnician) clientAddress else providerAddress
+
 
         return ReceiptData(
             date = dateFormatted,
@@ -523,8 +611,9 @@ class ChatViewModel @Inject constructor(
             providerName = providerName,
             isTechnician = isTechnician,
             profession = if (!profession.isNullOrBlank()) profession else null,
-            address = if (!providerAddress.isNullOrBlank()) providerAddress else null,
-            code = code
+            address = if (!address.isNullOrBlank()) address else null,
+            code = code,
+            prioritizeCompany = prioritizeCompany
         )
     }
 
@@ -567,6 +656,15 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+
+
+    fun clearMessages() {
+        _errorMessage.value = null
+        _successMessage.value = null
+    }
+
+    // Inicia la escucha en Firestore para descubrir conversaciones nuevas del prestador
+    // y actualiza _conversations desde Room automáticamente
     fun syncConversations() {
         if (myUserId.isEmpty()) return
         repository.syncConversationsFromFirestore(myUserId)

@@ -75,7 +75,8 @@ data class Provider(
     val direccionEmpresa: String? get() = companies.firstOrNull()?.branches?.firstOrNull()?.address?.fullString()
     val cuitEmpresa: String? get() = companies.firstOrNull()?.cuit
     val turnosEnLocal: Boolean get() = hasPhysicalLocation
-    val direccionLocal: String? get() = address?.fullString()
+    val localAddress: AddressProvider? get() = addresses.find { it.id == "local" } ?: address
+    val direccionLocal: String? get() = localAddress?.fullString()
     val phone: String get() = phoneNumber
     val dniCuit: String? get() = cuilCuit
     val tieneMatricula: Boolean get() = !matricula.isNullOrBlank()
@@ -85,6 +86,6 @@ data class Provider(
     val provincia: String? get() = address?.provincia
     val codigoPostal: String? get() = address?.codigoPostal
     val pais: String? get() = address?.pais
-    val provinciaLocal: String? get() = address?.provincia
-    val codigoPostalLocal: String? get() = address?.codigoPostal
+    val provinciaLocal: String? get() = localAddress?.provincia
+    val codigoPostalLocal: String? get() = localAddress?.codigoPostal
 }

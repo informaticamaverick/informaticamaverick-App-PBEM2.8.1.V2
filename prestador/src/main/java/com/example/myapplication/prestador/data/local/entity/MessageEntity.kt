@@ -89,8 +89,12 @@ data class MessageEntity(
     val receiptAddress: String? = null,
     val receiptCode: String? = null,
     val receiptIsTechnician: Boolean = false,
+    val receiptPrioritizeCompany: Boolean = false,
     
     // Estado de sincronización
     val isSynced: Boolean = false,
-    val syncError: String? = null
+    val syncError: String? = null,
+    //Campos de para la solicitud de presupuesto
+    val budgetRequestDescription: String? = null,
+    val budgetRequestClientAddress: String? = null,
 )

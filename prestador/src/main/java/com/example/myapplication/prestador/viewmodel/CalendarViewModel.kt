@@ -24,4 +24,16 @@ class CalendarViewModel @Inject constructor(
             bookedAppointmentDao.updateStatus(id, "CANCELLED")
         }
     }
+
+    fun rescheduleAppointment(id: String) {
+        viewModelScope.launch {
+            bookedAppointmentDao.updateStatus(id, "RESCHEDULED")
+        }
+    }
+
+    fun completeAppointment(id: String) {
+        viewModelScope.launch {
+            bookedAppointmentDao.updateStatus(id, "COMPLETED")
+        }
+    }
 }

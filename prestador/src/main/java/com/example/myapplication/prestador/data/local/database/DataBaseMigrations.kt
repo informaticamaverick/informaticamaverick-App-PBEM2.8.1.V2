@@ -814,6 +814,35 @@ NO ACTION
         }
     }
 
+    val MIGRATION_46_47 = object : Migration(46, 47) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE messages ADD COLUMN receiptPrioritizeCompany INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    val MIGRATION_47_48 = object : Migration(47, 48) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE availability_schedules ADD COLUMN scheduleType TEXT NOT NULL DEFAULT 'TECHNICAL_VISIT'")
+            // providerCompanyName agregado por Maxi sin migración
+            db.execSQL("ALTER TABLE presupuestos ADD COLUMN providerCompanyName TEXT DEFAULT NULL")
+            // Campos nuevos en messages agregados por Maxi sin migración
+            db.execSQL("ALTER TABLE messages ADD COLUMN appointmentType TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE messages ADD COLUMN providerAddress TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE messages ADD COLUMN companyId TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE messages ADD COLUMN categoryId TEXT DEFAULT NULL")
+            // Campos nuevos en conversations agregados por Maxi sin migración
+            db.execSQL("ALTER TABLE conversations ADD COLUMN companyId TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE conversations ADD COLUMN categoryId TEXT DEFAULT NULL")
+        }
+    }
+
+    val MIGRATION_48_49 = object : Migration(48, 49) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE messages ADD COLUMN budgetRequestDescription TEXT DEFAULT NULL")
+                    db.execSQL("ALTER TABLE messages ADD COLUMN budgetRequestClientAddress TEXT DEFAULT NULL")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_6_7,
         MIGRATION_7_8,
@@ -849,6 +878,9 @@ NO ACTION
         MIGRATION_43_44,
         MIGRATION_44_45,
         MIGRATION_45_46,
+        MIGRATION_46_47,
+        MIGRATION_47_48,
+        MIGRATION_48_49
     )
 }
 

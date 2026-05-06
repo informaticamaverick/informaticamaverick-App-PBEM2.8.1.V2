@@ -1,6 +1,8 @@
 ﻿package com.example.myapplication.prestador.ui.chat
 
+import android.R
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,6 +10,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +38,11 @@ import java.util.*
 fun SendCalendarDialog(
     providerId: String,
     onDismiss: () -> Unit,
-    onSend: (startDate: String, endDate: String, availabilityJson: String, bookedSlotsJson: String, appointmentType: String, providerAddress: String?) -> Unit,
+    onSend: (startDate: String, endDate: String, availabilityJson: String, bookedSlotsJson: String, appointmentType: String, providerAddress: String?, serviceCategory: String) -> Unit,
+    hasPhysicalLocation: Boolean = false,
+    tieneEmpresa: Boolean = false,
+    initialAppointmentType: String = "TECHNICAL_VISIT",
+    showTypePicker: Boolean = true,
     availabilityViewModel: AvailabilityViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel()
 ) {
@@ -40,17 +50,53 @@ fun SendCalendarDialog(
     val schedules by availabilityViewModel.schedules.collectAsState()
     val profileState by editProfileViewModel.profileState.collectAsState()
 
-    var appointmentType by remember { mutableStateOf("TECHNICAL_VISIT") }
-    var selectedAddress by remember { mutableStateOf<String?>(null) }
-
-    val branches = remember(profileState) {
-        (profileState as? com.example.myapplication.prestador.viewmodel.ProfileState.Success)?.provider?.companies?.flatMap { it.branches } ?: emptyList()
+    // Carga el perfil fresco desde Firestore cada vez que se abre el dialog
+    LaunchedEffect(Unit) {
+        editProfileViewModel.loadProfile()
     }
 
-    LaunchedEffect(branches) {
-        if (branches.isNotEmpty() && selectedAddress == null) {
-            selectedAddress = branches.firstOrNull()?.address?.fullString()
+    // Fuente única de verdad: leemos del ViewModel directamente
+    val provider = (profileState as? com.example.myapplication.prestador.viewmodel.ProfileState.Success)?.provider
+    val localActivo = provider?.hasPhysicalLocation ?: false
+    val empresaActiva = provider?.hasCompanyProfile ?: false
+    val canUseLocalAppointment = localActivo || empresaActiva
+
+    // Prioridad: local propio > empresa
+    val mostrarBranchesEmpresa = !localActivo && empresaActiva
+    val branches = if (mostrarBranchesEmpresa) provider?.companies?.flatMap { it.branches } ?: emptyList()
+    else emptyList()
+    val localAddress = if (localActivo)
+        provider?.addresses?.find { it.id == "local" }?.fullString() ?: provider?.address?.fullString()
+    else null
+
+    var appointmentType by remember { mutableStateOf(initialAppointmentType) }
+    LaunchedEffect(canUseLocalAppointment) {
+        if (!canUseLocalAppointment) appointmentType = "TECHNICAL_VISIT"
+    }
+
+    var selectedAddress by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(appointmentType, localActivo, mostrarBranchesEmpresa) {
+        selectedAddress = when {
+            appointmentType != "LOCAL_APPOINTMENT" -> null
+            localActivo -> localAddress
+            mostrarBranchesEmpresa -> branches.firstOrNull()?.address?.fullString()
+            else -> null
         }
+    }
+
+    val providerCategories = remember(provider) {
+        provider?.categories?.filter { it.isNotBlank() }?.distinct() ?: emptyList()
+    }
+    var selectedCategory by remember(providerCategories) {
+        mutableStateOf(providerCategories.firstOrNull() ?: "")
+    }
+    var categoryDropdownExpanded by remember { mutableStateOf(false) }
+
+    val filteredSchedules = remember(schedules, appointmentType) {
+        val exact = schedules.filter { it.scheduleType == appointmentType }
+        if (exact.isEmpty() && appointmentType == com.example.myapplication.prestador.data.local.entity.ScheduleType.LOCAL_APPOINTMENT.name)
+            schedules.filter { it.scheduleType == com.example.myapplication.prestador.data.local.entity.ScheduleType.TECHNICAL_VISIT.name }
+        else exact
     }
 
     var showRangePicker by remember { mutableStateOf(false) }
@@ -163,14 +209,23 @@ fun SendCalendarDialog(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.CalendarMonth,
+                    imageVector = if (appointmentType == "LOCAL_APPOINTMENT")
+                        Icons.Default.Store
+                    else
+                        Icons.Default.CalendarMonth,
                     contentDescription = null,
-                    tint = colors.primaryOrange,
+                    tint = if (appointmentType == "LOCAL_APPOINTMENT")
+                        Color(0xFF6366f1)
+                    else
+                        Color(0xFF8B5CF6),
                     modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Enviar disponibilidad",
+                    text = if (appointmentType == "LOCAL_APPOINTMENT")
+                        "Disponibilidad · Turno en Local"
+                    else
+                        "Disponibilidad · Visita Técnica",
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
                 )
@@ -178,62 +233,196 @@ fun SendCalendarDialog(
         },
         text = {
             Column {
-                // Selector de Tipo de Cita
-                Text(
-                    text = "Tipo de servicio:",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                    color = colors.textPrimary
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = appointmentType == "TECHNICAL_VISIT",
-                        onClick = { appointmentType = "TECHNICAL_VISIT" },
-                        label = { Text("Visita Técnica", fontSize = 11.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = colors.primaryOrange,
-                            selectedLabelColor = Color.White
+                // Selector de Categoría
+                if (providerCategories.isNotEmpty()) {
+                    val accentColor = if (appointmentType == "LOCAL_APPOINTMENT")
+                        Color(0xFF6366f1) else Color(0xFF8B5CF6)
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(accentColor, shape = RoundedCornerShape(50))
                         )
-                    )
-                    FilterChip(
-                        selected = appointmentType == "LOCAL_APPOINTMENT",
-                        onClick = { appointmentType = "LOCAL_APPOINTMENT" },
-                        label = { Text("Turno en Local", fontSize = 11.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = colors.primaryOrange,
-                            selectedLabelColor = Color.White
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Categoría del servicio",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = colors.textPrimary
                         )
-                    )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ExposedDropdownMenuBox(
+                        expanded = categoryDropdownExpanded,
+                        onExpandedChange = { categoryDropdownExpanded = it }
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = accentColor.copy(alpha = 0.08f),
+                            border = BorderStroke(1.dp, if (categoryDropdownExpanded) accentColor else accentColor.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor()
+                                .clickable { categoryDropdownExpanded = true }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Category,
+                                    contentDescription = null,
+                                    tint = accentColor,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = selectedCategory.ifBlank { "Seleccionar categoría" },
+                                    fontSize = 13.sp,
+                                    color = if (selectedCategory.isBlank()) colors.textSecondary else colors.textPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = if (categoryDropdownExpanded)
+                                        Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = accentColor,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        ExposedDropdownMenu(
+                            expanded = categoryDropdownExpanded,
+                            onDismissRequest = { categoryDropdownExpanded = false }
+                        ) {
+                            providerCategories.forEach { cat ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .background(
+                                                        if (cat == selectedCategory) accentColor else accentColor.copy(alpha = 0.3f),
+                                                        shape = RoundedCornerShape(50)
+                                                    )
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                cat,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (cat == selectedCategory) FontWeight.SemiBold else FontWeight.Normal,
+                                                color = if (cat == selectedCategory) accentColor else colors.textPrimary
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedCategory = cat
+                                        categoryDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                if (appointmentType == "LOCAL_APPOINTMENT") {
+
+                // Selector de Tipo de Cita
+                if (showTypePicker) {
                     Text(
-                        text = "Seleccioná la ubicación del turno:",
+                        text = "Tipo de servicio",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 13.sp,
                         color = colors.textPrimary
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    if (branches.isEmpty()) {
-                        Text("No tenés sucursales configuradas.", color = Color.Red, fontSize = 11.sp)
-                    } else {
-                        branches.forEach { branch ->
-                            val fullAddr = branch.address.fullString()
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { selectedAddress = fullAddr }.padding(vertical = 4.dp)
-                            ) {
-                                RadioButton(
-                                    selected = selectedAddress == fullAddr,
-                                    onClick = { selectedAddress = fullAddr },
-                                    colors = RadioButtonDefaults.colors(selectedColor = colors.primaryOrange)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = appointmentType == "TECHNICAL_VISIT",
+                            onClick = { appointmentType = "TECHNICAL_VISIT" },
+                            label = { Text("Visita técnica", fontSize = 11.sp)},
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = colors.primaryOrange,
+                                selectedLabelColor = Color.White
+                            )
+                        )
+                        if (canUseLocalAppointment) {
+                            FilterChip(
+                                selected = appointmentType == "LOCAL_APPOINTMENT",
+                                onClick = { appointmentType = "LOCAL_APPOINTMENT"},
+                                label = { Text("Turno en local", fontSize = 11.sp)},
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = colors.primaryOrange,
+                                    selectedLabelColor = Color.White
                                 )
-                                Column {
-                                    Text(branch.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-                                    Text(fullAddr, fontSize = 11.sp, color = colors.textSecondary)
+                            )
+                        }
+                    }
+                }
+
+                if (appointmentType == "LOCAL_APPOINTMENT") {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    if (mostrarBranchesEmpresa) {
+                        Text(
+                            text = "Seleccioná la ubicación del turno",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = colors.textPrimary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        if (branches.isEmpty()) {
+                            Text("No tenés sucursales configuradas.", color = Color.Red, fontSize = 11.sp)
+                        } else {
+                            branches.forEach { branch ->
+                                val fullAddr = branch.address.fullString()
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        selectedAddress = fullAddr }.padding(vertical = 4.dp)
+                                ) {
+                                    RadioButton(
+                                        selected = selectedAddress == fullAddr,
+                                        onClick = { selectedAddress = fullAddr },
+                                        colors = RadioButtonDefaults.colors(selectedColor = colors.primaryOrange)
+                                    )
+                                    Column {
+                                        Text(branch.name, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                                        Text(fullAddr, fontSize = 11.sp, color = colors.textSecondary)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        //Modo local/taller personal
+                        Text(
+                            text = "Ubicación del local/taller:",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = colors.textPrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (localAddress.isNullOrBlank()) {
+                            Text("No tenés dirección de local configurada.", color = Color.Red, fontSize = 11.sp)
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = colors.primaryOrange.copy(alpha = 0.08f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Store, null, tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(localAddress, fontSize = 13.sp, color = colors.textPrimary)
                                 }
                             }
                         }
@@ -241,27 +430,27 @@ fun SendCalendarDialog(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
-                if (schedules.isEmpty()) {
-                    Text(
-                        text = "No tenés horarios activos configurados. Andá a Disponibilidad para agregar horarios.",
-                        fontSize = 13.sp,
-                        color = colors.textSecondary
-                    )
-                } else {
-                    Text(
-                        text = "Horarios activos:",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 160.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(schedules.sortedBy { it.dayOfWeek }) { schedule ->
+        if (filteredSchedules.isEmpty()) {
+                        Text(
+                            text = "No tenés horarios de ${if (appointmentType == "TECHNICAL_VISIT") "Visita Técnica" else "Turno en Local"} configurados.\nAndá a Disponibilidad para agregar horarios.",
+                            fontSize = 13.sp,
+                            color = colors.textSecondary
+                        )
+                    } else {
+                        Text(
+                            text = "Horarios activos:",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = colors.textPrimary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 160.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(filteredSchedules.sortedBy { it.dayOfWeek }) { schedule ->
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = colors.primaryOrange.copy(alpha = 0.08f),
@@ -335,13 +524,14 @@ fun SendCalendarDialog(
                     onSend(
                         startDate,
                         endDate,
-                        buildAvailabilityJson(schedules, startMs, endMs),
+                        buildAvailabilityJson(filteredSchedules, startMs, endMs),
                         "[]",
                         appointmentType,
-                        if (appointmentType == "LOCAL_APPOINTMENT") selectedAddress else null
+                        if (appointmentType == "LOCAL_APPOINTMENT") selectedAddress else null,
+                        selectedCategory
                     )
                 },
-                enabled = schedules.isNotEmpty() && startDate.isNotBlank() && endDate.isNotBlank() && (appointmentType == "TECHNICAL_VISIT" || selectedAddress != null),
+                enabled = filteredSchedules.isNotEmpty() && startDate.isNotBlank() && endDate.isNotBlank() && (appointmentType == "TECHNICAL_VISIT" || selectedAddress != null),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange)
             ) {
                 Text("Enviar calendario")

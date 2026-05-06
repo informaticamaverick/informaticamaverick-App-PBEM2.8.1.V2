@@ -50,6 +50,7 @@ import java.util.*
 import com.example.myapplication.prestador.ui.calendar.dialogs.*
 import com.example.myapplication.prestador.utils.ServiceTypeConfig
 import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
+import androidx.compose.ui.window.Dialog
 import com.example.myapplication.prestador.viewmodel.EmpleadosViewModel
 
 
@@ -57,6 +58,7 @@ import com.example.myapplication.prestador.viewmodel.EmpleadosViewModel
 data class Appointment(
     val id: String,
     val clientId: String, // ID del cliente para navegación
+    val chatId: String = "", // ID de la conversación para Reprogramar
     val date: String, // Formato "yyyy-MM-dd"
     val time: String, // Ej: "10:30"
     val service: String,
@@ -69,7 +71,8 @@ enum class AppointmentStatus {
     CONFIRMED,    // Confirmada
     PENDING,      // Pendiente
     CANCELLED,    // Cancelada
-    COMPLETED     // Completada
+    COMPLETED,    // Completada
+    RESCHEDULED   // Reprogramada (pendiente de nuevo horario)
 }
 
 
@@ -149,12 +152,16 @@ fun PrestadorCalendarScreen(
             Appointment(
                 id = entity.id,
                 clientId = entity.clientId,
+                chatId = entity.chatId,
                 date = entity.date,
                 time = entity.time,
-                service = entity.notes.ifBlank { "Turno reservado" },
+                service = entity.service.ifBlank { entity.notes.ifBlank { "Turno reservado" } },
                 clientName = entity.clientName,
-                status = if (entity.status == "CANCELLED") AppointmentStatus.CANCELLED
-                         else AppointmentStatus.CONFIRMED,
+                status = when (entity.status) {
+                    "CANCELLED"   -> AppointmentStatus.CANCELLED
+                    "RESCHEDULED" -> AppointmentStatus.RESCHEDULED
+                    else          -> AppointmentStatus.CONFIRMED
+                },
                 avatarColor = Color(
                     (entity.clientId.hashCode().toLong() and 0xFFFFFFFF) or 0xFF000000
                 )
@@ -170,14 +177,6 @@ fun PrestadorCalendarScreen(
     // Estado para controlar si la lista de citas está expandida (calendario minimizado)
     var isExpanded by remember { mutableStateOf(true) }
     
-    // Estados para el modal de cancelación
-    var showCancelDialog by remember { mutableStateOf(false) }
-    var appointmentToCancel by remember { mutableStateOf<String?>(null) }
-
-    // Estados para el modal de reprogramación
-    var showRescheduleDialog by remember { mutableStateOf(false) }
-    var appointmentToReschedule by remember { mutableStateOf<Appointment?>(null) }
-
     // Estado para el modal de edición (deshabilitado — citas eliminadas)
     var showEditDialog by remember { mutableStateOf(false) }
 
@@ -362,64 +361,24 @@ fun PrestadorCalendarScreen(
                 serviceTypeConfig = serviceTypeConfig,
                 onExpandClick = { isExpanded = !isExpanded },
                 onNavigateToClientePerfil = onNavigateToClientePerfil,
-                onReschedule = { _ -> },
-
-                onCancel = { appointmentId ->
-                    appointmentToCancel = appointmentId
-                    showCancelDialog = true
+                onGoToChat = { clientId, clientName ->
+                    onNavigateToChat(clientId, clientName, "", "", "")
                 },
-                onConfirm = { _ -> },
-                onComplete = { _ -> },
-                onGenerarPresupuesto = { appointmentId, _ ->
-                    onNavigateToPresupuesto(appointmentId)
+                onCancel = { id, chatId, date, time, reason ->
+                    calendarViewModel.cancelAppointment(id)
+                    chatViewModel.sendCancellationNotice(chatId, date, time, reason)
+                },
+                onComplete = { id, chatId, date, time ->
+                    calendarViewModel.completeAppointment(id)
+                    chatViewModel.sendCompletionNotice(chatId, date, time)
+                },
+                onReschedule = { id, chatId, date, time, clientId, clientName ->
+                    calendarViewModel.rescheduleAppointment(id)
+                    chatViewModel.sendRescheduleNotice(chatId, date, time)
+                    onNavigateToChat(clientId, clientName, date, time, "RESCHEDULE")
                 }
             )
         }
-    }
-    
-    // Diálogo de confirmación de cancelación
-    if (showCancelDialog) {
-        CancelAppointmentDialog(
-            serviceTypeConfig = serviceTypeConfig,
-            onConfirm = {
-            appointmentToCancel?.let { calendarViewModel.cancelAppointment(it) }
-            showCancelDialog = false
-            appointmentToCancel = null
-        },
-            onDismiss = {
-                showCancelDialog = false
-                appointmentToCancel = null
-            }
-        )
-    }
-
-    // Diálogo de reprogramación
-    if (showRescheduleDialog && appointmentToReschedule != null) {
-        RescheduleAppointmentDialog(
-            appointment = appointmentToReschedule!!,
-            onDismiss = {
-                showRescheduleDialog = false
-                appointmentToReschedule = null
-            },
-            onConfirm = { newDate, newTime ->
-                println("🟣 Reprogramación confirmada - Nueva fecha: $newDate, hora: $newTime")
-                println("🟣 Navegando al chat con nueva fecha/hora")
-                println("🟣 ClientId: ${appointmentToReschedule?.clientId}, Nombre: ${appointmentToReschedule?.clientName}")
-                println("🟣 AppointmentId ORIGINAL: ${appointmentToReschedule?.id}")
-                
-                // Navegar al chat con los datos de la reprogramación
-                onNavigateToChat(
-                    appointmentToReschedule!!.clientId,
-                    appointmentToReschedule!!.clientName,
-                    newDate,
-                    newTime,
-                    appointmentToReschedule!!.id  // ✅ Pasar ID original de la cita
-                )
-                
-                showRescheduleDialog = false
-                appointmentToReschedule = null
-            }
-        )
     }
 
 }
@@ -654,12 +613,11 @@ fun AppointmentsList(
     isExpanded: Boolean,
     serviceTypeConfig: com.example.myapplication.prestador.utils.ServiceTypeConfig,
     onExpandClick: () -> Unit,
-    onReschedule: (String) -> Unit,
-    onCancel: (String) -> Unit,
-    onConfirm: (String) -> Unit = {},
-    onComplete: (String) -> Unit = {},
-    onGenerarPresupuesto: (appointmentId: String, clientName: String) -> Unit = { _, _ -> },
-    onNavigateToClientePerfil: (clientId: String) -> Unit = {}
+    onNavigateToClientePerfil: (clientId: String) -> Unit = {},
+    onGoToChat: (clientId: String, clientName: String) -> Unit = { _, _ -> },
+    onCancel: (id: String, chatId: String, date: String, time: String, reason: String) -> Unit = { _, _, _, _, _ -> },
+    onComplete: (id: String, chatId: String, date: String, time: String) -> Unit = { _, _, _, _ -> },
+    onReschedule: (id: String, chatId: String, date: String, time: String, clientId: String, clientName: String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
     val colors = getPrestadorColors()
     val dateFormat = SimpleDateFormat("d 'de' MMMM", Locale.getDefault())
@@ -670,14 +628,14 @@ fun AppointmentsList(
 
     val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time)
 
-    // Separar en próximas (pending/confirmed con fecha >= hoy) e historial (completed/cancelled o pasadas)
+    // Separar en próximas (pending/confirmed/rescheduled con fecha >= hoy) e historial (completed/cancelled o pasadas)
     val upcoming = appointments.filter {
-        (it.status == AppointmentStatus.PENDING || it.status == AppointmentStatus.CONFIRMED) && it.date >= today
+        (it.status == AppointmentStatus.PENDING || it.status == AppointmentStatus.CONFIRMED || it.status == AppointmentStatus.RESCHEDULED) && it.date >= today
     }.sortedBy { it.date + it.time }
 
     val history = appointments.filter {
         it.status == AppointmentStatus.COMPLETED || it.status == AppointmentStatus.CANCELLED ||
-        ((it.status == AppointmentStatus.PENDING || it.status == AppointmentStatus.CONFIRMED) && it.date < today)
+        ((it.status == AppointmentStatus.PENDING || it.status == AppointmentStatus.CONFIRMED || it.status == AppointmentStatus.RESCHEDULED) && it.date < today)
     }.sortedByDescending { it.date + it.time }
 
     var selectedTab by remember { mutableStateOf(0) }
@@ -822,11 +780,10 @@ fun AppointmentsList(
                             },
                             serviceTypeConfig = serviceTypeConfig,
                             onNavigateToClientePerfil = onNavigateToClientePerfil,
-                            onReschedule = onReschedule,
+                            onGoToChat = onGoToChat,
                             onCancel = onCancel,
-                            onConfirm = onConfirm,
                             onComplete = onComplete,
-                            onGenerarPresupuesto = onGenerarPresupuesto
+                            onReschedule = onReschedule
                         )
                     }
                 }
@@ -844,12 +801,11 @@ fun AppointmentCard(
     isExpanded: Boolean = false,
     onToggleExpand: () -> Unit = {},
     serviceTypeConfig: ServiceTypeConfig,
-    onReschedule: (String) -> Unit = {},
-    onCancel: (String) -> Unit = {},
-    onConfirm: (String) -> Unit = {},
-    onComplete: (String) -> Unit = {},
-    onGenerarPresupuesto: (appointmentId: String, clientName: String) -> Unit = { _, _ -> },
-    onNavigateToClientePerfil: (clientId: String) -> Unit = {}
+    onNavigateToClientePerfil: (clientId: String) -> Unit = {},
+    onGoToChat: (clientId: String, clientName: String) -> Unit = { _, _ -> },
+    onCancel: (id: String, chatId: String, date: String, time: String, reason: String) -> Unit = { _, _, _, _, _ -> },
+    onComplete: (id: String, chatId: String, date: String, time: String) -> Unit = { _, _, _, _ -> },
+    onReschedule: (id: String, chatId: String, date: String, time: String, clientId: String, clientName: String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
     val colors = getPrestadorColors()
     Surface(
@@ -917,26 +873,29 @@ fun AppointmentCard(
                 Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = when (appointment.status) {
-                        AppointmentStatus.CONFIRMED -> Color(0xFF10B981).copy(alpha = 0.1f)
-                        AppointmentStatus.PENDING -> Color(0xFFF59E0B).copy(alpha = 0.1f)
-                        AppointmentStatus.CANCELLED -> Color(0xFFEF4444).copy(alpha = 0.1f)
-                        AppointmentStatus.COMPLETED -> Color(0xFF6366F1).copy(alpha = 0.1f)
+                        AppointmentStatus.CONFIRMED    -> Color(0xFF10B981).copy(alpha = 0.1f)
+                        AppointmentStatus.PENDING      -> Color(0xFFF59E0B).copy(alpha = 0.1f)
+                        AppointmentStatus.CANCELLED    -> Color(0xFFEF4444).copy(alpha = 0.1f)
+                        AppointmentStatus.COMPLETED    -> Color(0xFF6366F1).copy(alpha = 0.1f)
+                        AppointmentStatus.RESCHEDULED  -> Color(0xFF059669).copy(alpha = 0.1f)
                     }
                 ) {
                     Text(
                         text = when (appointment.status) {
-                            AppointmentStatus.CONFIRMED -> serviceTypeConfig.confirmedStatus
-                            AppointmentStatus.PENDING -> serviceTypeConfig.pendingStatus
-                            AppointmentStatus.CANCELLED -> serviceTypeConfig.cancelledStatus
-                            AppointmentStatus.COMPLETED -> "Completada"
+                            AppointmentStatus.CONFIRMED   -> serviceTypeConfig.confirmedStatus
+                            AppointmentStatus.PENDING     -> serviceTypeConfig.pendingStatus
+                            AppointmentStatus.CANCELLED   -> serviceTypeConfig.cancelledStatus
+                            AppointmentStatus.COMPLETED   -> "Completada"
+                            AppointmentStatus.RESCHEDULED -> "Reprogramando"
                         },
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = when (appointment.status) {
-                            AppointmentStatus.CONFIRMED -> Color(0xFF10B981)
-                            AppointmentStatus.PENDING -> Color(0xFFF59E0B)
-                            AppointmentStatus.CANCELLED -> Color(0xFFEF4444)
-                            AppointmentStatus.COMPLETED -> Color(0xFF6366F1)
+                            AppointmentStatus.CONFIRMED   -> Color(0xFF10B981)
+                            AppointmentStatus.PENDING     -> Color(0xFFF59E0B)
+                            AppointmentStatus.CANCELLED   -> Color(0xFFEF4444)
+                            AppointmentStatus.COMPLETED   -> Color(0xFF6366F1)
+                            AppointmentStatus.RESCHEDULED -> Color(0xFF059669)
                         },
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
@@ -957,7 +916,13 @@ fun AppointmentCard(
             ) {
                 Column {
                     HorizontalDivider(color = colors.surfaceElevated)
-                    
+
+                    var showCancelDialog by remember { mutableStateOf(false) }
+                    var cancelReason by remember { mutableStateOf("") }
+                    var showCompleteDialog by remember { mutableStateOf(false) }
+                    var showRescheduleDialog by remember { mutableStateOf(false) }
+
+                    //Botones de acción
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -967,52 +932,22 @@ fun AppointmentCard(
                         val btnPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                         val btnModifier = Modifier.weight(1f).height(36.dp)
 
-                        // Botón Confirmar (solo si está pendiente)
-                        if (appointment.status == AppointmentStatus.PENDING) {
-                            Button(
-                                onClick = { onConfirm(appointment.id) },
-                                modifier = btnModifier,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = btnPadding
-                            ) {
-                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Confirmar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        // Botón Completar (solo si está confirmada)
-                        if (appointment.status == AppointmentStatus.CONFIRMED) {
-                            Button(
-                                onClick = { onComplete(appointment.id) },
-                                modifier = btnModifier,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = btnPadding
-                            ) {
-                                Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = "Completar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        // Botón Presupuesto (pending o confirmed)
+                        //Completar
                         Button(
-                            onClick = { onGenerarPresupuesto(appointment.id, appointment.clientName) },
+                            onClick = { showCompleteDialog = true },
                             modifier = btnModifier,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = btnPadding
                         ) {
-                            Icon(Icons.Default.AttachMoney, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Done, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(3.dp))
-                            Text(text = "Presupuesto", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Completar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        // Botón Reprogramar
+                        //Reprogramar
                         Button(
-                            onClick = { onReschedule(appointment.id) },
+                            onClick = { showRescheduleDialog = true },
                             modifier = btnModifier,
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B35)),
                             shape = RoundedCornerShape(8.dp),
@@ -1020,26 +955,298 @@ fun AppointmentCard(
                         ) {
                             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(3.dp))
-                            Text(text = serviceTypeConfig.rescheduleAction, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Reprogramar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
 
-                        // Botón Cancelar
+                        //Cancelar
                         OutlinedButton(
-                            onClick = { onCancel(appointment.id) },
+                            onClick = { showCancelDialog = true },
                             modifier = btnModifier,
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
                             border = BorderStroke(1.dp, Color(0xFFEF4444)),
                             shape = RoundedCornerShape(8.dp),
                             contentPadding = btnPadding
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
+                            Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(text = "Cancelar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (showCancelDialog) {
+                        Dialog(onDismissRequest = { showCancelDialog = false }) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = colors.surfaceColor,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(3.dp))
-                                Text(text = serviceTypeConfig.cancelAction, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Column {
+                                    // Header rojo
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(
+                                                Color(0xFFEF4444),
+                                                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                                            )
+                                            .padding(vertical = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                imageVector = Icons.Default.Cancel,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(40.dp)
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = "Cancelar turno",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 18.sp
+                                            )
+                                        }
+                                    }
+
+                                    // Contenido
+                                    Column(modifier = Modifier.padding(20.dp)) {
+
+                                        // Info del turno
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color(0xFFEF4444).copy(alpha = 0.1f),
+                                            border = BorderStroke(1.dp, Color(0xFFEF4444).copy(alpha = 0.3f))
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CalendarToday,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFFEF4444),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(
+                                                        text = appointment.clientName,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = colors.textPrimary
+                                                    )
+                                                    Text(
+                                                        text = "${appointment.date}  •  ${appointment.time}",
+                                                        fontSize = 12.sp,
+                                                        color = colors.textSecondary
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(14.dp))
+
+                                        //Motivos rapidos
+                                        val motivos = listOf("Horario no disponible", "Problema personal", "Fuerza mayor", "Otro")
+                                        Text("Motivo (obligatorio):", fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                                            color = colors.textPrimary)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        motivos.forEach { motivo ->
+                                            val selected = cancelReason == motivo
+                                            Surface(
+                                                shape = RoundedCornerShape(20.dp),
+                                                color = if (selected) Color(0xFFEF4444) else Color(
+                                                    0xFFEF4444
+                                                ).copy(alpha = 0.08f),
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    Color(0xFFEF4444).copy(alpha = if (selected) 1f else 0.3f)
+                                                ),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 3.dp)
+                                                    .clickable { cancelReason = motivo }
+                                            ) {
+                                                Text(
+                                                    text = motivo,
+                                                    fontSize = 13.sp,
+                                                    color = if (selected) Color.White else Color(
+                                                        0xFFEF4444
+                                                    ),
+                                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                    modifier = Modifier.padding(
+                                                        horizontal = 14.dp,
+                                                        vertical = 8.dp
+                                                    )
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+
+                                        Text(
+                                            text = "Esta acción no se puede deshacer. El cliente recibirá un mensaje automático notificando la cancelación.",
+                                            fontSize = 13.sp,
+                                            color = colors.textSecondary,
+                                            lineHeight = 18.sp
+                                        )
+
+                                        Spacer(modifier = Modifier.height(20.dp))
+
+                                        // Botones
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            OutlinedButton(
+                                                onClick = { showCancelDialog = false },
+                                                modifier = Modifier.weight(1f),
+                                                border = BorderStroke(1.dp, colors.border),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Text("Volver", color = colors.textPrimary)
+                                            }
+                                            Button(
+                                                onClick = {
+                                                    if (cancelReason.isNotEmpty()) {
+                                                        onCancel(appointment.id, appointment.chatId, appointment.date, appointment.time, cancelReason)
+                                                        cancelReason = ""
+                                                        showCancelDialog = false
+                                                    }
+                                                },
+                                                enabled = cancelReason.isNotEmpty(),
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Text("Sí, cancelar", color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Dialog Completar
+                    if (showCompleteDialog) {
+                        Dialog(onDismissRequest = { showCompleteDialog = false }) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = colors.surfaceColor,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFF6366F1), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                            .padding(vertical = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(Icons.Default.Done, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text("Completar turno", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                        }
+                                    }
+                                    Column(modifier = Modifier.padding(20.dp)) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color(0xFF6366F1).copy(alpha = 0.1f),
+                                            border = BorderStroke(1.dp, Color(0xFF6366F1).copy(alpha = 0.3f))
+                                        ) {
+                                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Color(0xFF6366F1), modifier = Modifier.size(18.dp))
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(appointment.clientName, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                                                    Text("${appointment.date}  •  ${appointment.time}", fontSize = 12.sp, color = colors.textSecondary)
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(14.dp))
+                                        Text("Al marcar como completado se notificará al cliente. Esta acción no se puede deshacer.", fontSize = 13.sp, color = colors.textSecondary, lineHeight = 18.sp)
+                                        Spacer(modifier = Modifier.height(20.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            OutlinedButton(
+                                                onClick = { showCompleteDialog = false },
+                                                modifier = Modifier.weight(1f),
+                                                border = BorderStroke(1.dp, colors.border),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) { Text("Volver", color = colors.textPrimary) }
+                                            Button(
+                                                onClick = {
+                                                    onComplete(appointment.id, appointment.chatId, appointment.date, appointment.time)
+                                                    showCompleteDialog = false
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) { Text("Sí, completar", color = Color.White, fontWeight = FontWeight.Bold) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Dialog Reprogramar
+                    if (showRescheduleDialog) {
+                        Dialog(onDismissRequest = { showRescheduleDialog = false }) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = colors.surfaceColor,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFFFF6B35), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                            .padding(vertical = 20.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp))
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text("Reprogramar turno", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                        }
+                                    }
+                                    Column(modifier = Modifier.padding(20.dp)) {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color(0xFFFF6B35).copy(alpha = 0.1f),
+                                            border = BorderStroke(1.dp, Color(0xFFFF6B35).copy(alpha = 0.3f))
+                                        ) {
+                                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Color(0xFFFF6B35), modifier = Modifier.size(18.dp))
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(appointment.clientName, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                                                    Text("${appointment.date}  •  ${appointment.time}", fontSize = 12.sp, color = colors.textSecondary)
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(14.dp))
+                                        Text("Se enviará al cliente un mensaje para que elija una nueva fecha. El estado del turno pasará a Reprogramando.", fontSize = 13.sp, color = colors.textSecondary, lineHeight = 18.sp)
+                                        Spacer(modifier = Modifier.height(20.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            OutlinedButton(
+                                                onClick = { showRescheduleDialog = false },
+                                                modifier = Modifier.weight(1f),
+                                                border = BorderStroke(1.dp, colors.border),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) { Text("Volver", color = colors.textPrimary) }
+                                            Button(
+                                                onClick = {
+                                                    onReschedule(appointment.id, appointment.chatId, appointment.date, appointment.time, appointment.clientId, appointment.clientName)
+                                                    showRescheduleDialog = false
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B35)),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) { Text("Sí, reprogramar", color = Color.White, fontWeight = FontWeight.Bold) }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -1049,9 +1256,6 @@ fun AppointmentCard(
     }
 }
 
-/**
- * Diálogo de confirmación para cancelar cita
- */
 // Función helper para generar color único basado en clientId
 private fun generateColorFromId(clientId: String): Color {
     val colors = listOf(
