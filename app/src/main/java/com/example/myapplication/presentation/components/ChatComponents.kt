@@ -183,7 +183,7 @@ fun MessageInputBar(
         ) {
             if (!isRecordingAudio) {
                 IconButton(onClick = onAttachMenuToggle) {
-                    Icon(Icons.Default.Add, null, tint = appColors.accentBlue)
+                    Text("📎", fontSize = 24.sp)
                 }
                 
                 IconButton(onClick = onCameraClick) {
@@ -257,8 +257,8 @@ fun AttachmentOptionsMenu(
     onDismiss: () -> Unit,
     onImageClick: () -> Unit,
     onLocationClick: () -> Unit,
-    onScheduleClick: () -> Unit,
-    onInviteClick: () -> Unit
+    onInviteClick: () -> Unit,
+    onBudgetRequestClick: () -> Unit = {}
 ) {
     Surface(
         modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -269,21 +269,21 @@ fun AttachmentOptionsMenu(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                AttachmentItem(Icons.Default.Image, "Galería", Color(0xFF3B82F6), onImageClick)
-                AttachmentItem(Icons.Default.LocationOn, "Ubicación", Color(0xFF10B981), onLocationClick)
-                AttachmentItem(Icons.Default.Event, "Turno", Color(0xFFF59E0B), onScheduleClick)
-                AttachmentItem(Icons.AutoMirrored.Filled.Assignment, "Invitar", Color(0xFF8B5CF6), onInviteClick)
+                AttachmentItem("🖼️", "Galería", Color(0xFF3B82F6), onImageClick)
+                AttachmentItem("📍", "Ubicación", Color(0xFF10B981), onLocationClick)
+                AttachmentItem("📝", "Solicitud", Color(0xFF2197F5), onBudgetRequestClick)
+                AttachmentItem("⚖️", "Invitar", Color(0xFF8B5CF6), onInviteClick)
             }
         }
     }
 }
 
 @Composable
-private fun AttachmentItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, onClick: () -> Unit) {
+private fun AttachmentItem(emoji: String, label: String, color: Color, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onClick() }.padding(8.dp)) {
         Surface(modifier = Modifier.size(50.dp), shape = CircleShape, color = color.copy(alpha = 0.2f)) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = color, modifier = Modifier.size(24.dp))
+                Text(emoji, fontSize = 24.sp)
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -304,7 +304,7 @@ fun DateSeparator(timestamp: Long, appColors: AppColors) {
             now.get(Calendar.YEAR) == msgDate.get(Calendar.YEAR) &&
             now.get(Calendar.DAY_OF_YEAR) - 1 == msgDate.get(Calendar.DAY_OF_YEAR) -> "Ayer"
             
-            else -> SimpleDateFormat("dd 'de' MMMM", Locale.getDefault()).format(Date(timestamp))
+            else -> SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(timestamp))
         }
     }
 
@@ -326,11 +326,16 @@ fun DateSeparator(timestamp: Long, appColors: AppColors) {
 
 @Composable
 fun EnhancedMessageBubble(message: MessageEntity, isMe: Boolean, appColors: AppColors, senderPhotoUrl: String? = null) {
+    val borderColor = if (isMe) Color(0xFF10B981) else Color(0xFF22D3EE)
+    
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
     ) {
-        Row(verticalAlignment = Alignment.Bottom) {
+        Row(
+            verticalAlignment = Alignment.Bottom,
+            modifier = Modifier.padding(horizontal = if (isMe) 8.dp else 0.dp)
+        ) {
             if (!isMe && senderPhotoUrl != null) {
                 AsyncImage(
                     model = senderPhotoUrl,
@@ -344,35 +349,40 @@ fun EnhancedMessageBubble(message: MessageEntity, isMe: Boolean, appColors: AppC
                 shape = RoundedCornerShape(
                     topStart = 16.dp, 
                     topEnd = 16.dp, 
-                    bottomStart = if (isMe) 16.dp else 4.dp, 
-                    bottomEnd = if (isMe) 4.dp else 16.dp
+                    bottomStart = if (isMe) 16.dp else 2.dp, 
+                    bottomEnd = if (isMe) 2.dp else 16.dp
                 ),
+                border = BorderStroke(0.5.dp, borderColor),
                 tonalElevation = if (isMe) 0.dp else 2.dp,
                 modifier = Modifier.widthIn(max = 280.dp)
             ) {
-                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Text(
-                        text = message.content,
-                        color = if (isMe) Color.White else appColors.textPrimaryColor,
-                        fontSize = 15.sp
-                    )
+                Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Column {
+                        Text(
+                            text = message.content,
+                            color = if (isMe) Color.White else appColors.textPrimaryColor,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(bottom = 4.dp, end = 40.dp) // Espacio para la hora
+                        )
+                    }
                     
                     Row(
-                        modifier = Modifier.align(Alignment.End).padding(top = 2.dp),
+                        modifier = Modifier.align(Alignment.BottomEnd),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                            fontSize = 10.sp,
-                            color = (if (isMe) Color.White else appColors.textSecondaryColor).copy(alpha = 0.7f)
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = (if (isMe) Color.White else appColors.textSecondaryColor).copy(alpha = 0.6f)
                         )
                         if (isMe) {
-                            Spacer(Modifier.width(4.dp))
+                            Spacer(Modifier.width(2.dp))
                             Icon(
                                 imageVector = if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
                                 contentDescription = null,
-                                tint = if (message.isRead) Color(0xFF53BDEB) else Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(14.dp)
+                                tint = if (message.isRead) Color(0xFF22D3EE) else Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(12.dp)
                             )
                         }
                     }
@@ -390,27 +400,41 @@ fun BudgetBubble(message: MessageEntity, budget: com.example.myapplication.data.
     val slateBorder = Color(0xFFE2E8F0)
     val slateText = Color(0xFF475569)
     val slateDark = Color(0xFF1E293B)
+    val borderColor = if (isMe) Color(0xFF10B981) else Color(0xFF22D3EE)
 
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isMe) 8.dp else 0.dp), 
+        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    ) {
         Column(
             modifier = Modifier
                 .width(280.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(
+                    topStart = 16.dp, 
+                    topEnd = 16.dp, 
+                    bottomStart = if (isMe) 16.dp else 2.dp, 
+                    bottomEnd = if (isMe) 2.dp else 16.dp
+                ))
                 .background(Color.White)
-                .border(1.dp, slateBorder, RoundedCornerShape(12.dp))
+                .border(0.5.dp, borderColor, RoundedCornerShape(
+                    topStart = 16.dp, 
+                    topEnd = 16.dp, 
+                    bottomStart = if (isMe) 16.dp else 2.dp, 
+                    bottomEnd = if (isMe) 2.dp else 16.dp
+                ))
                 .clickable { onClick() }
         ) {
-            // Header naranja
+            // Header naranja PREMIUM
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(orange)
+                    .background(orange.copy(alpha = 0.9f))
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("📋", fontSize = 16.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("📋", fontSize = 18.sp)
                     Column {
                         Text(
                             text = budget?.providerCompanyName ?: "PRESUPUESTO",
@@ -421,22 +445,28 @@ fun BudgetBubble(message: MessageEntity, budget: com.example.myapplication.data.
                             overflow = TextOverflow.Ellipsis
                         )
                         if (!budget?.category.isNullOrBlank()) {
-                            Surface(
-                                color = Color.White.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = budget!!.category!!.uppercase(),
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
-                            }
+                            Text(
+                                text = budget!!.category!!.uppercase(),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.8f),
+                                letterSpacing = 0.5.sp
+                            )
                         }
                     }
                 }
-                Text(budget?.budgetId?.takeLast(8) ?: (message.relatedId?.takeLast(8) ?: ""), fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
+                Surface(
+                    color = Color.Black.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = budget?.budgetId?.takeLast(8) ?: (message.relatedId?.takeLast(8) ?: ""), 
+                        fontSize = 9.sp, 
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
             }
 
             // Líneas de items
@@ -459,7 +489,7 @@ fun BudgetBubble(message: MessageEntity, budget: com.example.myapplication.data.
                                 color = orange
                             )
                             Spacer(Modifier.height(8.dp))
-                            Text("Sincronizando presupuesto...", fontSize = 11.sp, color = slateText)
+                            Text("Sincronizando...", fontSize = 11.sp, color = slateText)
                         }
                     }
                 } else {
@@ -508,20 +538,14 @@ fun BudgetBubble(message: MessageEntity, budget: com.example.myapplication.data.
                     )
                 }
                 if ((budget?.validityDays ?: 0) > 0) {
-                    Text(
-                        "Válido ${budget?.validityDays} días",
-                        fontSize = 10.sp, color = slateText
-                    )
+                    Surface(color = orange.copy(alpha = 0.1f), shape = RoundedCornerShape(4.dp)) {
+                        Text(
+                            "Válido ${budget?.validityDays} días",
+                            fontSize = 9.sp, fontWeight = FontWeight.Bold, color = orange,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
                 }
-            }
-
-            if (budget?.notes != null) {
-                HorizontalDivider(color = slateBorder)
-                Text(
-                    budget.notes,
-                    fontSize = 10.sp, color = slateText,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
             }
 
             // Botón "Ver presupuesto"
@@ -533,7 +557,8 @@ fun BudgetBubble(message: MessageEntity, budget: com.example.myapplication.data.
             ) {
                 TextButton(
                     onClick = onClick,
-                    colors = ButtonDefaults.textButtonColors(contentColor = orange)
+                    colors = ButtonDefaults.textButtonColors(contentColor = orange),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
                     Icon(
                         Icons.Default.Visibility,
@@ -541,13 +566,14 @@ fun BudgetBubble(message: MessageEntity, budget: com.example.myapplication.data.
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("Ver presupuesto", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("VER PRESUPUESTO", fontSize = 12.sp, fontWeight = FontWeight.Black)
                 }
                 
                 Text(
                     text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    fontSize = 10.sp,
-                    color = slateText.copy(alpha = 0.7f),
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = slateText.copy(alpha = 0.4f),
                     modifier = Modifier.padding(end = 8.dp)
                 )
             }
@@ -562,14 +588,17 @@ fun MessageBubble(
     isFromMe: Boolean,
     budget: com.example.myapplication.data.local.BudgetEntity? = null,
     onImageClick: () -> Unit = {},
-    onCalendarClick: () -> Unit = {}
+    onCalendarClick: () -> Unit = {},
+    onAddressClick: (String) -> Unit = {},
+    isEnabled: Boolean = true // 🔥 [NUEVO] Para habilitar/deshabilitar acciones
 ) {
     when (message.type) {
         MessageType.IMAGE -> ImageMessageBubble(message, appColors, isFromMe, onImageClick)
         MessageType.LOCATION -> LocationMessageBubble(message, appColors, isFromMe)
         MessageType.VISIT -> AppointmentBubble(message, isFromMe, appColors)
         MessageType.BUDGET -> BudgetBubble(message, budget, isFromMe, appColors, onClick = {})
-        MessageType.CALENDAR_INVITE -> CalendarInviteBubble(message, isFromMe, appColors, onCalendarClick)
+        MessageType.BUDGET_REQUEST -> BudgetRequestBubble(message, isFromMe, appColors)
+        MessageType.CALENDAR_INVITE -> CalendarInviteBubble(message, isFromMe, appColors, isEnabled, onCalendarClick)
         MessageType.AUDIO -> {
             val audioPath = if (message.content == "[Audio]" && !message.imageUrl.isNullOrBlank()) message.imageUrl else message.content
             AudioMessageBubble(
@@ -579,6 +608,13 @@ fun MessageBubble(
                 appColors = appColors, 
                 isFromMe = isFromMe
             )
+        }
+        MessageType.APPOINTMENT_RECEIPT -> {
+            if (message.receiptIsTechnician == true) {
+                TechnicalVisitReceiptBubble(message, isFromMe, appColors, onCalendarClick, onAddressClick)
+            } else {
+                StandardAppointmentReceiptBubble(message, isFromMe, appColors, onCalendarClick, onAddressClick)
+            }
         }
         else -> EnhancedMessageBubble(message, isFromMe, appColors)
     }
@@ -594,14 +630,21 @@ fun ImageMessageBubble(message: MessageEntity, appColors: AppColors, isFromMe: B
             else -> null
         }
     }
+    val borderColor = if (isFromMe) Color(0xFF10B981) else Color(0xFF22D3EE)
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isFromMe) 8.dp else 0.dp), 
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
     ) {
         Surface(
             color = appColors.surfaceColor,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(
+                topStart = 16.dp, 
+                topEnd = 16.dp, 
+                bottomStart = if (isFromMe) 16.dp else 2.dp, 
+                bottomEnd = if (isFromMe) 2.dp else 16.dp
+            ),
+            border = BorderStroke(0.5.dp, borderColor),
             tonalElevation = 2.dp,
             modifier = Modifier.widthIn(max = 240.dp).clickable { onImageClick() }
         ) {
@@ -622,12 +665,17 @@ fun ImageMessageBubble(message: MessageEntity, appColors: AppColors, isFromMe: B
                     }
                 }
                 
-                Text(
-                    text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    modifier = Modifier.align(Alignment.End).padding(4.dp),
-                    fontSize = 10.sp,
-                    color = appColors.textSecondaryColor
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 4.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text(
+                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = appColors.textSecondaryColor.copy(alpha = 0.5f)
+                    )
+                }
             }
         }
     }
@@ -638,41 +686,91 @@ fun LocationMessageBubble(message: MessageEntity, appColors: AppColors, isFromMe
     val context = LocalContext.current
     val lat = message.latitude ?: 0.0
     val lng = message.longitude ?: 0.0
+    val emeraldColor = Color(0xFF10B981) // Esmeralda Maverick
+    val borderColor = if (isFromMe) Color(0xFF10B981) else Color(0xFF22D3EE)
     
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isFromMe) 8.dp else 0.dp), 
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
     ) {
         Surface(
             color = appColors.surfaceColor,
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(
+                topStart = 16.dp, 
+                topEnd = 16.dp, 
+                bottomStart = if (isFromMe) 16.dp else 2.dp,
+                bottomEnd = if (isFromMe) 2.dp else 16.dp
+            ),
+            border = BorderStroke(0.5.dp, borderColor),
             tonalElevation = 2.dp,
-            modifier = Modifier.widthIn(max = 240.dp).clickable {
+            modifier = Modifier.widthIn(max = 260.dp).clickable {
                 val gmmIntentUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng")
                 val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                 context.startActivity(mapIntent)
             }
         ) {
-            Column(modifier = Modifier.padding(8.dp)) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFFE8F5E9)),
-                    contentAlignment = Alignment.Center
+            Column {
+                // Header PREMIUM Ubicación
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(emeraldColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.LocationOn, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(32.dp))
-                        Text("Ver ubicación", color = Color(0xFF4CAF50), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Text("📍", fontSize = 18.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Ubicación Compartida", 
+                        fontWeight = FontWeight.Black, 
+                        color = Color.White, 
+                        fontSize = 14.sp,
+                        letterSpacing = 0.5.sp
+                    )
                 }
-                
-                Spacer(Modifier.height(8.dp))
-                Text(message.locationAddress ?: "Ubicación compartida", fontSize = 13.sp, color = appColors.textPrimaryColor)
-                
-                Text(
-                    text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    modifier = Modifier.align(Alignment.End),
-                    fontSize = 10.sp,
-                    color = appColors.textSecondaryColor
-                )
+
+                Column(modifier = Modifier.padding(12.dp)) {
+                    // DIRECCIÓN PRIMERO CON EMOJI
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text("📍", fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = message.locationAddress ?: "Coordenadas GPS", 
+                            fontSize = 13.sp, 
+                            color = Color.White,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    
+                    Spacer(Modifier.height(12.dp))
+
+                    // TARJETA VER EN MAPA ABAJO CON EMOJI DE MAPA A COLOR
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.05f))
+                            .border(1.dp, emeraldColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🗺️", fontSize = 32.sp) // Emoji de mapa a color
+                            Spacer(Modifier.height(4.dp))
+                            Text("VER EN MAPA", color = emeraldColor, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                        }
+                    }
+                    
+                    Text(
+                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                        modifier = Modifier.align(Alignment.End).padding(top = 8.dp),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = appColors.textSecondaryColor.copy(alpha = 0.4f)
+                    )
+                }
             }
         }
     }
@@ -689,6 +787,7 @@ fun AudioMessageBubble(
     var isPlaying by remember { mutableStateOf(false) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var currentPosition by remember { mutableStateOf(0) }
+    val borderColor = if (isFromMe) Color(0xFF10B981) else Color(0xFF22D3EE)
     
     val displayDuration = if (duration > 0) duration else 0
     val minutes = displayDuration / 60
@@ -710,12 +809,18 @@ fun AudioMessageBubble(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isFromMe) 8.dp else 0.dp), 
         horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
     ) {
         Surface(
             color = if (isFromMe) appColors.accentBlue else appColors.surfaceColor,
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(
+                topStart = 24.dp, 
+                topEnd = 24.dp, 
+                bottomStart = if (isFromMe) 24.dp else 4.dp, 
+                bottomEnd = if (isFromMe) 4.dp else 24.dp
+            ),
+            border = BorderStroke(0.5.dp, borderColor),
             tonalElevation = 2.dp,
             modifier = Modifier.widthIn(min = 200.dp, max = 260.dp)
         ) {
@@ -750,7 +855,7 @@ fun AudioMessageBubble(
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = if (isFromMe) Color.White else appColors.accentBlue
+                        tint = if (isFromMe) Color.White else Color(0xFF22D3EE)
                     )
                 }
                 
@@ -758,13 +863,13 @@ fun AudioMessageBubble(
                     LinearProgressIndicator(
                         progress = { if (isPlaying && mediaPlayer != null && mediaPlayer!!.duration > 0) currentPosition.toFloat() / mediaPlayer!!.duration else 0f },
                         modifier = Modifier.fillMaxWidth().height(4.dp),
-                        color = if (isFromMe) Color.White else appColors.accentBlue,
+                        color = if (isFromMe) Color.White else Color(0xFF22D3EE),
                         trackColor = (if (isFromMe) Color.White else appColors.textSecondaryColor).copy(alpha = 0.2f),
                     )
                     Spacer(Modifier.height(4.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(durationText, fontSize = 10.sp, color = if (isFromMe) Color.White.copy(alpha = 0.8f) else appColors.textSecondaryColor)
-                        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp)), fontSize = 10.sp, color = if (isFromMe) Color.White.copy(alpha = 0.8f) else appColors.textSecondaryColor)
+                        Text(durationText, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = if (isFromMe) Color.White.copy(alpha = 0.8f) else appColors.textSecondaryColor)
+                        Text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp)), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = if (isFromMe) Color.White.copy(alpha = 0.8f) else appColors.textSecondaryColor)
                     }
                 }
 
@@ -784,220 +889,337 @@ fun AppointmentBubble(
     onReject: (() -> Unit)? = null
 ) {
     val status = message.appointmentStatus ?: "PENDING"
-    val accentColor = when(status) {
+    val isTechnicalVisit = message.appointmentType == "TECHNICAL_VISIT"
+    
+    // Identidad Visual Unificada
+    val (headerColor, headerEmoji, headerTitle) = if (isTechnicalVisit) {
+        Triple(Color(0xFF10B981), "🧰", "Propuesta de Visita")
+    } else {
+        Triple(Color(0xFF2197F5), "🗓️", "Propuesta de Turno")
+    }
+
+    val statusColor = when(status) {
         "ACCEPTED" -> Color(0xFF10B981)
         "REJECTED" -> Color(0xFFEF4444)
-        else -> Color(0xFFF59E0B)
+        else -> headerColor
     }
-
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
-        Surface(
-            color = appColors.surfaceColor,
-            shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f)),
-            modifier = Modifier.widthIn(max = 260.dp)
-        ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Event, null, tint = accentColor, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Propuesta de Turno", fontWeight = FontWeight.Bold, color = appColors.textPrimaryColor, fontSize = 14.sp)
-                }
-                
-                Spacer(Modifier.height(8.dp))
-                if (!isMe && providerPhotoUrl != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                        AsyncImage(
-                            model = providerPhotoUrl,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp).clip(CircleShape)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text("Propuesta de prestador", fontSize = 11.sp, color = appColors.textSecondaryColor)
-                    }
-                }
-
-                Text("📅 ${message.appointmentDate ?: "A convenir"}", fontSize = 13.sp, color = appColors.textPrimaryColor)
-                Text("🕒 ${message.appointmentTime ?: "A convenir"}", fontSize = 13.sp, color = appColors.textPrimaryColor)
-                
-                if (message.content.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(message.content, fontSize = 12.sp, color = appColors.textSecondaryColor, fontStyle = FontStyle.Italic)
-                }
-
-                Spacer(Modifier.height(12.dp))
-                
-                if (status == "PENDING" && !isMe && onAccept != null && onReject != null) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = onAccept,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Aceptar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        OutlinedButton(
-                            onClick = onReject,
-                            modifier = Modifier.weight(1f),
-                            border = BorderStroke(1.dp, Color(0xFFEF4444)),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Rechazar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                } else {
-                    Surface(
-                        color = accentColor.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = when(status) {
-                                "ACCEPTED" -> "✓ Aceptada"
-                                "REJECTED" -> "✕ Rechazada"
-                                else -> "⏳ Pendiente"
-                            },
-                            color = accentColor,
-                            modifier = Modifier.padding(vertical = 4.dp),
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-                
-                Text(
-                    text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    modifier = Modifier.align(Alignment.End).padding(top = 4.dp),
-                    fontSize = 10.sp,
-                    color = appColors.textSecondaryColor
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun CalendarInviteBubble(message: MessageEntity, isMe: Boolean, appColors: AppColors, onClick: () -> Unit) {
-    val maverickBlue = Color(0xFF2197F5)
-    val maverickCyan = Color(0xFF22D3EE)
-    val isTechnicalVisit = message.appointmentType == "TECHNICAL_VISIT"
-
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isMe) Alignment.End else Alignment.Start) {
-        Surface(
-            color = appColors.surfaceColor,
-            shape = RoundedCornerShape(20.dp),
-            border = BorderStroke(1.dp, maverickBlue.copy(alpha = 0.3f)),
-            modifier = Modifier.widthIn(max = 280.dp).clickable { onClick() },
-            shadowElevation = 4.dp
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(maverickBlue.copy(alpha = 0.1f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (isTechnicalVisit) Icons.Default.HomeRepairService else Icons.Default.Storefront,
-                            null, 
-                            tint = maverickCyan, 
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = if (isTechnicalVisit) "Visita Técnica" else "Turno en Local",
-                            fontWeight = FontWeight.Black, 
-                            color = Color.White, 
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = "AGENDA DISPONIBLE",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = maverickCyan,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                    }
-                }
-                
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = if (isTechnicalVisit) 
-                        "El prestador compartió su agenda para realizar la visita en tu domicilio." 
-                        else "El prestador compartió su agenda para que reserves un turno en su local.",
-                    fontSize = 13.sp, 
-                    color = Color.White.copy(alpha = 0.8f),
-                    lineHeight = 18.sp
-                )
-                
-                Spacer(Modifier.height(16.dp))
-                Button(
-                    onClick = onClick,
-                    modifier = Modifier.fillMaxWidth().height(42.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = maverickBlue),
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("ELEGIR DÍA Y HORA", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
-                }
-                
-                Text(
-                    text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    modifier = Modifier.align(Alignment.End).padding(top = 8.dp),
-                    fontSize = 10.sp,
-                    color = appColors.textSecondaryColor
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun AppointmentReceiptBubble(message: MessageEntity, isMe: Boolean, appColors: AppColors) {
-    val maverickBlue = Color(0xFF2197F5)
-    val statusConfirmed = Color(0xFF10B981)
+    
+    val borderColor = if (isMe) Color(0xFF10B981) else Color(0xFF22D3EE)
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isMe) 8.dp else 0.dp), 
         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
     ) {
         Surface(
             color = appColors.surfaceColor,
-            shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(1.dp, statusConfirmed.copy(alpha = 0.3f)),
+            shape = RoundedCornerShape(
+                topStart = 16.dp, 
+                topEnd = 16.dp, 
+                bottomStart = if (isMe) 16.dp else 2.dp, 
+                bottomEnd = if (isMe) 2.dp else 16.dp
+            ),
+            border = BorderStroke(1.dp, borderColor),
+            tonalElevation = 2.dp,
+            modifier = Modifier.widthIn(max = 280.dp)
+        ) {
+            Column {
+                // Header con Identidad Unificada
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(headerColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(headerEmoji, fontSize = 18.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = headerTitle, 
+                        fontWeight = FontWeight.Black, 
+                        color = Color.White, 
+                        fontSize = 14.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                Column(modifier = Modifier.padding(12.dp)) {
+                    if (!isMe && providerPhotoUrl != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
+                            AsyncImage(
+                                model = providerPhotoUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp).clip(CircleShape)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Propuesta de prestador", fontSize = 11.sp, color = appColors.textSecondaryColor, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Card de Datos de la Cita
+                    Surface(
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CalendarToday, null, tint = headerColor, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                // 🔥 FORMATEO dd/MM/yyyy
+                                val displayDate = try {
+                                    val inputFmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                    val outputFmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                                    message.appointmentDate?.let { dateStr ->
+                                        if (dateStr.contains("-") && dateStr.length == 10) {
+                                            inputFmt.parse(dateStr)?.let { outputFmt.format(it) }
+                                        } else dateStr
+                                    } ?: message.appointmentDate
+                                } catch (e: Exception) { message.appointmentDate }
+                                
+                                Text(displayDate ?: "A convenir", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AccessTime, null, tint = headerColor, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(message.appointmentTime ?: "A convenir", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    
+                    if (message.content.isNotBlank() && !message.content.startsWith("Cita en:")) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = message.content, 
+                            fontSize = 12.sp, 
+                            color = appColors.textSecondaryColor, 
+                            fontStyle = FontStyle.Italic,
+                            lineHeight = 16.sp
+                        )
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    
+                    if (status == "PENDING" && !isMe && onAccept != null && onReject != null) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = onAccept,
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("ACEPTAR", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            }
+                            OutlinedButton(
+                                onClick = onReject,
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF4444)),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Text("RECHAZAR", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    } else {
+                        Surface(
+                            color = statusColor.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = when(status) {
+                                    "ACCEPTED" -> "✓ ACEPTADA"
+                                    "REJECTED" -> "✕ RECHAZADA"
+                                    else -> "⏳ PENDIENTE"
+                                },
+                                color = statusColor,
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+                    
+                    Text(
+                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                        modifier = Modifier.align(Alignment.End).padding(top = 8.dp),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = appColors.textSecondaryColor.copy(alpha = 0.5f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CalendarInviteBubble(
+    message: MessageEntity, 
+    isMe: Boolean, 
+    appColors: AppColors, 
+    isEnabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    val isTechnicalVisit = message.appointmentType == "TECHNICAL_VISIT"
+    
+    // Identidad Visual Unificada
+    val (headerColor, headerEmoji, headerTitle) = if (isTechnicalVisit) {
+        Triple(Color(0xFF10B981), "🧰", "Visita Técnica")
+    } else {
+        Triple(Color(0xFF2197F5), "🗓️", "Turno en Local")
+    }
+    
+    val accentCyan = Color(0xFF22D3EE)
+    val borderColor = if (isMe) Color(0xFF10B981) else Color(0xFF22D3EE)
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isMe) 8.dp else 0.dp), 
+        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    ) {
+        Surface(
+            color = appColors.surfaceColor,
+            shape = RoundedCornerShape(
+                topStart = 16.dp, 
+                topEnd = 16.dp, 
+                bottomStart = if (isMe) 16.dp else 2.dp, 
+                bottomEnd = if (isMe) 2.dp else 16.dp
+            ),
+            border = BorderStroke(1.dp, borderColor),
+            modifier = Modifier.widthIn(max = 280.dp).then(
+                if (isEnabled) Modifier.clickable { onClick() } else Modifier
+            ),
+            shadowElevation = 4.dp
+        ) {
+            Column {
+                // Header con Identidad Unificada
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(headerColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(headerEmoji, fontSize = 18.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = headerTitle,
+                            fontWeight = FontWeight.Black, 
+                            color = Color.White, 
+                            fontSize = 14.sp,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = if (isEnabled) "AGENDA DISPONIBLE" else "CITA AGENDADA",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isEnabled) accentCyan else Color.Gray,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                    }
+                }
+
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (isEnabled) {
+                            if (isTechnicalVisit) 
+                                "El prestador compartió su agenda para realizar la visita en tu domicilio." 
+                                else "El prestador compartió su agenda para que reserves un turno en su local."
+                        } else {
+                            "Ya has seleccionado un horario para esta propuesta."
+                        },
+                        fontSize = 13.sp, 
+                        color = Color.White.copy(alpha = 0.8f),
+                        lineHeight = 18.sp
+                    )
+                    
+                    Spacer(Modifier.height(20.dp))
+                    Button(
+                        onClick = onClick,
+                        enabled = isEnabled,
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isEnabled) headerColor else Color.Gray.copy(alpha = 0.2f),
+                            disabledContainerColor = Color.Gray.copy(alpha = 0.2f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        if (isEnabled) {
+                            Icon(Icons.Default.CalendarMonth, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("ELEGIR DÍA Y HORA", fontSize = 12.sp, fontWeight = FontWeight.Black)
+                        } else {
+                            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp), tint = Color.Gray)
+                            Spacer(Modifier.width(8.dp))
+                            Text("TURNO RESERVADO", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color.Gray)
+                        }
+                    }
+                    
+                    Text(
+                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                        modifier = Modifier.align(Alignment.End).padding(top = 10.dp),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = appColors.textSecondaryColor.copy(alpha = 0.4f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// COMPROBANTES DE TURNO (RECEIPTS)
+// ==========================================
+
+@Composable
+fun TechnicalVisitReceiptBubble(
+    message: MessageEntity, 
+    isMe: Boolean, 
+    appColors: AppColors,
+    onCalendarClick: () -> Unit = {},
+    onAddressClick: (String) -> Unit = {}
+) {
+    val statusConfirmed = Color(0xFF10B981) // Verde Maverick
+    val maverickBlue = Color(0xFF2197F5)
+    val borderColor = if (isMe) Color(0xFF10B981) else Color(0xFF22D3EE)
+    var showSecurityPopup by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isMe) 8.dp else 0.dp),
+        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    ) {
+        Surface(
+            color = appColors.surfaceColor,
+            shape = RoundedCornerShape(
+                topStart = 16.dp, 
+                topEnd = 16.dp, 
+                bottomStart = if (isMe) 16.dp else 2.dp, 
+                bottomEnd = if (isMe) 2.dp else 16.dp
+            ),
+            border = BorderStroke(1.dp, borderColor),
             shadowElevation = 8.dp,
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // --- BADGE SUPERIOR ---
+            Column {
+                // Header PREMIUM Visita Técnica (Verde)
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(statusConfirmed.copy(alpha = 0.15f))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .background(statusConfirmed.copy(alpha = 0.15f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Check,
-                            null,
-                            tint = statusConfirmed,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                    Text("🧰", fontSize = 18.sp)
                     Spacer(Modifier.width(10.dp))
                     Text(
-                        text = if (message.receiptIsTechnician == true) "VISITA CONFIRMADA" else "TURNO CONFIRMADO",
+                        text = "VISITA TÉCNICA CONFIRMADA",
                         fontWeight = FontWeight.Black,
                         color = statusConfirmed,
                         fontSize = 12.sp,
@@ -1005,105 +1227,365 @@ fun AppointmentReceiptBubble(message: MessageEntity, isMe: Boolean, appColors: A
                     )
                 }
 
-                Spacer(Modifier.height(20.dp))
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "DETALLES VISITA TÉCNICA",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Spacer(Modifier.height(8.dp))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("📅", fontSize = 12.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Agendado en tu Calendario", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                    }
 
-                // --- INFO PRINCIPAL ---
-                Text(
-                    text = message.id, // ID o Código Principal como en la imagen
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White,
-                    maxLines = 2,
-                    lineHeight = 22.sp
-                )
-                Text(
-                    text = message.receiptProviderName ?: "Maverick Service",
-                    fontSize = 13.sp,
-                    color = Color.Gray,
-                    fontWeight = FontWeight.Bold
-                )
+                    Spacer(Modifier.height(12.dp))
 
-                Spacer(Modifier.height(20.dp))
+                    // Tarjeta Fecha y Hora
+                    Surface(
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onCalendarClick() },
+                        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("FECHA", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
+                                // 🔥 FORMATEO dd/MM/yyyy o Respetar Formato del Prestador
+                                val displayDate = remember(message.appointmentDate) {
+                                    try {
+                                        val inputFmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                        val outputFmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                                        message.appointmentDate?.let { dateStr ->
+                                            if (dateStr.contains("-") && dateStr.length == 10) {
+                                                inputFmt.parse(dateStr)?.let { outputFmt.format(it) }
+                                            } else dateStr
+                                        } ?: "--/--/--"
+                                    } catch (e: Exception) { message.appointmentDate ?: "--/--/--" }
+                                }
+                                Text(displayDate, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.1f)))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("HORA", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
+                                Text("${message.appointmentTime ?: "--:--"} HS", fontSize = 14.sp, color = maverickBlue, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }
 
-                // --- TARJETA DE FECHA Y HORA ---
-                Surface(
-                    color = Color.White.copy(alpha = 0.05f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
+                    Spacer(Modifier.height(16.dp))
+
+                    val providerName = message.receiptProviderName ?: "El prestador"
+                    Text(
+                        text = "📍 $providerName se va a dirigir a esta dirección:",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium
+                    )
+                    
+                    Spacer(Modifier.height(8.dp))
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().clickable { message.receiptAddress?.let { onAddressClick(it) } },
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(0.5.dp, maverickBlue.copy(alpha = 0.2f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.LocationOn, null, tint = maverickBlue, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = message.receiptAddress ?: "Ubicación confirmada",
+                                fontSize = 12.sp,
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // Código de Validación
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("FECHA", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
-                            Text(message.appointmentDate ?: "--/--/--", fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            Text("CÓDIGO DE VALIDACIÓN", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
+                            Text(
+                                text = message.receiptCode ?: "PENDIENTE",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                color = statusConfirmed,
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 2.sp
+                            )
                         }
-                        Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.1f)))
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("HORA", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
-                            Text("${message.appointmentTime ?: "--:--"} HS", fontSize = 14.sp, color = maverickBlue, fontWeight = FontWeight.Black)
+                        
+                        IconButton(
+                            onClick = { showSecurityPopup = true },
+                            modifier = Modifier.align(Alignment.CenterEnd).size(24.dp)
+                        ) {
+                            Text("⚠️", fontSize = 16.sp)
                         }
                     }
-                }
 
-                Spacer(Modifier.height(20.dp))
-
-                // --- UBICACIÓN ---
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.LocationOn,
-                        null,
-                        tint = maverickBlue,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
                     Text(
-                        text = message.receiptAddress ?: "Ubicación confirmada",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.8f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                        modifier = Modifier.align(Alignment.End).padding(top = 12.dp),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = appColors.textSecondaryColor.copy(alpha = 0.3f)
                     )
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // --- CÓDIGO DE VALIDACIÓN ---
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("CÓDIGO DE VALIDACIÓN", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
-                        Text(
-                            text = message.receiptCode ?: "#VIS--001",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Black,
-                            color = statusConfirmed,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 2.sp
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.CalendarToday, null, tint = Color.Gray, modifier = Modifier.size(12.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Agendado en tu Calendario", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
                 }
             }
         }
+    }
+
+    if (showSecurityPopup) {
+        SecurityRecommendationsPopup(onDismiss = { showSecurityPopup = false })
+    }
+}
+
+@Composable
+fun StandardAppointmentReceiptBubble(
+    message: MessageEntity, 
+    isMe: Boolean, 
+    appColors: AppColors,
+    onCalendarClick: () -> Unit = {},
+    onAddressClick: (String) -> Unit = {}
+) {
+    val maverickBlue = Color(0xFF2197F5)
+    val statusConfirmed = Color(0xFF10B981)
+    val borderColor = if (isMe) Color(0xFF10B981) else Color(0xFF22D3EE)
+    var showSecurityPopup by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isMe) 8.dp else 0.dp),
+        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    ) {
+        Surface(
+            color = appColors.surfaceColor,
+            shape = RoundedCornerShape(
+                topStart = 16.dp, 
+                topEnd = 16.dp, 
+                bottomStart = if (isMe) 16.dp else 2.dp, 
+                bottomEnd = if (isMe) 2.dp else 16.dp
+            ),
+            border = BorderStroke(1.dp, borderColor),
+            shadowElevation = 8.dp,
+            modifier = Modifier.widthIn(max = 300.dp)
+        ) {
+            Column {
+                // Header PREMIUM Turno Confirmado (Azul)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(maverickBlue.copy(alpha = 0.15f))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🗓️", fontSize = 18.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "TURNO CONFIRMADO",
+                        fontWeight = FontWeight.Black,
+                        color = maverickBlue,
+                        fontSize = 12.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
+
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "DETALLE DE TURNO",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Spacer(Modifier.height(8.dp))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("📅", fontSize = 12.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Agendado en tu Calendario", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Surface(
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { onCalendarClick() },
+                        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("FECHA", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
+                                // 🔥 FORMATEO dd/MM/yyyy o Respetar Formato del Prestador
+                                val displayDate = remember(message.appointmentDate) {
+                                    try {
+                                        val inputFmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                        val outputFmt = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+                                        message.appointmentDate?.let { dateStr ->
+                                            if (dateStr.contains("-") && dateStr.length == 10) {
+                                                inputFmt.parse(dateStr)?.let { outputFmt.format(it) }
+                                            } else dateStr
+                                        } ?: "--/--/--"
+                                    } catch (e: Exception) { message.appointmentDate ?: "--/--/--" }
+                                }
+                                Text(displayDate, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.White.copy(alpha = 0.1f)))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("HORA", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
+                                Text("${message.appointmentTime ?: "--:--"} HS", fontSize = 14.sp, color = maverickBlue, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    val providerName = message.receiptProviderName ?: "El prestador"
+                    Text(
+                        text = "🏢 $providerName te va a esperar en:",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium
+                    )
+                    
+                    Spacer(Modifier.height(8.dp))
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().clickable { message.receiptAddress?.let { onAddressClick(it) } },
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(0.5.dp, maverickBlue.copy(alpha = 0.2f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.LocationOn, null, tint = maverickBlue, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = message.receiptAddress ?: "Ubicación confirmada",
+                                fontSize = 12.sp,
+                                color = Color.White,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("CÓDIGO DE VALIDACIÓN", fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Black)
+                            Text(
+                                text = message.receiptCode ?: "PENDIENTE",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                color = statusConfirmed,
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 2.sp
+                            )
+                        }
+                        
+                        IconButton(
+                            onClick = { showSecurityPopup = true },
+                            modifier = Modifier.align(Alignment.CenterEnd).size(24.dp)
+                        ) {
+                            Text("⚠️", fontSize = 16.sp)
+                        }
+                    }
+
+                    Text(
+                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                        modifier = Modifier.align(Alignment.End).padding(top = 12.dp),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = appColors.textSecondaryColor.copy(alpha = 0.3f)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showSecurityPopup) {
+        SecurityRecommendationsPopup(onDismiss = { showSecurityPopup = false })
+    }
+}
+
+@Composable
+fun SecurityRecommendationsPopup(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("🛡️", fontSize = 24.sp)
+                Spacer(Modifier.width(12.dp))
+                Text("Seguridad Maverick", fontWeight = FontWeight.Black)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SecurityItem("👤", "Verifica la identidad del prestador pidiendo su DNI al llegar.")
+                SecurityItem("🔑", "No compartas el código de validación hasta que el trabajo haya comenzado o el prestador esté presente.")
+                SecurityItem("🏠", "Si es una visita técnica, asegúrate de estar acompañado si es posible.")
+                SecurityItem("📞", "Cualquier irregularidad, repórtala de inmediato a través del botón de ayuda.")
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2197F5))
+            ) {
+                Text("ENTENDIDO", fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = Color(0xFF1E293B),
+        titleContentColor = Color.White,
+        textContentColor = Color.White.copy(alpha = 0.8f),
+        shape = RoundedCornerShape(24.dp)
+    )
+}
+
+@Composable
+private fun SecurityItem(emoji: String, text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Text(emoji, fontSize = 16.sp, modifier = Modifier.padding(top = 2.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(text, fontSize = 13.sp, lineHeight = 18.sp)
     }
 }
 
@@ -1192,9 +1674,7 @@ fun UnifiedChatListItem(
                     shape = CircleShape,
                     color = Color.Gray.copy(alpha = 0.2f)
                 ) {
-                    val photoUrl = (thread.companyId?.let { cid -> 
-                        provider.companies.find { it.id == cid }?.photoUrl 
-                    } ?: provider.photoUrl)
+                    val photoUrl = provider.photoUrl
 
                     if (!photoUrl.isNullOrBlank()) {
                         AsyncImage(
@@ -1224,9 +1704,7 @@ fun UnifiedChatListItem(
             Spacer(Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                val displayName = thread.companyId?.let { cid ->
-                    provider.companies.find { it.id == cid }?.name
-                } ?: provider.displayName
+                val displayName = provider.displayName
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -1238,29 +1716,6 @@ fun UnifiedChatListItem(
                     if (provider.isVerified) {
                         Spacer(Modifier.width(4.dp))
                         Icon(Icons.Default.Verified, null, tint = Color(0xFF2197F5), modifier = Modifier.size(16.dp))
-                    }
-                }
-                
-                // Mostrar rubro o información de empresa (Badge Moderno)
-                Row(
-                    modifier = Modifier.padding(top = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Surface(
-                        color = Color(0xFF2197F5).copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(4.dp),
-                        border = BorderStroke(0.5.dp, Color(0xFF2197F5).copy(alpha = 0.3f))
-                    ) {
-                        Text(
-                            text = (thread.categoryId ?: provider.categories.firstOrNull() ?: "Prestador").uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Black,
-                            color = Color(0xFF22D3EE),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                            fontSize = 8.sp,
-                            letterSpacing = 0.5.sp
-                        )
                     }
                 }
 
@@ -1301,21 +1756,59 @@ fun ImageZoomDialog(
     message: MessageEntity,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val state = rememberTransformableState { zoomChange, offsetChange, _ ->
+        scale *= zoomChange
+        offset += offsetChange
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = Color.Black
+            color = Color.Black.copy(alpha = 0.95f)
         ) {
-            Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = {
+                                scale = if (scale > 1f) 1f else 2f
+                                offset = Offset.Zero
+                            }
+                        )
+                    }
+            ) {
                 AsyncImage(
                     model = message.imageUrl ?: message.content,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = maxOf(1f, scale),
+                            scaleY = maxOf(1f, scale),
+                            translationX = offset.x,
+                            translationY = offset.y
+                        )
+                        .transformable(state = state),
                     contentScale = ContentScale.Fit
                 )
+                
+                // Botón de cierre superior
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                 ) {
                     Icon(Icons.Default.Close, null, tint = Color.White)
                 }
@@ -1324,7 +1817,7 @@ fun ImageZoomDialog(
     }
 }
 
-@Preview(showBackground = true)
+@Preview(showBackground = true, name = "Mensajes de Texto y Presupuesto")
 @Composable
 fun MessageBubblePreview() {
     val appColors = getThemeColors()
@@ -1334,28 +1827,182 @@ fun MessageBubblePreview() {
         senderId = "p1",
         receiverId = "user1",
         type = MessageType.TEXT,
-        content = "Hola, ¿cómo estás?",
+        content = "Hola, ¿cómo estás? Te envío el presupuesto solicitado para la reparación.",
         timestamp = System.currentTimeMillis()
     )
     MyApplicationTheme {
-        Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(appColors.backgroundColor)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             MessageBubble(message = message, appColors = appColors, isFromMe = false)
-            Spacer(Modifier.height(8.dp))
-            MessageBubble(message = message.copy(senderId = "user1", receiverId = "p1", content = "¡Todo bien!"), appColors = appColors, isFromMe = true)
-            Spacer(Modifier.height(8.dp))
+            MessageBubble(message = message.copy(senderId = "user1", receiverId = "p1", content = "¡Hola! Perfecto, lo reviso ahora mismo."), appColors = appColors, isFromMe = true)
+            
             val budget = BudgetEntity(
                 budgetId = "b1",
                 clientId = "u1",
                 providerId = "p1",
                 providerName = "Juan Perez",
-                items = listOf(BudgetItem(description = "Insumo 1", quantity = 1, unitPrice = 1000.0)),
-                subtotal = 1000.0,
-                grandTotal = 1210.0,
-                validityDays = 7,
+                providerCompanyName = "Maverick Tech Solutions",
+                category = "Refrigeración",
+                items = listOf(
+                    BudgetItem(description = "Compresor 1/4 HP", quantity = 1, unitPrice = 45000.0),
+                    BudgetItem(description = "Carga de Gas R134", quantity = 1, unitPrice = 12000.0)
+                ),
+                services = listOf(
+                    BudgetService(description = "Mano de obra especializada", total = 15000.0)
+                ),
+                subtotal = 72000.0,
+                grandTotal = 87120.0,
+                validityDays = 5,
                 status = com.example.myapplication.data.local.BudgetStatus.PENDIENTE,
                 dateTimestamp = System.currentTimeMillis()
             )
-            BudgetBubble(message = message.copy(senderId = "user1", receiverId = "p1"), budget = budget, isMe = true, appColors = appColors, onClick = {})
+            BudgetBubble(message = message.copy(type = MessageType.BUDGET), budget = budget, isMe = false, appColors = appColors, onClick = {})
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Burbujas Multimedia")
+@Composable
+fun MediaBubblesPreview() {
+    val appColors = getThemeColors()
+    val now = System.currentTimeMillis()
+    
+    val imageMsg = MessageEntity(
+        id = "m1",
+        chatId = "c1",
+        senderId = "u1",
+        receiverId = "p1",
+        type = MessageType.IMAGE,
+        content = "Imagen adjunta",
+        imageUrl = "https://picsum.photos/400/300",
+        timestamp = now
+    )
+    
+    val audioMsg = MessageEntity(
+        id = "m2",
+        chatId = "c1",
+        senderId = "p1",
+        receiverId = "u1",
+        type = MessageType.AUDIO,
+        content = "[Audio]",
+        durationSeconds = 42,
+        timestamp = now
+    )
+    
+    val locationMsg = MessageEntity(
+        id = "m3",
+        chatId = "c1",
+        senderId = "u1",
+        receiverId = "p1",
+        type = MessageType.LOCATION,
+        content = "Ubicación compartida",
+        latitude = -26.8241,
+        longitude = -65.2226,
+        locationAddress = "Av. Sarmiento 1100, San Miguel de Tucumán",
+        timestamp = now
+    )
+
+    MyApplicationTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(appColors.backgroundColor)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            ImageMessageBubble(message = imageMsg, appColors = appColors, isFromMe = true, onImageClick = {})
+            AudioMessageBubble(
+                audioPath = audioMsg.imageUrl, 
+                duration = audioMsg.durationSeconds ?: 0, 
+                timestamp = audioMsg.timestamp, 
+                appColors = appColors, 
+                isFromMe = false
+            )
+            LocationMessageBubble(message = locationMsg, appColors = appColors, isFromMe = true)
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Burbujas de Turnos y Citas")
+@Composable
+fun TurnoBubblesPreview() {
+    val appColors = getThemeColors()
+    val now = System.currentTimeMillis()
+    
+    val appointmentMsg = MessageEntity(
+        id = "t1",
+        chatId = "c1",
+        senderId = "p1",
+        receiverId = "u1",
+        type = MessageType.VISIT,
+        content = "Te propongo realizar la visita técnica este día.",
+        appointmentDate = "2024-12-25",
+        appointmentTime = "10:30",
+        appointmentStatus = "PENDING",
+        appointmentType = "TECHNICAL_VISIT",
+        timestamp = now
+    )
+    
+    val inviteMsg = MessageEntity(
+        id = "t2",
+        chatId = "c1",
+        senderId = "p1",
+        receiverId = "u1",
+        type = MessageType.CALENDAR_INVITE,
+        content = "Elegí el horario que mejor te quede.",
+        appointmentType = "IN_STORE",
+        timestamp = now
+    )
+    
+    val receiptMsgVisita = MessageEntity(
+        id = "t3",
+        chatId = "c1",
+        senderId = "p1",
+        receiverId = "u1",
+        type = MessageType.APPOINTMENT_RECEIPT,
+        content = "¡Listo! Visita confirmada.",
+        appointmentDate = "Mié 06/05/2026",
+        appointmentTime = "10:00",
+        receiptProviderName = "Maverick Refrigeración",
+        receiptAddress = "B. Matienzo 1339",
+        receiptCode = "#VIS-20260506-001",
+        receiptIsTechnician = true,
+        timestamp = now
+    )
+    
+    val receiptMsgTurno = MessageEntity(
+        id = "t4",
+        chatId = "c1",
+        senderId = "p1",
+        receiverId = "u1",
+        type = MessageType.APPOINTMENT_RECEIPT,
+        content = "¡Listo! Turno confirmado.",
+        appointmentDate = "Jue 07/05/2026",
+        appointmentTime = "16:30",
+        receiptProviderName = "Maverick Refrigeración",
+        receiptAddress = "Calle Junín 450, Tucumán",
+        receiptCode = "#TRN-20260507-001",
+        receiptIsTechnician = false,
+        timestamp = now
+    )
+
+    MyApplicationTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(appColors.backgroundColor)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            AppointmentBubble(message = appointmentMsg, isMe = false, appColors = appColors, onAccept = {}, onReject = {})
+            CalendarInviteBubble(message = inviteMsg, isMe = false, appColors = appColors, onClick = {})
+            TechnicalVisitReceiptBubble(message = receiptMsgVisita, isMe = false, appColors = appColors)
+            StandardAppointmentReceiptBubble(message = receiptMsgTurno, isMe = false, appColors = appColors)
         }
     }
 }

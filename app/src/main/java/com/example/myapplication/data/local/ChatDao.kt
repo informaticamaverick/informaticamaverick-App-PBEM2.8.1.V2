@@ -47,13 +47,15 @@ interface ChatDao {
 
     // Obtener un resumen de las conversaciones activas (ordenadas por el mensaje más reciente)
     @Query("""
-        SELECT chatId, 
-               CASE WHEN senderId = :myUserId THEN receiverId ELSE senderId END as userId,
-               companyId, categoryId, content as lastMessage, timestamp as lastTimestamp
+        SELECT m1.chatId, 
+               CASE WHEN m1.senderId = :myUserId THEN m1.receiverId ELSE m1.senderId END as userId,
+               (SELECT MAX(companyId) FROM messages m3 WHERE m3.chatId = m1.chatId) as companyId,
+               (SELECT MAX(categoryId) FROM messages m4 WHERE m4.chatId = m1.chatId) as categoryId,
+               m1.content as lastMessage, m1.timestamp as lastTimestamp
         FROM messages m1
-        WHERE (senderId = :myUserId OR receiverId = :myUserId)
-        AND timestamp = (SELECT MAX(timestamp) FROM messages m2 WHERE m2.chatId = m1.chatId)
-        GROUP BY chatId
+        WHERE (m1.senderId = :myUserId OR m1.receiverId = :myUserId)
+        AND m1.timestamp = (SELECT MAX(m2.timestamp) FROM messages m2 WHERE m2.chatId = m1.chatId)
+        GROUP BY m1.chatId
         ORDER BY lastTimestamp DESC
     """)
     fun getActiveChatSummaries(myUserId: String): Flow<List<ChatSummary>>

@@ -15,7 +15,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -61,7 +63,7 @@ fun ResultadoLicitacionOverlay(
     onClearFilters: () -> Unit,
     onClearSort: () -> Unit,
     onBudgetClick: (BudgetEntity) -> Unit,
-    onChatClick: (String) -> Unit,
+    onChatClick: (String, String?) -> Unit,
     onAvatarClick: (BudgetEntity) -> Unit,
     isMultiSelectionActive: Boolean,
     selectedItemIds: Set<String>,
@@ -192,7 +194,7 @@ fun ComparisonSheetEdgeToEdge(
     onClearSort: () -> Unit,
     onBack: () -> Unit,
     onBudgetClick: (BudgetEntity) -> Unit,
-    onChatClick: (String) -> Unit,
+    onChatClick: (String, String?) -> Unit,
     onAvatarClick: (BudgetEntity) -> Unit,
     isMultiSelectionActive: Boolean = false,
     selectedItemIds: Set<String> = emptySet(),
@@ -286,12 +288,27 @@ fun ComparisonSheetEdgeToEdge(
             }
         ) {
             // ==========================================================================================
+            // --- SECCIÓN: CABECERA DE REQUISITOS (SOLO PARA LICITACIONES) ---
+            // ==========================================================================================
+            if (tender.requiresVisit || tender.requiresWorkGuarantee || tender.requiresProviderDoc) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (tender.requiresVisit) RequirementBadge("Visita", Icons.Default.Build)
+                    if (tender.requiresWorkGuarantee) RequirementBadge("Garantía", Icons.Default.Build)
+                    if (tender.requiresProviderDoc) RequirementBadge("Docs", Icons.Default.Build)
+                }
+            }
+
+            // ==========================================================================================
             // --- SECCIÓN 2: PANEL DE CONTENIDO (GRID DE PRESUPUESTOS) ---
             // El contenido ahora vive dentro del Molde para heredar el fondo Glass y bordes ROG.
             // ==========================================================================================
             DividerPremium() // Separador visual entre cabecera y contenido
             
             BudgetGridContent(
+                tender = tender,
                 budgets = budgets,
                 isMultiSelectionActive = isMultiSelectionActive,
                 selectedItemIds = selectedItemIds,
@@ -307,14 +324,34 @@ fun ComparisonSheetEdgeToEdge(
 
 
 @Composable
+fun RequirementBadge(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Surface(
+        color = Color.White.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(4.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(10.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(label, color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+
+@Composable
 fun BudgetGridContent(
     state: LazyGridState = rememberLazyGridState(),
+    tender: TenderEntity,
     budgets: List<BudgetEntity>,
     isMultiSelectionActive: Boolean = false,
     selectedItemIds: Set<String> = emptySet(),
     onToggleItemSelection: (String) -> Unit = {},
     onBudgetClick: (BudgetEntity) -> Unit,
-    onChatClick: (String) -> Unit,
+    onChatClick: (String, String?) -> Unit,
     onToggleMultiSelection: () -> Unit,
     onAvatarClick: (BudgetEntity) -> Unit
 ) {
@@ -407,7 +444,7 @@ fun BudgetGridContent(
                             isRead = budget.isRead,
                             isMultiSelectionActive = isMultiSelectionActive,
                             onViewClick = { onBudgetClick(budget) },
-                            onChatClick = { onChatClick(budget.providerId) },
+                            onChatClick = { onChatClick(budget.providerId, budget.category ?: tender.category) },
                             onAvatarClick = { onAvatarClick(budget) },
                             onLongClick = {
                                 if (!isMultiSelectionActive) {
@@ -498,7 +535,7 @@ fun ResultadoLicitacionOverlayPreview() {
             onClearFilters = {},
             onClearSort = {},
             onBudgetClick = {},
-            onChatClick = {},
+            onChatClick = { _, _ -> },
             onAvatarClick = {},
             isMultiSelectionActive = false,
             selectedItemIds = emptySet(),

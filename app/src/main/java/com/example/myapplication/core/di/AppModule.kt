@@ -130,6 +130,7 @@ object AppModule {
         chatDao: ChatDao,
         budgetDao: BudgetDao,
         calendarDao: CalendarDao,
+        providerDao: ProviderDao, // 🔥 NUEVO: Requerido para sync silencioso de prestadores
         firestore: FirebaseFirestore,
         database: FirebaseDatabase,
         auth: FirebaseAuth,
@@ -140,6 +141,7 @@ object AppModule {
             chatDao = chatDao,
             budgetDao = budgetDao,
             calendarDao = calendarDao,
+            providerDao = providerDao, // 🔥 ASIGNADO
             firestore = firestore,
             database = database,
             auth = auth,

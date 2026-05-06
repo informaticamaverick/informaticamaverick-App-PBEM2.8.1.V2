@@ -27,6 +27,7 @@ data class ServiceDisplayModel(
     val acceptsAppointments: Boolean = false,
     val isSubscribed: Boolean = false,
     val categoryId: String? = null,
+    val companyId: String? = null,              // 🔥 [NUEVO] Contexto de empresa para Chat
     val categories: List<String> = emptyList(), // Para el ModalBottomSheet
     val displayAddress: String? = null,         // Dirección formateada
     val branchName: String? = null,             // Nombre de sucursal si aplica

@@ -1,11 +1,15 @@
 package com.example.myapplication.data.repository
 
 import com.example.myapplication.data.local.ProviderDao
+import com.example.myapplication.data.local.ProviderEntity
+import com.example.myapplication.data.local.FastCategoryDao
 import com.example.myapplication.data.model.Provider
 import com.example.myapplication.data.model.ProviderType
 import com.example.myapplication.data.model.ServiceDisplayModel
+import com.example.myapplication.data.repository.util.ProviderMapper
 import com.example.myapplication.presentation.client.ProviderWithDistance
 import com.google.firebase.firestore.FirebaseFirestore
+import android.util.Log
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,9 +17,9 @@ import kotlin.math.*
 
 @Singleton
 class FastRepository @Inject constructor(
-    private val providerDao: com.example.myapplication.data.local.ProviderDao,
-    private val fastCategoryDao: com.example.myapplication.data.local.FastCategoryDao,
-    private val firestore: com.google.firebase.firestore.FirebaseFirestore
+    private val providerDao: ProviderDao,
+    private val fastCategoryDao: FastCategoryDao,
+    private val firestore: FirebaseFirestore
 ) {
     /**
      * Obtiene el historial de categorías más usadas o recientes.
@@ -82,22 +86,35 @@ class FastRepository @Inject constructor(
             // if (zipCode.isNotEmpty()) query = query.whereEqualTo("address.postalCode", zipCode)
 
             val snapshot = query.get().await()
+            val remoteEntities = mutableListOf<ProviderEntity>()
+            
             snapshot.documents.forEach { doc ->
-                val p = doc.toObject(Provider::class.java) ?: return@forEach
-                if (results.any { it.service.id == p.uid }) return@forEach // Evitar duplicados
+                // 🔥 [ZERO COST SYNC] Convertimos y guardamos en Room 🔥
+                val entity = ProviderMapper.fromFirestore(doc)
+                if (entity != null) {
+                    remoteEntities.add(entity)
+                    
+                    val p = entity.toDomain()
+                    if (results.any { it.service.id == p.uid }) return@forEach // Evitar duplicados
 
-                val distance = calculateDistanceKm(userLat, userLon, p.address?.latitude ?: 0.0, p.address?.longitude ?: 0.0)
-                
-                // Filtro de radio (ej: 20km para emergencias)
-                if (distance > 20.0) return@forEach
+                    val distance = calculateDistanceKm(userLat, userLon, p.address?.latitude ?: 0.0, p.address?.longitude ?: 0.0)
+                    
+                    // Filtro de radio (ej: 20km para emergencias)
+                    if (distance > 20.0) return@forEach
 
-                results.add(ProviderWithDistance(
-                    service = transformToUnified(p),
-                    distanceKm = distance,
-                    estimatedMinutes = (distance * 8).toInt().coerceIn(5, 45),
-                    lat = p.address?.latitude ?: 0.0,
-                    lon = p.address?.longitude ?: 0.0
-                ))
+                    results.add(ProviderWithDistance(
+                        service = transformToUnified(p),
+                        distanceKm = distance,
+                        estimatedMinutes = (distance * 8).toInt().coerceIn(5, 45),
+                        lat = p.address?.latitude ?: 0.0,
+                        lon = p.address?.longitude ?: 0.0
+                    ))
+                }
+            }
+            
+            if (remoteEntities.isNotEmpty()) {
+                providerDao.insertAll(remoteEntities)
+                Log.d("FastRepository", "✅ ${remoteEntities.size} prestadores sincronizados en Room desde FAST")
             }
         } catch (e: Exception) {
             // Log error

@@ -404,7 +404,8 @@ class ChatViewModel @Inject constructor(
         profession: String? = null,
         providerAddress: String? = null,
         accepted: Boolean,
-        rejectionReason: String? = null
+        rejectionReason: String? = null,
+        appointmentType: String? = null // 🔥 Agregado para discriminar correctamente
     ) {
         if (currentConversationId.isEmpty()) return
         viewModelScope.launch {
@@ -428,7 +429,8 @@ class ChatViewModel @Inject constructor(
                         serviceType = serviceType,
                         doesHomeVisits = doesHomeVisits,
                         profession = profession,
-                        providerAddress = providerAddress
+                        providerAddress = providerAddress,
+                        appointmentType = appointmentType // 🔥 Usamos el tipo original si está presente
                     )
                     repository.sendAppointmentReceiptMessage(
                         conversationId = currentConversationId,
@@ -496,9 +498,16 @@ class ChatViewModel @Inject constructor(
         serviceType: String,
         doesHomeVisits: Boolean,
         profession: String?,
-        providerAddress: String?
+        providerAddress: String?,
+        appointmentType: String? = null
     ): ReceiptData {
-        val isTechnician = serviceType == "TECHNICAL" || doesHomeVisits
+        // 🔥 Lógica de discriminación mejorada: Prioriza el tipo de cita si viene especificado
+        val isTechnician = if (appointmentType != null) {
+            appointmentType == "TECHNICAL_VISIT"
+        } else {
+            serviceType == "TECHNICAL" || doesHomeVisits
+        }
+
         val dateFormatted = formatDateForDisplay(date)
         val timeFormatted = if (time.isNotBlank()) "$time hs" else time
         val code = if (isTechnician) {

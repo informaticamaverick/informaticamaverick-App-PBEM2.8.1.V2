@@ -72,14 +72,15 @@ fun ChatConversationScreen(
     onBack: () -> Unit,
     onNavigateToPresupuesto: () -> Unit = {},
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
-    onNavigateToClientePerfil: () -> Unit = {}
+    onNavigateToClientePerfil: () -> Unit = {},
+    initialChatId: String? = null
 ){
     val context = LocalContext.current
     val notificationHelper = remember { NotificationHelper(context) }
 
     val chatViewModel: com.example.myapplication.prestador.viewmodel.ChatViewModel = hiltViewModel()
-    val chatId = remember(userId, providerId) {
-        com.example.myapplication.prestador.utils.ChatIdHelper.generateChatId(userId, providerId)
+    val chatId = remember(userId, providerId, initialChatId) {
+        initialChatId ?: com.example.myapplication.prestador.utils.ChatIdHelper.generateChatId(userId, providerId)
     }
 
     // Estado para saber si este chat está visible
@@ -1105,14 +1106,15 @@ fun ChatConversationScreen(
     onBack: () -> Unit,
     onNavigateToPresupuesto: () -> Unit = {},
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
-    onNavigateToClientePerfil: () -> Unit = {}
+    onNavigateToClientePerfil: () -> Unit = {},
+    initialChatId: String? = null
 ){
     val context = LocalContext.current
     val notificationHelper = remember { NotificationHelper(context) }
 
     val chatViewModel: com.example.myapplication.prestador.viewmodel.ChatViewModel = hiltViewModel()
-    val chatId = remember(userId, providerId) {
-        com.example.myapplication.prestador.utils.ChatIdHelper.generateChatId(userId, providerId)
+    val chatId = remember(userId, providerId, initialChatId) {
+        initialChatId ?: com.example.myapplication.prestador.utils.ChatIdHelper.generateChatId(userId, providerId)
     }
 
     // Estado para saber si este chat está visible

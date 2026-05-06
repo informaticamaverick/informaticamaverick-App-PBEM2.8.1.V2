@@ -30,6 +30,7 @@ data class ChatUiState(
     val isProviderTyping: Boolean = false,
     val selectedBudget: BudgetEntity? = null,
     val providerPhotoUrl: String? = null,
+    val confirmedInviteIds: Set<String> = emptySet() // IDs de invitaciones ya confirmadas
 )
 
 sealed class ChatUiEvent {
@@ -58,18 +59,18 @@ class ChatViewModel @Inject constructor(
     private var recordingTimerJob: kotlinx.coroutines.Job? = null
 
     private var currentChatId: String = ""
-    private var currentCompanyId: String? = null
-    private var currentCategoryId: String? = null
     private val currentUserId = auth.currentUser?.uid ?: ""
+    private var activeCompanyId: String? = null
+    private var activeCategoryId: String? = null
 
     /**
-     * Inicialización manual para asegurar que tenemos el chatId.
+     * Inicialización manual para asegurar que tenemos el chatId unificado.
      */
     fun initialize(chatId: String, companyId: String? = null, categoryId: String? = null) {
         if (currentChatId == chatId) return
         currentChatId = chatId
-        currentCompanyId = companyId
-        currentCategoryId = categoryId
+        activeCompanyId = companyId
+        activeCategoryId = categoryId
 
         // 1. Activar escucha activa desde el servidor (Firebase RTDB -> Room)
         chatRepository.startListening(chatId)
@@ -77,6 +78,12 @@ class ChatViewModel @Inject constructor(
         // 2. Escuchar mensajes desde Room (SSOT)
         viewModelScope.launch {
             chatRepository.getMessages(chatId).collect { messages ->
+                // Identificar invitaciones que ya tienen un comprobante asociado
+                val confirmedIds = messages
+                    .filter { it.type == MessageType.APPOINTMENT_RECEIPT }
+                    .mapNotNull { it.calendarInviteMessageId }
+                    .toSet()
+
                 val uiMessages = messages.map { msg ->
                     val budgetId = if (msg.type == MessageType.BUDGET) {
                         msg.relatedId ?: msg.id
@@ -84,12 +91,15 @@ class ChatViewModel @Inject constructor(
                     val budget = budgetId?.let { chatRepository.getBudgetById(it) }
                     ChatMessageUiModel(msg, budget)
                 }
-                _uiState.update { it.copy(messages = uiMessages) }
+                _uiState.update { it.copy(
+                    messages = uiMessages,
+                    confirmedInviteIds = confirmedIds
+                ) }
             }
         }
 
         // 3. Observar estado de "escribiendo" del proveedor
-        val providerId = extractProviderId(chatId)
+        val providerId = extractOtherParticipantId(chatId)
         viewModelScope.launch {
             chatRepository.observeProviderTyping(chatId, providerId).collect { isTyping ->
                 _uiState.update { it.copy(isProviderTyping = isTyping) }
@@ -107,8 +117,8 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun extractProviderId(chatId: String): String {
-        return chatId.replace(currentUserId, "").replace("_", "")
+    private fun extractOtherParticipantId(chatId: String): String {
+        return chatId.split("_").firstOrNull { it != currentUserId } ?: ""
     }
 
     fun sendText(text: String) {
@@ -143,11 +153,27 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun sendLocation(lat: Double, lng: Double) {
+    fun sendLocation(lat: Double, lng: Double, address: String) {
         viewModelScope.launch {
-            val message = createMessage(MessageType.LOCATION, "Ubicación compartida").copy(
+            val message = createMessage(MessageType.LOCATION, address).copy(
                 latitude = lat,
-                longitude = lng
+                longitude = lng,
+                locationAddress = address
+            )
+            chatRepository.sendMessage(message)
+            _events.emit(ChatUiEvent.MessageSent)
+        }
+    }
+
+    /**
+     * Envía una solicitud de presupuesto formal desde el cliente.
+     */
+    fun sendBudgetRequest(problem: String, address: String, lat: Double, lng: Double) {
+        viewModelScope.launch {
+            val message = createMessage(MessageType.BUDGET_REQUEST, problem).copy(
+                latitude = lat,
+                longitude = lng,
+                locationAddress = address
             )
             chatRepository.sendMessage(message)
             _events.emit(ChatUiEvent.MessageSent)
@@ -192,6 +218,8 @@ class ChatViewModel @Inject constructor(
                 startRecordingTimer()
             } catch (e: Exception) {
                 e.printStackTrace()
+                _events.emit(ChatUiEvent.ShowError("No se pudo iniciar la grabación: ${e.message}"))
+                _uiState.update { it.copy(isRecording = false) }
             }
         }
     }
@@ -213,9 +241,16 @@ class ChatViewModel @Inject constructor(
         val duration = _recordingTime.value
 
         try {
-            mediaRecorder?.stop()
-            mediaRecorder?.release()
-        } catch (e: Exception) { e.printStackTrace() }
+            mediaRecorder?.apply {
+                stop()
+                reset()
+                release()
+            }
+        } catch (e: Exception) { 
+            e.printStackTrace() 
+            // Si falla el stop, intentamos liberar de todos modos
+            try { mediaRecorder?.release() } catch (ex: Exception) {}
+        }
         
         mediaRecorder = null
         _uiState.update { it.copy(isRecording = false) }
@@ -223,7 +258,8 @@ class ChatViewModel @Inject constructor(
         _recordingTime.value = 0
         audioFilePath = null
 
-        if (path != null) {
+        // Solo enviamos si la duración es razonable (> 0 segundos)
+        if (path != null && duration > 0) {
             viewModelScope.launch {
                 val file = java.io.File(path)
                 if (file.exists()) {
@@ -294,11 +330,11 @@ class ChatViewModel @Inject constructor(
             id = UUID.randomUUID().toString(),
             chatId = currentChatId,
             senderId = currentUserId,
-            receiverId = extractProviderId(currentChatId),
+            receiverId = extractOtherParticipantId(currentChatId),
             type = type,
             content = content,
-            companyId = currentCompanyId,
-            categoryId = currentCategoryId,
+            companyId = activeCompanyId,
+            categoryId = activeCategoryId,
             // [REGLA DE ORO] TECHNICAL_VISIT como fallback para solicitudes de cliente
             appointmentType = if (type == MessageType.VISIT) "TECHNICAL_VISIT" else null,
             timestamp = System.currentTimeMillis()

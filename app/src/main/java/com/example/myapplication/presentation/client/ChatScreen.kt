@@ -204,12 +204,6 @@ fun ChatScreenContent(
     var activeProviderId by remember { 
         mutableStateOf(if (initialProviderId == "{providerId}") null else initialProviderId) 
     }
-    var activeCompanyId by remember {
-        mutableStateOf(if (initialCompanyId == "{companyId}") null else initialCompanyId)
-    }
-    var activeCategoryId by remember {
-        mutableStateOf(if (initialCategoryId == "{categoryId}") null else initialCategoryId)
-    }
 
     // --- SECCIÓN: CARGA DE PROVEEDOR FALLBACK ---
     // Si el providerId no está en la lista de 'chattingThreads' (porque es un chat nuevo),
@@ -228,8 +222,6 @@ fun ChatScreenContent(
     BackHandler {
         if (activeProviderId != null) {
             activeProviderId = null
-            activeCompanyId = null
-            activeCategoryId = null
         } else onBack()
     }
 
@@ -247,8 +239,6 @@ fun ChatScreenContent(
                 unreadCountsMap = unreadCountsMap,
                 onChatClick = { thread -> 
                     activeProviderId = thread.provider.uid
-                    activeCompanyId = thread.companyId
-                    activeCategoryId = thread.categoryId
                 },
                 onBack = onBack,
                 appColors = appColors,
@@ -260,37 +250,49 @@ fun ChatScreenContent(
                 selectedIds = selectedIds
             )
         } else {
-            val provider = allThreads.find { it.provider.uid == activeProviderId }?.provider ?: fallbackProvider
+            val providerFromThread = allThreads.find { it.provider.uid == activeProviderId }?.provider
+            
+            // Si el proveedor ya viene decorado de la lista, lo respetamos.
+            // Si es un chat nuevo (fallback), lo decoramos manualmente si tenemos el contexto de empresa.
+            val provider = providerFromThread ?: fallbackProvider?.let { fb ->
+                if (initialCompanyId != null) {
+                    val company = fb.companies.find { it.id == initialCompanyId }
+                    fb.copy(
+                        displayName = company?.name ?: fb.displayName,
+                        photoUrl = company?.photoUrl ?: fb.photoUrl
+                    )
+                } else fb
+            }
 
             if (provider != null) {
-                // [REGLA DE ORO] Generamos el chatId consistente
-                val chatId = ChatIdHelper.generateChat(currentUserId, provider.uid, activeCompanyId)
+                // [REGLA DE ORO] Generamos el chatId unificado
+                val chatId = ChatIdHelper.generateChatId(currentUserId, provider.uid)
                 
                 // Usamos hiltViewModel con una key para que cada chat tenga su propia instancia
                 val chatViewModel: ChatViewModel = hiltViewModel(key = chatId)
                 
-                // [PASO CRÍTICO] Inicializamos el ViewModel con el chatId generado
+                // [PASO CRÍTICO] Inicializamos el ViewModel con el chatId generado y el contexto opcional
                 LaunchedEffect(chatId) {
                     chatViewModel.initialize(
                         chatId = chatId,
-                        companyId = activeCompanyId,
-                        categoryId = activeCategoryId
+                        companyId = initialCompanyId,
+                        categoryId = initialCategoryId
                     )
                 }
                 
                 if (beBrainViewModel != null) {
                     ChatConversationScreen(
                         provider = provider,
-                        companyId = activeCompanyId,
-                        categoryId = activeCategoryId,
                         viewModel = chatViewModel,
                         onBack = { 
                             activeProviderId = null
-                            activeCompanyId = null
-                            activeCategoryId = null
                         },
                         appColors = appColors,
-                        beBrainViewModel = beBrainViewModel
+                        onNavigateToCalendar = {
+                            navController?.navigate(Screen.Calendar.route)
+                        },
+                        beBrainViewModel = beBrainViewModel,
+                        ubicacionViewModel = hiltViewModel()
                     )
                 }
             }
@@ -447,8 +449,6 @@ fun ChatScreenPreview() {
     val sampleThread = ChatThread(
         chatId = "c1",
         provider = sampleProvider,
-        companyId = null,
-        categoryId = "Sistemas",
         lastMessage = "Hola!",
         lastTimestamp = System.currentTimeMillis()
     )

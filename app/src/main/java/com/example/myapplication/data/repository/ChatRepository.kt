@@ -14,6 +14,8 @@ import com.example.myapplication.data.local.BudgetTax
 import com.example.myapplication.data.local.CalendarDao
 import com.example.myapplication.data.local.CalendarEventEntity
 import com.example.myapplication.data.local.ChatDao
+import com.example.myapplication.data.local.ProviderDao
+import com.example.myapplication.data.repository.util.ProviderMapper
 import com.example.myapplication.data.local.ChatUnreadCount
 import com.example.myapplication.data.local.EventType
 import com.example.myapplication.data.local.MessageEntity
@@ -46,6 +48,7 @@ class ChatRepository @Inject constructor(
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
     private val calendarDao: CalendarDao, // 🔥 RE-AGREGADO: Necesario para sincronizar con el calendario
+    private val providerDao: ProviderDao, // 🔥 NUEVO: Necesario para sincronizar prestadores
     private val firestore: FirebaseFirestore,
     private val database: FirebaseDatabase,
     private val auth: FirebaseAuth,
@@ -255,12 +258,19 @@ class ChatRepository @Inject constructor(
     //Listener global notificaciones en todos los chats
     private val globalListeners = mutableMapOf<String, Pair<DatabaseReference, ChildEventListener>>()
     private var firestoreGlobalListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var currentListeningUserId: String? = null // 🔥 Track user ID to allow restarts
 
     private var syncStartTime = System.currentTimeMillis()
 
     fun startGlobalListening(myUserId: String) {
-        if (firestoreGlobalListener != null) return // ya escuchando
+        // [REGLA DE ORO] Si el ID de usuario cambió, reiniciamos la escucha
+        if (currentListeningUserId != null && currentListeningUserId != myUserId) {
+            stopGlobalListening()
+        }
+        
+        if (firestoreGlobalListener != null) return // ya escuchando al mismo usuario
 
+        currentListeningUserId = myUserId
         firestoreGlobalListener = firestore.collection("chats")
             .whereArrayContains("participants", myUserId)
             .addSnapshotListener { snapshot, error ->
@@ -326,6 +336,22 @@ class ChatRepository @Inject constructor(
                                 val budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java)
                                 if (type == MessageType.BUDGET && budgetDataJson != null) {
                                     budgetSavedId = parseAndSaveBudget(budgetDataJson, msgId, myUserId, senderId, msgTimestamp, categorias)
+                                }
+
+                                // 🔥 [ZERO COST SYNC] Si el prestador no existe en Room, lo traemos de Firestore 🔥
+                                scope.launch {
+                                    if (providerDao.getProviderById(senderId) == null) {
+                                        try {
+                                            val provDoc = firestore.collection("providers").document(senderId).get().await()
+                                            val providerEntity = ProviderMapper.fromFirestore(provDoc)
+                                            if (providerEntity != null) {
+                                                providerDao.insertAll(listOf(providerEntity))
+                                                Log.d("ChatRepository", "✅ Prestador $senderId sincronizado silenciosamente al recibir mensaje")
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.w("ChatRepository", "⚠️ No se pudo sincronizar prestador $senderId: ${e.message}")
+                                        }
+                                    }
                                 }
 
                                 val entity = MessageEntity(
@@ -414,6 +440,7 @@ class ChatRepository @Inject constructor(
     fun stopGlobalListening() {
         firestoreGlobalListener?.remove()
         firestoreGlobalListener = null
+        currentListeningUserId = null
         globalListeners.values.forEach { (ref, listener) -> ref.removeEventListener(listener) }
         globalListeners.clear()
     }

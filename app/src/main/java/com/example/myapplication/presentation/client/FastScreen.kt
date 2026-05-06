@@ -446,7 +446,8 @@ fun FastScreenContent(
                             },
                             onChatClick = {
                                 selectedProviderOnRadar = null
-                                navController.navigate("chat?providerId=${providerData.service.id}")
+                                val service = providerData.service
+                                navController.navigate("chat?providerId=${service.id}&companyId=${service.companyId ?: ""}&categoryId=${service.categoryId ?: ""}")
                             }
                         )
                         

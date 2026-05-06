@@ -50,7 +50,7 @@ fun ChatPresupuestoRecibidosScreen(
     viewModel: BudgetViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
     beBrainViewModel: BeBrainViewModel = hiltViewModel(),
-    onChatClick: (String) -> Unit = {},
+    onChatClick: (String, String?) -> Unit = { _, _ -> },
     onBack: () -> Unit,
     bottomPadding: PaddingValues = PaddingValues(0.dp)
 ) {
@@ -192,7 +192,7 @@ fun ChatPresupuestoRecibidosScreenContent(
     onFilterToggle: (String) -> Unit,
     onClearFilters: () -> Unit,
     onClearSort: () -> Unit,
-    onChatClick: (String) -> Unit,
+    onChatClick: (String, String?) -> Unit,
     onBack: () -> Unit,
     onAcceptBudget: (BudgetEntity) -> Unit,
     onRejectBudget: (BudgetEntity) -> Unit,
@@ -271,8 +271,19 @@ fun ChatPresupuestoRecibidosScreenContent(
                         }
                     }
                 ) {
+                    val genericTender = remember(directBudgets) {
+                        TenderEntity(
+                            tenderId = "direct_budgets",
+                            title = "Presupuestos Directos",
+                            clientId = directBudgets.firstOrNull()?.clientId ?: "",
+                            description = "Presupuestos recibidos directamente por chat",
+                            category = "Varios",
+                            status = "DIRECTO"
+                        )
+                    }
                     BudgetGridContent(
                         state = directListState,
+                        tender = genericTender,
                         budgets = directBudgets,
                         isMultiSelectionActive = isMultiSelectionActive,
                         selectedItemIds = selectedItemIds,
@@ -382,7 +393,7 @@ fun ChatPresupuestoRecibidosScreenPreview() {
             onFilterToggle = {},
             onClearFilters = {},
             onClearSort = {},
-            onChatClick = {},
+            onChatClick = { _, _ -> },
             onBack = {},
             onAcceptBudget = {},
             onRejectBudget = {},

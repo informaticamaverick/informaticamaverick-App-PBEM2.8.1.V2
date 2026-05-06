@@ -771,7 +771,7 @@ class BeBrainViewModel @Inject constructor(
             }
         }
 
-        _showBe.value = !(currentRoute == "login" || currentRoute == "register" || currentRoute == "startup")
+        _showBe.value = !(currentRoute == "login" || currentRoute == "register" || currentRoute == "startup" || currentRoute == "chat_conversation")
         _isResultadoVisible.value = false
         _showBeTools.value = false
         

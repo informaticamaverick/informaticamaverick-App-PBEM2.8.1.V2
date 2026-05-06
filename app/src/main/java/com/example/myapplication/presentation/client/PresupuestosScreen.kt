@@ -66,7 +66,7 @@ fun PresupuestosScreen(
     beBrainViewModel: BeBrainViewModel = hiltViewModel(),
     // 🔥 REGLA DE ORO: Inyectamos el Maestro de Intenciones (AppActionCoordinator)
     // Nota: Coordinator es un Singleton @Inject, no un ViewModel.
-    onChatClick: (String) -> Unit = {},
+    onChatClick: (String, String?) -> Unit = { _, _ -> },
     onBack: () -> Unit,
     bottomPadding: PaddingValues = PaddingValues(0.dp)
 ) {
@@ -252,7 +252,7 @@ fun PresupuestosScreenContent(
     onClearSort: () -> Unit,
     onSetContext: (HUDContext) -> Unit,
     getBudgetsForTender: (String) -> StateFlow<List<BudgetEntity>>,
-    onChatClick: (String) -> Unit,
+    onChatClick: (String, String?) -> Unit,
     onBack: () -> Unit,
     bottomPadding: PaddingValues, // Re-agregado
     isSearchActive: Boolean,
@@ -435,7 +435,7 @@ fun PresupuestosScreenContent(
                 tender = tenderForDetails, 
                 onClose = onCloseTenderDetails, 
                 onUpdateStatus = { onUpdateTenderStatus(tenderForDetails.tenderId, it); onCloseTenderDetails() },
-                onContactProvider = onChatClick
+                onContactProvider = { providerId -> onChatClick(providerId, null) }
             )
         }
 
@@ -499,7 +499,7 @@ fun PresupuestosScreenPreview() {
             onClearSort = {},
             onSetContext = {},
             getBudgetsForTender = { MutableStateFlow(sampleBudgets) },
-            onChatClick = {},
+            onChatClick = { _, _ -> },
             onBack = {},
             bottomPadding = PaddingValues(0.dp), // Agregado
             isSearchActive = false,

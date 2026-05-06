@@ -67,7 +67,7 @@ import kotlinx.coroutines.launch
 sealed class Screen(val route: String, val title: String) {
     object Home : Screen("home", "Inicio")
     object Presupuestos : Screen("presupuestos", "Presupuestos")
-    object Chat : Screen("chat?providerId={providerId}", "Chat")
+    object Chat : Screen("chat?providerId={providerId}&companyId={companyId}&categoryId={categoryId}", "Chat")
     object Calendar : Screen("calendar", "Calendario")
     object Promo : Screen("promo", "Promociones")
     object CrearLicitacion : Screen("crear_licitacion", "Crear Licitación")
@@ -452,25 +452,45 @@ fun AppNavigationStateless(
                     HomeScreenComplete(navController = navController, beViewModel = beViewModel ?: hiltViewModel())
                 }
 
-                composable(route = Screen.Chat.route, arguments = listOf(navArgument("providerId") { type = NavType.StringType; nullable = true; defaultValue = null }), enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { backStackEntry ->
+                composable(
+                    route = Screen.Chat.route,
+                    arguments = listOf(
+                        navArgument("providerId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument("companyId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument("categoryId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                    ),
+                    enterTransition = mainEnterTransition,
+                    exitTransition = mainExitTransition
+                ) { backStackEntry ->
                     val providerId = backStackEntry.arguments?.getString("providerId")
+                    val companyId = backStackEntry.arguments?.getString("companyId")
+                    val categoryId = backStackEntry.arguments?.getString("categoryId")
+                    
                     // ==========================================================================================
-                    // --- 🛠️ SECCIÓN: NAVEGACIÓN A CHAT ---
-                    // Pasamos la lambda onInConversationChange para que el ChatScreen pueda avisar al Cerebro (BeBrain)
-                    // cuando debe ocultar o mostrar la barra de navegación inferior (Lista vs Conversación).
+                    // --- 🛠️ SECCIÓN: NAVEGACIÓN A CHAT (MAVERICK UNIFICADO) ---
+                    // Se usa un chatId único (user_provider) pero se pasa el contexto de empresa y categoría
+                    // para que los mensajes queden etiquetados y la lista de chats sea "Premium".
                     // ==========================================================================================
                     ChatScreen(
                         onBack = { navController.popBackStack() }, 
                         initialProviderId = providerId,
-                        navController = navController, // 🔥 PASAMOS EL NAVCONTROLLER
-                        beBrainViewModel = beViewModel ?: hiltViewModel(), // 🔥 FIJO: Pasamos el Cerebro Global o generamos uno si es null
+                        initialCompanyId = companyId,
+                        initialCategoryId = categoryId,
+                        navController = navController, 
+                        beBrainViewModel = beViewModel ?: hiltViewModel(), 
                         onInConversationChange = { isInConversation ->
                             beViewModel?.setBottomBarVisible(!isInConversation)
                         }
                     )
                 }
 
-                composable(route = Screen.Calendar.route, enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { CalendarScreen(onBack = { navController.popBackStack() }) }
+                composable(route = Screen.Calendar.route, enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { 
+                    CalendarScreen(
+                        onBack = { navController.popBackStack() },
+                        onChatClick = { pid -> navController.navigate("chat?providerId=$pid") },
+                        onNavigateToProfile = { pid -> navController.navigate("perfil_prestador/$pid") }
+                    ) 
+                }
 
                 composable(route = Screen.Promo.route, enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { PromoScreen(navController = navController, onBack = { navController.popBackStack() }) }
 
@@ -484,7 +504,15 @@ fun AppNavigationStateless(
 
                 composable(route = Screen.ResultBusqueda.route, arguments = listOf(navArgument("category") { type = NavType.StringType })) { backStackEntry ->
                     val category = backStackEntry.arguments?.getString("category") ?: ""
-                    ResultBusquedaCategoriaScreen(categoryName = category, onBack = { navController.popBackStack() }, onNavigateToProviderProfile = { pid -> navController.navigate("perfil_prestador/$pid") }, onNavigateToChat = { pid -> navController.navigate("chat?providerId=$pid") }, beViewModel = beViewModel ?: hiltViewModel())
+                    ResultBusquedaCategoriaScreen(
+                        categoryName = category, 
+                        onBack = { navController.popBackStack() }, 
+                        onNavigateToProviderProfile = { pid -> navController.navigate("perfil_prestador/$pid") }, 
+                        onNavigateToChat = { service -> 
+                            navController.navigate("chat?providerId=${service.id}&companyId=${service.companyId ?: ""}&categoryId=${service.categoryId ?: ""}") 
+                        }, 
+                        beViewModel = beViewModel ?: hiltViewModel()
+                    )
                 }
 
                 composable(route = Screen.PerfilPrestador.route, arguments = listOf(navArgument("providerId") { type = NavType.StringType })) { backStackEntry ->
@@ -499,7 +527,7 @@ fun AppNavigationStateless(
                 ) {
                     ChatPresupuestoRecibidosScreen(
                         onBack = { navController.popBackStack() },
-                        onChatClick = { pid -> navController.navigate("chat?providerId=$pid") },
+                        onChatClick = { pid, _ -> navController.navigate("chat?providerId=$pid") },
                         beBrainViewModel = beViewModel ?: hiltViewModel()
                     )
                 }
@@ -515,7 +543,7 @@ fun AppNavigationStateless(
                         viewModel = hiltViewModel(),
                         categoryViewModel = hiltViewModel(),
                         beBrainViewModel = beViewModel ?: hiltViewModel(),
-                        onChatClick = { pid -> navController.navigate("chat?providerId=$pid") },
+                        onChatClick = { pid, _ -> navController.navigate("chat?providerId=$pid") },
                         onBack = { navController.popBackStack() },
                         bottomPadding = innerPadding
                     )
@@ -559,7 +587,15 @@ fun AppNavigationStateless(
         }
         AnimatedVisibility(
             visible = showBe,
-            modifier = Modifier.zIndex(1100f) // 🔥 AUMENTADO: Para estar sobre la Nav Bar (950f)
+            modifier = Modifier.zIndex(1100f), // 🔥 AUMENTADO: Para estar sobre la Nav Bar (950f)
+            enter = slideInVertically(initialOffsetY = { it / 2 }) + 
+                    slideInHorizontally(initialOffsetX = { it / 2 }) + 
+                    expandIn(expandFrom = Alignment.BottomEnd) + 
+                    fadeIn(animationSpec = tween(400)),
+            exit = slideOutVertically(targetOffsetY = { it / 2 }) + 
+                   slideOutHorizontally(targetOffsetX = { it / 2 }) + 
+                   shrinkOut(shrinkTowards = Alignment.BottomEnd) + 
+                   fadeOut(animationSpec = tween(300))
         ) {
             val beVerticalBias by animateFloatAsState(
                 targetValue = when {

@@ -446,6 +446,7 @@ class ProviderViewModel @Inject constructor(
             acceptsAppointments = accApp,
             isSubscribed = provider.isSubscribed,
             categoryId = provider.categories.firstOrNull(),
+            companyId = mainCompany?.id,
             categories = provider.categories,
             displayAddress = provider.address?.fullString() ?: allBranches.firstOrNull()?.address?.fullString(),
             branchName = allBranches.firstOrNull()?.name,

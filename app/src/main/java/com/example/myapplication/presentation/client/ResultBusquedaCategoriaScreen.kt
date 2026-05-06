@@ -75,7 +75,7 @@ fun ResultBusquedaCategoriaScreen(
     categoryName: String,
     onBack: () -> Unit,
     onNavigateToProviderProfile: (String) -> Unit,
-    onNavigateToChat: (String) -> Unit,
+    onNavigateToChat: (ServiceDisplayModel) -> Unit,
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
     beViewModel: BeBrainViewModel = hiltViewModel(),
@@ -261,7 +261,7 @@ fun ResultBusquedaCategoriaContent(
     onClearRefinements: () -> Unit,
     onBack: () -> Unit,
     onNavigateToProviderProfile: (String) -> Unit,
-    onNavigateToChat: (String) -> Unit,
+    onNavigateToChat: (ServiceDisplayModel) -> Unit,
     // --- NUEVAS PROPS PARA EL FLOATING TOOL ---
     activeAddress: AddressInfo?,
     availableAddresses: List<AddressInfo>,
@@ -492,7 +492,7 @@ fun ProviderListContent(
     userLoc: UserLocation?, 
     categoryColor: Color, 
     onNavigateToProviderProfile: (String) -> Unit, 
-    onNavigateToChat: (String) -> Unit,
+    onNavigateToChat: (ServiceDisplayModel) -> Unit,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState // <--- AÑADIDO ESTADO
 ) {
     if (uiItems.isEmpty()) { EmptyStateMessage(userLoc?.locality) } else {
@@ -518,7 +518,16 @@ fun ProviderListContent(
                             item(key = item.service.id) {
                                 val isExp = expandedCards[item.service.id] ?: false
                                 val compact = isBentoView && !isExp
-                                PrestadorCardV3(provider = item.service, isCompact = compact, onClick = { if (compact) expandedCards[item.service.id] = true else onNavigateToProviderProfile(item.service.id) }, onChatClick = { onNavigateToChat(item.service.id) }, modifier = Modifier.padding(bottom = 1.dp))
+                                PrestadorCardV3(
+                                    provider = item.service, 
+                                    isCompact = compact, 
+                                    onClick = { 
+                                        if (compact) expandedCards[item.service.id] = true 
+                                        else onNavigateToProviderProfile(item.service.id) 
+                                    }, 
+                                    onChatClick = { onNavigateToChat(item.service) }, 
+                                    modifier = Modifier.padding(bottom = 1.dp)
+                                )
                             }
                         }
                     }

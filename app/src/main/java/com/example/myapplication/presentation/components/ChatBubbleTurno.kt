@@ -36,6 +36,9 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.myapplication.data.local.MessageEntity
 import com.example.myapplication.presentation.components.Utilidades.MaverickColors
 import com.example.myapplication.presentation.components.Utilidades.CPCyberColors
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.data.model.MessageType
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
@@ -125,24 +128,23 @@ fun BookingDialog(
 
                 Column(modifier = Modifier.fillMaxSize()) {
 
-                    // --- Encabezado Táctico ---
+                    // --- Encabezado PREMIUM ---
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .background(maverickBlue.copy(alpha = 0.15f))
                             .padding(24.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
-                                color = maverickBlue.copy(alpha = 0.2f),
+                                color = Color.White.copy(alpha = 0.1f),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.size(48.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isTechnicalVisit) Icons.Default.HomeRepairService else Icons.Default.Storefront,
-                                        contentDescription = null,
-                                        tint = maverickCyan,
-                                        modifier = Modifier.size(24.dp)
+                                    Text(
+                                        text = if (isTechnicalVisit) "🧰" else "🗓️",
+                                        fontSize = 24.sp
                                     )
                                 }
                             }
@@ -170,7 +172,7 @@ fun BookingDialog(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = 24.dp)
+                            .padding(24.dp)
                             .verticalScroll(rememberScrollState())
                     ) {
                         
@@ -572,3 +574,132 @@ fun generateSlotsFromAvailability(avail: DayAvailability, booked: List<Pair<Stri
 
     return slots
 }
+
+// ==========================================
+// SECCIÓN DE VISTAS PREVIAS (PREVIEWS)
+// ==========================================
+
+@Preview(showBackground = true, name = "Booking Dialog Premium")
+@Composable
+fun BookingDialogPreview() {
+    val sampleAvailability = """
+        [
+            {"date": "2024-05-10", "startTime": "09:00", "endTime": "18:00", "durationMinutes": 60},
+            {"date": "2024-05-11", "startTime": "10:00", "endTime": "15:00", "durationMinutes": 30}
+        ]
+    """.trimIndent()
+    
+    val sampleMessage = MessageEntity(
+        id = "m1",
+        chatId = "c1",
+        senderId = "p1",
+        receiverId = "u1",
+        type = MessageType.CALENDAR_INVITE,
+        content = "Agenda disponible",
+        availabilityJson = sampleAvailability,
+        appointmentType = "TECHNICAL_VISIT",
+        providerAddress = "Calle Falsa 123, Springfield"
+    )
+
+    val sampleAddresses = listOf(
+        AddressInfo(id = "a1", companyOrUserName = "Juan", branchName = "Mi Casa", streetAndNumber = "Av. Alem 1234", locality = "Tucumán", postalCode = "4000", isCompany = false, lat = 0.0, lng = 0.0),
+        AddressInfo(id = "gps_current", companyOrUserName = "Juan", branchName = "Ubicación Actual", streetAndNumber = "San Martín 450", locality = "Tucumán", postalCode = "4000", isCompany = false, lat = 0.0, lng = 0.0)
+    )
+
+    MyApplicationTheme {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
+            BookingDialog(
+                message = sampleMessage,
+                availableAddresses = sampleAddresses,
+                onDismissRequest = {},
+                onAcceptRequest = { _, _, _, _ -> }
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Address Item Premium")
+@Composable
+fun AddressItemPremiumPreview() {
+    val sampleAddr = AddressInfo(
+        id = "a1", 
+        companyOrUserName = "Maverick Tech",
+        branchName = "Oficina Central", 
+        streetAndNumber = "Santa Fe 100", 
+        locality = "SM de Tucumán", 
+        postalCode = "4000",
+        isCompany = true,
+        lat = 0.0,
+        lng = 0.0
+    )
+    MyApplicationTheme {
+        Column(modifier = Modifier.padding(16.dp).background(Color(0xFF0F172A)).padding(16.dp)) {
+            AddressItemPremium(address = sampleAddr, isSelected = false, onClick = {})
+            Spacer(Modifier.height(12.dp))
+            AddressItemPremium(address = sampleAddr, isSelected = true, onClick = {})
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Time and Day Items")
+@Composable
+fun TimeDayItemsPreview() {
+    MyApplicationTheme {
+        Column(modifier = Modifier.padding(16.dp).background(Color(0xFF0F172A)).padding(16.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                DayItemV2(date = Date(), isSelected = false, onClick = {})
+                DayItemV2(date = Date(), isSelected = true, onClick = {})
+            }
+            Spacer(Modifier.height(20.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TimeItemV2(slot = TimeSlot("09:00", false), isSelected = false, onClick = {})
+                TimeItemV2(slot = TimeSlot("10:00", false), isSelected = true, onClick = {})
+                TimeItemV2(slot = TimeSlot("11:00", true), isSelected = false, onClick = {})
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Booking Dialog Local")
+@Composable
+fun BookingDialogLocalPreview() {
+    val sampleAvailability = """
+        [
+            {"date": "2024-05-15", "startTime": "16:00", "endTime": "20:00", "durationMinutes": 30}
+        ]
+    """.trimIndent()
+    
+    val sampleMessage = MessageEntity(
+        id = "m1",
+        chatId = "c1",
+        senderId = "p1",
+        receiverId = "u1",
+        type = MessageType.CALENDAR_INVITE,
+        content = "Agenda para turno en local",
+        availabilityJson = sampleAvailability,
+        appointmentType = "IN_STORE",
+        providerAddress = "Calle Junín 450, San Miguel de Tucumán"
+    )
+
+    MyApplicationTheme {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
+            BookingDialog(
+                message = sampleMessage,
+                availableAddresses = emptyList(),
+                onDismissRequest = {},
+                onAcceptRequest = { _, _, _, _ -> }
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun LocationInfoCardPreview() {
+    MyApplicationTheme {
+        Box(modifier = Modifier.padding(16.dp).background(Color(0xFF0F172A)).padding(16.dp)) {
+            LocationInfoCard(title = "Ubicación del Local", address = "San Miguel de Tucumán, Argentina")
+        }
+    }
+}
+

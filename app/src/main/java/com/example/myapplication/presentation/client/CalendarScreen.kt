@@ -1,5 +1,7 @@
 package com.example.myapplication.presentation.client
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -25,6 +27,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -75,6 +78,7 @@ private val ErrorRed = Color(0xFFF43F5E)
 fun CalendarScreen(
     onBack: () -> Unit,
     onChatClick: (String) -> Unit = {},
+    onNavigateToProfile: (String) -> Unit = {}, // 🔥 [NUEVO]
     viewModel: CalendarViewModel = hiltViewModel(),
     beBrainViewModel: BeBrainViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel()
@@ -112,6 +116,10 @@ fun CalendarScreen(
         availableCategories = availableCategories,
         onBack = onBack,
         onChatClick = onChatClick,
+        onNavigateToProfile = { pid -> 
+            beBrainViewModel.coordinator.updateSearchQuery("") // Limpiar búsqueda global
+            onNavigateToProfile(pid)
+        },
         onDateChange = { viewModel.updateSelectedDate(it) },
         onToggleFilter = { id ->
             if (id.startsWith("cat_")) {
@@ -159,6 +167,7 @@ fun CalendarScreenContent(
     availableCategories: List<ControlItem> = emptyList(), // 🔥 [NUEVO] Categorías dinámicas
     onBack: () -> Unit,
     onChatClick: (String) -> Unit,
+    onNavigateToProfile: (String) -> Unit = {}, // 🔥 [NUEVO]
     onDateChange: (Calendar) -> Unit,
     onToggleFilter: (String) -> Unit,
     onTogglePastEvents: (Boolean) -> Unit,
@@ -410,6 +419,10 @@ fun CalendarScreenContent(
                 onCancelClick = { event ->
                     eventToCancel = event
                     selectedEvent = null
+                },
+                onProviderClick = { pid ->
+                    selectedEvent = null
+                    onNavigateToProfile(pid)
                 }
             )
         }
@@ -948,9 +961,12 @@ fun EventDetailsModal(
     onDismiss: () -> Unit,
     onChatClick: (String) -> Unit,
     onRescheduleClick: (CalendarEventEntity) -> Unit,
-    onCancelClick: (CalendarEventEntity) -> Unit
+    onCancelClick: (CalendarEventEntity) -> Unit,
+    onProviderClick: (String) -> Unit = {} // 🔥 [NUEVO] Para ir al perfil
 ) {
+    val context = LocalContext.current
     val eventColor = Color(event.type.colorLong)
+    val isCancelled = event.status == VisitStatus.CANCELLED
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.85f)).clickable(onClick = onDismiss, indication = null, interactionSource = remember { MutableInteractionSource() }), contentAlignment = Alignment.Center) {
@@ -979,20 +995,39 @@ fun EventDetailsModal(
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
-                    Text(text = event.title, fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color.White, lineHeight = 28.sp)
+                    
+                    // Título Limpio (Evita UUIDs)
+                    val cleanTitle = if (event.title.contains("|")) {
+                        event.title.split("|").lastOrNull()?.trim() ?: event.title
+                    } else if (event.title.length > 30 && event.title.contains("-")) {
+                        event.type.label // Fallback
+                    } else {
+                        event.title
+                    }
+                    
+                    Text(text = cleanTitle, fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color.White, lineHeight = 28.sp)
+                    
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // --- TARJETA DE TIEMPO (ESTILO PREMIUM) ---
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Surface(modifier = Modifier.weight(1f), color = Color.White.copy(0.05f), shape = RoundedCornerShape(16.dp)) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Text("DÍA", fontSize = 9.sp, color = Color.Gray, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                                Text(event.date, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+                                // Formatear fecha si es posible
+                                val displayDate = try {
+                                    val inputFmt = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                                    val outputFmt = SimpleDateFormat("EEE dd/MM/yyyy", Locale("es", "ES"))
+                                    inputFmt.parse(event.date)?.let { outputFmt.format(it).replaceFirstChar { c -> c.uppercase() } } ?: event.date
+                                } catch (e: Exception) { event.date }
+                                Text(displayDate, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
                             }
                         }
                         Surface(modifier = Modifier.weight(1f), color = Color.White.copy(0.05f), shape = RoundedCornerShape(16.dp)) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Text("HORARIO", fontSize = 9.sp, color = Color.Gray, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                                Text("${event.time} HS", fontSize = 14.sp, color = eventColor, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 2.dp))
+                                val cleanTime = event.time.lowercase().replace("hs", "").trim()
+                                Text("$cleanTime HS", fontSize = 14.sp, color = eventColor, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 2.dp))
                             }
                         }
                     }
@@ -1002,27 +1037,53 @@ fun EventDetailsModal(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        // DIRECCIÓN (INTERACTIVA)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    val uri = Uri.parse("geo:0,0?q=${Uri.encode(event.address)}")
+                                    val intent = Intent(Intent.ACTION_VIEW, uri)
+                                    context.startActivity(intent)
+                                }
+                                .padding(vertical = 4.dp)
+                        ) {
                             Box(modifier = Modifier.size(36.dp).background(Color.White.copy(0.05f), CircleShape), contentAlignment = Alignment.Center) {
                                 Icon(Icons.Default.LocationOn, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
                             }
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text("Dirección", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
-                                Text(event.address, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Medium)
+                                Text(event.address, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                         }
 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (event.providerPhotoUrl != null) {
-                                AsyncImage(model = event.providerPhotoUrl, contentDescription = null, modifier = Modifier.size(36.dp).clip(CircleShape).border(1.dp, Color.White.copy(0.2f), CircleShape), contentScale = ContentScale.Crop)
-                            } else {
-                                Box(modifier = Modifier.size(36.dp).background(Color(event.avatarColorLong), CircleShape).border(1.dp, Color.White.copy(0.2f), CircleShape), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Handyman, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                        // PRESTADOR (INTERACTIVO)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { onProviderClick(event.providerId) }
+                            ) {
+                                if (event.providerPhotoUrl != null) {
+                                    AsyncImage(model = event.providerPhotoUrl, contentDescription = null, modifier = Modifier.size(36.dp).clip(CircleShape).border(1.dp, Color.White.copy(0.2f), CircleShape), contentScale = ContentScale.Crop)
+                                } else {
+                                    Box(modifier = Modifier.size(36.dp).background(Color(event.avatarColorLong), CircleShape).border(1.dp, Color.White.copy(0.2f), CircleShape), contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Handyman, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { onProviderClick(event.providerId) }
+                            ) {
                                 Text("Prestador / Profesional", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
                                 Text(event.provider, fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Medium)
                             }
@@ -1033,7 +1094,7 @@ fun EventDetailsModal(
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
-                    if (event.status != VisitStatus.CANCELLED) {
+                    if (!isCancelled) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Button(onClick = { onCancelClick(event) }, modifier = Modifier.weight(1f).height(50.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = ErrorRed.copy(alpha = 0.1f), contentColor = ErrorRed)) {
                                 Text("CANCELAR", fontSize = 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
