@@ -31,11 +31,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -73,7 +75,8 @@ fun BudgetPreviewPDFDialog(
     isProfessional: Boolean = false,
     presupuestoNumero: String = "",
     tituloTrabajo: String = "",
-    category: String = ""
+    category: String = "",
+    validezDias: Int = 15
 ){
     val coroutineScope = rememberCoroutineScope()
     val captureLayer = rememberGraphicsLayer()
@@ -238,7 +241,8 @@ fun BudgetPreviewPDFDialog(
                                 taxAmount = taxAmount,
                                 discountAmount = discountAmount,
                                 total = grandTotal,
-                                taxes = if (showTaxDetail) taxes else emptyList()
+                                taxes = if (showTaxDetail) taxes else emptyList(),
+                                validezDias = validezDias
                             )
                         }
                     }
@@ -404,13 +408,13 @@ fun A4HeaderSection(
             Box(
                 modifier = Modifier
                     .padding(vertical = 3.dp)
-                    .background(Slate50)
-                    .border(1.dp, Slate300, RoundedCornerShape(4.dp))
+                    .background(Color(0xFFDBEAFE))
+                    .border(1.dp, Color(0xFF93C5FD), RoundedCornerShape(4.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
-                Text("N° ${presupuestoNumero.ifBlank { prestador.id.takeLast(8) }}", fontWeight = FontWeight.Bold, fontSize = 10.sp, color = Slate800)
+                Text("N° ${presupuestoNumero.ifBlank { prestador.id.takeLast(8) }}", fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, color = Color(0xFF1E40AF))
             }
-            Text(currentDate, fontSize = 10.sp, color = Slate600, fontWeight = FontWeight.Medium)
+            Text(currentDate, fontSize = 10.sp, color = Slate800, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -428,42 +432,74 @@ fun A4ClientInfoSection(prestador: ProviderEntity,
                         providerEmail: String = "",
                         category: String = "") {
     // Nombre a mostrar: empresa si tiene, sino nombre completo
-    val displayName = providerName.ifBlank {
-        prestador.nombreEmpresa ?: "${prestador.name} ${prestador.apellido}".trim()
+    val tieneEmpresa = prestador.tieneEmpresa && !prestador.nombreEmpresa.isNullOrBlank()
+    val displayName = if (tieneEmpresa) {
+        prestador.nombreEmpresa!!
+    } else {
+        providerName.ifBlank { "${prestador.name} ${prestador.apellido}".trim() }
     }
     val displayPhone = providerPhone.ifBlank { prestador.phone }
     val displayEmail = providerEmail.ifBlank { prestador.email }
-    val displayAddress = providerAddress.ifBlank { prestador.direccionLocal ?: "" }
+    val displayAddress = if (tieneEmpresa) {
+        prestador.direccionEmpresa ?: providerAddress.ifBlank { prestador.direccionLocal ?: "" }
+    } else {
+        providerAddress.ifBlank { prestador.direccionLocal ?: "" }
+    }
 
     Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
-        // --- Datos del prestador: nombre, teléfono y correo en columna ---
+        // --- Datos del prestador: nombre, CUIT/matrícula, dirección ---
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                displayName,
+                displayName.uppercase(),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = Slate800,
                 lineHeight = 14.sp
             )
-            if (displayPhone.isNotBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Default.Phone, null, tint = Slate400, modifier = Modifier.size(10.dp))
-                    Text(displayPhone, fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
+            if (tieneEmpresa) {
+                // Modo empresa: razón social + CUIT + dirección empresa
+                val cuit = prestador.cuitEmpresa?.takeIf { it.isNotBlank() }
+                if (cuit != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.Business, null, tint = Slate400, modifier = Modifier.size(10.dp).padding(top = 1.dp))
+                        Text("CUIT $cuit", fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
+                    }
+                }
+                if (displayAddress.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.LocationOn, null, tint = Slate400, modifier = Modifier.size(10.dp).padding(top = 1.dp))
+                        Text(displayAddress, modifier = Modifier.weight(1f), fontSize = 9.sp, color = Slate600, lineHeight = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            } else {
+                // Modo individual: dirección personal + categoría + matrícula
+                if (displayAddress.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.LocationOn, null, tint = Slate400, modifier = Modifier.size(10.dp).padding(top = 1.dp))
+                        Text(displayAddress, modifier = Modifier.weight(1f), fontSize = 9.sp, color = Slate600, lineHeight = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
-            if (displayEmail.isNotBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Default.Email, null, tint = Slate400, modifier = Modifier.size(10.dp))
-                    Text(displayEmail, fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
-                }
-            }
-            if (displayAddress.isNotBlank()) {
+            if (category.isNotBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Default.LocationOn, null, tint = Slate400, modifier = Modifier.size(10.dp).padding(top = 1.dp))
-                    Text(displayAddress, fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
+                    Icon(Icons.Default.Category, null, tint = Slate400, modifier = Modifier.size(10.dp).padding(top = 1.dp))
+                    Text(category.uppercase(), fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
+                }
+            }
+            if (prestador.tieneMatricula) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Default.Badge, null, tint = Slate400, modifier = Modifier.size(10.dp).padding(top = 1.dp))
+                    Text(
+                        text = "Mat. ${prestador.matricula}",
+                        fontSize = 9.sp,
+                        color = Slate600,
+                        lineHeight = 11.sp
+                    )
                 }
             }
         }
@@ -485,28 +521,14 @@ fun A4ClientInfoSection(prestador: ProviderEntity,
                         Text(clientAddress, fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
                     }
                 }
-                HorizontalDivider(color = Slate300, thickness = 1.dp, modifier = Modifier.padding(top = 4.dp))
             }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(0.7f), horizontalAlignment = Alignment.End) {
                 Text(if (isProfessional) "CONSULTA / SERVICIO" else "TRABAJO / PROYECTO", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Slate400)
                 Text(tituloTrabajo.ifBlank { if (isProfessional) "Servicio profesional" else "Proyecto de servicio" }, fontSize = 11.sp, color = Slate800, lineHeight = 14.sp)
-                if (category.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.Category, null, tint = Slate400, modifier = Modifier.size(10.dp))
-                        Text(
-                            category.uppercase(),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Slate600,
-                            letterSpacing = 0.3.sp
-                        )
-                    }
-                }
-                HorizontalDivider(color = Slate300, thickness = 1.dp, modifier = Modifier.padding(top = 4.dp))
             }
         }
+        HorizontalDivider(color = Slate300, thickness = 1.dp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -579,7 +601,8 @@ fun A4FooterSection(
     taxAmount: Double,
     discountAmount: Double,
     total: Double,
-    taxes: List<BudgetTax> = emptyList()
+    taxes: List<BudgetTax> = emptyList(),
+    validezDias: Int = 15
 ) {
     Column(
         modifier = Modifier
@@ -594,7 +617,7 @@ fun A4FooterSection(
         ) {
             // Nota Legal
             Text(
-                text = "Nota: Los precios están expresados en Pesos Argentinos.\nVálido por 15 días.",
+                text = "Nota: Los precios están expresados en Pesos Argentinos.\nVálido por $validezDias días.",
                 fontSize = 10.sp,
                 color = Slate400,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
@@ -674,5 +697,51 @@ fun A4FooterSection(
                 }
             }
         }
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.O)
+@Preview(showBackground = true, widthDp = 460, heightDp = 680, name = "Vista Previa Presupuesto A4")
+@Composable
+private fun PreviewBudgetDialog() {
+    val prestadorEjemplo = ProviderEntity(
+        id = "preview",
+        email = "juan@ejemplo.com",
+        phoneNumber = "1122334455",
+        displayName = "Juan Pérez",
+        name = "Juan",
+        lastName = "Pérez",
+        categories = listOf("Gasista"),
+        hasPhysicalLocation = true,
+        createdAt = 0L
+    )
+    val items = listOf(
+        PresupuestoItemDisplay("2", "Mano de obra", "$ 5.000", "$ 10.000"),
+        PresupuestoItemDisplay("1", "Materiales varios", "$ 8.000", "$ 8.000")
+    )
+    Column(
+        modifier = Modifier
+            .width(A4_WIDTH)
+            .height(A4_HEIGHT)
+            .background(Color.White)
+            .border(1.dp, Slate300)
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(MaverickGradient))
+        A4HeaderSection(prestadorEjemplo, "Juan Pérez", "P-001", false)
+        HorizontalDivider(color = Slate200)
+        A4ClientInfoSection(
+            prestador = prestadorEjemplo,
+            clientName = "Franco García",
+            clientCompany = null,
+            clientAddress = "Av. Corrientes 1234, CABA",
+            providerName = "Juan Pérez",
+            providerAddress = "Av. Rivadavia 500, CABA",
+            isProfessional = false,
+            tituloTrabajo = "Instalación de gas",
+            category = "Gasista"
+        )
+        A4ItemsTable(items)
+        Spacer(modifier = Modifier.weight(1f))
+        A4FooterSection(subtotal = 18000.0, taxAmount = 0.0, discountAmount = 0.0, total = 18000.0, taxes = emptyList())
     }
 }
