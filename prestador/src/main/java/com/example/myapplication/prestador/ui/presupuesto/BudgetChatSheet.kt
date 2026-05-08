@@ -26,9 +26,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.room.util.TableInfo
 //import com.example.myapplication.prestador.data.PPrestadorProfileFalso
 import com.example.myapplication.prestador.data.local.entity.ClienteEntity
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
@@ -142,6 +141,10 @@ fun BudgetChatSheet(
     val taxesSubtotal = taxes.sumOf { it.amount }
     val subtotal = itemsSubtotal + servicesSubtotal + feesSubtotal + miscSubtotal
     val grandTotal = subtotal + taxesSubtotal
+
+    // Base para chips de IVA: excluye artículos que ya tienen IVA propio aplicado
+    val ivaBase = items.filter { it.taxPercentage == 0.0 }.sumOf { it.unitPrice * it.quantity } +
+                  servicesSubtotal + feesSubtotal + miscSubtotal
 
     val lazyListState = rememberLazyListState()
 
@@ -270,9 +273,11 @@ fun BudgetChatSheet(
     }
 
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = colors.backgroundColor
+        onDismissRequest = { if (sheetType != null) sheetType = null else onDismiss() },
+        containerColor = colors.backgroundColor,
+        contentWindowInsets = { WindowInsets(0) }
     ) {
+        if (sheetType == null) {
         Column(modifier = Modifier.fillMaxHeight(0.93f)) {
             // --- HEADER ---
             Row(
@@ -336,128 +341,103 @@ fun BudgetChatSheet(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .imePadding()
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
 
-                // --- CATEGORIA SELECTOR ---
-                if (providerCategories.isNotEmpty()) {
-                    item {
-                        ExposedDropdownMenuBox(
-                            expanded = budgetCategoryExpanded,
-                            onExpandedChange = { budgetCategoryExpanded = it }
-                        ) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor()
-                                    .clickable { budgetCategoryExpanded = true },
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.5.dp, colors.primaryOrange.copy(alpha = 0.5f)),
-                                color = colors.primaryOrange.copy(alpha = 0.05f)
+                // --- Fila 1: Categoría + Válido por
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (providerCategories.isNotEmpty()) {
+                            ExposedDropdownMenuBox(
+                                expanded = budgetCategoryExpanded,
+                                onExpandedChange = { budgetCategoryExpanded = it },
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor()
+                                        .clickable { budgetCategoryExpanded = true },
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.5.dp, colors.primaryOrange.copy(alpha = 0.5f)),
+                                    color = colors.primaryOrange.copy(alpha = 0.05f)
                                 ) {
-                                    Icon(
-                                        Icons.Default.Category,
-                                        contentDescription = null,
-                                        tint = colors.primaryOrange,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            "Rubro / Categoría",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = colors.textSecondary
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Category,
+                                            contentDescription = null,
+                                            tint = colors.primaryOrange,
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                        Text(
-                                            selectedBudgetCategory.ifBlank { "Seleccionar categoría" },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (selectedBudgetCategory.isBlank()) colors.textSecondary else colors.textPrimary
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("Categoria",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = colors.textSecondary)
+                                            Text(
+                                                selectedBudgetCategory.ifBlank { "Seleccionar" },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (selectedBudgetCategory.isBlank()) colors.textSecondary else colors.textPrimary,
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Icon(
+                                            if (budgetCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = null,
+                                            tint = colors.primaryOrange,
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
-                                    Icon(
-                                        if (budgetCategoryExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = null,
-                                        tint = colors.primaryOrange,
-                                        modifier = Modifier.size(20.dp)
-                                    )
                                 }
-                            }
-                            ExposedDropdownMenu(
-                                expanded = budgetCategoryExpanded,
-                                onDismissRequest = { budgetCategoryExpanded = false },
-                                containerColor = colors.surfaceColor
-                            ) {
-                                providerCategories.forEach { cat ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                cat,
-                                                fontWeight = if (cat == selectedBudgetCategory) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (cat == selectedBudgetCategory) colors.primaryOrange else colors.textPrimary
-                                            )
-                                        },
-                                        onClick = {
-                                            selectedBudgetCategory = cat
-                                            budgetCategoryExpanded = false
-                                        },
-                                        leadingIcon = {
-                                            if (cat == selectedBudgetCategory) {
-                                                Icon(Icons.Default.Check, null, tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
+                                ExposedDropdownMenu(
+                                    expanded = budgetCategoryExpanded,
+                                    onDismissRequest = { budgetCategoryExpanded = false},
+                                    containerColor = colors.surfaceColor
+                                ) {
+                                    providerCategories.forEach { cat ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    cat,
+                                                    fontWeight = if (cat == selectedBudgetCategory) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (cat == selectedBudgetCategory) colors.primaryOrange else colors.textPrimary
+                                                )
+                                            },
+                                            onClick = {
+                                                selectedBudgetCategory = cat
+                                                budgetCategoryExpanded = false
+                                            },
+                                            leadingIcon = {
+                                                if (cat == selectedBudgetCategory) {
+                                                    Icon(Icons.Default.Check, null, tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                }
-
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Text(
-                            if (isProfessional) "Nombre del servicio / consulta" else "Nombre del trabajo / proyecto",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = colors.textSecondary,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                        OutlinedTextField(
-                            value = tituloTrabajo,
-                            onValueChange = {
-                                tituloTrabajo = it },
-                            placeholder = {
-                                Text(
-                                    if (isProfessional) "Ej: Consulta técnica eléctrica" else "Ej: Instalación de red Wi-Fi",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = colors.primaryOrange,
-                                focusedLabelColor = colors.primaryOrange,
-                                cursorColor = colors.primaryOrange
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HorizontalDivider(color = colors.border)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                        //Válido por
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.5.dp,
+                                colors.primaryOrange.copy(alpha = 0.5f)),
+                            color = colors.primaryOrange.copy(alpha = 0.05f)
                         ) {
                             Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
@@ -467,56 +447,84 @@ fun BudgetChatSheet(
                                     tint = colors.primaryOrange,
                                     modifier = Modifier.size(16.dp)
                                 )
-                                Text(
-                                    "Válido por",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = colors.textPrimary
-                                )
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                BasicTextField(
-                                    value = validity,
-                                    onValueChange = { v ->
-                                        if (v.length <= 3 && v.all { it.isDigit() }) validity = v
-                                    },
-                                    singleLine = true,
-                                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                        color = colors.primaryOrange,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                    ),
-                                    keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
-                                    decorationBox = { innerTextField ->
-                                        Box(
-                                            modifier = Modifier
-                                                .width(56.dp)
-                                                .border(1.5.dp, colors.primaryOrange.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                                                .background(colors.primaryOrange.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
-                                                .padding(horizontal = 8.dp, vertical = 10.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (validity.isEmpty()) {
-                                                Text("15", style = MaterialTheme.typography.bodyLarge.copy(
-                                                    color = colors.textSecondary,
-                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                ))
+                                Column {
+                                    Text(
+                                        "Válido por",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = colors.textSecondary
+                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        BasicTextField(
+                                            value = validity,
+                                            onValueChange = { v ->
+                                                if (v.length <= 3 && v.all { it.isDigit() }) validity = v
+                                            },
+                                            singleLine = true,
+                                            textStyle = MaterialTheme.typography.bodySmall.copy(
+                                                color = colors.primaryOrange,
+                                                fontWeight = FontWeight.Bold,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                            ),
+                                            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                                            decorationBox = { innerTextField ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(36.dp)
+                                                        .border(1.dp, colors.primaryOrange.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+                                                        .background(colors.primaryOrange.copy(alpha = 0.06f), RoundedCornerShape(6.dp))
+                                                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (validity.isEmpty()) {
+                                                        Text("15", style = MaterialTheme.typography.bodySmall.copy(
+                                                            color = colors.textSecondary,
+                                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                        ))
+                                                    }
+                                                    innerTextField()
+                                                }
                                             }
-                                            innerTextField()
-                                        }
+                                        )
+                                        Text(
+                                            "días",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.textSecondary
+                                        )
                                     }
-                                )
-                                Text(
-                                    "días",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = colors.textSecondary
-                                )
+                                }
                             }
                         }
                     }
+                }
+
+                // Fila 2 Nombre del trabajo
+                item {
+                    OutlinedTextField(
+                        value = tituloTrabajo,
+                        onValueChange = { tituloTrabajo = it },
+                        label = {
+                            Text(
+                                if (isProfessional) "Nombre del servicio / consulta" else "Nombre del trabajo / proyecto",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        placeholder = {
+                            Text(
+                                if (isProfessional) "Ej: consulta técnica eléctrica" else "Ej: Instalación de red Wi-Fi",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = colors.primaryOrange,
+                            focusedLabelColor = colors.primaryOrange,
+                            cursorColor = colors.primaryOrange
+                        )
+                    )
                 }
 
                 // Articles
@@ -534,16 +542,14 @@ fun BudgetChatSheet(
                                 onAdd = { selected ->
                                     items.add(selected.copy(id = System.currentTimeMillis()))
                                     expandedSection = "articles"
-                                }
+                                },
+                                items = items,
+                                onEdit = { item -> itemToEdit = item; sheetType = SheetType.Article },
+                                onDelete = { index -> items.removeAt(index) }
                             )
-                        }
-                    ) { item, index ->
-                            ArticleSummaryRow(
-                                item = item,
-                                onEdit = { itemToEdit = item; sheetType = SheetType.Article },
-                                onDelete = { items.removeAt(index) }
-                            )
-                    }
+                        },
+                        showDefaultContent = false
+                    ) { _, _ -> }
                 }
                 // Services
                 if (!isProfessional) item {
@@ -560,16 +566,14 @@ fun BudgetChatSheet(
                                 onAdd = { selected ->
                                     services.add(selected.copy(id = System.currentTimeMillis()))
                                     expandedSection = "services"
-                                }
+                                },
+                                items = services,
+                                onEdit = { item -> itemToEdit = item; sheetType = SheetType.Service },
+                                onDelete = { index -> services.removeAt(index) }
                             )
-                        }
-                    ) { item, index ->
-                        ServiceSummaryRow(
-                            item = item,
-                            onEdit = { itemToEdit = item; sheetType = SheetType.Service },
-                            onDelete = { services.removeAt(index) }
-                        )
-                    }
+                        },
+                        showDefaultContent = false
+                    ) { _, _ -> }
                 }
                 // Professional Fees
                 item {
@@ -586,16 +590,14 @@ fun BudgetChatSheet(
                                 onAdd = { selected ->
                                     professionalFees.add(selected.copy(id = System.currentTimeMillis()))
                                     expandedSection = "fees"
-                                }
+                                },
+                                items = professionalFees,
+                                onEdit = { item -> itemToEdit = item; sheetType = SheetType.ProfessionalFee },
+                                onDelete = { index -> professionalFees.removeAt(index) }
                             )
-                        }
-                    ) { item, index ->
-                        ProfessionalFeeSummaryRow(
-                            item = item,
-                            onEdit = { itemToEdit = item; sheetType = SheetType.ProfessionalFee },
-                            onDelete = { professionalFees.removeAt(index) }
-                        )
-                    }
+                        },
+                        showDefaultContent = false
+                    ) { _, _ -> }
                 }
                 // Misc
                 if (!isProfessional) item {
@@ -679,7 +681,7 @@ fun BudgetChatSheet(
                                         selected = alreadyAdded,
                                         onClick = {
                                             if (!alreadyAdded) {
-                                                taxes.add(BudgetTax(id = System.currentTimeMillis(), description = label, amount = subtotal * pct / 100))
+                                                taxes.add(BudgetTax(id = System.currentTimeMillis(), description = label, amount = ivaBase * pct / 100))
                                                 expandedSection = "taxes"
                                             } else {
                                                 taxes.removeAll { it.description == label }
@@ -698,6 +700,14 @@ fun BudgetChatSheet(
                                             borderColor = colors.border,
                                             selectedBorderColor = colors.primaryOrange
                                         )
+                                    )
+                                }
+                                if (itemsTaxTotal > 0.0) {
+                                    Text(
+                                        "⚠ Algunos artículos ya incluyen IVA",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = colors.primaryOrange,
+                                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
                                     )
                                 }
                                 // IIBB chip
@@ -831,116 +841,107 @@ fun BudgetChatSheet(
                 }
             }
         }
-    }
-
-    // --- ITEM FORMS as Dialog (to avoid nested ModalBottomSheet) ---
-    if (sheetType != null) {
-        Dialog(
-            onDismissRequest = { sheetType = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth(0.97f)
-                    .fillMaxHeight(0.88f),
-                shape = RoundedCornerShape(16.dp),
-                color = colors.backgroundColor
-            ) {
-                when (sheetType) {
-                    SheetType.Article -> AddArticleSheetContent(
-                        itemToEdit = itemToEdit as? BudgetItem,
-                        suggestionItems = suggestionItems,
-                        currentItems = items,
-                        onAddItem = { items.add(it); expandedSection = "articles" },
+        } else {
+            // --- ITEM FORMS inside ModalBottomSheet (keyboard works correctly here) ---
+            when (sheetType) {
+                SheetType.Article -> AddArticleSheetContent(
+                    itemToEdit = itemToEdit as? BudgetItem,
+                    suggestionItems = suggestionItems,
+                    currentItems = items,
+                    onAddItem = { items.add(it); expandedSection = "articles" },
+                    onUpdateItem = { updated ->
+                        val i = items.indexOfFirst { it.id == updated.id }
+                        if (i != -1) items[i] = updated
+                        sheetType = null
+                    },
+                    onDeleteCurrentItem = { index -> if (index in items.indices) items.removeAt(index) },
+                    onDeleteSaved = { saved -> viewModel.deleteArticleFromSuggestions(saved.description) },
+                    onSaveToSuggestions = { viewModel.saveArticleToSuggestions(it) },
+                    onAddComplete = { sheetType = null },
+                    onDismiss = { sheetType = null }
+                )
+                SheetType.Service -> AddServiceSheetContent(
+                    itemToEdit = itemToEdit as? BudgetService,
+                    suggestionItems = suggServices,
+                    currentItems = services,
+                    onAddItem = { services.add(it); expandedSection = "services" },
+                    onUpdateItem = { updated ->
+                        val i = services.indexOfFirst { it.id == updated.id }
+                        if (i != -1) services[i] = updated
+                        sheetType = null
+                    },
+                    onDeleteCurrentItem = { index -> if (index in services.indices) services.removeAt(index) },
+                    onDeleteSaved = { saved -> viewModel.deleteServiceFromSuggestions(saved.description) },
+                    onSaveToSuggestions = { viewModel.saveServiceToSuggestions(it) },
+                    onAddComplete = { sheetType = null },
+                    onDismiss = { sheetType = null }
+                )
+                SheetType.ProfessionalFee -> AddProfessionalFeeSheetContent(
+                    itemToEdit = itemToEdit as? BudgetProfessionalFee,
+                    suggestionItems = suggFees,
+                    currentItems = professionalFees,
+                    onAddItem = { professionalFees.add(it); expandedSection = "fees" },
+                    onUpdateItem = { updated ->
+                        val i = professionalFees.indexOfFirst { it.id == updated.id }
+                        if (i != -1) professionalFees[i] = updated
+                        sheetType = null
+                    },
+                    onDeleteCurrentItem = { index -> if (index in professionalFees.indices) professionalFees.removeAt(index) },
+                    onDeleteSaved = { saved -> viewModel.deleteProfessionalFeeFromSuggestions(saved.description) },
+                    onSaveToSuggestions = { viewModel.saveProfessionalFeeToSuggestions(it) },
+                    onAddComplete = { sheetType = null },
+                    onDismiss = { sheetType = null }
+                )
+                SheetType.Misc -> AddMiscExpenseSheetContent(
+                    itemToEdit = itemToEdit as? BudgetMiscExpense,
+                    existingItems = miscExpenses.toList(),
+                    savedGastos = presupuestos.flatMap { p ->
+                        if (p.gastosJson.isBlank()) emptyList()
+                        else p.gastosJson.split("|").mapNotNull { s ->
+                            val parts = s.split(";")
+                            val desc = parts.getOrNull(0) ?: return@mapNotNull null
+                            val amt = parts.getOrNull(1)?.toDoubleOrNull() ?: 0.0
+                            desc to amt
+                        }
+                    }.distinctBy { it.first },
+                    onAddItem = { list -> miscExpenses.addAll(list); expandedSection = "misc" },
+                    onUpdateItem = { updated ->
+                        val i = miscExpenses.indexOfFirst { it.id == updated.id }
+                        if (i != -1) miscExpenses[i] = updated
+                        sheetType = null
+                    },
+                    onDeleteItem = { item -> miscExpenses.removeAll { it.id == item.id } },
+                    onDeleteSaved = { desc -> viewModel.deleteMiscExpenseFromSuggestions(desc) },
+                    onUpdateSaved = { oldDesc, newDesc, newAmt -> viewModel.updateMiscExpenseInSuggestions(oldDesc, newDesc, newAmt) },
+                    onDismiss = { sheetType = null }
+                )
+                SheetType.Tax -> {
+                    val predefinedLabels = setOf("IVA 21%", "IVA 10.5%", "IVA 27%")
+                    val customForSheet = presupuestos.flatMap { p ->
+                        if (p.impuestosJson.isBlank()) emptyList()
+                        else p.impuestosJson.split("|").mapNotNull { s ->
+                            val parts = s.split(";")
+                            val desc = parts.getOrNull(0) ?: return@mapNotNull null
+                            val amt = parts.getOrNull(1)?.toDoubleOrNull() ?: 0.0
+                            if (desc !in predefinedLabels && !desc.startsWith("IIBB")) desc to amt else null
+                        }
+                    }.distinctBy { it.first }
+                    AddTaxSheetContent(
+                        itemToEdit = itemToEdit as? BudgetTax,
+                        subtotal = subtotal,
+                        savedCustomTaxes = customForSheet,
+                        onDeleteSaved = { desc -> viewModel.deleteCustomTaxFromSuggestions(desc) },
+                        onUpdateSaved = { desc, newAmt -> viewModel.updateCustomTaxInSuggestions(desc, newAmt) },
+                        onAddItem = { list -> taxes.addAll(list); sheetType = null; expandedSection = "taxes" },
                         onUpdateItem = { updated ->
-                            val i = items.indexOfFirst { it.id == updated.id }
-                            if (i != -1) items[i] = updated
+                            val i = taxes.indexOfFirst { it.id == updated.id }
+                            if (i != -1) taxes[i] = updated
                             sheetType = null
                         },
-                        onDeleteCurrentItem = { index -> if (index in items.indices) items.removeAt(index) },
-                        onDeleteSaved = { saved -> viewModel.deleteArticleFromSuggestions(saved.description) },
-                        onSaveToSuggestions = { viewModel.saveArticleToSuggestions(it) },
-                        onAddComplete = { sheetType = null }
+                        onDismiss = { sheetType = null }
                     )
-                    SheetType.Service -> AddServiceSheetContent(
-                        itemToEdit = itemToEdit as? BudgetService,
-                        suggestionItems = suggServices,
-                        currentItems = services,
-                        onAddItem = { services.add(it); expandedSection = "services" },
-                        onUpdateItem = { updated ->
-                            val i = services.indexOfFirst { it.id == updated.id }
-                            if (i != -1) services[i] = updated
-                            sheetType = null
-                        },
-                        onDeleteCurrentItem = { index -> if (index in services.indices) services.removeAt(index) },
-                        onDeleteSaved = { saved -> viewModel.deleteServiceFromSuggestions(saved.description) },
-                        onSaveToSuggestions = { viewModel.saveServiceToSuggestions(it) },
-                        onAddComplete = { sheetType = null }
-                    )
-                    SheetType.ProfessionalFee -> AddProfessionalFeeSheetContent(
-                        itemToEdit = itemToEdit as? BudgetProfessionalFee,
-                        suggestionItems = suggFees,
-                        currentItems = professionalFees,
-                        onAddItem = { professionalFees.add(it); expandedSection = "fees" },
-                        onUpdateItem = { updated ->
-                            val i = professionalFees.indexOfFirst { it.id == updated.id }
-                            if (i != -1) professionalFees[i] = updated
-                            sheetType = null
-                        },
-                        onDeleteCurrentItem = { index -> if (index in professionalFees.indices) professionalFees.removeAt(index) },
-                        onDeleteSaved = { saved -> viewModel.deleteProfessionalFeeFromSuggestions(saved.description) },
-                        onSaveToSuggestions = { viewModel.saveProfessionalFeeToSuggestions(it) },
-                        onAddComplete = { sheetType = null }
-                    )
-                    SheetType.Misc -> AddMiscExpenseSheetContent(
-                        itemToEdit = itemToEdit as? BudgetMiscExpense,
-                        existingItems = miscExpenses.toList(),
-                        savedGastos = presupuestos.flatMap { p ->
-                            if (p.gastosJson.isBlank()) emptyList()
-                            else p.gastosJson.split("|").mapNotNull { s ->
-                                val parts = s.split(";")
-                                val desc = parts.getOrNull(0) ?: return@mapNotNull null
-                                val amt = parts.getOrNull(1)?.toDoubleOrNull() ?: 0.0
-                                desc to amt
-                            }
-                        }.distinctBy { it.first },
-                        onAddItem = { list -> miscExpenses.addAll(list); expandedSection = "misc" },
-                        onUpdateItem = { updated ->
-                            val i = miscExpenses.indexOfFirst { it.id == updated.id }
-                            if (i != -1) miscExpenses[i] = updated
-                            sheetType = null
-                        },
-                        onDeleteItem = { item -> miscExpenses.removeAll { it.id == item.id } },
-                        onDeleteSaved = { desc -> viewModel.deleteMiscExpenseFromSuggestions(desc) },
-                        onUpdateSaved = { oldDesc, newDesc, newAmt -> viewModel.updateMiscExpenseInSuggestions(oldDesc, newDesc, newAmt) }
-                    )
-                    SheetType.Tax -> {
-                        val predefinedLabels = setOf("IVA 21%", "IVA 10.5%", "IVA 27%")
-                        val customForSheet = presupuestos.flatMap { p ->
-                            if (p.impuestosJson.isBlank()) emptyList()
-                            else p.impuestosJson.split("|").mapNotNull { s ->
-                                val parts = s.split(";")
-                                val desc = parts.getOrNull(0) ?: return@mapNotNull null
-                                val amt = parts.getOrNull(1)?.toDoubleOrNull() ?: 0.0
-                                if (desc !in predefinedLabels && !desc.startsWith("IIBB")) desc to amt else null
-                            }
-                        }.distinctBy { it.first }
-                        AddTaxSheetContent(
-                            itemToEdit = itemToEdit as? BudgetTax,
-                            subtotal = subtotal,
-                            savedCustomTaxes = customForSheet,
-                            onDeleteSaved = { desc -> viewModel.deleteCustomTaxFromSuggestions(desc) },
-                            onUpdateSaved = { desc, newAmt -> viewModel.updateCustomTaxInSuggestions(desc, newAmt) },
-                            onAddItem = { list -> taxes.addAll(list); sheetType = null; expandedSection = "taxes" },
-                            onUpdateItem = { updated ->
-                                val i = taxes.indexOfFirst { it.id == updated.id }
-                                if (i != -1) taxes[i] = updated
-                                sheetType = null
-                            }
-                        )
-                    }
-                    else -> {}
                 }
+                else -> {}
             }
         }
     }

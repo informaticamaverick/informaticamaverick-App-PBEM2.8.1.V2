@@ -51,12 +51,12 @@ fun AddArticleSheetContent(
     onDeleteCurrentItem: ((Int) -> Unit)? = null,
     onDeleteSaved: ((BudgetItem) -> Unit)? = null,
     onSaveToSuggestions: ((BudgetItem) -> Unit)? = null,
-    onAddComplete: () -> Unit = {}
-) {
+    onAddComplete: () -> Unit = {},
+    onDismiss: () -> Unit = {}
+){
     val colors = getPrestadorColors()
     val isEditMode = itemToEdit != null
     var currentItem by remember { mutableStateOf(itemToEdit ?: BudgetItem()) }
-    var searchQuery by remember { mutableStateOf("") }
 
     val baseAmount = currentItem.quantity * currentItem.unitPrice
     val taxAmountValue = baseAmount * (currentItem.taxPercentage / 100)
@@ -81,10 +81,9 @@ fun AddArticleSheetContent(
     }
 
     Column(modifier = Modifier
-        .padding(16.dp)
-        .verticalScroll(rememberScrollState())
         .imePadding()
-        .navigationBarsPadding()
+        .verticalScroll(rememberScrollState())
+        .padding(16.dp)
         .background(colors.backgroundColor)) {
         // Handle pill
         Box(
@@ -117,6 +116,13 @@ fun AddArticleSheetContent(
                 color = colors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Cerrar",
+                    tint = colors.textSecondary
+                )
+            }
         }
 
         BudgetItemRow(item = currentItem, suggestionItems = suggestionItems, onUpdate = { currentItem = it })
@@ -149,7 +155,7 @@ fun AddArticleSheetContent(
                         currentItem = currentItem.copy(taxPercentage = 0.0)
                     }
                 },
-                label = { Text("Imp. (%)") },
+                label = { Text("Imp. (%)", style = MaterialTheme.typography.labelSmall) },
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
             )
@@ -170,7 +176,7 @@ fun AddArticleSheetContent(
                         currentItem = currentItem.copy(taxPercentage = 0.0)
                     }
                 },
-                label = { Text("Imp. ($)") },
+                label = { Text("Imp. ($)", style = MaterialTheme.typography.labelSmall) },
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Next)
             )
@@ -192,7 +198,7 @@ fun AddArticleSheetContent(
                         currentItem = currentItem.copy(discountPercentage = 0.0)
                     }
                 },
-                label = { Text("Desc. (%)") },
+                label = { Text("Desc. (%)", style = MaterialTheme.typography.labelSmall) },
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done)
             )
@@ -210,7 +216,7 @@ fun AddArticleSheetContent(
                         currentItem = currentItem.copy(discountPercentage = 0.0)
                     }
                 },
-                label = { Text("Desc. ($)") },
+                label = { Text("Desc. ($)", style = MaterialTheme.typography.labelSmall) },
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done)
             )
@@ -228,7 +234,6 @@ fun AddArticleSheetContent(
                         pendingItemToSave = added
                     }
                     currentItem = BudgetItem()
-                    searchQuery = ""
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -308,98 +313,6 @@ fun AddArticleSheetContent(
                 }
             )
         }
-
-        // Catálogo de artículos guardados
-        if (!isEditMode && suggestionItems.isNotEmpty()) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = colors.border)
-            Text(
-                "Artículos guardados (${suggestionItems.size})",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.textSecondary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Buscar artículo...") },
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
-                    }
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colors.primaryOrange,
-                    unfocusedBorderColor = colors.border,
-                    focusedLabelColor = colors.primaryOrange,
-                    cursorColor = colors.primaryOrange,
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary
-                ),
-                shape = RoundedCornerShape(8.dp)
-            )
-            val filtered = if (searchQuery.isBlank()) suggestionItems
-                           else suggestionItems.filter { it.description.contains(searchQuery, ignoreCase = true) || it.code.contains(searchQuery, ignoreCase = true) }
-            filtered.forEach { saved ->
-                key(saved.description) {
-                    var showConfirmDelete by remember { mutableStateOf(false) }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.primaryOrange.copy(alpha = 0.06f))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                buildString {
-                                    if (saved.code.isNotBlank()) append("[${saved.code}] ")
-                                    append(saved.description)
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.textPrimary
-                            )
-                            Text(
-                                "${saved.quantity} u.  •  \$${"%.2f".format(saved.unitPrice)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colors.textSecondary
-                            )
-                        }
-                        IconButton(
-                            onClick = { currentItem = saved.copy(id = currentItem.id) },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = "Editar", tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
-                        }
-                        IconButton(
-                            onClick = { showConfirmDelete = true },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = "Eliminar", tint = Color(0xFFEF4444), modifier = Modifier.size(16.dp))
-                        }
-                    }
-                    if (showConfirmDelete) {
-                        AlertDialog(
-                            onDismissRequest = { showConfirmDelete = false },
-                            title = { Text("¿Eliminar?", fontWeight = FontWeight.Bold) },
-                            text = { Text("Se eliminará \"${saved.description}\" de la lista.") },
-                            confirmButton = {
-                                TextButton(onClick = { onDeleteSaved?.invoke(saved); showConfirmDelete = false }) {
-                                    Text("Eliminar", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
-                                }
-                            },
-                            dismissButton = { TextButton(onClick = { showConfirmDelete = false }) { Text("Cancelar") } }
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -413,18 +326,18 @@ fun AddServiceSheetContent(
     suggestionItems: List<BudgetService> = emptyList(),
     onDeleteSaved: ((BudgetService) -> Unit)? = null,
     onSaveToSuggestions: ((BudgetService) -> Unit)? = null,
-    onAddComplete: () -> Unit = {}
-) {
+    onAddComplete: () -> Unit = {},
+    onDismiss: () -> Unit = {}
+){
     val colors = getPrestadorColors()
     val isEditMode = itemToEdit != null
     var currentItem by remember { mutableStateOf(itemToEdit ?: BudgetService()) }
     var pendingItemToSave by remember { mutableStateOf<BudgetService?>(null) }
 
     Column(modifier = Modifier
-        .padding(16.dp)
-        .verticalScroll(rememberScrollState())
         .imePadding()
-        .navigationBarsPadding()
+        .verticalScroll(rememberScrollState())
+        .padding(16.dp)
         .background(colors.backgroundColor)) {
         // Handle pill
         Box(
@@ -457,6 +370,9 @@ fun AddServiceSheetContent(
                 color = colors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.textSecondary)
+            }
         }
         BudgetServiceRow(service = currentItem, suggestionItems = suggestionItems, onUpdate = { currentItem = it })
         Spacer(modifier = Modifier.height(16.dp))
@@ -582,18 +498,18 @@ fun AddProfessionalFeeSheetContent(
     suggestionItems: List<BudgetProfessionalFee> = emptyList(),
     onDeleteSaved: ((BudgetProfessionalFee) -> Unit)? = null,
     onSaveToSuggestions: ((BudgetProfessionalFee) -> Unit)? = null,
-    onAddComplete: () -> Unit = {}
-) {
+    onAddComplete: () -> Unit = {},
+    onDismiss: () -> Unit = {}
+){
     val colors = getPrestadorColors()
     val isEditMode = itemToEdit != null
     var currentItem by remember { mutableStateOf(itemToEdit ?: BudgetProfessionalFee()) }
     var pendingItemToSave by remember { mutableStateOf<BudgetProfessionalFee?>(null) }
 
     Column(modifier = Modifier
-        .padding(16.dp)
-        .verticalScroll(rememberScrollState())
         .imePadding()
-        .navigationBarsPadding()
+        .verticalScroll(rememberScrollState())
+        .padding(16.dp)
         .background(colors.backgroundColor)) {
         // Handle pill
         Box(
@@ -627,6 +543,9 @@ fun AddProfessionalFeeSheetContent(
                 color = colors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.textSecondary)
+            }
         }
         BudgetProfessionalFeeRow(fee = currentItem, suggestionItems = suggestionItems, onUpdate = { updatedItem -> currentItem = updatedItem })
         Spacer(modifier = Modifier.height(16.dp))
@@ -771,8 +690,9 @@ fun AddMiscExpenseSheetContent(
     onUpdateItem: (BudgetMiscExpense) -> Unit,
     onDeleteItem: ((BudgetMiscExpense) -> Unit)? = null,
     onDeleteSaved: ((String) -> Unit)? = null,
-    onUpdateSaved: ((String, String, Double) -> Unit)? = null
-) {
+    onUpdateSaved: ((String, String, Double) -> Unit)? = null,
+    onDismiss: () -> Unit = {}
+){
     val colors = getPrestadorColors()
     val isEditMode = itemToEdit != null
 
@@ -787,10 +707,9 @@ fun AddMiscExpenseSheetContent(
 
     Column(
         modifier = Modifier
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
             .imePadding()
-            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
             .background(colors.backgroundColor)
     ) {
         // Handle pill
@@ -824,88 +743,83 @@ fun AddMiscExpenseSheetContent(
                 color = colors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.textSecondary)
+            }
         }
 
-        Column(modifier = Modifier.padding(bottom = 12.dp)) {
-            Text("DESCRIPCIÓN", style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold, color = colors.textSecondary,
-                modifier = Modifier.padding(bottom = 4.dp))
-            OutlinedTextField(
-                value = description,
-                onValueChange = {
-                    description = it
-                    showSuggestions = it.isNotBlank()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text(if (savedGastos.isNotEmpty()) "Descripción (${savedGastos.size} sugerencias)" else "...", style = MaterialTheme.typography.bodySmall) },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                shape = RoundedCornerShape(8.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colors.primaryOrange,
-                    unfocusedBorderColor = Color(0xFFE2E8F0),
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary,
-                    cursorColor = colors.primaryOrange
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Column(modifier = Modifier.weight(0.65f)) {
+                Text("DESCRIPCIÓN", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    fontWeight = FontWeight.SemiBold, color = colors.textSecondary,
+                    modifier = Modifier.padding(bottom = 4.dp))
+                CompactTextField(
+                    value = description,
+                    onValueChange = {
+                        description = it
+                        showSuggestions = it.isNotBlank()
+                    },
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    placeholder = { Text(if (savedGastos.isNotEmpty()) "${savedGastos.size} sugerencias" else "...", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
                 )
-            )
-            // Sugerencias inline
-            if (showSuggestions && filteredSuggestions.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8F5)),
-                    elevation = CardDefaults.cardElevation(4.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Column {
-                        filteredSuggestions.forEachIndexed { index, (desc, amt) ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        description = desc
-                                        amountStr = if (amt > 0) amt.toString() else ""
-                                        showSuggestions = false
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(desc, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
-                                    Text("\$${"%.2f".format(amt)}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+            }
+            Column(modifier = Modifier.weight(0.35f)) {
+                Text("IMPORTE ($)", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    fontWeight = FontWeight.SemiBold, color = colors.textSecondary,
+                    modifier = Modifier.padding(bottom = 4.dp))
+                CompactTextField(
+                    value = amountStr,
+                    onValueChange = { amountStr = it.filter { c -> c.isDigit() || c == '.' } },
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    placeholder = { Text("$ 0.00", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+                )
+            }
+        }
+
+        // Sugerencias inline
+        if (showSuggestions && filteredSuggestions.isNotEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8F5)),
+                elevation = CardDefaults.cardElevation(4.dp),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column {
+                    filteredSuggestions.forEachIndexed { index, (desc, amt) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    description = desc
+                                    amountStr = if (amt > 0) amt.toString() else ""
+                                    showSuggestions = false
                                 }
-                                Icon(Icons.Default.NorthWest, contentDescription = "Usar", tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(desc, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
+                                Text("\$${"%.2f".format(amt)}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                             }
-                            if (index < filteredSuggestions.size - 1) HorizontalDivider(color = Color(0xFFE2E8F0))
+                            Icon(Icons.Default.NorthWest, contentDescription = "Usar", tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
                         }
+                        if (index < filteredSuggestions.size - 1) HorizontalDivider(color = Color(0xFFE2E8F0))
                     }
                 }
             }
         }
 
-        Column(modifier = Modifier.padding(bottom = 20.dp)) {
-            Text("IMPORTE ($)", style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold, color = colors.textSecondary,
-                modifier = Modifier.padding(bottom = 4.dp))
-            OutlinedTextField(
-                value = amountStr,
-                onValueChange = { amountStr = it.filter { c -> c.isDigit() || c == '.' } },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text("0.00", style = MaterialTheme.typography.bodySmall) },
-                prefix = { Text("$") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                shape = RoundedCornerShape(8.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colors.primaryOrange,
-                    unfocusedBorderColor = Color(0xFFE2E8F0),
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary,
-                    cursorColor = colors.primaryOrange
-                )
-            )
-        }
 
         Button(
             onClick = {
@@ -976,26 +890,23 @@ fun AddMiscExpenseSheetContent(
                     }
                     if (editingThis) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(
+                        CompactTextField(
                             value = editDesc,
                             onValueChange = { editDesc = it },
-                            label = { Text("Descripción") },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colors.primaryOrange, unfocusedBorderColor = colors.border, focusedLabelColor = colors.primaryOrange, cursorColor = colors.primaryOrange, focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary),
-                            shape = RoundedCornerShape(8.dp)
+                            label = { Text("Descripción", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
                         )
-                        OutlinedTextField(
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CompactTextField(
                             value = editAmt,
                             onValueChange = { editAmt = it.filter { c -> c.isDigit() || c == '.' } },
-                            label = { Text("Importe") },
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                            singleLine = true,
-                            prefix = { Text("$") },
+                            label = { Text("Importe", style = MaterialTheme.typography.labelSmall) },
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colors.primaryOrange, unfocusedBorderColor = colors.border, focusedLabelColor = colors.primaryOrange, cursorColor = colors.primaryOrange, focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary),
-                            shape = RoundedCornerShape(8.dp)
+                            textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
                         Button(
                             onClick = {
                                 val v = editAmt.toDoubleOrNull() ?: 0.0
@@ -1065,26 +976,23 @@ fun AddMiscExpenseSheetContent(
                             }
                             if (editingThis) {
                                 Spacer(Modifier.height(8.dp))
-                                OutlinedTextField(
+                                CompactTextField(
                                     value = editDesc,
                                     onValueChange = { editDesc = it },
-                                    label = { Text("Descripción") },
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                    singleLine = true,
-                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colors.primaryOrange, unfocusedBorderColor = colors.border, focusedLabelColor = colors.primaryOrange, cursorColor = colors.primaryOrange, focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary),
-                                    shape = RoundedCornerShape(8.dp)
+                                    label = { Text("Descripción", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                                    textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
                                 )
-                                OutlinedTextField(
+                                Spacer(modifier = Modifier.height(8.dp))
+                                CompactTextField(
                                     value = editAmt,
                                     onValueChange = { editAmt = it.filter { c -> c.isDigit() || c == '.' } },
-                                    label = { Text("Importe") },
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                    singleLine = true,
-                                    prefix = { Text("$") },
+                                    label = { Text("Importe", style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.fillMaxWidth().height(40.dp),
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colors.primaryOrange, unfocusedBorderColor = colors.border, focusedLabelColor = colors.primaryOrange, cursorColor = colors.primaryOrange, focusedTextColor = colors.textPrimary, unfocusedTextColor = colors.textPrimary),
-                                    shape = RoundedCornerShape(8.dp)
+                                    textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
                                 )
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Button(
                                     onClick = {
                                         val v = editAmt.toDoubleOrNull() ?: 0.0
@@ -1127,8 +1035,9 @@ fun AddTaxSheetContent(
     onDeleteSaved: ((String) -> Unit)? = null,
     onUpdateSaved: ((String, Double) -> Unit)? = null,
     onAddItem: (List<BudgetTax>) -> Unit,
-    onUpdateItem: (BudgetTax) -> Unit
-) {
+    onUpdateItem: (BudgetTax) -> Unit,
+    onDismiss: () -> Unit = {}
+){
     val colors = getPrestadorColors()
     val isEditMode = itemToEdit != null
 
@@ -1159,10 +1068,9 @@ fun AddTaxSheetContent(
 
     Column(
         modifier = Modifier
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
             .imePadding()
-            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
             .background(colors.backgroundColor)
     ) {
         // Handle pill
@@ -1196,25 +1104,21 @@ fun AddTaxSheetContent(
                 color = colors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.textSecondary)
+            }
         }
 
         // Description
-        OutlinedTextField(
+        CompactTextField(
             value = description,
             onValueChange = { description = it },
-            label = { Text("Descripción") },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = colors.primaryOrange,
-                unfocusedBorderColor = colors.border,
-                focusedLabelColor = colors.primaryOrange,
-                cursorColor = colors.primaryOrange,
-                focusedTextColor = colors.textPrimary,
-                unfocusedTextColor = colors.textPrimary
-            ),
-            shape = RoundedCornerShape(8.dp)
+            label = { Text("Descripción", style = MaterialTheme.typography.labelSmall) },
+            modifier = Modifier.fillMaxWidth().height(40.dp),
+            textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Value + toggle
         Row(
@@ -1222,23 +1126,13 @@ fun AddTaxSheetContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
+            CompactTextField(
                 value = valueStr,
                 onValueChange = { valueStr = it.filter { c -> c.isDigit() || c == '.' } },
-                label = { Text(if (isPercentage) "Porcentaje" else "Importe") },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                suffix = { Text(if (isPercentage) "%" else "$") },
+                label = { Text(if (isPercentage) "Porcentaje (%)" else "Importe ($)", style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.weight(1f).height(40.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colors.primaryOrange,
-                    unfocusedBorderColor = colors.border,
-                    focusedLabelColor = colors.primaryOrange,
-                    cursorColor = colors.primaryOrange,
-                    focusedTextColor = colors.textPrimary,
-                    unfocusedTextColor = colors.textPrimary
-                ),
-                shape = RoundedCornerShape(8.dp)
+                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
             )
             // % / $ toggle
             Row(
@@ -1327,23 +1221,13 @@ fun AddTaxSheetContent(
                     if (editMode) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
+                            CompactTextField(
                                 value = editValueStr,
                                 onValueChange = { editValueStr = it.filter { c -> c.isDigit() || c == '.' } },
-                                label = { Text(if (editIsPercent) "Porcentaje" else "Importe") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true,
-                                suffix = { Text(if (editIsPercent) "%" else "$") },
+                                label = { Text(if (editIsPercent) "Porcentaje (%)" else "Importe ($)", style = MaterialTheme.typography.labelSmall) },
+                                modifier = Modifier.weight(1f).height(40.dp),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = colors.primaryOrange,
-                                    unfocusedBorderColor = colors.border,
-                                    focusedLabelColor = colors.primaryOrange,
-                                    cursorColor = colors.primaryOrange,
-                                    focusedTextColor = colors.textPrimary,
-                                    unfocusedTextColor = colors.textPrimary
-                                ),
-                                shape = RoundedCornerShape(8.dp)
+                                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
                             )
                             Row(
                                 modifier = Modifier

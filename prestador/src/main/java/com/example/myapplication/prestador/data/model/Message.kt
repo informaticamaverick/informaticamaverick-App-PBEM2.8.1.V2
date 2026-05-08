@@ -54,6 +54,8 @@ data class Message(
     val budgetNotas: String? = null,
     val budgetValidezDias: Int? = null,
     val budgetTituloTrabajo: String? = null,
+    val budgetCategorias: String? = null,
+    val budgetClienteId: String? = null,
 
 
 
