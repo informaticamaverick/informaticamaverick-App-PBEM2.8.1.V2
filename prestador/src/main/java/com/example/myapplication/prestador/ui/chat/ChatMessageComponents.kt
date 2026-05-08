@@ -479,6 +479,11 @@ fun AudioMessageBubbleWA(
     senderAvatarUrl: String? = null
 ) {
     val colors = getPrestadorColors()
+    val contentColor = if (isFromCurrentUser) Color.White else colors.textPrimary
+    val contentColorSecondary = if (isFromCurrentUser) Color.White.copy(0.75f) else colors.textSecondary
+    val waveformActive = if (isFromCurrentUser) Color.White else colors.textPrimary
+    val waveformInactive = if (isFromCurrentUser) Color.White.copy(0.35f) else colors.textPrimary.copy(0.35f)
+
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableStateOf(0) }
@@ -576,7 +581,7 @@ fun AudioMessageBubbleWA(
                     Icon(
                         imageVector = if (isPlaying) androidx.compose.material.icons.Icons.Default.Pause else androidx.compose.material.icons.Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = contentColor,
                         modifier = Modifier.size(28.dp).clickable { togglePlay() }
                     )
                     Canvas(
@@ -596,12 +601,12 @@ fun AudioMessageBubbleWA(
                         repeat(dotCount) { i ->
                             val x = i * spacing + spacing / 2f
                             drawCircle(
-                                color = if (x < sx) Color.White else Color.White.copy(0.35f),
+                                color = if (x < sx) waveformActive else waveformInactive,
                                 radius = dotR,
                                 center = Offset(x, size.height / 2f)
                             )
                         }
-                        drawCircle(Color.White, scrubR, Offset(sx.coerceIn(scrubR, size.width - scrubR), size.height / 2f))
+                        drawCircle(waveformActive, scrubR, Offset(sx.coerceIn(scrubR, size.width - scrubR), size.height / 2f))
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -610,15 +615,15 @@ fun AudioMessageBubbleWA(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(formatMs(currentPosition), fontSize = 11.sp, color = Color.White.copy(0.75f))
+                    Text(formatMs(currentPosition), fontSize = 11.sp, color = contentColorSecondary)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(
                             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp)),
                             fontSize = 11.sp,
-                            color = Color.White.copy(0.75f)
+                            color = contentColorSecondary
                         )
                         if (isFromCurrentUser) {
-                            Icon(androidx.compose.material.icons.Icons.Default.Done, null, tint = Color.White.copy(0.75f), modifier = Modifier.size(14.dp))
+                            Icon(androidx.compose.material.icons.Icons.Default.Done, null, tint = contentColorSecondary, modifier = Modifier.size(14.dp))
                         }
                     }
                 }
@@ -1826,14 +1831,13 @@ fun BudgetRequestBubble(
     clientName: String,
     onCreateBudget: () -> Unit
 ) {
-    val accentColor = Color(0xFF059669)
-    val bgColor = Color(0xFF022C22)
+    val colors = MaterialTheme.colorScheme
 
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
         Surface(
             shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
-            color = bgColor,
-            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.7f)),
+            color = colors.surfaceVariant,
+            border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.7f)),
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
@@ -1841,12 +1845,12 @@ fun BudgetRequestBubble(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = accentColor.copy(alpha = 0.15f)
+                        color = colors.primary.copy(alpha = 0.15f)
                     ) {
                         Icon(
                             imageVector = Icons.Default.RequestPage,
                             contentDescription = null,
-                            tint = accentColor,
+                            tint = colors.primary,
                             modifier = Modifier.padding(4.dp).size(18.dp)
                         )
                     }
@@ -1856,13 +1860,13 @@ fun BudgetRequestBubble(
                             text = "Solicitud de presupuesto",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = Color(0xFF34D399)
+                            color = colors.primary
                         )
                         if (clientName.isNotBlank()) {
                             Text(
                                 text = clientName,
                                 fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.6f)
+                                color = colors.onSurfaceVariant
                             )
                         }
                     }
@@ -1870,7 +1874,7 @@ fun BudgetRequestBubble(
 
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 8.dp),
-                    color = accentColor.copy(alpha = 0.2f)
+                    color = colors.primary.copy(alpha = 0.2f)
                 )
 
                 // Descripción
@@ -1879,14 +1883,14 @@ fun BudgetRequestBubble(
                         Icon(
                             imageVector = Icons.Default.Description,
                             contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.5f),
+                            tint = colors.onSurfaceVariant,
                             modifier = Modifier.size(14.dp).padding(top = 2.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = message.budgetRequestDescription,
                             fontSize = 13.sp,
-                            color = Color.White
+                            color = colors.onSurface
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
@@ -1898,14 +1902,14 @@ fun BudgetRequestBubble(
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = null,
-                            tint = Color(0xFF6EE7B7),
+                            tint = colors.primary,
                             modifier = Modifier.size(14.dp).padding(top = 2.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = message.budgetRequestClientAddress,
                             fontSize = 12.sp,
-                            color = Color(0xFF6EE7B7)
+                            color = colors.onSurfaceVariant
                         )
                     }
                     Spacer(modifier = Modifier.height(6.dp))
@@ -1915,7 +1919,7 @@ fun BudgetRequestBubble(
                 Button(
                     onClick = onCreateBudget,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primary),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Icon(
@@ -1933,7 +1937,7 @@ fun BudgetRequestBubble(
                     text = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
                         .format(java.util.Date(message.timestamp)),
                     fontSize = 10.sp,
-                    color = Color.White.copy(alpha = 0.4f),
+                    color = colors.onSurface.copy(alpha = 0.4f),
                     modifier = Modifier.align(Alignment.End)
                 )
             }

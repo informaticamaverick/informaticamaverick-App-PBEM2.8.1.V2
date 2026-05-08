@@ -53,6 +53,8 @@ import com.example.myapplication.prestador.data.local.entity.ClienteEntity
 import kotlinx.coroutines.launch
 import com.example.myapplication.prestador.ui.presupuesto.sheets.*
 import com.example.myapplication.prestador.ui.presupuesto.components.*
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 
 enum class SheetType { Article, Service, ProfessionalFee, Misc, Tax, Attachment, Sections, ClientPicker }
 
@@ -269,6 +271,11 @@ fun CrearPresupuestoPrestadorScreen(
 
     val subtotal = itemsSubtotal + servicesSubtotal + professionalFeesSubtotal + miscSubtotal
     val grandTotal = subtotal + taxesSubtotal
+
+    // Base para chips de IVA: excluye artículos que ya tienen IVA propio aplicado
+    // (evita doble imposición cuando el artículo tiene taxPercentage > 0)
+    val ivaBase = items.filter { it.taxPercentage == 0.0 }.sumOf { it.unitPrice * it.quantity } +
+                  servicesSubtotal + professionalFeesSubtotal + miscSubtotal
 
 
     // --- DERIVED STATE FOR SCROLL ---
@@ -666,16 +673,14 @@ fun CrearPresupuestoPrestadorScreen(
                             quickAddSlot = {
                                 ArticleAutoCompleteFields(
                                     suggestions = savedArticleItems,
-                                    onAdd = { items.add(it.copy(id = System.currentTimeMillis())); isArticlesExpanded = true }
+                                    onAdd = { items.add(it.copy(id = System.currentTimeMillis())); isArticlesExpanded = true },
+                                    items = items,
+                                    onEdit = { item -> itemToEdit = item; sheetType = SheetType.Article },
+                                    onDelete = { index -> items.removeAt(index) }
                                 )
-                            }
-                        ) { item, index ->
-                                ArticleSummaryRow(
-                                    item = item,
-                                    onEdit = { itemToEdit = item; sheetType = SheetType.Article },
-                                    onDelete = { items.removeAt(index) }
-                                )
-                        }
+                            },
+                            showDefaultContent = false
+                        ) { _, _ -> }
                     }
                 }
 
@@ -694,16 +699,14 @@ fun CrearPresupuestoPrestadorScreen(
                             quickAddSlot = {
                                 ServiceAutoCompleteFields(
                                     suggestions = savedServiceItems,
-                                    onAdd = { services.add(it.copy(id = System.currentTimeMillis())); isServicesExpanded = true }
+                                    onAdd = { services.add(it.copy(id = System.currentTimeMillis())); isServicesExpanded = true },
+                                    items = services,
+                                    onEdit = { item -> itemToEdit = item; sheetType = SheetType.Service },
+                                    onDelete = { index -> services.removeAt(index) }
                                 )
-                            }
-                        ) { item, index ->
-                            ServiceSummaryRow(
-                                item = item,
-                                onEdit = { itemToEdit = item; sheetType = SheetType.Service },
-                                onDelete = { services.removeAt(index) }
-                            )
-                        }
+                            },
+                            showDefaultContent = false
+                        ) { _, _ -> }
                     }
                 }
 
@@ -717,15 +720,16 @@ fun CrearPresupuestoPrestadorScreen(
                             onToggleExpand = { isProfessionalFeesExpanded = !isProfessionalFeesExpanded },
                             onAddClick = { itemToEdit = null; sheetType = SheetType.ProfessionalFee },
                             quickAddSlot = {
-                                FeeAutoCompleteFields(suggestions = savedFeeItems, onAdd = { professionalFees.add(it.copy(id = System.currentTimeMillis())); isProfessionalFeesExpanded = true })
-                            }
-                        ) { item, index ->
-                            ProfessionalFeeSummaryRow(
-                                item = item,
-                                onEdit = { itemToEdit = item; sheetType = SheetType.ProfessionalFee },
-                                onDelete = { professionalFees.removeAt(index) }
-                            )
-                        }
+                                FeeAutoCompleteFields(
+                                    suggestions = savedFeeItems,
+                                    onAdd = { professionalFees.add(it.copy(id = System.currentTimeMillis())); isProfessionalFeesExpanded = true },
+                                    items = professionalFees,
+                                    onEdit = { item -> itemToEdit = item; sheetType = SheetType.ProfessionalFee },
+                                    onDelete = { index -> professionalFees.removeAt(index) }
+                                )
+                            },
+                            showDefaultContent = false
+                        ) { _, _ -> }
                     }
                 }
 
@@ -798,12 +802,20 @@ fun CrearPresupuestoPrestadorScreen(
                                         FilterChip(
                                             selected = alreadyAdded,
                                             onClick = {
-                                                if (!alreadyAdded) { taxes.add(BudgetTax(id = System.currentTimeMillis(), description = label, amount = subtotal * pct / 100)); isTaxesExpanded = true }
+                                                if (!alreadyAdded) { taxes.add(BudgetTax(id = System.currentTimeMillis(), description = label, amount = ivaBase * pct / 100)); isTaxesExpanded = true }
                                                 else taxes.removeAll { it.description == label }
                                             },
                                             label = { Text(label, style = MaterialTheme.typography.labelSmall) },
                                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = colors.primaryOrange, selectedLabelColor = Color.White, containerColor = colors.primaryOrange.copy(alpha = 0.08f), labelColor = colors.textPrimary),
                                             border = FilterChipDefaults.filterChipBorder(enabled = true, selected = alreadyAdded, borderColor = colors.border, selectedBorderColor = colors.primaryOrange)
+                                        )
+                                    }
+                                    if (itemsTaxTotal > 0.0) {
+                                        Text(
+                                            "⚠ Algunos artículos ya incluyen IVA",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = colors.primaryOrange,
+                                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
                                         )
                                     }
                                     val iibbAdded = taxes.any { it.description.startsWith("IIBB") }
@@ -1024,7 +1036,8 @@ fun CrearPresupuestoPrestadorScreen(
                         }
                         onBack()
                     },
-                    clientName = "",
+                    clientName = clienteNombre,
+                    clientAddress = clienteDireccion.ifBlank { null },
                     providerName = providerDisplayName,
                     providerAddress = providerDisplayAnddress,
                     isProfessional = isProviderProfessional,
@@ -1036,12 +1049,29 @@ fun CrearPresupuestoPrestadorScreen(
 
             // --- BOTTOM SHEETS ---
             if (sheetType != null) {
-                ModalBottomSheet(
+                Dialog(
                     onDismissRequest = { sheetType = null },
-                    containerColor = colors.backgroundColor,
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                    properties = DialogProperties(usePlatformDefaultWidth = false)
                 ) {
-                    when (sheetType) {
+            val view = androidx.compose.ui.platform.LocalView.current
+                    DisposableEffect(view) {
+                        val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+                        if (window != null) {
+                            @Suppress("DEPRECATION")
+                            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
+                            window.setGravity(android.view.Gravity.BOTTOM)
+                        }
+                        onDispose {}
+                    }
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth(0.97f)
+                            .fillMaxHeight(0.90f)
+                            .padding(bottom = 8.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = colors.backgroundColor
+                    ) {
+                        when (sheetType) {
                         SheetType.Article -> AddArticleSheetContent(
                             itemToEdit = itemToEdit as? BudgetItem,
                             suggestionItems = savedArticleItems,
@@ -1052,7 +1082,8 @@ fun CrearPresupuestoPrestadorScreen(
                                 sheetType = null
                             },
                             onDeleteSaved = { saved -> viewModel.deleteArticleFromSuggestions(saved.description) },
-                            onSaveToSuggestions = { viewModel.saveArticleToSuggestions(it) }
+                            onSaveToSuggestions = { viewModel.saveArticleToSuggestions(it) },
+                            onDismiss = { sheetType = null }
                         )
                         SheetType.Service -> AddServiceSheetContent(
                             itemToEdit = itemToEdit as? BudgetService,
@@ -1064,7 +1095,8 @@ fun CrearPresupuestoPrestadorScreen(
                                 sheetType = null
                             },
                             onDeleteSaved = { saved -> viewModel.deleteServiceFromSuggestions(saved.description) },
-                            onSaveToSuggestions = { viewModel.saveServiceToSuggestions(it) }
+                            onSaveToSuggestions = { viewModel.saveServiceToSuggestions(it) },
+                            onDismiss = { sheetType = null }
                         )
                         SheetType.ProfessionalFee -> AddProfessionalFeeSheetContent(
                             itemToEdit = itemToEdit as? BudgetProfessionalFee,
@@ -1076,7 +1108,8 @@ fun CrearPresupuestoPrestadorScreen(
                                 sheetType = null
                             },
                             onDeleteSaved = { saved -> viewModel.deleteProfessionalFeeFromSuggestions(saved.description) },
-                            onSaveToSuggestions = { viewModel.saveProfessionalFeeToSuggestions(it) }
+                            onSaveToSuggestions = { viewModel.saveProfessionalFeeToSuggestions(it) },
+                            onDismiss = { sheetType = null }
                         )
                         SheetType.Misc -> AddMiscExpenseSheetContent(
                             itemToEdit = itemToEdit as? BudgetMiscExpense,
@@ -1098,7 +1131,8 @@ fun CrearPresupuestoPrestadorScreen(
                             },
                             onDeleteItem = { item -> miscExpenses.removeAll { it.id == item.id } },
                             onDeleteSaved = { desc -> viewModel.deleteMiscExpenseFromSuggestions(desc) },
-                            onUpdateSaved = { oldDesc, newDesc, newAmt -> viewModel.updateMiscExpenseInSuggestions(oldDesc, newDesc, newAmt) }
+                            onUpdateSaved = { oldDesc, newDesc, newAmt -> viewModel.updateMiscExpenseInSuggestions(oldDesc, newDesc, newAmt) },
+                            onDismiss = { sheetType = null }
                         )
                         SheetType.Tax -> {
                             val predefinedLabels = setOf("IVA 21%", "IVA 10.5%", "IVA 27%")
@@ -1122,7 +1156,8 @@ fun CrearPresupuestoPrestadorScreen(
                                     val index = taxes.indexOfFirst { it.id == updatedItem.id }
                                     if (index != -1) taxes[index] = updatedItem
                                     sheetType = null
-                                }
+                                },
+                                onDismiss = { sheetType = null }
                             )
                         }
                         SheetType.Attachment -> AddAttachmentSheetContent(
@@ -1163,6 +1198,7 @@ fun CrearPresupuestoPrestadorScreen(
                             onClose = { sheetType = null }
                         )
                         null -> {}
+                    }
                     }
                 }
             }

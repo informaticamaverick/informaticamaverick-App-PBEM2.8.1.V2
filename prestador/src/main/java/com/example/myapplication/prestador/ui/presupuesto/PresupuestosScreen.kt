@@ -454,7 +454,8 @@ fun PresupuestosScreen(
                 providerAddress = prestador.direccionLocal ?: "",
                 isProfessional = isProfessional,
                 presupuestoNumero = presupuestoSeleccionado!!.numeroPresupuesto,
-                tituloTrabajo = entity.tituloTrabajo
+                tituloTrabajo = entity.tituloTrabajo,
+                category = entity.categorias
             )
         }
     }
