@@ -146,7 +146,9 @@ class ChatRepository @Inject constructor(
             put("notas", pres.notas)
             put("validezDias", pres.validezDias)
             put("titulo", pres.tituloTrabajo)
-            put("companyName", pres.providerCompanyName) // 🔥 Enviamos el nombre legible de la empresa
+            put("companyName", pres.providerCompanyName)
+            put("categorias", pres.categorias)
+            put("clienteId", pres.clienteId)
         }.toString()
         val message = MessageEntity(
             messageId = UUID.randomUUID().toString(),
@@ -532,6 +534,12 @@ class ChatRepository @Inject constructor(
                 val msgType = snapshot.child("type").getValue(String::class.java) ?:
                 "TEXT"
 
+                // Log todos los campos del snapshot para mensajes BUDGET_REQUEST
+                if (msgType == "BUDGET_REQUEST") {
+                    val keys = snapshot.children.map { "${it.key}=${it.value}" }.joinToString(" | ")
+                    Log.d("DEBUG_ADDRESS", "📦 BUDGET_REQUEST snapshot completo | msgId=$msgId | campos: $keys")
+                }
+
                 var resolvedImageUrl: String? = null
                 var localImagePath: String? = null
 
@@ -593,7 +601,12 @@ class ChatRepository @Inject constructor(
                     calendarInviteMessageId = snapshot.child("calendarInviteMessageId").getValue(String::class.java),
                     receiptService = snapshot.child("receiptService").getValue(String::class.java),
                     budgetRequestDescription = snapshot.child("budgetRequestDescription").getValue(String::class.java),
-                    budgetRequestClientAddress = snapshot.child("budgetRequestClientAddress").getValue(String::class.java),
+                    budgetRequestClientAddress = (
+                        snapshot.child("budgetRequestClientAddress").getValue(String::class.java)?.takeIf { it.isNotBlank() }
+                            ?: snapshot.child("locationAddress").getValue(String::class.java)?.takeIf { it.isNotBlank() }
+                    ).also {
+                        Log.d("DEBUG_ADDRESS", "📥 Firebase snapshot budgetRequestClientAddress = '$it' | type=${snapshot.child("type").getValue(String::class.java)}")
+                    },
                     receiptProviderName = snapshot.child("receiptProviderName").getValue(String::class.java),
                     receiptProfession = snapshot.child("receiptProfession").getValue(String::class.java),
                     receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
@@ -628,8 +641,12 @@ class ChatRepository @Inject constructor(
                         }
 
                         val existsInRoom = messageDao.getMessageById(msgId) != null
-                        if (!existsInRoom) {
-                            messageDao.insertMessage(msg)
+                        // Siempre upsert: si el mensaje ya existe, actualiza sus campos
+                        // (ej: budgetRequestClientAddress que pudo haber llegado tarde)
+                        messageDao.insertMessage(msg)
+                        if (msg.budgetRequestClientAddress != null) {
+                            val saved = messageDao.getMessageById(msgId)
+                            Log.d("DEBUG_ADDRESS", "💾 Room upsert done | msgId=$msgId | saved.address='${saved?.budgetRequestClientAddress}'")
                         }
                         val isNewMessage = msg.timestamp >= listeningStartAt - 5_000
                         if (!isOwn && !existsInRoom) {

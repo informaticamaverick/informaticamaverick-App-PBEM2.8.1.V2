@@ -5,12 +5,15 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -22,6 +25,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -80,12 +84,16 @@ fun BudgetChatSheet(
     // --- DATOS DEL CLIENTE ---
     var clienteData by remember { mutableStateOf<ClienteEntity?>(null) }
     var overrideClientAddress by remember { mutableStateOf(initialClientAddress) }
+    LaunchedEffect(Unit) {
+        android.util.Log.d("DEBUG_ADDRESS", "🏠 BudgetChatSheet init | initialClientAddress = '$initialClientAddress' | overrideClientAddress = '$overrideClientAddress'")
+    }
     LaunchedEffect(initialClientAddress) {
         if (!initialClientAddress.isNullOrBlank()) overrideClientAddress = initialClientAddress
     }
     LaunchedEffect(userId) {
         if (userId.isNotBlank())  {
             clienteData = viewModel.getClienteById(userId)
+            android.util.Log.d("DEBUG_ADDRESS", "👤 clienteData loaded | direccion = '${clienteData?.direccion}' | overrideClientAddress = '$overrideClientAddress'")
         }
     }
 
@@ -256,7 +264,7 @@ fun BudgetChatSheet(
             honorariosJson = honorariosJson,
             gastosJson = gastosJson,
             impuestosJson = impuestosJson,
-            categorias = provider?.categories?.joinToString(",") ?: "",
+            categorias = selectedBudgetCategory,
             providerCompanyName = providerDisplayName
         )
     }
@@ -296,6 +304,26 @@ fun BudgetChatSheet(
                             fontWeight = FontWeight.Bold,
                             color = colors.textPrimary
                         )
+                        val displayAddr = overrideClientAddress?.takeIf { it.isNotBlank() }
+                            ?: clienteData?.direccion?.takeIf { it.isNotBlank() }
+                        if (displayAddr != null) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = colors.textSecondary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    displayAddr,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -421,6 +449,73 @@ fun BudgetChatSheet(
                                 cursorColor = colors.primaryOrange
                             )
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = colors.border)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = colors.primaryOrange,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    "Válido por",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                BasicTextField(
+                                    value = validity,
+                                    onValueChange = { v ->
+                                        if (v.length <= 3 && v.all { it.isDigit() }) validity = v
+                                    },
+                                    singleLine = true,
+                                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                        color = colors.primaryOrange,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    ),
+                                    keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                                    decorationBox = { innerTextField ->
+                                        Box(
+                                            modifier = Modifier
+                                                .width(56.dp)
+                                                .border(1.5.dp, colors.primaryOrange.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                                .background(colors.primaryOrange.copy(alpha = 0.06f), RoundedCornerShape(8.dp))
+                                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (validity.isEmpty()) {
+                                                Text("15", style = MaterialTheme.typography.bodyLarge.copy(
+                                                    color = colors.textSecondary,
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                                ))
+                                            }
+                                            innerTextField()
+                                        }
+                                    }
+                                )
+                                Text(
+                                    "días",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -889,9 +984,13 @@ fun BudgetChatSheet(
                                     nombre = userName,
                                     email = "",
                                     telefono = "",
-                                    direccion = ""
+                                    direccion = overrideClientAddress?.takeIf { it.isNotBlank() } ?: ""
                                 )
                             )
+                            kotlinx.coroutines.delay(100)
+                        } else if (!overrideClientAddress.isNullOrBlank() && clienteData?.direccion.isNullOrBlank()) {
+                            // Si ya existe pero sin dirección, actualizarla con la que llegó del request
+                            viewModel.insertCliente(clienteData!!.copy(direccion = overrideClientAddress))
                             kotlinx.coroutines.delay(100)
                         }
                         viewModel.insertPresupuesto(pres)
@@ -901,8 +1000,10 @@ fun BudgetChatSheet(
                     onDismiss()
                 },
                 clientName = userName,
-                clientAddress = overrideClientAddress ?: clienteData?.direccion,
-                category = selectedBudgetCategory
+                clientAddress = overrideClientAddress?.takeIf { it.isNotBlank() }
+                    ?: clienteData?.direccion?.takeIf { it.isNotBlank() },
+                category = selectedBudgetCategory,
+                validezDias = validity.toIntOrNull() ?: 15
             )
         }
     }

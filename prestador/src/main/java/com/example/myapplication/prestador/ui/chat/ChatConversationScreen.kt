@@ -123,6 +123,7 @@ fun ChatConversationScreen(
     val colors = getPrestadorColors()
 
     LaunchedEffect(chatId) {
+        android.util.Log.d("DEBUG_ADDRESS", "💬 Chat abierto | chatId='$chatId' | userId='$userId' | providerId='$providerId'")
         chatViewModel.loadMessagesByConversation(chatId)
         chatViewModel.markMessagesAsRead(chatId)
     }
@@ -145,6 +146,9 @@ fun ChatConversationScreen(
             "CANCELLATION_NOTICE" -> Message.MessageType.CANCELLATION_NOTICE
             "BUDGET_REQUEST" -> Message.MessageType.BUDGET_REQUEST
             else -> Message.MessageType.TEXT
+        }
+        if (type == Message.MessageType.BUDGET_REQUEST) {
+            android.util.Log.d("DEBUG_ADDRESS", "🗺️ Mapping BUDGET_REQUEST | id=${entity.messageId} | entity.budgetRequestClientAddress='${entity.budgetRequestClientAddress}'")
         }
         val budgetObj = if (type == Message.MessageType.BUDGET && entity.budgetDataJson != null) {
             try { org.json.JSONObject(entity.budgetDataJson) } catch (e: Exception) { null }
@@ -189,6 +193,8 @@ fun ChatConversationScreen(
             budgetNotas = budgetObj?.optString("notas"),
             budgetValidezDias = budgetObj?.optInt("validezDias"),
             budgetTituloTrabajo = budgetObj?.optString("titulo"),
+            budgetCategorias = budgetObj?.optString("categorias"),
+            budgetClienteId = budgetObj?.optString("clienteId"),
             calendarStartDate = entity.calendarStartDate,
             calendarEndDate = entity.calendarEndDate,
             availabilityJson = entity.availabilityJson,
@@ -722,6 +728,7 @@ fun ChatConversationScreen(
 
                                 onCreateBudgetFromRequest = if (message.type == Message.MessageType.BUDGET_REQUEST) {
                                     {
+                                        android.util.Log.d("DEBUG_ADDRESS", "🖱️ Crear presupuesto clicked | budgetRequestClientAddress = '${message.budgetRequestClientAddress}'")
                                         budgetRequestMessage = message
                                         showBudgetSheet = true
                                     }
@@ -1025,6 +1032,8 @@ val prestador = remember(provider, businessEntity) {
                                 isProfessional = currentServiceType == com.example.myapplication.prestador.data.model.ServiceType.PROFESSIONAL,
                                 presupuestoNumero = msg.budgetNumero ?: "",
                                 tituloTrabajo = msg.budgetTituloTrabajo ?: "",
+                                clientName = userName,
+                                category = msg.budgetCategorias ?: "",
                                 onDismiss = { presupuestoMsgToView = null },
                                 onEnviar = { presupuestoMsgToView = null }
                             )
