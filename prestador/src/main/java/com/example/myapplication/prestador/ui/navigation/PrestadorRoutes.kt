@@ -9,8 +9,11 @@ sealed class PrestadorRoutes(val route: String) {
     object Dashboard : PrestadorRoutes("dashboard")
     object EditProfile : PrestadorRoutes("edit_profile")
     object Profile : PrestadorRoutes("profile")
-    object Services : PrestadorRoutes("servives")
+    object Services : PrestadorRoutes("services")
     object ServiceConfig : PrestadorRoutes("service_config")
+    object CalendarioConfig : PrestadorRoutes("calendario_config")
+
+    object CalendarConfig : PrestadorRoutes("calendario_config")
     object CrearPresupuesto : PrestadorRoutes("crear_presupuesto?origin={origin}&appointmentId={appointmentId}") {
         fun createRoute(origin: String, appointmentId: String = "") =
             "crear_presupuesto?origin=$origin&appointmentId=$appointmentId"

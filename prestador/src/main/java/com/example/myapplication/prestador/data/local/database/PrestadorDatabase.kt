@@ -9,6 +9,7 @@ import com.example.myapplication.prestador.data.local.dao.PromotionDao
 import com.example.myapplication.prestador.data.local.dao.EmpleadoDao
 import com.example.myapplication.prestador.data.local.dao.AvailabilityScheduleDao
 import com.example.myapplication.prestador.data.local.dao.RentalSpaceDao
+import com.example.myapplication.prestador.data.local.dao.BlockedDateDao
 import com.example.myapplication.prestador.data.local.entity.ClienteEntity
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
@@ -16,6 +17,7 @@ import com.example.myapplication.prestador.data.local.entity.PromotionEntity
 import com.example.myapplication.prestador.data.local.entity.EmpleadoEntity
 import com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity
 import com.example.myapplication.prestador.data.local.entity.RentalSpaceEntity
+import com.example.myapplication.prestador.data.local.entity.BlockedDateEntity
 import com.example.myapplication.prestador.data.local.dao.BusinessDao
 import com.example.myapplication.prestador.data.local.entity.BusinessEntity
 import com.example.myapplication.prestador.data.local.entity.SucursalEntity
@@ -61,8 +63,9 @@ import com.example.myapplication.prestador.data.local.Converters
         ReferenteEntity::class,
         NotificacionEntity::class,
         BookedAppointmentEntity::class,
+        BlockedDateEntity::class,
    ],
-    version = 49,
+    version = 50,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -85,5 +88,6 @@ abstract class PrestadorDatabase : RoomDatabase() {
     abstract fun referenteDao(): ReferenteDao
     abstract fun noticacionDao(): NotificacionDao
     abstract fun bookedAppointmentDao(): BookedAppointmentDao
+    abstract fun blockedDateDao(): BlockedDateDao
 }
 

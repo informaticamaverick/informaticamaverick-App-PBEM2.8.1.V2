@@ -113,4 +113,10 @@ object DatabaseModule {
         return database.bookedAppointmentDao()
     }
 
+    @Provides
+    @Singleton
+    fun provideBlockedDateDao(database: PrestadorDatabase): BlockedDateDao {
+        return database.blockedDateDao()
+    }
+
 }

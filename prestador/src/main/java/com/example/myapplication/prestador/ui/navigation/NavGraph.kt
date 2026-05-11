@@ -28,7 +28,8 @@ import com.example.myapplication.prestador.ui.login.PrestadorLoginScreen
 import com.example.myapplication.prestador.ui.register.PrestadorRegisterScreen
 import com.example.myapplication.prestador.ui.success.PrestadorSuccessScreen
 import com.example.myapplication.prestador.ui.dashboard.PrestadorDashboardScreen
-import com.example.myapplication.prestador.ui.config.ServiceConfigScreen
+import com.example.myapplication.prestador.ui.config.ConfiguracionScreen
+import com.example.myapplication.prestador.ui.config.CalendarioConfigScreen
 import com.example.myapplication.prestador.ui.presupuesto.CrearPresupuestoPrestadorScreen
 import com.example.myapplication.prestador.ui.presupuesto.PresupuestosScreen
 import com.example.myapplication.prestador.ui.promotion.CreatePromotionScreen
@@ -37,6 +38,7 @@ import com.example.myapplication.prestador.ui.promotion.PromotionDetailScreen
 import com.example.myapplication.prestador.ui.profile.EditProfileScreenUnified
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 // import com.example.myapplication.prestador.viewmodel.ChatSimulationViewModel
+import com.example.myapplication.prestador.ui.config.CalendarioConfigScreen
 
 import com.example.myapplication.prestador.ui.profile.ProfileScreen
 import com.example.myapplication.prestador.ui.client.ClientePerfilScreen
@@ -220,8 +222,29 @@ fun PrestadorNavGraph(
             }
 
             composable(PrestadorRoutes.ServiceConfig.route) {
-                ServiceConfigScreen(
-                    onBack = { navController.navigateUp() }
+                ConfiguracionScreen(
+                    onBack = { navController.navigateUp() },
+                    onNavigateToCalendario = {
+                        navController.navigate(PrestadorRoutes.CalendarioConfig.route)
+                    }
+                )
+            }
+
+            composable(PrestadorRoutes.CalendarioConfig.route) {
+                CalendarioConfigScreen(
+                    onBack = { navController.navigateUp() },
+                    onGoToEditProfile = {
+                        navController.navigate(PrestadorRoutes.EditProfile.route)
+                    }
+                )
+            }
+
+            composable(PrestadorRoutes.CalendarioConfig.route) {
+                CalendarioConfigScreen(
+                    onBack = { navController.navigateUp() },
+                    onGoToEditProfile = {
+                        navController.navigate(PrestadorRoutes.EditProfile.route)
+                    }
                 )
             }
 
