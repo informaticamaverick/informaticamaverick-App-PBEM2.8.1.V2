@@ -88,9 +88,9 @@ fun PresupuestosScreen(
 
     // 🔥 REGLA DE ORO 4: Sincronización del Contexto de Be
     LaunchedEffect(Unit) {
-        beBrainViewModel.onRouteChanged("presupuestos")
-        beBrainViewModel.setHUDContext(HUDContext.BUDGETS_TENDERS) // Sincronizamos Cerebro
-        viewModel.setContext(HUDContext.BUDGETS_TENDERS) // Sincronizamos Obrero
+        // [REGLA DE ORO] Ya no forzamos el contexto del Cerebro si coincide con la ruta.
+        // Solo sincronizamos el Obrero para que sepa qué datos filtrar.
+        viewModel.setContext(HUDContext.BUDGETS_TENDERS) 
     }
 
     // --- SECCIÓN: SINCRONIZACIÓN DE BÚSQUEDA Y ASISTENTE (Be) ---
@@ -109,10 +109,10 @@ fun PresupuestosScreen(
         beBrainViewModel.syncMultiSelection(isMultiSelectionActive, selectedItemIds)
     }
 
-    // 🔥 LIMPIEZA AL SALIR DE LA PANTALLA
+    // 🔥 LIMPIEZA AL SALIR DE LA PANTALLA (HUD V5.1)
     DisposableEffect(Unit) {
         onDispose {
-            beBrainViewModel.setCustomActions(emptyList())
+            beBrainViewModel.clearCustomActions(HUDContext.BUDGETS_TENDERS)
             beBrainViewModel.syncMultiSelection(false, emptySet())
         }
     }
@@ -133,27 +133,16 @@ fun PresupuestosScreen(
     val budgetActions by viewModel.beActions.collectAsStateWithLifecycle()
 
     LaunchedEffect(budgetActions, hudContext) {
-        val baseActions = budgetActions.map { action ->
+        // Filtramos acciones estáticas (que ya están en el Cerebro)
+        // para evitar que se mezclen o dupliquen en el HUD.
+        val baseActions = budgetActions.filter { it.id != "licit" }.map { action ->
             action.copy(onClick = { beBrainViewModel.triggerAction(action.id) })
         }
-        val finalActions = baseActions + listOfNotNull(
-            if (hudContext == HUDContext.BUDGETS_TENDERS) {
-                BeSmallActionModel(
-                    id = "licit",
-                    icon = Icons.Default.Add,
-                    label = "Nueva Lic",
-                    emoji = "📄",
-                    tint = MaverickBlue,
-                    isDefault = true,
-                    onClick = { beBrainViewModel.triggerAction("licit") }
-                )
-            } else null
-        )
-        beBrainViewModel.setCustomActions(finalActions)
+        beBrainViewModel.setCustomActions(baseActions, HUDContext.BUDGETS_TENDERS)
     }
 
     // --- SECCIÓN: CAPTURA DE EVENTOS DEL CEREBRO (BeBrain) ---
-    val allBudgets by viewModel.allBudgets.collectAsStateWithLifecycle()
+    val allBudgetsData by viewModel.allBudgets.collectAsStateWithLifecycle()
     
     LaunchedEffect(Unit) {
         beBrainViewModel.actionEvent.collect { actionId ->
@@ -166,7 +155,7 @@ fun PresupuestosScreen(
                 }
                 "compare_selected" -> {
                     // Acción táctica: Comparamos solo los presupuestos seleccionados (usualmente dentro de una licitación)
-                    val selectedBudgets = allBudgets.filter { it.budgetId in selectedItemIds }
+                    val selectedBudgets = allBudgetsData.filter { it.budgetId in selectedItemIds }
                     if (selectedBudgets.isNotEmpty()) {
                         budgetsToAnalyze = selectedBudgets
                         // Buscamos la licitación asociada al primer presupuesto para el contexto visual
@@ -178,7 +167,7 @@ fun PresupuestosScreen(
                     // Acción desde TENDER_DETAILS: Comparamos todo lo recibido para esa licitación
                     val currentTenderId = viewModel.selectedIds.value.firstOrNull() // En este contexto, selectedIds tiene el ID de la licitación abierta
                     val tender = tenders.find { it.tenderId == currentTenderId }
-                    val budgetsForThisTender = allBudgets.filter { it.tenderId == currentTenderId }
+                    val budgetsForThisTender = allBudgetsData.filter { it.tenderId == currentTenderId }
                     
                     if (tender != null && budgetsForThisTender.isNotEmpty()) {
                         tenderForAnalytics = tender
@@ -207,7 +196,6 @@ fun PresupuestosScreen(
         onClearFilters = { beBrainViewModel.clearSpecificFilters(listOf("filter_", "cat_")) },
         onClearSort = { beBrainViewModel.clearSpecificFilters(listOf("sort_", "view_")) },
         onSetContext = { 
-            beBrainViewModel.setHUDContext(it)
             viewModel.setContext(it) 
         },
         getBudgetsForTender = { viewModel.getFilteredBudgetsForTender(it) },
@@ -234,7 +222,8 @@ fun PresupuestosScreen(
         onCloseAnalytics = { showAnalyticsOverlay = false },
         tenderForAnalytics = tenderForAnalytics,
         budgetsToAnalyze = budgetsToAnalyze,
-        onOpenBudgetPreview = { /* Lógica para abrir desde analytics si es necesario */ }
+        onOpenBudgetPreview = { /* Lógica para abrir desde analytics si es necesario */ },
+        allBudgetsData = allBudgetsData // PASAMOS LOS DATOS
     )
 }
 
@@ -276,7 +265,8 @@ fun PresupuestosScreenContent(
     onCloseAnalytics: () -> Unit,
     tenderForAnalytics: TenderEntity?,
     budgetsToAnalyze: List<BudgetEntity>,
-    onOpenBudgetPreview: (BudgetEntity) -> Unit
+    onOpenBudgetPreview: (BudgetEntity) -> Unit,
+    allBudgetsData: List<BudgetEntity> // NUEVO
 ) {
     val tenderListState = rememberLazyListState()
     var selectedTenderForSheet by remember { mutableStateOf<TenderEntity?>(null) }
@@ -355,14 +345,16 @@ fun PresupuestosScreenContent(
                                 startDate = tender.startDate,
                                 endDate = tender.endDate,
                                 budgetCount = budgets.size,
-                                unreadCount = 0,
+                                unreadCount = budgets.count { !it.isRead }, // Contamos reales
                                 isSelected = selectedItemIds.contains(tender.tenderId),
+                                awardedProviderName = tender.awardedProviderName,
+                                awardedBudgetId = tender.awardedBudgetId,
+                                awardedProviderPhotoUrl = tender.awardedProviderPhotoUrl,
                                 onClick = {
                                     if (isMultiSelectionActive) onToggleItemSelection(tender.tenderId)
                                     else { 
                                         selectedTenderForSheet = tender 
                                         onTenderSelected(tender.tenderId) 
-                                        onSetContext(HUDContext.BUDGETS_TENDERS)
                                     }
                                 },
                                 onLongClick = {
@@ -383,11 +375,11 @@ fun PresupuestosScreenContent(
             onClose = {
                 selectedTenderForSheet = null
                 onTenderSelected(null)
-                onSetContext(HUDContext.BUDGETS_TENDERS)
             },
             beBrainActionEvent = beBrainActionEvent,
             onSetContext = { nuevoContexto -> onSetContext(nuevoContexto) },
             getBudgetsForTender = getBudgetsForTender,
+            categories = categories, // PASAMOS CATEGORIAS REALES DEL OBRERO
             activeFilters = activeFilters,
             dynamicCategories = dynamicCategories,
             refinementFilters = refinementFilters,
@@ -432,10 +424,22 @@ fun PresupuestosScreenContent(
 
         if (tenderForDetails != null) {
             TenderDetailPopup(
-                tender = tenderForDetails, 
+                tender = tenderForDetails!!, 
                 onClose = onCloseTenderDetails, 
-                onUpdateStatus = { onUpdateTenderStatus(tenderForDetails.tenderId, it); onCloseTenderDetails() },
-                onContactProvider = { providerId -> onChatClick(providerId, null) }
+                onUpdateStatus = { onUpdateTenderStatus(tenderForDetails!!.tenderId, it); onCloseTenderDetails() },
+                onContactProvider = { providerId -> onChatClick(providerId, null) },
+                onViewProviderProfile = { providerId ->
+                    // Lógica para ver perfil (puedes usar un callback similar a onChatClick si existe navegación global)
+                    onChatClick(providerId, null) // Por ahora redirigimos al chat como fallback
+                },
+                onViewAwardedBudget = { bId ->
+                    // Buscamos el presupuesto en la lista cargada
+                    val budget = allBudgetsData.find { it.budgetId == bId }
+                    if (budget != null) {
+                        budgetForA4Preview = budget
+                        onCloseTenderDetails()
+                    }
+                }
             )
         }
 
@@ -522,7 +526,8 @@ fun PresupuestosScreenPreview() {
             onCloseAnalytics = {},
             tenderForAnalytics = null,
             budgetsToAnalyze = emptyList(),
-            onOpenBudgetPreview = {}
+            onOpenBudgetPreview = {},
+            allBudgetsData = emptyList()
         )
     }
 }

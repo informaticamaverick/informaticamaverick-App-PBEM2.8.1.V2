@@ -87,6 +87,7 @@ sealed class Screen(val route: String, val title: String) {
 @Composable
 fun AppNavigation(
     initialTarget: String? = null,
+    onLogoutRequest: () -> Unit = {}, // 🔥 NUEVO: Callback para el Logout raíz
     hudViewModel: BeBrainViewModel = hiltViewModel(),
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
@@ -161,8 +162,18 @@ fun AppNavigation(
         }
     }
 
+    // 🔥 SINCRONIZACIÓN: RESET DE POSICIÓN CUANDO BE SE OCULTA 🔥
+    // Si Be deja de ser visible (ej: entramos al chat), reseteamos su posición
+    // para que siempre vuelva a aparecer desde su "nido" en el borde derecho.
+    LaunchedEffect(showBe) {
+        if (!showBe) {
+            beAssistantViewModel.resetPosition()
+        }
+    }
+
     AppNavigationContent(
         initialTarget = initialTarget,
+        onLogoutRequest = onLogoutRequest, // PASAMOS EL CALLBACK
         beViewModel = hudViewModel,
         coordinator = hudViewModel.coordinator, // Pasamos el Maestro de Intenciones
         beAssistantViewModel = beAssistantViewModel, // Pasamos el coreógrafo
@@ -212,6 +223,7 @@ fun AppNavigation(
 @Composable
 fun AppNavigationContent(
     initialTarget: String? = null,
+    onLogoutRequest: () -> Unit = {}, // 🔥 NUEVO
     beViewModel: BeBrainViewModel,
     coordinator: AppActionCoordinator, // NUEVO: Mediador SSOT
     beAssistantViewModel: BeAssistantViewModel, // NUEVO
@@ -301,6 +313,7 @@ fun AppNavigationContent(
     AppNavigationStateless(
         navController = navController,
         currentRoute = currentRoute,
+        onLogoutRequest = onLogoutRequest, // PASAMOS EL CALLBACK
         coordinator = coordinator, // PASAMOS EL MEDIADOR
         showBe = showBe,
         isSearchActive = isSearchActive,
@@ -358,6 +371,7 @@ fun AppNavigationContent(
 fun AppNavigationStateless(
     navController: NavHostController,
     currentRoute: String?,
+    onLogoutRequest: () -> Unit = {}, // 🔥 NUEVO
     coordinator: AppActionCoordinator? = null, // NUEVO
     showBe: Boolean,
     isSearchActive: Boolean,
@@ -406,7 +420,15 @@ fun AppNavigationStateless(
         // ==========================================================================================
         // --- 🛠️ SECCIÓN: CONFIGURACIÓN DE ANIMACIONES DE NAVEGACIÓN (MAVERICK STYLE) ---
         // ==========================================================================================
-        val navItems = listOf(Screen.Home, Screen.Presupuestos, Screen.Chat, Screen.Calendar, Screen.Promo)
+        val navItems = listOf(
+            Screen.Home, 
+            Screen.Presupuestos, 
+            Screen.Chat, 
+            Screen.Calendar, 
+            Screen.Promo,
+            Screen.PerfilCliente,
+            Screen.ResultBusqueda
+        )
 
         // --- TRANSICIÓN DE ENTRADA: DESLIZAMIENTO LATERAL SEGÚN ÍNDICE ---
         val mainEnterTransition: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition = {
@@ -449,7 +471,11 @@ fun AppNavigationStateless(
                     enterTransition = mainEnterTransition,
                     exitTransition = mainExitTransition
                 ) {
-                    HomeScreenComplete(navController = navController, beViewModel = beViewModel ?: hiltViewModel())
+                    HomeScreenComplete(
+                        navController = navController, 
+                        beViewModel = beViewModel ?: hiltViewModel(),
+                        onLogoutRoot = onLogoutRequest // PASAMOS EL CALLBACK RAÍZ
+                    )
                 }
 
                 composable(
@@ -480,6 +506,7 @@ fun AppNavigationStateless(
                         beBrainViewModel = beViewModel ?: hiltViewModel(), 
                         onInConversationChange = { isInConversation ->
                             beViewModel?.setBottomBarVisible(!isInConversation)
+                            beViewModel?.setBeVisible(!isInConversation)
                         }
                     )
                 }
@@ -500,9 +527,24 @@ fun AppNavigationStateless(
                     exitTransition = { slideOutVertically(targetOffsetY = { it }, animationSpec = tween(400)) }
                 ) { CrearLicScreen(onBack = { navController.popBackStack() }) }
 
-                composable(route = Screen.PerfilCliente.route) { PerfilUsuarioScreen(onNavigateBack = { navController.popBackStack() }, onLogout = { }, beViewModel = beViewModel ?: hiltViewModel()) }
+                composable(
+                    route = Screen.PerfilCliente.route,
+                    enterTransition = mainEnterTransition,
+                    exitTransition = mainExitTransition
+                ) { 
+                    PerfilUsuarioScreen(
+                        onNavigateBack = { navController.popBackStack() }, 
+                        onLogout = onLogoutRequest, // USAMOS EL CALLBACK RAÍZ
+                        beViewModel = beViewModel ?: hiltViewModel()
+                    ) 
+                }
 
-                composable(route = Screen.ResultBusqueda.route, arguments = listOf(navArgument("category") { type = NavType.StringType })) { backStackEntry ->
+                composable(
+                    route = Screen.ResultBusqueda.route, 
+                    arguments = listOf(navArgument("category") { type = NavType.StringType }),
+                    enterTransition = mainEnterTransition,
+                    exitTransition = mainExitTransition
+                ) { backStackEntry ->
                     val category = backStackEntry.arguments?.getString("category") ?: ""
                     ResultBusquedaCategoriaScreen(
                         categoryName = category, 
@@ -588,14 +630,8 @@ fun AppNavigationStateless(
         AnimatedVisibility(
             visible = showBe,
             modifier = Modifier.zIndex(1100f), // 🔥 AUMENTADO: Para estar sobre la Nav Bar (950f)
-            enter = slideInVertically(initialOffsetY = { it / 2 }) + 
-                    slideInHorizontally(initialOffsetX = { it / 2 }) + 
-                    expandIn(expandFrom = Alignment.BottomEnd) + 
-                    fadeIn(animationSpec = tween(400)),
-            exit = slideOutVertically(targetOffsetY = { it / 2 }) + 
-                   slideOutHorizontally(targetOffsetX = { it / 2 }) + 
-                   shrinkOut(shrinkTowards = Alignment.BottomEnd) + 
-                   fadeOut(animationSpec = tween(300))
+            enter = slideInHorizontally(initialOffsetX = { it }) + fadeIn(animationSpec = tween(400)),
+            exit = slideOutHorizontally(targetOffsetX = { it }) + fadeOut(animationSpec = tween(300))
         ) {
             val beVerticalBias by animateFloatAsState(
                 targetValue = when {
@@ -800,7 +836,7 @@ fun AppBottomNavigationBar(
                         .shakeClick {
                             scope.launch {
                                 // ==========================================================================================
-                                // --- 🛠️ SECCIÓN: LÓGICA DE NAVEGACIÓN OPTIMIZADA (V2) ---
+                                // --- 🛠️ SECCIÓN: LÓGICA DE NAVEGACIÓN OPTIMIZADA (V3) ---
                                 // Se asegura de mantener el estado y realizar transiciones limpias.
                                 // ==========================================================================================
                                 
@@ -808,19 +844,25 @@ fun AppBottomNavigationBar(
                                 val targetBase = screen.route.split("?").first().split("/").first()
                                 val currentBase = currentRoute?.split("?")?.first()?.split("/")?.first()
 
-                                // 2. Si ya estamos en la pantalla base, NO disparamos navegación redundante
-                                if (targetBase == currentBase) return@launch
+                                // 2. SI YA ESTAMOS AQUÍ (O en una sub-pantalla de esta base): 
+                                // Forzamos limpieza y volvemos a la raíz SIEMPRE.
+                                // [CAMBIO] Quitamos el return@launch preventivo para que SIEMPRE navegue a la raíz.
+                                if (targetBase == currentBase) {
+                                    beViewModel?.clearFilters()
+                                }
 
-                                // 3. Ejecutamos la navegación con limpieza de stack Maverick
+                                // 3. NAVEGACIÓN FORZADA Maverick
+                                // Usamos restoreState = false y saveState = false para asegurar que se limpie el estado
+                                // de la pestaña y se abra la pantalla principal desde cero.
                                 val destination = if (screen is Screen.Chat) "chat" else screen.route
                                 
                                 navController.navigate(destination) {
-                                    // Al ir a una pestaña principal, limpiamos el stack hasta el inicio
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
+                                    val startId = navController.graph.findStartDestination().id
+                                    popUpTo(startId) {
+                                        saveState = false // Limpiamos estado guardado
                                     }
                                     launchSingleTop = true
-                                    restoreState = true
+                                    restoreState = false // No restauramos estado anterior, empezamos de cero
                                 }
                             }
                         },

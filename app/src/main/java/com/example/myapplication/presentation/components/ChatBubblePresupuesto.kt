@@ -2,7 +2,6 @@ package com.example.myapplication.presentation.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,17 +20,262 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.data.local.MessageEntity
+import com.example.myapplication.data.local.BudgetEntity
+import com.example.myapplication.data.local.BudgetItem
+import com.example.myapplication.data.local.BudgetService
 import com.example.myapplication.data.model.Provider
+import com.example.myapplication.data.model.MessageType
 import com.example.myapplication.ui.theme.AppColors
+import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.ui.theme.getThemeColors
 import java.text.SimpleDateFormat
 import java.util.*
+
+// ==========================================
+// BURBUJAS DE PRESUPUESTO
+// ==========================================
+
+/**
+ * Burbuja que muestra el resumen de un presupuesto formal enviado por el prestador.
+ */
+@Composable
+fun BudgetBubble(
+    message: MessageEntity,
+    budget: BudgetEntity?,
+    isMe: Boolean,
+    appColors: AppColors,
+    categoryEmoji: String? = null,
+    onReply: () -> Unit = {}, // 🔥 [NUEVO]
+    onClick: () -> Unit
+) {
+    val budgetOrange = Color(0xFFFF6B35)
+    val budgetAmber = Color(0xFFFFB300)
+    val headerGradient = Brush.horizontalGradient(listOf(budgetOrange, budgetAmber))
+
+    val borderColor =
+        if (isMe) appColors.accentGreen.copy(alpha = 0.5f) else appColors.accentBlue.copy(alpha = 0.5f)
+
+    SwipeToReplyWrapper(onReply = onReply) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = if (isMe) 12.dp else 4.dp, vertical = 4.dp),
+            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+        ) {
+            Card(
+                modifier = Modifier
+                    .width(280.dp)
+                    .clickable { onClick() },
+                shape = RoundedCornerShape(
+                    topStart = 20.dp,
+                    topEnd = 20.dp,
+                    bottomStart = if (isMe) 20.dp else 4.dp,
+                    bottomEnd = if (isMe) 4.dp else 20.dp
+                ),
+                colors = CardDefaults.cardColors(containerColor = appColors.surfaceColor),
+                border = BorderStroke(1.dp, borderColor),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column {
+                    if (message.replyToId != null) {
+                        QuotedMessage(
+                            replyToSenderName = message.replyToSenderName,
+                            replyToContent = message.replyToContent,
+                            appColors = appColors,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                    // --- HEADER: MODERNO Y LIMPIO ---
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(headerGradient)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("📄", fontSize = 18.sp)
+                            Text(
+                                text = "PRESUPUESTO",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                letterSpacing = 1.sp
+                            )
+                        }
+
+                        Surface(
+                            color = Color.Black.copy(alpha = 0.25f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "#${
+                                    budget?.budgetId?.takeLast(6) ?: message.relatedId?.takeLast(
+                                        6
+                                    ) ?: "---"
+                                }",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    // --- CUERPO: ENFOQUE EN CATEGORÍA ---
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (budget == null) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().height(40.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = budgetOrange
+                                )
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Surface(
+                                    color = budgetOrange.copy(alpha = 0.1f),
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(categoryEmoji ?: "📋", fontSize = 16.sp)
+                                    }
+                                }
+                                Column {
+                                    Text(
+                                        text = budget.category?.uppercase() ?: "GENERAL",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = budgetOrange,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Text(
+                                        text = "Servicio Profesional Detallado",
+                                        fontSize = 12.sp,
+                                        color = appColors.textSecondaryColor,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.05f),
+                        modifier = Modifier.padding(horizontal = 14.dp)
+                    )
+
+                    // --- FOOTER: TOTAL Y VIGENCIA ---
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "TOTAL DEL PRESUPUESTO",
+                                fontSize = 9.sp,
+                                color = appColors.textSecondaryColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "$ ${String.format(Locale.US, "%,.2f", budget?.grandTotal ?: 0.0)}",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                color = budgetOrange
+                            )
+                        }
+
+                        if ((budget?.validityDays ?: 0) > 0) {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Icon(
+                                    Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = budgetOrange.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    "${budget?.validityDays} días",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = appColors.textSecondaryColor
+                                )
+                            }
+                        }
+                    }
+
+                    // --- ACCIÓN ---
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.03f))
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(
+                                onClick = onClick,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = budgetOrange)
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.OpenInNew,
+                                    null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "REVISAR DETALLES",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+
+                            Text(
+                                text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(
+                                    Date(
+                                        message.timestamp
+                                    )
+                                ),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = appColors.textSecondaryColor.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 // ==========================================
 // DIÁLOGO DE SOLICITUD DE PRESUPUESTO
@@ -89,17 +334,22 @@ fun BudgetRequestDialog(
                             .background(maverickBlue.copy(alpha = 0.15f))
                             .padding(24.dp)
                     ) {
-                        Text(
-                            text = "Solicitud de presupuesto",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White,
-                            fontWeight = FontWeight.Black
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("📝", fontSize = 24.sp)
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = "Solicitud de presupuesto",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color.White,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
                         Text(
                             text = provider.displayName,
                             style = MaterialTheme.typography.bodyMedium,
                             color = maverickCyan,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 36.dp)
                         )
                     }
 
@@ -155,7 +405,12 @@ fun BudgetRequestDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 120.dp),
-                            placeholder = { Text("Ej: Mi aire acondicionado no enfría...", color = Color.Gray) },
+                            placeholder = {
+                                Text(
+                                    "Ej: Mi aire acondicionado no enfría...",
+                                    color = Color.Gray
+                                )
+                            },
                             colors = TextFieldDefaults.colors(
                                 focusedIndicatorColor = maverickBlue,
                                 unfocusedIndicatorColor = Color.White.copy(alpha = 0.1f),
@@ -185,13 +440,22 @@ fun BudgetRequestDialog(
                                 shape = RoundedCornerShape(16.dp),
                                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
                             ) {
-                                Text("CANCELAR", color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
+                                Text(
+                                    "CANCELAR",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
 
                             Button(
                                 onClick = {
                                     selectedAddress?.let { addr ->
-                                        onAcceptRequest(problemText, addr.streetAndNumber, addr.lat, addr.lng)
+                                        onAcceptRequest(
+                                            problemText,
+                                            addr.streetAndNumber,
+                                            addr.lat,
+                                            addr.lng
+                                        )
                                     }
                                 },
                                 enabled = problemText.isNotBlank() && selectedAddress != null,
@@ -215,122 +479,219 @@ fun BudgetRequestDialog(
 // ==========================================
 // BURBUJA DE SOLICITUD DE PRESUPUESTO
 // ==========================================
-/**
- * Burbuja de chat para mostrar una solicitud de presupuesto.
- * Sigue el estilo de las burbujas de presupuesto pero con identidad azul.
- */
 @Composable
 fun BudgetRequestBubble(
     message: MessageEntity,
     isMe: Boolean,
-    appColors: AppColors
+    appColors: AppColors,
+    onReply: () -> Unit = {} // 🔥 [NUEVO]
 ) {
-    val maverickBlue = Color(0xFF2197F5)
-    val slateLight = Color(0xFFF8FAFC)
-    val slateBorder = Color(0xFFE2E8F0)
-    val slateText = Color(0xFF475569)
-    val slateDark = Color(0xFF1E293B)
-    val borderColor = if (isMe) maverickBlue else Color(0xFF10B981)
+    val budgetOrange = Color(0xFFFF6B35)
+    val budgetAmber = Color(0xFFFFB300)
+    val headerGradient = Brush.horizontalGradient(listOf(budgetOrange, budgetAmber))
 
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = if (isMe) 8.dp else 0.dp),
-        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
-    ) {
+    val borderColor =
+        if (isMe) appColors.accentGreen.copy(alpha = 0.6f) else appColors.accentBlue.copy(alpha = 0.6f)
+    val borderWeight = if (isMe) 1.5.dp else 1.dp
+
+    SwipeToReplyWrapper(onReply = onReply) {
         Column(
-            modifier = Modifier
-                .width(280.dp)
-                .clip(RoundedCornerShape(
-                    topStart = 16.dp,
-                    topEnd = 16.dp,
-                    bottomStart = if (isMe) 16.dp else 2.dp,
-                    bottomEnd = if (isMe) 2.dp else 16.dp
-                ))
-                .background(Color.White)
-                .border(0.5.dp, borderColor, RoundedCornerShape(
-                    topStart = 16.dp,
-                    topEnd = 16.dp,
-                    bottomStart = if (isMe) 16.dp else 2.dp,
-                    bottomEnd = if (isMe) 2.dp else 16.dp
-                ))
+            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = if (isMe) 12.dp else 4.dp, vertical = 4.dp),
+            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
         ) {
-            // Header Azul PREMIUM
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(maverickBlue.copy(alpha = 0.9f))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Card(
+                modifier = Modifier.width(280.dp),
+                shape = RoundedCornerShape(
+                    topStart = 20.dp,
+                    topEnd = 20.dp,
+                    bottomStart = if (isMe) 20.dp else 4.dp,
+                    bottomEnd = if (isMe) 4.dp else 20.dp
+                ),
+                colors = CardDefaults.cardColors(containerColor = appColors.surfaceColor),
+                border = BorderStroke(borderWeight, borderColor),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
-                Text("📝", fontSize = 18.sp)
-                Spacer(Modifier.width(8.dp))
                 Column {
-                    Text(
-                        text = "SOLICITUD DE PRESUPUESTO",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "CLIENTE MAVERICK",
-                        fontSize = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White.copy(alpha = 0.8f),
-                        letterSpacing = 0.5.sp
-                    )
+                    if (message.replyToId != null) {
+                        QuotedMessage(
+                            replyToSenderName = message.replyToSenderName,
+                            replyToContent = message.replyToContent,
+                            appColors = appColors,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                    // --- HEADER: CONSISTENTE CON PRESUPUESTO ---
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(headerGradient)
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("📝", fontSize = 18.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "SOLICITUD DE PRESUPUESTO",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = 0.5.sp
+                        )
+                    }
+
+                    // --- CUERPO: DETALLE Y LOCALIZACIÓN ---
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "DETALLE DEL PROBLEMA",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = budgetOrange,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = message.content,
+                                fontSize = 13.sp,
+                                color = appColors.textPrimaryColor,
+                                lineHeight = 18.sp
+                            )
+                        }
+
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                color = budgetOrange.copy(alpha = 0.1f),
+                                shape = CircleShape,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = budgetOrange,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = message.locationAddress ?: "Dirección no especificada",
+                                fontSize = 11.sp,
+                                color = appColors.textSecondaryColor,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    // --- FOOTER: HORA ---
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.03f))
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Text(
+                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(
+                                Date(
+                                    message.timestamp
+                                )
+                            ),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = appColors.textSecondaryColor.copy(alpha = 0.5f)
+                        )
+                    }
                 }
-            }
-
-            // Cuerpo del mensaje
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(slateLight)
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "Detalle del problema:",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = maverickBlue
-                )
-                Text(
-                    text = message.content,
-                    fontSize = 13.sp,
-                    color = slateDark,
-                    lineHeight = 18.sp
-                )
-
-                HorizontalDivider(color = slateBorder)
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LocationOn, null, tint = maverickBlue, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = message.locationAddress ?: "Dirección no especificada",
-                        fontSize = 11.sp,
-                        color = slateText,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Footer con hora
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = slateText.copy(alpha = 0.4f)
-                )
             }
         }
     }
 }
+
+/**
+// ==========================================
+// SECCIÓN DE VISTAS PREVIAS (PREVIEWS)
+// ==========================================
+
+    @Preview(showBackground = true, name = "Burbuja Solicitud Presupuesto")
+    @Composable
+    fun BudgetRequestBubblePreview() {
+        val appColors = getThemeColors()
+        val message = MessageEntity(
+            id = "1",
+            chatId = "c1",
+            senderId = "user1",
+            receiverId = "p1",
+            type = MessageType.BUDGET_REQUEST,
+            content = "Necesito presupuesto para arreglar un lavarropas que no desagota.",
+            locationAddress = "Av. Siempre Viva 742",
+            timestamp = System.currentTimeMillis()
+        )
+        MyApplicationTheme {
+            Box(
+                modifier = Modifier.fillMaxWidth().background(appColors.backgroundColor)
+                    .padding(16.dp)
+            ) {
+                BudgetRequestBubble(message = message, isMe = true, appColors = appColors)
+            }
+        }
+    }
+
+    @Preview(showBackground = true, name = "Burbuja Presupuesto Formal")
+    @Composable
+    fun BudgetBubblePreview() {
+        val appColors = getThemeColors()
+        val message = MessageEntity(
+            id = "1",
+            chatId = "c1",
+            senderId = "p1",
+            receiverId = "user1",
+            type = MessageType.BUDGET,
+            content = "Presupuesto enviado",
+            timestamp = System.currentTimeMillis()
+        )
+        val budget = BudgetEntity(
+            budgetId = "b1",
+            clientId = "u1",
+            providerId = "p1",
+            providerName = "Juan Perez",
+            providerCompanyName = "Maverick Tech Solutions",
+            category = "Refrigeración",
+            items = listOf(
+                BudgetItem(description = "Compresor 1/4 HP", quantity = 1, unitPrice = 45000.0),
+                BudgetItem(description = "Carga de Gas R134", quantity = 1, unitPrice = 12000.0)
+            ),
+            services = listOf(
+                BudgetService(description = "Mano de obra especializada", total = 15000.0)
+            ),
+            subtotal = 72000.0,
+            grandTotal = 87120.0,
+            validityDays = 5,
+            status = com.example.myapplication.data.local.BudgetStatus.PENDIENTE,
+            dateTimestamp = System.currentTimeMillis()
+        )
+        MyApplicationTheme {
+            Box(
+                modifier = Modifier.fillMaxWidth().background(appColors.backgroundColor)
+                    .padding(16.dp)
+            ) {
+                BudgetBubble(
+                    message = message,
+                    budget = budget,
+                    isMe = false,
+                    appColors = appColors,
+                    onClick = {})
+            }
+        }
+    }
+**/

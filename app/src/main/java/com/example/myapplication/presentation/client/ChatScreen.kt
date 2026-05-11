@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -46,6 +43,7 @@ fun ChatScreen(
     
     val profileState by profileViewModel.uiState.collectAsStateWithLifecycle()
     val unreadCountsMap by beBrainViewModel.unreadCountsMap.collectAsStateWithLifecycle()
+    val allCategories by beBrainViewModel.allCategories.collectAsStateWithLifecycle()
 
     // Estados de multiselección y acciones de Be
     val isMultiSelectMode by chatListViewModel.isMultiSelectionActive.collectAsStateWithLifecycle()
@@ -53,104 +51,43 @@ fun ChatScreen(
     val selectedIdsState = chatListViewModel.selectedProviderIds.collectAsStateWithLifecycle()
     val selectedIds by selectedIdsState
 
+    // [REGLA DE ORO] El Obrero decide qué herramientas mostrar en el HUD de Be
+    val chatActions by chatListViewModel.beActions.collectAsStateWithLifecycle()
+
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
-    // Sincronización de Multiselección con el Cerebro (BeBrain)
-    LaunchedEffect(isMultiSelectMode, selectedIds) {
+    // --- SECCIÓN: SINCRONIZACIÓN CON EL CEREBRO (BeBrain) ---
+    // Sincronizamos el estado de multiselección y las herramientas dinámicas
+    LaunchedEffect(isMultiSelectMode, selectedIds, chatActions) {
         beBrainViewModel.syncMultiSelection(isMultiSelectMode, selectedIds)
-    }
-
-    // [PASO CRÍTICO] Sincronización del Contexto de Be y Acciones Dinámicas
-    LaunchedEffect(Unit) {
-        beBrainViewModel.onRouteChanged("chat_list")
-        // Registramos el botón de Presupuestos Recibidos por defecto al iniciar
-        val chatActions = listOf(
-            BeSmallActionModel(
-                id = "goto_direct_budgets",
-                icon = Icons.AutoMirrored.Filled.Message,
-                label = "Presupuestos",
-                emoji = "📩",
-                tint = Color(0xFF2197F5), // MaverickBlue
-                isDefault = true,
-                onClick = { beBrainViewModel.triggerAction("goto_direct_budgets") }
-            )
-        )
-        beBrainViewModel.setCustomActions(chatActions)
-    }
-
-    // --- SECCIÓN: ACCIONES DINÁMICAS DE BE (TOOLBOX) ---
-    // Dependiendo de si estamos en multiselección o no, inyectamos diferentes herramientas
-    LaunchedEffect(isMultiSelectMode) {
+        // [REGLA DE ORO] Solo registramos acciones si estamos en multiselección.
+        // El acceso directo a presupuestos ahora es nativo en el Cerebro.
         if (isMultiSelectMode) {
-            val multiActions = listOf(
-                BeSmallActionModel(
-                    id = "cancel",
-                    icon = Icons.Default.Close,
-                    label = "Cancelar",
-                    emoji = "❌",
-                    isDefault = true,
-                    onClick = { beBrainViewModel.triggerAction("cancel") }
-                ),
-                BeSmallActionModel(
-                    id = "select_all",
-                    icon = Icons.Default.SelectAll,
-                    label = "Todo",
-                    emoji = "✅",
-                    isDefault = true,
-                    onClick = { beBrainViewModel.triggerAction("select_all") }
-                ),
-                BeSmallActionModel(
-                    id = "delete_multi",
-                    icon = Icons.Default.Delete,
-                    label = "Eliminar",
-                    emoji = "🗑️",
-                    tint = Color.Red,
-                    isDefault = true,
-                    onClick = { beBrainViewModel.triggerAction("delete_multi") }
-                )
-            )
-            beBrainViewModel.setCustomActions(multiActions)
+            beBrainViewModel.setCustomActions(chatActions, HUDContext.CHAT)
         } else {
-            // Restauramos las acciones por defecto del chat (Presupuestos Recibidos)
-            val chatActions = listOf(
-                BeSmallActionModel(
-                    id = "goto_direct_budgets",
-                    icon = Icons.AutoMirrored.Filled.Message,
-                    label = "Presupuestos",
-                    emoji = "📩",
-                    tint = Color(0xFF2197F5), // MaverickBlue
-                    isDefault = true,
-                    onClick = { beBrainViewModel.triggerAction("goto_direct_budgets") }
-                )
-            )
-            beBrainViewModel.setCustomActions(chatActions)
+            beBrainViewModel.clearCustomActions(HUDContext.CHAT)
         }
     }
 
-    // Capturar Acciones de BeBrain y delegar al ViewModel de Lista (OBRERO)
+    // --- SECCIÓN: GESTIÓN DE EVENTOS (MAESTRO DE INTENCIONES) ---
     LaunchedEffect(Unit) {
+        // [REGLA DE ORO] Ya no llamamos a onRouteChanged ni setHUDContext aquí.
+        
+        // Capturar acciones disparadas desde Be y delegar al Obrero
         beBrainViewModel.actionEvent.collect { actionId ->
-            when (actionId) {
-                // SECCIÓN: Navegación desde el HUD de Be
-                "goto_direct_budgets" -> navController?.navigate("chat_presupuestos_recibidos")
-
-                // SECCIÓN: Acciones de multiselección de chats
-                // Usamos .value para asegurar que obtenemos el dato más fresco del flujo
-                "select_all" -> chatListViewModel.selectAll(chattingThreadsState.value.map { it.chatId })
-                "delete_multi" -> if (selectedIdsState.value.isNotEmpty()) showDeleteConfirmDialog = true
-                "cancel" -> chatListViewModel.updateMultiSelection(false)
-                else -> { /* Manejar otras acciones si es necesario */ }
-            }
+            chatListViewModel.onBeAction(
+                actionId = actionId,
+                onNavigateToBudgets = { navController?.navigate("chat_presupuestos_recibidos") },
+                onShowDeleteConfirm = { showDeleteConfirmDialog = true }
+            )
         }
     }
 
-    // 🔥 NUEVO: Limpieza al destruir la pantalla o al salir de multiselección
+    // 🔥 LIMPIEZA: Al salir de la pantalla, reseteamos el estado de Be (HUD V5.1)
     DisposableEffect(Unit) {
         onDispose {
-            // Avisamos al cerebro que esta pantalla ya no controla las acciones personalizadas
-            // Esto es crucial para que la barra de Be se limpie al salir de la pantalla
-            beBrainViewModel.setCustomActions(emptyList())
-            beBrainViewModel.syncMultiSelection(false, emptySet()) // También reseteamos la multiselección
+            beBrainViewModel.clearCustomActions(HUDContext.CHAT)
+            beBrainViewModel.syncMultiSelection(false, emptySet())
         }
     }
 
@@ -158,6 +95,7 @@ fun ChatScreen(
         allThreads = chattingThreads,
         profileState = profileState,
         unreadCountsMap = unreadCountsMap,
+        allCategories = allCategories,
         onBack = onBack,
         initialProviderId = initialProviderId,
         initialCompanyId = initialCompanyId,
@@ -173,8 +111,7 @@ fun ChatScreen(
         onConfirmDelete = { 
             chatListViewModel.deleteSelectedChats()
             showDeleteConfirmDialog = false
-        },
-        onRouteChanged = { beBrainViewModel.onRouteChanged("chat_list") }
+        }
     )
 }
 
@@ -183,6 +120,7 @@ fun ChatScreenContent(
     allThreads: List<ChatThread>,
     profileState: com.example.myapplication.presentation.profile.ProfileUiState,
     unreadCountsMap: Map<String, Int>,
+    allCategories: List<com.example.myapplication.data.local.CategoryEntity> = emptyList(),
     onBack: () -> Unit,
     initialProviderId: String? = null,
     initialCompanyId: String? = null,
@@ -195,8 +133,7 @@ fun ChatScreenContent(
     selectedIds: Set<String> = emptySet(),
     showDeleteConfirmDialog: Boolean = false,
     onDismissDeleteDialog: () -> Unit = {},
-    onConfirmDelete: () -> Unit = {},
-    onRouteChanged: () -> Unit
+    onConfirmDelete: () -> Unit = {}
 ) {
     val appColors = getAppColors()
     
@@ -214,7 +151,7 @@ fun ChatScreenContent(
         remember { mutableStateOf(null) }
     }
 
-    // Efecto de visibilidad de la barra inferior
+    // Efecto de visibilidad de la barra inferior y Asistente Be
     LaunchedEffect(activeProviderId) {
         onInConversationChange(activeProviderId != null)
     }
@@ -243,7 +180,6 @@ fun ChatScreenContent(
                 onBack = onBack,
                 appColors = appColors,
                 navController = navController,
-                onRouteChanged = onRouteChanged,
                 beBrainViewModel = beBrainViewModel,
                 chatListViewModel = chatListViewModel,
                 isMultiSelectMode = isMultiSelectMode,
@@ -272,11 +208,12 @@ fun ChatScreenContent(
                 val chatViewModel: ChatViewModel = hiltViewModel(key = chatId)
                 
                 // [PASO CRÍTICO] Inicializamos el ViewModel con el chatId generado y el contexto opcional
-                LaunchedEffect(chatId) {
+                LaunchedEffect(chatId, allCategories) {
                     chatViewModel.initialize(
                         chatId = chatId,
                         companyId = initialCompanyId,
-                        categoryId = initialCategoryId
+                        categoryId = initialCategoryId,
+                        categories = allCategories
                     )
                 }
                 
@@ -335,7 +272,6 @@ fun ChatListContent(
     onBack: () -> Unit,
     appColors: AppColors,
     navController: NavHostController? = null,
-    onRouteChanged: () -> Unit,
     beBrainViewModel: BeBrainViewModel? = null,
     chatListViewModel: ChatListViewModel? = null,
     isMultiSelectMode: Boolean = false,
@@ -348,10 +284,6 @@ fun ChatListContent(
             if (listState.firstVisibleItemIndex > 0) 1f
             else (listState.firstVisibleItemScrollOffset.toFloat() / 250f).coerceIn(0f, 1f)
         }
-    }
-
-    LaunchedEffect(Unit) {
-        onRouteChanged()
     }
 
     val activeFilters by beBrainViewModel?.activeFilters?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptySet()) }
@@ -465,8 +397,7 @@ fun ChatScreenPreview() {
             allThreads = sampleThreads,
             profileState = sampleProfileState,
             unreadCountsMap = sampleUnreadCounts,
-            onBack = {},
-            onRouteChanged = {}
+            onBack = {}
         )
     }
 }

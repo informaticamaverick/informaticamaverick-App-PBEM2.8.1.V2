@@ -44,14 +44,14 @@ class PromoViewModel @Inject constructor() : ViewModel() {
     // ======================================================================================
 
     /**
-     * Genera la lista de banners orquestada.
-     * [ESTABILIDAD]: Utiliza seeds para Random para evitar el efecto "loco" en el carrusel.
-     * [NUEVO]: Integra lógica de PromoScreen para mostrar ofertas reales.
+     * Genera la lista de banners de forma síncrona.
+     * [OPTIMIZACIÓN]: Permite obtener los banners instantáneamente si los datos ya están cargados.
      */
-    fun getHomeBanners(
+    fun generateHomeBanners(
         categories: List<CategoryEntity>,
-        services: List<ServiceDisplayModel>
-    ): Flow<List<AccordionBanner>> = _activeFilters.map { filters ->
+        services: List<ServiceDisplayModel>,
+        filters: Set<String> = _activeFilters.value
+    ): List<AccordionBanner> {
         val bannerList = mutableListOf<AccordionBanner>()
 
         // A. MAPEADO DE NOVEDADES (Categorías nuevas)
@@ -69,7 +69,6 @@ class PromoViewModel @Inject constructor() : ViewModel() {
         }
 
         // B. MAPEADO DE PROMOCIONES (Prestadores suscritos con ofertas)
-        // Solo tomamos prestadores suscritos para el carrusel de alta visibilidad
         services.filter { it.isSubscribed }.take(6).forEach { service ->
             val stableSeed = Random(service.id.hashCode().toLong())
             val discount = if (stableSeed.nextBoolean()) (10..50).random(stableSeed) else null
@@ -100,7 +99,6 @@ class PromoViewModel @Inject constructor() : ViewModel() {
         // D. FILTRADO TÁCTICO
         val filteredList = if (filters.isEmpty()) bannerList 
         else bannerList.filter { banner ->
-            // El anuncio institucional siempre se muestra si no hay filtros específicos de tipo
             if (banner.type == BannerType.GOOGLE_AD) true 
             else {
                 val isNovedad = banner.type == BannerType.NEW_CATEGORY || banner.type == BannerType.NEW_PROVIDER
@@ -115,8 +113,19 @@ class PromoViewModel @Inject constructor() : ViewModel() {
             }
         }
 
-        // E. MEZCLA ESTABLE (Evita cambios bruscos en recomposición)
-        inyectarPublicidad(filteredList.sortedBy { it.id }) 
+        // E. MEZCLA ESTABLE
+        return inyectarPublicidad(filteredList.sortedBy { it.id })
+    }
+
+    /**
+     * Genera la lista de banners orquestada como un Flow.
+     * [ESTABILIDAD]: Utiliza seeds para Random para evitar el efecto "loco" en el carrusel.
+     */
+    fun getHomeBanners(
+        categories: List<CategoryEntity>,
+        services: List<ServiceDisplayModel>
+    ): Flow<List<AccordionBanner>> = _activeFilters.map { filters ->
+        generateHomeBanners(categories, services, filters)
     }
 
     /**

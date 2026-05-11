@@ -9,6 +9,7 @@ import com.example.myapplication.data.local.ChatDao
 import com.example.myapplication.data.local.FastCategoryDao
 import com.example.myapplication.data.local.ProviderDao
 import com.example.myapplication.data.local.UserDao
+import com.example.myapplication.data.repository.CalendarRepository
 import com.example.myapplication.data.repository.CategoryRepository
 import com.example.myapplication.data.repository.ChatRepository
 import com.example.myapplication.data.repository.FastRepository
@@ -130,7 +131,9 @@ object AppModule {
         chatDao: ChatDao,
         budgetDao: BudgetDao,
         calendarDao: CalendarDao,
+        calendarRepository: CalendarRepository, // 🔥 NUEVO: Para lógica inteligente de agenda
         providerDao: ProviderDao, // 🔥 NUEVO: Requerido para sync silencioso de prestadores
+        categoryDao: CategoryDao, // 🔥 NUEVO: Requerido para sync de rubros
         firestore: FirebaseFirestore,
         database: FirebaseDatabase,
         auth: FirebaseAuth,
@@ -141,7 +144,9 @@ object AppModule {
             chatDao = chatDao,
             budgetDao = budgetDao,
             calendarDao = calendarDao,
+            calendarRepository = calendarRepository, // 🔥 ASIGNADO
             providerDao = providerDao, // 🔥 ASIGNADO
+            categoryDao = categoryDao, // 🔥 ASIGNADO
             firestore = firestore,
             database = database,
             auth = auth,

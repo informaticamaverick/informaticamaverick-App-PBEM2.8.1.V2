@@ -125,11 +125,12 @@ class ProviderViewModel @Inject constructor(
         val companies = provider.companies
         
         // 1. Lógica de Perfil Activo
+        val fullName = "${provider.name} ${provider.lastName}".trim()
         val activeInfo = if (page == 0) {
             ProviderActiveProfileInfo(
                 id = 0,
                 photo = provider.photoUrl,
-                title = "${provider.name} ${provider.lastName}",
+                title = fullName.ifEmpty { provider.displayName },
                 subtitle = provider.titulo ?: "Profesional Independiente",
                 isVerified = provider.isVerified
             )
@@ -427,13 +428,23 @@ class ProviderViewModel @Inject constructor(
             BadgeDisplayData("prod", "🛍️", "Venta Productos", dProd)
         )
 
+        // Título Robusto: Priorizar Empresa -> Nombre Completo -> DisplayName
+        val fullName = "${provider.name} ${provider.lastName}".trim()
+        val displayTitle = if (provider.priorizarEmpresa && mainCompany != null) {
+            mainCompany.name
+        } else if (fullName.isNotEmpty()) {
+            fullName
+        } else {
+            provider.displayName
+        }
+
         return ServiceDisplayModel(
             id = provider.id,
-            title = mainCompany?.name ?: provider.displayName,
+            title = displayTitle,
             subtitle = if (isCompany) "Empresa" else "Independiente",
-            photoUrl = mainCompany?.photoUrl ?: provider.photoUrl ?: "",
-            rating = (mainCompany?.rating ?: provider.rating).toDouble(),
-            isVerified = mainCompany?.isVerified ?: provider.isVerified,
+            photoUrl = if (provider.priorizarEmpresa && mainCompany != null) (mainCompany.photoUrl ?: "") else (provider.photoUrl ?: ""),
+            rating = (if (provider.priorizarEmpresa && mainCompany != null) mainCompany.rating else provider.rating).toDouble(),
+            isVerified = if (provider.priorizarEmpresa && mainCompany != null) mainCompany.isVerified else provider.isVerified,
             isOnline = provider.isOnline,
             isFavorite = provider.isFavorite,
             type = if (isCompany) ProviderType.COMPANY else ProviderType.INDIVIDUAL,

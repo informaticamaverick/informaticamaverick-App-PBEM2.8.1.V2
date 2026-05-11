@@ -94,13 +94,6 @@ fun ResultBusquedaCategoriaScreen(
     val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
     val availableAddressInfosBrain by beViewModel.availableAddressInfos.collectAsStateWithLifecycle()
 
-    // Sincronización del Cerebro: Mantenemos al BeBrain informado del catálogo cargado
-    LaunchedEffect(allCategories) {
-        if (allCategories.isNotEmpty()) {
-            beViewModel.hydrateCategories(allCategories)
-        }
-    }
-
     // ==================================================================================
     // --- 📊 SUBSECCIÓN: TRABAJO SUCIO DE PRESTADORES (DEL OBRERO PROVIDER) ---
     // ==================================================================================

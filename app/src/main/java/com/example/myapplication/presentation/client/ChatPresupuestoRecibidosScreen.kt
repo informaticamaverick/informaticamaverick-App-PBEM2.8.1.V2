@@ -64,8 +64,9 @@ fun ChatPresupuestoRecibidosScreen(
     val selectedItemIds by viewModel.selectedIds.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        beBrainViewModel.onRouteChanged("chat_presupuestos_recibidos")
+        // [REGLA DE ORO] Sincronizamos solo el Obrero y el Contexto de Be.
         viewModel.setContext(HUDContext.BUDGETS_DIRECT) 
+        beBrainViewModel.onRouteChanged("direct_budgets")
     }
 
     val budgetActions by viewModel.beActions.collectAsStateWithLifecycle()
@@ -89,11 +90,6 @@ fun ChatPresupuestoRecibidosScreen(
         viewModel.setFilters(activeFilters)
     }
 
-    LaunchedEffect(allBudgets, categories) {
-        beBrainViewModel.updateBudgets(allBudgets)
-        beBrainViewModel.hydrateCategories(categories)
-    }
-
     LaunchedEffect(isMultiSelectionActive, selectedItemIds) {
         beBrainViewModel.syncMultiSelection(isMultiSelectionActive, selectedItemIds)
     }
@@ -101,11 +97,15 @@ fun ChatPresupuestoRecibidosScreen(
     val hudContext by viewModel.currentHUDContext.collectAsStateWithLifecycle()
     val currentSelectedIds by rememberUpdatedState(selectedItemIds)
 
-    LaunchedEffect(budgetActions, hudContext) {
-        val baseActions = budgetActions.map { action ->
-            action.copy(onClick = { beBrainViewModel.triggerAction(action.id) })
+    LaunchedEffect(budgetActions, hudContext, isMultiSelectionActive) {
+        if (isMultiSelectionActive) {
+            val baseActions = budgetActions.map { action ->
+                action.copy(onClick = { beBrainViewModel.triggerAction(action.id) })
+            }
+            beBrainViewModel.setCustomActions(baseActions, HUDContext.BUDGETS_DIRECT)
+        } else {
+            beBrainViewModel.clearCustomActions(HUDContext.BUDGETS_DIRECT)
         }
-        beBrainViewModel.setCustomActions(baseActions)
     }
 
     val currentIdsToSelect by rememberUpdatedState(directBudgets.map { it.budgetId })
@@ -135,7 +135,7 @@ fun ChatPresupuestoRecibidosScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            beBrainViewModel.setCustomActions(emptyList())
+            beBrainViewModel.clearCustomActions(HUDContext.BUDGETS_DIRECT)
             beBrainViewModel.syncMultiSelection(false, emptySet())
         }
     }
@@ -143,6 +143,7 @@ fun ChatPresupuestoRecibidosScreen(
     Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } }) {
         ChatPresupuestoRecibidosScreenContent(
             directBudgets = directBudgets,
+            categories = categories, // PASAR CATEGORIAS AL CONTENIDO
             activeFilters = activeFilters,
             refinementFilters = availableFilters,
             sortOptions = availableSortOptions,
@@ -186,6 +187,7 @@ fun ChatPresupuestoRecibidosScreen(
 @Composable
 fun ChatPresupuestoRecibidosScreenContent(
     directBudgets: List<BudgetEntity>,
+    categories: List<CategoryEntity> = emptyList(), // NUEVO: RECIBIR CATEGORIAS
     activeFilters: Set<String>,
     refinementFilters: List<ControlItem>,
     sortOptions: List<ControlItem>,
@@ -285,6 +287,7 @@ fun ChatPresupuestoRecibidosScreenContent(
                         state = directListState,
                         tender = genericTender,
                         budgets = directBudgets,
+                        categories = categories, // PASAMOS LAS CATEGORÍAS REALES DEL OBRERO
                         isMultiSelectionActive = isMultiSelectionActive,
                         selectedItemIds = selectedItemIds,
                         onToggleItemSelection = onToggleItemSelection,

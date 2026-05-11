@@ -74,7 +74,8 @@ fun ResultadoLicitacionOverlay(
     onMarkAsReadMulti: (Set<String>) -> Unit = {},
     onSetContext: (HUDContext) -> Unit,
     showDeleteConfirmDialog: (String, () -> Unit) -> Unit,
-    isAssistantActive: Boolean = false // NUEVO: Estado para desplazar la UI
+    isAssistantActive: Boolean = false, // NUEVO: Estado para desplazar la UI
+    categories: List<com.example.myapplication.data.local.CategoryEntity> = emptyList() // MOVIDO AL FINAL
 ) {
     // Backup para mantener la UI estable durante la animación de salida
     var lastSelectedTenderForExit by remember { mutableStateOf<TenderEntity?>(null) }
@@ -153,6 +154,7 @@ fun ResultadoLicitacionOverlay(
             ComparisonSheetEdgeToEdge(
                 tender = tender,
                 budgets = sortedAndFilteredBudgets,
+                categories = categories, // PASAR CATEGORIAS
                 activeFilters = activeFilters,
                 dynamicCategories = dynamicCategories,
                 refinementFilters = refinementFilters,
@@ -185,6 +187,7 @@ fun ResultadoLicitacionOverlay(
 fun ComparisonSheetEdgeToEdge(
     tender: TenderEntity,
     budgets: List<BudgetEntity>,
+    categories: List<com.example.myapplication.data.local.CategoryEntity> = emptyList(), // NUEVO
     activeFilters: Set<String>,
     dynamicCategories: List<ControlItem>,
     refinementFilters: List<ControlItem>,
@@ -310,6 +313,7 @@ fun ComparisonSheetEdgeToEdge(
             BudgetGridContent(
                 tender = tender,
                 budgets = budgets,
+                categories = categories, // AHORA SI TENEMOS REFERENCIA
                 isMultiSelectionActive = isMultiSelectionActive,
                 selectedItemIds = selectedItemIds,
                 onToggleItemSelection = onToggleItemSelection,
@@ -347,6 +351,7 @@ fun BudgetGridContent(
     state: LazyGridState = rememberLazyGridState(),
     tender: TenderEntity,
     budgets: List<BudgetEntity>,
+    categories: List<com.example.myapplication.data.local.CategoryEntity> = emptyList(), // NUEVO: Lista de categorías para buscar iconos
     isMultiSelectionActive: Boolean = false,
     selectedItemIds: Set<String> = emptySet(),
     onToggleItemSelection: (String) -> Unit = {},
@@ -432,17 +437,16 @@ fun BudgetGridContent(
 
                 if (isExpanded) {
                     items(budgetsInDate, key = { it.budgetId }) { budget ->
-                        TarjetaPresupuestoPremium(
-                            providerName = budget.providerName,
-                            companyName = budget.providerCompanyName ?: "Independiente",
-                            amount = budget.grandTotal,
-                            budgetId = budget.budgetId,
-                            photoUrl = budget.providerPhotoUrl,
-                            isOnline = true,
-                            isSubscribed = true,
+                        // BUSQUEDA DE ICONO REAL EN LA LISTA DE CATEGORIAS (Regla de Oro: Datos del Obrero)
+                        val catIcon = remember(budget.category, categories) {
+                            categories.find { it.name.equals(budget.category, ignoreCase = true) }?.icon ?: "📋"
+                        }
+                        
+                        BudgetCard(
+                            budget = budget,
                             isSelected = selectedItemIds.contains(budget.budgetId),
-                            isRead = budget.isRead,
                             isMultiSelectionActive = isMultiSelectionActive,
+                            categoryEmoji = catIcon, // Pasar el icono real encontrado
                             onViewClick = { onBudgetClick(budget) },
                             onChatClick = { onChatClick(budget.providerId, budget.category ?: tender.category) },
                             onAvatarClick = { onAvatarClick(budget) },

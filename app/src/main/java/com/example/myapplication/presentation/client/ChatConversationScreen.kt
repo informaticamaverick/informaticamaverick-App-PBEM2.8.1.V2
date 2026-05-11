@@ -27,7 +27,7 @@ import com.example.myapplication.data.model.Provider
 import com.example.myapplication.ui.theme.AppColors
 import com.example.myapplication.data.model.MessageType
 import com.example.myapplication.presentation.components.*
-import kotlinx.coroutines.delay
+import com.example.myapplication.presentation.components.BudgetRequestDialog // 🔥 [NUEVO] Importación explícita
 import kotlinx.coroutines.flow.Flow
 import com.example.myapplication.data.local.BudgetEntity
 import androidx.compose.ui.tooling.preview.Preview
@@ -36,10 +36,6 @@ import com.example.myapplication.ui.theme.getThemeColors
 import com.example.myapplication.data.local.MessageEntity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
 
 /**
  * PANTALLA DE CONVERSACIÓN DE CHAT (UI PURA)
@@ -49,7 +45,7 @@ import com.google.firebase.database.ValueEventListener
 @Composable
 fun ChatConversationContent(
     provider: Provider,
-    availableAddresses: List<com.example.myapplication.presentation.components.AddressInfo> = emptyList(),
+    availableAddresses: List<AddressInfo> = emptyList(),
     uiState: ChatUiState,
     events: Flow<ChatUiEvent>,
     onBack: () -> Unit,
@@ -71,22 +67,15 @@ fun ChatConversationContent(
     onCalendarClick: () -> Unit = {},
     onAddressClick: (String) -> Unit = {},
     matchingTenders: List<com.example.myapplication.data.local.TenderEntity> = emptyList(),
-    ubicacionViewModel: UbicacionClimaViewModel? = null
+    ubicacionViewModel: UbicacionClimaViewModel? = null,
+    allCategories: List<com.example.myapplication.data.local.CategoryEntity> = emptyList(),
+    // [NUEVO] Eventos para el BookingDialog (Obrero)
+    onOpenBooking: (MessageEntity) -> Unit,
+    onDaySelected: (DayAvailability, String) -> Unit,
+    onTimeSelected: (String) -> Unit,
+    onAddressSelected: (AddressInfo) -> Unit,
+    onReply: (MessageEntity?) -> Unit = {} // 🔥 [NUEVO] Permitir null para cancelar
 ) {
-    // --- POLÍTICA ZERO COST: Cargar estado online desde Firebase ---
-    val isProviderOnline by produceState(initialValue = false, provider.uid) {
-        val ref = FirebaseDatabase.getInstance().reference
-            .child("users").child(provider.uid).child("online")
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                value = snapshot.getValue(Boolean::class.java) ?: false
-            }
-            override fun onCancelled(error: DatabaseError) { value = false }
-        }
-        ref.addValueEventListener(listener)
-        awaitDispose { ref.removeEventListener(listener) }
-    }
-
     // Resolver datos del Header usando el perfil base del prestador (Chat Unificado)
     val resolvedProviderName = provider.displayName
     val resolvedProviderPhoto = provider.photoUrl
@@ -110,22 +99,10 @@ fun ChatConversationContent(
         }
     }
 
-    // Auto-detener grabación después de 60 segundos
-    LaunchedEffect(uiState.isRecording) {
-        if (uiState.isRecording) {
-            var recordingSeconds = 0
-            while (uiState.isRecording) {
-                delay(1000)
-                recordingSeconds++
-                if (recordingSeconds >= 60) {
-                    onAudioClick()
-                    break
-                }
-            }
-        }
-    }
-
     // --- PERMISOS Y LAUNCHERS ---
+
+    // VALORES PARA PREVIEW (Evitar FileProvider en modo diseño)
+    val isInEditMode = androidx.compose.ui.platform.LocalInspectionMode.current
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { onSendImage(it); showAttachMenu = false }
@@ -155,15 +132,16 @@ fun ChatConversationContent(
     }
 
     // --- CÁMARA LAUNCHER Y PERMISOS (REGLA DE ORO: Captura a resolución completa) ---
-    // Creamos un Uri temporal para que la cámara guarde la imagen a resolución completa
     val tempPhotoUri = remember {
-        val photoFile = java.io.File(context.cacheDir, "camera_photo_${System.currentTimeMillis()}.jpg")
-        FileProvider.getUriForFile(context, "com.example.myapplication.provider", photoFile)
+        if (isInEditMode) Uri.EMPTY
+        else {
+            val photoFile = java.io.File(context.cacheDir, "camera_photo_${System.currentTimeMillis()}.jpg")
+            FileProvider.getUriForFile(context, "com.example.myapplication.provider", photoFile)
+        }
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success) {
-            // Pasamos el Uri de la foto a resolución completa al ViewModel para su procesamiento
             onSendImage(tempPhotoUri)
         }
     }
@@ -232,9 +210,18 @@ fun ChatConversationContent(
     }
 
     showCalendarBooking?.let { msg ->
-        com.example.myapplication.presentation.components.BookingDialog(
+        BookingDialog(
             message = msg,
             availableAddresses = availableAddresses,
+            categories = allCategories,
+            availableDays = uiState.bookingUiState.availableDays,
+            selectedDay = uiState.bookingUiState.selectedDay,
+            currentSlots = uiState.bookingUiState.slots,
+            selectedTime = uiState.bookingUiState.selectedTime,
+            selectedAddress = uiState.bookingUiState.selectedAddress,
+            onDaySelected = { onDaySelected(it, msg.bookedSlotsJson ?: "[]") },
+            onTimeSelected = onTimeSelected,
+            onAddressSelected = onAddressSelected,
             onDismissRequest = { showCalendarBooking = null },
             onAcceptRequest = { dateStr, timeStr, address, label ->
                 showCalendarBooking = null
@@ -255,7 +242,7 @@ fun ChatConversationContent(
             ChatHeader(
                 providerName = resolvedProviderName,
                 providerPhoto = resolvedProviderPhoto,
-                isOnline = isProviderOnline,
+                isOnline = uiState.isProviderOnline, // [REGLA DE ORO] Viene del ViewModel
                 onBack = onBack,
                 appColors = appColors,
                 isProviderTyping = uiState.isProviderTyping
@@ -263,6 +250,21 @@ fun ChatConversationContent(
         },
         bottomBar = {
             Column(modifier = Modifier.background(appColors.backgroundColor)) {
+                // [NUEVO] Barra de respuesta estilo WhatsApp
+                AnimatedVisibility(
+                    visible = uiState.replyingToMessage != null,
+                    enter = slideInVertically { it } + fadeIn(),
+                    exit = slideOutVertically { it } + fadeOut()
+                ) {
+                    uiState.replyingToMessage?.let { msg ->
+                        ReplyPreviewBar(
+                            message = msg,
+                            onCancelReply = { onReply(null) }, 
+                            appColors = appColors
+                        )
+                    }
+                }
+
                 AnimatedVisibility(visible = showAttachMenu) {
                     AttachmentOptionsMenu(
                         onDismiss = { showAttachMenu = false },
@@ -319,37 +321,66 @@ fun ChatConversationContent(
                         budget = budget,
                         isMe = message.senderId != provider.id,
                         appColors = appColors,
+                        categoryEmoji = uiModel.categoryEmoji,
                         onClick = { message.relatedId?.let { onBudgetClick(it) } }
                     )
                     MessageType.AUDIO -> AudioMessageBubble(
-                        audioPath = if (message.content == "[Audio]" && message.imageUrl != null) message.imageUrl else message.content,
-                        duration = message.durationSeconds ?: 0,
-                        timestamp = message.timestamp,
+                        message = message,
                         appColors = appColors,
                         isFromMe = message.senderId != provider.id
                     )
-                    MessageType.VISIT -> AppointmentBubble(
-                        message = message,
-                        isMe = message.senderId != provider.id,
-                        appColors = appColors,
-                        providerPhotoUrl = if (message.senderId == provider.id) effectiveProviderPhoto else null,
-                        onAccept = { 
-                            onRespondAppointment(
-                                "preview", 
-                                message.id, 
-                                message.relatedId ?: "", 
-                                true, 
-                                message.appointmentDate, 
-                                message.appointmentTime, 
-                                "Cita", 
-                                provider.displayName, 
-                                effectiveProviderPhoto,
-                                message.categoryId ?: provider.categories.firstOrNull(),
-                                null
-                            ) 
-                        },
-                        onReject = { onRespondAppointment("preview", message.id, message.relatedId ?: "", false, null, null, "", "", null, null, null) }
-                    )
+                    MessageType.VISIT -> {
+                        val isTechnical = message.appointmentType == "TECHNICAL_VISIT"
+                        if (isTechnical) {
+                            TechnicalVisitProposalBubble(
+                                message = message,
+                                isMe = message.senderId != provider.id,
+                                appColors = appColors,
+                                providerPhotoUrl = if (message.senderId == provider.id) effectiveProviderPhoto else null,
+                                categoryEmoji = uiModel.categoryEmoji,
+                                onAccept = { 
+                                    onRespondAppointment(
+                                        "preview", 
+                                        message.id, 
+                                        message.relatedId ?: "", 
+                                        true, 
+                                        message.appointmentDate, 
+                                        message.appointmentTime, 
+                                        "Visita Técnica", 
+                                        provider.displayName, 
+                                        effectiveProviderPhoto,
+                                        message.categoryId ?: provider.categories.firstOrNull(),
+                                        null
+                                    ) 
+                                },
+                                onReject = { onRespondAppointment("preview", message.id, message.relatedId ?: "", false, null, null, "", "", null, null, null) }
+                            )
+                        } else {
+                            LocalAppointmentProposalBubble(
+                                message = message,
+                                isMe = message.senderId != provider.id,
+                                appColors = appColors,
+                                providerPhotoUrl = if (message.senderId == provider.id) effectiveProviderPhoto else null,
+                                categoryEmoji = uiModel.categoryEmoji,
+                                onAccept = { 
+                                    onRespondAppointment(
+                                        "preview", 
+                                        message.id, 
+                                        message.relatedId ?: "", 
+                                        true, 
+                                        message.appointmentDate, 
+                                        message.appointmentTime, 
+                                        "Turno en local",
+                                        provider.displayName, 
+                                        effectiveProviderPhoto,
+                                        message.categoryId ?: provider.categories.firstOrNull(),
+                                        null
+                                    ) 
+                                },
+                                onReject = { onRespondAppointment("preview", message.id, message.relatedId ?: "", false, null, null, "", "", null, null, null) }
+                            )
+                        }
+                    }
                     else -> {
                         var showViewer by remember { mutableStateOf(false) }
                         MessageBubble(
@@ -357,9 +388,14 @@ fun ChatConversationContent(
                             appColors = appColors,
                             isFromMe = message.senderId != provider.id,
                             budget = budget,
+                            allCategories = allCategories, 
+                            onReply = { onReply(message) }, // 🔥 [NUEVO]
                             onImageClick = { showViewer = true },
                             onCalendarClick = { 
-                                if (message.type == MessageType.CALENDAR_INVITE) showCalendarBooking = message
+                                if (message.type == MessageType.CALENDAR_INVITE) {
+                                    onOpenBooking(message)
+                                    showCalendarBooking = message
+                                }
                                 else onCalendarClick() 
                             },
                             onAddressClick = onAddressClick,
@@ -400,11 +436,10 @@ fun ChatConversationScreen(
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
-        // [REGLA DE ORO] Sincronizar contexto del Asistente Be
-        beBrainViewModel.onRouteChanged("chat_conversation")
+        // [REGLA DE ORO] La sincronización de ruta ahora se maneja en el orquestador ChatScreen
+        // beBrainViewModel.onRouteChanged("chat_conversation")
     }
 
-    // 🔥 ESCUCHA DE EVENTOS DE CITAS (TOASTS)
     LaunchedEffect(Unit) {
         appointmentViewModel.uiEvent.collect { message ->
             Toast.makeText(context, message, Toast.LENGTH_LONG).show()
@@ -421,6 +456,7 @@ fun ChatConversationScreen(
     val mainCategory = provider.categories.firstOrNull() ?: ""
     val matchingTenders by viewModel.getMatchingTenders(mainCategory).collectAsStateWithLifecycle(initialValue = emptyList())
     val availableAddresses by beBrainViewModel.availableAddressInfos.collectAsStateWithLifecycle()
+    val allCategories by beBrainViewModel.allCategories.collectAsStateWithLifecycle()
 
     ChatConversationContent(
         provider = provider,
@@ -452,7 +488,14 @@ fun ChatConversationScreen(
             context.startActivity(intent)
         },
         matchingTenders = matchingTenders,
-        ubicacionViewModel = ubicacionViewModel
+        ubicacionViewModel = ubicacionViewModel,
+        allCategories = allCategories,
+        // [NUEVO] Callbacks de BookingDialog vinculados al Obrero
+        onOpenBooking = { viewModel.openBookingDialog(it, availableAddresses) },
+        onDaySelected = { day, booked -> viewModel.onDaySelected(day, booked) },
+        onTimeSelected = { viewModel.onTimeSelected(it) },
+        onAddressSelected = { viewModel.onAddressSelected(it) },
+        onReply = { viewModel.setReplyMessage(it) }
     )
 }
 
@@ -462,11 +505,9 @@ private fun isSameDayChat(t1: Long, t2: Long): Boolean {
     return fmt.format(java.util.Date(t1)) == fmt.format(java.util.Date(t2))
 }
 
-// --- PANTALLAS Y COMPONENTES ADICIONALES ---
-
 @Composable
 fun LocationSelectionDialog(
-    availableAddresses: List<com.example.myapplication.presentation.components.AddressInfo>,
+    availableAddresses: List<AddressInfo>,
     appColors: AppColors,
     onDismiss: () -> Unit,
     onSelect: (Double, Double, String) -> Unit,
@@ -487,7 +528,6 @@ fun LocationSelectionDialog(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
-                // Opción GPS
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -608,7 +648,6 @@ fun TenderSelectionDialog(
     )
 }
 
-// --- PREVIEW ---
 @Preview(showBackground = true)
 @Composable
 fun ChatConversationScreenPreview() {
@@ -639,9 +678,27 @@ fun ChatConversationScreenPreview() {
         val sampleUiState = ChatUiState(
             messages = listOf(
                 ChatMessageUiModel(MessageEntity(id="1", chatId="c1", senderId="me", receiverId="p1", type=MessageType.TEXT, content="Hola!", timestamp=System.currentTimeMillis()-50000)),
-                ChatMessageUiModel(MessageEntity(id="2", chatId="c1", senderId="p1", receiverId="me", type=MessageType.TEXT, content="¿En qué puedo ayudarte?", timestamp=System.currentTimeMillis()-10000))
+                ChatMessageUiModel(MessageEntity(id="2", chatId="c1", senderId="p1", receiverId="me", type=MessageType.TEXT, content="¿En qué puedo ayudarte?", timestamp=System.currentTimeMillis()-10000)),
+                ChatMessageUiModel(MessageEntity(
+                    id="3", chatId="c1", senderId="p1", receiverId="me", 
+                    type=MessageType.VISIT, content="Propuesta de visita", 
+                    appointmentDate="2024-05-10", appointmentTime="10:00",
+                    appointmentType="TECHNICAL_VISIT", categoryId="Técnico",
+                    timestamp=System.currentTimeMillis()-5000
+                )),
+                ChatMessageUiModel(MessageEntity(
+                    id="4", chatId="c1", senderId="p1", receiverId="me", 
+                    type=MessageType.VISIT, content="Propuesta de turno", 
+                    appointmentDate="2024-05-11", appointmentTime="16:00",
+                    appointmentType="LOCAL_APPOINTMENT", categoryId="Local",
+                    timestamp=System.currentTimeMillis()-2000
+                ))
             ),
             isProviderTyping = true
+        )
+        val sampleCategories = listOf(
+            com.example.myapplication.data.local.CategoryEntity(name="Técnico", icon="🛠️", superCategory="", isNew=false, isNewPrestador=false, isAd=false),
+            com.example.myapplication.data.local.CategoryEntity(name="Local", icon="🏪", superCategory="", isNew=false, isNewPrestador=false, isAd=false)
         )
         ChatConversationContent(
             provider = sampleProvider,
@@ -661,7 +718,12 @@ fun ChatConversationScreenPreview() {
             onAcceptBudget = {},
             onRejectBudget = {},
             onRespondAppointment = {_,_,_,_,_,_,_,_,_,_,_ ->},
-            onTenderInvitation = {}
+            onTenderInvitation = {},
+            allCategories = sampleCategories,
+            onOpenBooking = {},
+            onDaySelected = {_,_ ->},
+            onTimeSelected = {},
+            onAddressSelected = {}
         )
     }
 }

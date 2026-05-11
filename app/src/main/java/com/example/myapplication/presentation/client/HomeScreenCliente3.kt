@@ -51,6 +51,7 @@ import kotlin.collections.isNotEmpty
 @Composable
 fun HomeScreenComplete(
     navController: NavHostController,
+    onLogoutRoot: () -> Unit = {}, // 🔥 NUEVO: Callback para navegación raíz
     profileViewModel: ProfileViewModel = hiltViewModel(),
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
@@ -75,10 +76,10 @@ fun HomeScreenComplete(
     // ==================================================================================
     // --- 🧠 SUBSECCIÓN: SINCRONIZACIÓN OBREROS -> CEREBRO (INTERMEDIARIO) ---
     // ==================================================================================
-    // 🔥 NUEVO: ESCUCHA DE ACCIONES DEL CEREBRO PARA EL OBRERO (ORQUESTACIÓN) 🔥
+    // 🔥 ESCUCHA DE ACCIONES DEL CEREBRO PARA EL OBRERO (ORQUESTACIÓN) 🔥
     LaunchedEffect(Unit) {
-        // Notificamos al cerebro que estamos en la Home para actualizar consejos/emociones
-        beViewModel.onRouteChanged("home")
+        // [REGLA DE ORO] Ya no llamamos a onRouteChanged ni setHUDContext aquí.
+        // La navegación central (AppNavigation) se encarga de la sincronización inicial.
 
         beViewModel.actionEvent.collect { actionId ->
             when {
@@ -117,10 +118,11 @@ fun HomeScreenComplete(
     // Mostramos el popup si el usuario NO tiene direcciones y el flag de "una sola vez" es true
     val shouldDisplayPopup = !hasAddresses && showAddressPopup && userState != null
 
-    // --- BANNERS DINÁMICOS (Optimizado: remember para evitar fugas de Flow en recomposición) ---
-    val bannerItems by remember(allRawCategories, unifiedServices) {
-        promoViewModel.getHomeBanners(allRawCategories, unifiedServices)
-    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    // --- BANNERS DINÁMICOS (Optimizado: remember para evitar parpadeo y efectos de expansión) ---
+    val activeFilters by promoViewModel.activeFilters.collectAsStateWithLifecycle()
+    val bannerItems = remember(allRawCategories, unifiedServices, activeFilters) {
+        promoViewModel.generateHomeBanners(allRawCategories, unifiedServices, activeFilters)
+    }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -195,7 +197,10 @@ fun HomeScreenComplete(
         },
         bannerItems = bannerItems,
         favoriteProviders = favorites,
-        onLogout = { profileViewModel.logout(); navController.navigate(Screen.Login.route) { popUpTo(0) } },
+        onLogout = { 
+            profileViewModel.logout()
+            onLogoutRoot() // USAMOS EL CALLBACK RAÍZ
+        },
         beViewModel = beViewModel,
         categoryViewModel = categoryViewModel // El contenido pide al obrero directamente vía eventos
     )
@@ -352,8 +357,8 @@ fun HomeScreenContent(
 
                 AnimatedVisibility(
                     visible = bannerItems.isNotEmpty() && !isSearchActive,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
+                    enter = fadeIn(),
+                    exit = fadeOut()
                 ) {
                     Column {
                         PremiumLensCarouselV3(

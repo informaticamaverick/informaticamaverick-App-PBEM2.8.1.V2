@@ -6,12 +6,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.local.BudgetEntity
 import com.example.myapplication.data.local.CategoryEntity
-import com.example.myapplication.data.local.TenderEntity
 import com.example.myapplication.data.local.UserEntity
-import com.example.myapplication.data.model.Provider
-import com.example.myapplication.data.model.ServiceDisplayModel
 import com.example.myapplication.presentation.components.BeEmotion
 import com.example.myapplication.presentation.components.BeMessage
 import com.example.myapplication.presentation.components.BeSmallActionModel
@@ -22,6 +18,8 @@ import com.example.myapplication.presentation.registry.BeMenuRegistry
 import com.example.myapplication.presentation.registry.BeDictionary
 import com.example.myapplication.data.repository.UserRepository
 import com.example.myapplication.data.repository.AppActionCoordinator
+import com.example.myapplication.data.repository.CategoryRepository
+import kotlinx.coroutines.flow.firstOrNull
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,11 +41,7 @@ import com.example.myapplication.data.repository.AuthRepository
 import com.example.myapplication.data.local.TokenManager
 import com.example.myapplication.data.repository.ChatRepository
 import com.example.myapplication.data.repository.BudgetRepository
-import com.example.myapplication.data.repository.CalendarRepository
 import com.example.myapplication.data.local.ChatUnreadCount
-import com.example.myapplication.data.utils.SearchUtils.matchesSmart
-import com.example.myapplication.data.utils.SearchUtils.prepareForSearch
-import com.example.myapplication.data.utils.SearchUtils.wordStartsWithSmart
 import kotlinx.coroutines.Job
 
 // ==========================================================================================
@@ -73,7 +67,7 @@ class BeBrainViewModel @Inject constructor(
     private val tokenManager: TokenManager,
     private val chatRepository: ChatRepository,
     private val budgetRepository: BudgetRepository,
-    private val calendarRepository: CalendarRepository,
+    private val categoryRepository: CategoryRepository,
     val coordinator: AppActionCoordinator
 ) : ViewModel() {
 
@@ -95,23 +89,12 @@ class BeBrainViewModel @Inject constructor(
         .map { it > 0 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val hasBudgetNotifications: StateFlow<Boolean> = budgetRepository.allBudgets
-        .map { list: List<BudgetEntity> -> list.any { it.status.name == "PENDIENTE" && !it.isRead } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    val hasCalendarNotifications: StateFlow<Boolean> = calendarRepository.allEvents
-        .map { list: List<com.example.myapplication.data.local.CalendarEventEntity> -> list.any { it.status.name == "PENDIENTE" } }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    val hasPromoNotifications: StateFlow<Boolean> = kotlinx.coroutines.flow.flowOf(false)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
     val unreadCountsMap: StateFlow<Map<String, Int>> = userRepository.userProfile
         .flatMapLatest { user: UserEntity? ->
             if (user != null) chatRepository.getUnreadCountsPerChat(user.id)
-            else kotlinx.coroutines.flow.flowOf(emptyList<ChatUnreadCount>())
+            else kotlinx.coroutines.flow.flowOf(emptyList())
         }
-        .map { list: List<ChatUnreadCount> -> list.associate { it.chatId to it.count } }
+        .map { list: List<ChatUnreadCount> -> list.associateBy({ it.chatId }, { it.count }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private fun startGlobalChatSync(userId: String) {
@@ -135,11 +118,6 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     // --- 1. ESTADO DE NAVEGACIÓN Y AUTH (DECISIONES ESTRATÉGICAS) ---
     // ======================================================================================
-    private val _allBudgetsRaw = MutableStateFlow<List<BudgetEntity>>(emptyList())
-    private val _allTendersRaw = MutableStateFlow<List<TenderEntity>>(emptyList())
-    private val _allProvidersRaw = MutableStateFlow<List<ServiceDisplayModel>>(emptyList())
-    val allProvidersRaw: StateFlow<List<ServiceDisplayModel>> = _allProvidersRaw.asStateFlow()
-
     private val _initialNavTarget = MutableStateFlow(InitialNavTarget.CHECKING)
     val initialNavTarget: StateFlow<InitialNavTarget> = _initialNavTarget.asStateFlow()
 
@@ -176,8 +154,8 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     // --- 2. GESTIÓN DE CATEGORÍAS Y ORDENAMIENTO ---
     // ======================================================================================
-    private val _allCategoriesRaw = MutableStateFlow<List<CategoryEntity>>(emptyList())
-    val allCategories: StateFlow<List<CategoryEntity>> = _allCategoriesRaw.asStateFlow()
+    val allCategories: StateFlow<List<CategoryEntity>> = categoryRepository.allCategories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedSuperCategory = MutableStateFlow<SuperCategory?>(null)
     val selectedSuperCategory: StateFlow<SuperCategory?> = _selectedSuperCategory.asStateFlow()
@@ -197,7 +175,9 @@ class BeBrainViewModel @Inject constructor(
 
     /** 🔥 Sincroniza los mensajes contextuales desde el Obrero de Conversación */
     fun syncConversationalMessages(messages: List<BeMessage>) {
-        _beMessages.value = messages
+        if (messages.isNotEmpty()) {
+            _beMessages.value = messages
+        }
     }
 
     /** 🔥 Sincroniza el mensaje de respuesta activa desde el Obrero de Conversación */
@@ -216,22 +196,6 @@ class BeBrainViewModel @Inject constructor(
             _beState.value = BeState.IDLE
         }
     }
-
-    fun hydrateCategories(list: List<CategoryEntity>) {
-        _allCategoriesRaw.value = list
-    }
-
-    fun updateTenders(tenders: List<TenderEntity>) {
-        _allTendersRaw.value = tenders
-    }
-
-    fun updateBudgets(budgets: List<BudgetEntity>) {
-        _allBudgetsRaw.value = budgets
-    }
-
-   // fun updateProfile(user: UserEntity?) {
-        // Ya no es necesario actualizar manualmente ya que observamos el Repositorio directamente
-   // }
     
     /** SELECCIÓN DE SUPER CATEGORÍA (ORQUESTADO) */
     fun selectSuperCategory(superCategory: SuperCategory?) { _selectedSuperCategory.value = superCategory }
@@ -275,6 +239,10 @@ class BeBrainViewModel @Inject constructor(
     fun setWeatherDetailsVisible(visible: Boolean) { _showWeatherDetails.value = visible }
     fun toggleFavoritesPanel() { _showFavoritesPanel.value = !_showFavoritesPanel.value }
     fun setFavoritesPanelVisible(visible: Boolean) { _showFavoritesPanel.value = visible }
+    
+    /** [REGLA DE ORO] Control manual de visibilidad de Be para sub-contextos */
+    fun setBeVisible(visible: Boolean) { _showBe.value = visible }
+
     fun setBottomBarVisible(visible: Boolean) { 
         _isBottomBarVisible.value = visible 
         // Si se oculta desde una pantalla, marcamos el flag para que Be no la restaure al "despertar"
@@ -289,13 +257,12 @@ class BeBrainViewModel @Inject constructor(
             // --- SECCIÓN: ORQUESTACIÓN DE ACCIONES ---
             // Las acciones se emiten para que los "Obreros" (otros ViewModels) las procesen.
             if (actionId.startsWith("chat_")) {
-                val providerId = actionId.removePrefix("chat_")
                 coordinator.triggerAction(actionId)
             } else if (actionId.startsWith("talk_")) {
                 coordinator.triggerAction(actionId)
             } else if (actionId.startsWith("cat_")) {
                 val catName = actionId.removePrefix("cat_")
-                _allCategoriesRaw.value.find { 
+                categoryRepository.allCategories.firstOrNull()?.find { 
                     it.name.lowercase().trim() == catName.lowercase().trim() 
                 }?.let { _categorySelectionEvent.emit(it) }
 
@@ -414,11 +381,6 @@ class BeBrainViewModel @Inject constructor(
         coordinator.updateAddressFromGps(address)
     }
 
-    /** Método legacy para compatibilidad durante transición, pronto a deprecado
-    fun syncAvailableAddresses(list: List<AddressInfo>) {
-        // Ya no hace nada, usamos availableAddressInfos derivado
-    }
-**/
     private val _toolboxKey = MutableStateFlow("home_default")
     val toolboxKey: StateFlow<String> = _toolboxKey.asStateFlow()
 
@@ -433,6 +395,7 @@ class BeBrainViewModel @Inject constructor(
     val currentActions: StateFlow<List<BeSmallActionModel>> = _currentActions.asStateFlow()
 
     private val _customActions = MutableStateFlow<List<BeSmallActionModel>>(emptyList())
+    private var _currentActionsOwner: HUDContext? = null // 🔥 PROPIETARIO DEL CONTEXTO DE ACCIONES
 
     // ======================================================================================
     // --- 6. MULTISELECCIÓN Y FILTROS ---
@@ -484,15 +447,15 @@ class BeBrainViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val dynamicCategories: StateFlow<List<ControlItem>> = combine(
-        currentContext, _allCategoriesRaw, _allTendersRaw, _allBudgetsRaw
+        currentContext, categoryRepository.allCategories, budgetRepository.allTenders, budgetRepository.allBudgets
     ) { context, allCats, tenders, budgets ->
         val filtered = when (context) {
             HUDContext.BUDGETS, HUDContext.BUDGETS_TENDERS -> {
-                val categoryNamesInTenders = tenders.map { it.category.lowercase().trim() }.toSet()
+                val categoryNamesInTenders = tenders.asSequence().map { it.category.lowercase().trim() }.toSet()
                 allCats.filter { it.name.lowercase().trim() in categoryNamesInTenders }
             }
             HUDContext.BUDGETS_DIRECT, HUDContext.TENDER_DETAILS -> {
-                val categoryNamesInBudgets = budgets.mapNotNull { it.category?.lowercase()?.trim() }.toSet()
+                val categoryNamesInBudgets = budgets.asSequence().mapNotNull { it.category?.lowercase()?.trim() }.toSet()
                 allCats.filter { it.name.lowercase().trim() in categoryNamesInBudgets }
             }
             else -> allCats
@@ -501,7 +464,7 @@ class BeBrainViewModel @Inject constructor(
             ControlItem(
                 label = cat.name, 
                 icon = null, 
-                emoji = cat.icon ?: "📁", 
+                emoji = cat.icon,
                 color = Color(CategoryVisuals.getColorFor(cat.superCategory)),
                 id = "cat_${cat.name.lowercase().trim()}"
             ) 
@@ -585,7 +548,7 @@ class BeBrainViewModel @Inject constructor(
             // --- REACCIÓN AL VOLVER ---
             _beState.value = BeState.NOTIFICATION_READY
         }
-        updateBeContextMessages(_lastRoute ?: "home")
+        _lastRoute?.let { updateBeContextMessages(it) }
     }
 
     private var _lastRoute: String? = null
@@ -709,13 +672,10 @@ class BeBrainViewModel @Inject constructor(
     fun setShowProviderSimDialog(visible: Boolean) { _showProviderSimDialog.value = visible }
     private fun updateToolboxKey() { val context = currentContext.value.name.lowercase(); val mode = if (_showBeTools.value) "tools" else "default"; _toolboxKey.value = "${context}_$mode" }
 
-    // ======================================================================================
-    // --- SENSOR DE CONTEXTO ---
-    // ======================================================================================
-    
-    /**
-     * Mapea un contexto específico a su categoría principal (Top-Level).
-     * Esto evita que se limpien las herramientas al navegar entre sub-secciones.
+    /** 
+     * [MEJORA HUD V5.2] Mapeo de sub-rutas a su área funcional principal.
+     * Esto asegura que las herramientas se mantengan persistentes mientras el usuario
+     * navega dentro de la misma sección.
      */
     private fun getTopLevelContext(context: HUDContext): HUDContext {
         return when (context) {
@@ -729,49 +689,69 @@ class BeBrainViewModel @Inject constructor(
             HUDContext.SEARCH_RESULTS -> HUDContext.SEARCH_RESULTS
             HUDContext.FAST -> HUDContext.FAST
             HUDContext.CALENDAR -> HUDContext.CALENDAR
+            HUDContext.PROMO -> HUDContext.PROMO
             else -> HUDContext.UNKNOWN
         }
     }
 
+    /**
+     * [REGLA DE ORO] El Coordinador Global de Rutas.
+     * Centraliza el cambio de contexto visual basado en la navegación real.
+     */
     fun onRouteChanged(route: String?) {
         val currentRoute = route ?: return
         
-        // --- EVITAR DUPLICADOS ---
-        if (_lastRoute == currentRoute) return
+        // --- EVITAR PROCESAMIENTO DUPLICADO ---
+        // Se quita el bloqueo de _lastRoute para garantizar refresco de herramientas en cada entrada
+        // if (_lastRoute == currentRoute) return 
         _lastRoute = currentRoute
         
+        // [ESTABILIZACIÓN HUD V5.3] Mapeo preciso de rutas (Evitar solapamientos)
         val newContext = when {
-            currentRoute.contains("home") -> HUDContext.HOME
-            currentRoute.contains("presupuestos") -> HUDContext.BUDGETS
-            currentRoute.contains("chat") -> HUDContext.CHAT
-            currentRoute.contains("calendar") -> HUDContext.CALENDAR
-            currentRoute.contains("perfil_cliente") -> HUDContext.PROFILE
+            currentRoute == "home" || currentRoute.startsWith("home/") -> HUDContext.HOME
+            currentRoute == "chat_presupuestos_recibidos" -> HUDContext.BUDGETS_DIRECT
+            currentRoute == "presupuestos" -> HUDContext.BUDGETS_TENDERS
+            currentRoute == "chat" || currentRoute.startsWith("chat?") -> HUDContext.CHAT
+            currentRoute == "chat_conversation" -> HUDContext.CHAT 
+            currentRoute == "calendar" -> HUDContext.CALENDAR
+            currentRoute == "perfil_cliente" -> HUDContext.PROFILE
             currentRoute.contains("result_busqueda") -> HUDContext.SEARCH_RESULTS
-            currentRoute.contains("fast") -> HUDContext.FAST
+            currentRoute.startsWith("perfil_prestador") -> HUDContext.SEARCH_RESULTS
+            currentRoute == "fast" -> HUDContext.FAST
+            currentRoute == "promo" -> HUDContext.PROMO
+            currentRoute == "crear_licitacion" -> HUDContext.BUDGETS_TENDERS
+            currentRoute == "login" || currentRoute == "register" || currentRoute == "startup" -> HUDContext.UNKNOWN
             else -> HUDContext.UNKNOWN
         }
 
         val oldContext = currentContext.value
+        
+        // Actualizamos el coordinador SIEMPRE para asegurar SSOT
+        coordinator.updateHUDContext(newContext)
+
         if (oldContext != newContext) {
-            // --- SECCIÓN: LIMPIEZA INTELIGENTE ---
+            // --- SECCIÓN: LIMPIEZA INTELIGENTE DE HERRAMIENTAS (HUD V5.1) ---
             // Solo limpiamos acciones personalizadas si cambiamos de área funcional (Top-Level)
             if (getTopLevelContext(oldContext) != getTopLevelContext(newContext)) {
-                _customActions.value = emptyList()
-                coordinator.updateHUDContext(newContext)
-                
-                // En HUD V5, permitimos que la barra sea visible por defecto. 
-                // Reseteamos el flag de ocultación forzada al cambiar de área funcional.
                 _isBottomBarForcedHidden.value = false
                 _isBottomBarVisible.value = true
+                
+                // 🔥 SOLUCIÓN RACING: Solo limpiamos si el dueño actual NO es el nuevo contexto.
+                if (_currentActionsOwner != newContext && _currentActionsOwner != getTopLevelContext(newContext)) {
+                    _customActions.value = emptyList()
+                    _currentActionsOwner = null
+                }
             }
 
-            // 🔥 RESET: Cerramos búsqueda al cambiar de pantalla para evitar desincronización
+            // Reset de búsqueda al cambiar de pantalla
             if (_isSearchActive.value) {
                 cerrarBeAssistantCompleto()
             }
         }
 
+        // Política de visibilidad de Be
         _showBe.value = !(currentRoute == "login" || currentRoute == "register" || currentRoute == "startup" || currentRoute == "chat_conversation")
+
         _isResultadoVisible.value = false
         _showBeTools.value = false
         
@@ -780,13 +760,19 @@ class BeBrainViewModel @Inject constructor(
         updateToolboxKey()
     }
 
+    /**
+     * [REGLA DE ORO] Permite a las pantallas forzar un contexto granular.
+     * Útil para sub-vistas que no disparan un cambio de ruta real en el NavController.
+     */
     fun setHUDContext(context: HUDContext) {
         val current = currentContext.value
-        // Si el contexto actual es igual al nuevo, no hacemos nada
-        if (current == context) return
-
-        // REGLA: Solo cerramos Be y limpiamos filtros si cambiamos de área funcional (Top-Level)
+        
+        // Si cambiamos de área mayor, limpiamos acciones personalizadas previas
         if (getTopLevelContext(current) != getTopLevelContext(context)) {
+            if (_currentActionsOwner != context && _currentActionsOwner != getTopLevelContext(context)) {
+                _customActions.value = emptyList()
+                _currentActionsOwner = null
+            }
             cerrarBeAssistantCompleto()
             clearFilters()
         }
@@ -798,26 +784,54 @@ class BeBrainViewModel @Inject constructor(
 
     private fun updateActionsForContext(context: HUDContext) {
         val actions = mutableListOf<BeSmallActionModel>()
-        if (context == HUDContext.HOME) {
-            actions.add(BeSmallActionModel("sim_chat", Icons.AutoMirrored.Filled.Chat, "Sim Chat", emoji = "💬") { triggerAction("sim_chat") })
-            actions.add(BeSmallActionModel("sim_tender", Icons.Default.Gavel, "Sim Licit", emoji = "⚖️") { triggerAction("sim_tender") })
-            actions.add(BeSmallActionModel("sim_massive", Icons.Default.PersonAdd, "Sim Prov", emoji = "👥") { triggerAction("sim_massive") })
-            actions.add(BeSmallActionModel("migrate_cats", Icons.Default.CloudUpload, "Migrar", emoji = "☁️") { triggerAction("migrate_cats") })
-            actions.add(BeSmallActionModel("fast", Icons.Default.FlashOn, "Fast", emoji = "⚡", isDefault = true) { triggerAction("fast") })
-            actions.add(BeSmallActionModel("licit", Icons.Default.Gavel, "Licitación", emoji = "⚖️", isDefault = true) { triggerAction("licit") })
-            actions.add(BeSmallActionModel("fav", Icons.Default.Favorite, "Favoritos", emoji = "❤️", isDefault = true) { triggerAction("fav") })
-            actions.add(BeSmallActionModel("share", Icons.Default.Share, "Compartir", emoji = "📤") { })
-        } else if (context == HUDContext.PROFILE) {
-            if (_customActions.value.isNotEmpty()) actions.addAll(_customActions.value.map { if (it.id.contains("divider_v")) it else it.copy(onClick = { triggerAction(it.id) }) })
-            else {
-                actions.add(BeSmallActionModel("edit_profile", Icons.Default.Edit, "Editar", emoji = "✏️", isDefault = true) { triggerAction("edit_profile") })
-                actions.add(BeSmallActionModel("settings_profile", Icons.Default.Settings, "Ajustes", emoji = "⚙️", isDefault = true) { triggerAction("settings_profile") })
+        
+        // --- SECCIÓN: ACCIONES HARDCODED POR CONTEXTO (ESTABILIDAD TOTAL HUD V5.4) ---
+        when (context) {
+            HUDContext.HOME -> {
+                actions.add(BeSmallActionModel("sim_chat", Icons.AutoMirrored.Filled.Chat, "Sim Chat", emoji = "💬") { triggerAction("sim_chat") })
+                actions.add(BeSmallActionModel("sim_tender", Icons.Default.Gavel, "Sim Licit", emoji = "⚖️") { triggerAction("sim_tender") })
+                actions.add(BeSmallActionModel("sim_massive", Icons.Default.PersonAdd, "Sim Prov", emoji = "👥") { triggerAction("sim_massive") })
+                actions.add(BeSmallActionModel("migrate_cats", Icons.Default.CloudUpload, "Migrar", emoji = "☁️") { triggerAction("migrate_cats") })
+                actions.add(BeSmallActionModel("fast", Icons.Default.FlashOn, "Fast", emoji = "⚡", isDefault = true) { triggerAction("fast") })
+                actions.add(BeSmallActionModel("licit", Icons.Default.Gavel, "Licitación", emoji = "⚖️", isDefault = true) { triggerAction("licit") })
+                actions.add(BeSmallActionModel("fav", Icons.Default.Favorite, "Favoritos", emoji = "❤️", isDefault = true) { triggerAction("fav") })
+                actions.add(BeSmallActionModel("share", Icons.Default.Share, "Compartir", emoji = "📤") { })
             }
-        } else if (context == HUDContext.SEARCH_RESULTS || context == HUDContext.FAST) {
-            // 🔥 BOTÓN PARA ACTIVAR LA HERRAMIENTA EN EL MENÚ 🔥
-            // actions.add(BeSmallActionModel("location_tool", Icons.Default.LocationOn, "Ubicación", emoji = "📍", isDefault = true) { setShowLocationTool(!_showLocationTool.value) })
-            actions.add(BeSmallActionModel("share", Icons.Default.Share, "Compartir", emoji = "📤") { })
-        } else actions.addAll(_customActions.value)
+            HUDContext.CHAT -> {
+                actions.add(BeSmallActionModel("goto_direct_budgets", Icons.AutoMirrored.Filled.Chat, "Presupuestos", emoji = "📩", tint = Color(0xFF2197F5), isDefault = true) { triggerAction("goto_direct_budgets") })
+            }
+            HUDContext.PROFILE -> {
+                if (_customActions.value.isEmpty()) {
+                    actions.add(BeSmallActionModel("edit_profile", Icons.Default.Edit, "Editar", emoji = "✏️", isDefault = true) { triggerAction("edit_profile") })
+                    actions.add(BeSmallActionModel("settings_profile", Icons.Default.Settings, "Ajustes", emoji = "⚙️", isDefault = true) { triggerAction("settings_profile") })
+                }
+            }
+            HUDContext.CALENDAR -> {
+                actions.add(BeSmallActionModel("goto_history", Icons.Default.History, "Historial", emoji = "📜", tint = Color(0xFFFF9800), isDefault = true) { triggerAction("goto_history") })
+            }
+            HUDContext.BUDGETS_TENDERS -> {
+                actions.add(BeSmallActionModel("licit", Icons.Default.Add, "Nueva Lic", emoji = "📄", tint = Color(0xFF2197F5), isDefault = true) { triggerAction("licit") })
+            }
+            HUDContext.SEARCH_RESULTS, HUDContext.FAST -> {
+                actions.add(BeSmallActionModel("share", Icons.Default.Share, "Compartir", emoji = "📤") { })
+            }
+            else -> {}
+        }
+        
+        // --- SECCIÓN: INTEGRACIÓN DE ACCIONES PERSONALIZADAS (Dra. Fission V5.1) ---
+        // Combinamos las acciones inyectadas por los ViewModels (Obreros)
+        val ownerTopLevel = _currentActionsOwner?.let { getTopLevelContext(it) }
+        val currentTopLevel = getTopLevelContext(context)
+
+        if (_currentActionsOwner == context || (ownerTopLevel != null && ownerTopLevel == currentTopLevel)) {
+            _customActions.value.forEach { customAction ->
+                // Evitamos duplicados por ID si ya existen en las hardcoded
+                if (actions.none { it.id == customAction.id }) {
+                    actions.add(customAction)
+                }
+            }
+        }
+
         _currentActions.value = actions
     }
 
@@ -829,12 +843,11 @@ class BeBrainViewModel @Inject constructor(
         // ======================================================================================
         if (_isOffline.value) {
             finalMessages.add(BeMessage("⚠️", "Sin conexión. Búsquedas limitadas a la base de datos interna 🛠️", null, Color(0xFFEF4444), emotion = BeEmotion.ANGRY))
-        } else if (_lastRoute != null && !_isOffline.value) {
-            // Podríamos mostrar un mensaje de "Volvimos" brevemente, pero por ahora mantenemos el flujo normal
         }
 
-        val currentHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        if (currentHour >= 21 || currentHour < 6) finalMessages.add(BeMessage("🌙", "Es tarde. Si tienes una urgencia, usa Maverick FAST.", "PROBAR FAST", Color(0xFFF59E0B), emotion = BeEmotion.SURPRISED))
+        val calendar = Calendar.getInstance()
+        val currentHour = calendar.get(Calendar.HOUR_OF_DAY)
+        if (currentHour in 21..23 || currentHour in 0..5) finalMessages.add(BeMessage("🌙", "Es tarde. Si tienes una urgencia, usa Maverick FAST.", "PROBAR FAST", Color(0xFFF59E0B), emotion = BeEmotion.SURPRISED))
         finalMessages.addAll(when {
             route.contains("home") -> BeDictionary.HomeMessages
             route.contains("presupuestos") -> BeDictionary.BudgetMessages
@@ -855,10 +868,31 @@ class BeBrainViewModel @Inject constructor(
         updateActionsForContext(currentContext.value); updateToolboxKey()
     }
 
-    fun setCustomActions(actions: List<BeSmallActionModel>) { 
+    /**
+     * REGISTRO SEGURO DE ACCIONES PERSONALIZADAS (HUD V5.1)
+     * @param actions Lista de herramientas a mostrar.
+     * @param context Contexto al que pertenecen estas herramientas.
+     */
+    fun setCustomActions(actions: List<BeSmallActionModel>, context: HUDContext? = null) { 
+        val targetContext = context ?: currentContext.value
         _customActions.value = actions
-        updateActionsForContext(currentContext.value) 
+        _currentActionsOwner = targetContext
+        updateActionsForContext(targetContext) 
     }
+
+    /**
+     * LIMPIEZA SEGURA DE ACCIONES (HUD V5.1)
+     * Solo limpia si el contexto que solicita la limpieza es el dueño actual de las acciones.
+     * Esto evita que el onDispose de una pantalla que sale borre las acciones de la que entra.
+     */
+    fun clearCustomActions(context: HUDContext) {
+        if (_currentActionsOwner == context) {
+            _customActions.value = emptyList()
+            _currentActionsOwner = null
+            updateActionsForContext(currentContext.value)
+        }
+    }
+
     fun toggleMultiSelection() {
         val newState = !_isMultiSelectionActive.value
         _isMultiSelectionActive.value = newState

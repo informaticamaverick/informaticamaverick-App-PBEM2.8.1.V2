@@ -81,7 +81,8 @@ fun FastScreen(
     val fastHistory by fastViewModel.fastHistory.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        beViewModel.onRouteChanged("fast")
+        // [REGLA DE ORO] El onRouteChanged ahora se centraliza en AppNavigation
+        // beViewModel.onRouteChanged("fast")
     }
 
     LaunchedEffect(isBeSearchActive) {

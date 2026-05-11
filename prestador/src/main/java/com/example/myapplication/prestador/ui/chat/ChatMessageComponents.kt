@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -87,6 +88,60 @@ import androidx.work.WorkRequest
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.RequestPage
+
+@Composable
+fun QuotedMessage(
+    replyToSenderName: String?,
+    replyToContent: String?,
+    colors: PrestadorColors,
+    modifier: Modifier = Modifier
+) {
+    if (replyToSenderName == null || replyToContent == null) return
+
+    val maverickBlue = Color(0xFF2197F5)
+    
+    Surface(
+        color = Color.Black.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(8.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(8.dp)
+                .height(IntrinsicSize.Min)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(maverickBlue)
+            )
+            
+            Spacer(Modifier.width(10.dp))
+            
+            Column {
+                Text(
+                    text = replyToSenderName,
+                    fontSize = 12.sp,
+                    color = maverickBlue,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = replyToContent,
+                    fontSize = 13.sp,
+                    color = colors.textPrimary.copy(alpha = 0.7f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun MessageBubble(
@@ -128,9 +183,7 @@ fun MessageBubble(
     // Audio: renderizado especial con avatar fuera de la burbuja (estilo WhatsApp)
     if (message.type == Message.MessageType.AUDIO) {
         AudioMessageBubbleWA(
-            audioUrl = message.audioUrl,
-            duration = message.audioDuration ?: 0,
-            timestamp = message.timestamp,
+            message = message,
             isFromCurrentUser = isFromCurrentUser,
             senderAvatarUrl = senderAvatarUrl
         )
@@ -156,13 +209,20 @@ fun MessageBubble(
                     message.type == Message.MessageType.APPOINTMENT_RECEIPT ||
                     message.type == Message.MessageType.RESCHEDULE_NOTICE ||
                     message.type == Message.MessageType.COMPLETION_NOTICE ||
-                    message.type == Message.MessageType.CANCELLATION_NOTICE) Modifier else Modifier.padding(
+                    message.type == Message.MessageType.CANCELLATION_NOTICE) Modifier.padding(8.dp) else Modifier.padding(
                         start = 12.dp,
                         end = 12.dp,
                         top = 8.dp,
                         bottom = 4.dp
                     )
             ) {
+                if (message.replyToId != null) {
+                    QuotedMessage(
+                        replyToSenderName = message.replyToSenderName,
+                        replyToContent = message.replyToContent,
+                        colors = colors
+                    )
+                }
                 when (message.type) {
                     Message.MessageType.TEXT -> {
                         // Estilo WhatsApp: texto y hora en la misma línea
@@ -472,12 +532,13 @@ fun ImageMessageContent(
 // Burbuja de audio estilo WhatsApp (con avatar + dots progress)
 @Composable
 fun AudioMessageBubbleWA(
-    audioUrl: String?,
-    duration: Int,
-    timestamp: Long,
+    message: com.example.myapplication.prestador.data.model.Message,
     isFromCurrentUser: Boolean,
     senderAvatarUrl: String? = null
 ) {
+    val audioUrl = message.audioUrl
+    val duration = message.audioDuration ?: 0
+    val timestamp = message.timestamp
     val colors = getPrestadorColors()
     val contentColor = if (isFromCurrentUser) Color.White else colors.textPrimary
     val contentColorSecondary = if (isFromCurrentUser) Color.White.copy(0.75f) else colors.textSecondary
@@ -574,6 +635,14 @@ fun AudioMessageBubbleWA(
             shadowElevation = 2.dp
         ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                if (message.replyToId != null) {
+                    QuotedMessage(
+                        replyToSenderName = message.replyToSenderName,
+                        replyToContent = message.replyToContent,
+                        colors = colors,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)

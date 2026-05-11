@@ -10,12 +10,12 @@ import com.example.myapplication.data.repository.ProviderRepository
 import com.example.myapplication.data.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.ui.graphics.Color
 import com.example.myapplication.presentation.components.BeSmallActionModel
-import com.example.myapplication.presentation.util.ChatIdHelper
 import com.example.myapplication.data.repository.AppActionCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -73,7 +73,6 @@ class ChatListViewModel @Inject constructor(
                 val providerFromRoom = allProviders.find { it.uid == summary.userId }
                 
                 // 🔥 [MEJORA] Si no existe o falta la empresa específica del chat, sincronizamos profundamente
-                // IMPORTANTE: companyId puede venir en el summary si se guardó en algún mensaje del hilo
                 val needsSync = (providerFromRoom == null) || 
                                (summary.companyId != null && providerFromRoom.companies.none { it.id == summary.companyId })
 
@@ -89,33 +88,19 @@ class ChatListViewModel @Inject constructor(
                             } catch (e: Exception) {
                                 Log.e("ChatListVM", "❌ Error en sincronización silenciosa para ${summary.userId}: ${e.message}")
                             } finally {
-                                // Mantenemos en el set un tiempo breve para evitar spam, pero permitimos re-intento rápido si Room cambia
                                 syncingProviderIds.remove(summary.userId)
                             }
                         }
                     }
                 }
 
-                // Determinar el nombre y la foto a mostrar con prioridad SSOT
-                // Si el chat tiene un companyId asociado, buscamos esa empresa en el objeto Provider
-                val company = summary.companyId?.let { cid ->
-                    providerFromRoom?.companies?.find { it.id == cid }
-                }
-
-                val displayName = company?.name ?: providerFromRoom?.displayName ?: "Cargando..."
-                val photoUrl = company?.photoUrl ?: providerFromRoom?.photoUrl
-
-                // Si no está en Room todavía o el nombre sigue siendo placeholder, 
-                // creamos un objeto Provider mínimo pero con los datos que queremos mostrar (SSOT)
-                val provider = providerFromRoom?.copy(
-                    displayName = displayName,
-                    photoUrl = photoUrl
-                ) ?: Provider(
+                // [REGLA DE ORO] Usamos el Repositorio para decorar el proveedor (Empresa vs Persona)
+                val baseProvider = providerFromRoom ?: Provider(
                     uid = summary.userId,
                     email = "",
                     phoneNumber = "",
-                    displayName = displayName,
-                    photoUrl = photoUrl,
+                    displayName = "Cargando...",
+                    photoUrl = null,
                     name = "Cargando",
                     lastName = "",
                     createdAt = summary.lastTimestamp,
@@ -125,9 +110,11 @@ class ChatListViewModel @Inject constructor(
                     rating = 0f
                 )
                 
+                val provider = providerRepository.decorateProvider(baseProvider, summary.companyId)
+                
                 // Filtro de búsqueda (Usando el nombre final que se mostrará)
                 val matchesQuery = query.isEmpty() || 
-                    displayName.lowercase().contains(norm) ||
+                    provider.displayName.lowercase().contains(norm) ||
                     (providerFromRoom?.displayName?.lowercase()?.contains(norm) ?: false)
                 
                 if (!matchesQuery) return@mapNotNull null
@@ -140,11 +127,6 @@ class ChatListViewModel @Inject constructor(
                 )
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // Mantener chattingProviders por compatibilidad o multiselección (aunque debería ser chattingThreads)
-    val chattingProviders: StateFlow<List<Provider>> = chattingThreads.map { threads ->
-        threads.map { it.provider }.distinctBy { it.uid }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // --- MULTISELECCIÓN ---
     private val _isMultiSelectionActive = MutableStateFlow(false)
@@ -169,7 +151,11 @@ class ChatListViewModel @Inject constructor(
     }
 
     // --- ACCIONES DE BE ---
-    val beActions = _isMultiSelectionActive.map { active ->
+    /**
+     * Define las herramientas dinámicas para el asistente Be basadas en el estado del Obrero.
+     * Sigue la Regla de Oro: El ViewModel decide qué herramientas ofrecer.
+     */
+    val beActions: StateFlow<List<BeSmallActionModel>> = _isMultiSelectionActive.map { active ->
         if (active) {
             listOf(
                 BeSmallActionModel(
@@ -177,32 +163,56 @@ class ChatListViewModel @Inject constructor(
                     icon = Icons.Default.Close,
                     label = "Cancelar",
                     emoji = "✖️",
-                    tint = Color.Gray
-                ),
-                // Divider Vertical Táctico
-                BeSmallActionModel(
-                    id = "divider_v_chat",
-                    icon = Icons.Default.Close, // Dummy, BeActionsBar detecta id prefix "divider_v"
-                    label = "",
-                    isVisible = true
+                    tint = Color.Gray,
+                    isDefault = true
                 ),
                 BeSmallActionModel(
                     id = "select_all",
                     icon = Icons.Default.SelectAll,
                     label = "Todo",
                     emoji = "✅",
-                    tint = Color(0xFF2197F5)
+                    tint = Color(0xFF2197F5),
+                    isDefault = true
                 ),
                 BeSmallActionModel(
                     id = "delete_multi",
                     icon = Icons.Default.Delete,
                     label = "Eliminar",
                     emoji = "🗑️",
-                    tint = Color.Red
+                    tint = Color.Red,
+                    isDefault = true
                 )
             )
-        } else emptyList()
+        } else {
+            listOf(
+                BeSmallActionModel(
+                    id = "goto_direct_budgets",
+                    icon = Icons.AutoMirrored.Filled.Message,
+                    label = "Presupuestos",
+                    emoji = "📩",
+                    tint = Color(0xFF2197F5), // MaverickBlue
+                    isDefault = true
+                )
+            )
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Maneja las acciones disparadas desde el HUD de Be.
+     * Centraliza la respuesta a intenciones del usuario.
+     */
+    fun onBeAction(
+        actionId: String, 
+        onNavigateToBudgets: () -> Unit,
+        onShowDeleteConfirm: () -> Unit
+    ) {
+        when (actionId) {
+            "goto_direct_budgets" -> onNavigateToBudgets()
+            "select_all" -> selectAll(chattingThreads.value.map { it.chatId })
+            "delete_multi" -> if (_selectedProviderIds.value.isNotEmpty()) onShowDeleteConfirm()
+            "cancel" -> updateMultiSelection(false)
+        }
+    }
 
     // --- ACCIONES ---
     fun getProviderById(providerId: String): Flow<Provider?> {

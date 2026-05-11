@@ -58,6 +58,11 @@ data class MessageEntity(
     val receiptAddress: String? = null,
     val receiptCode: String? = null,
 
+    // 🔥 [NUEVO] Campos para Respuestas (Reply) estilo WhatsApp
+    val replyToId: String? = null,
+    val replyToContent: String? = null,
+    val replyToSenderName: String? = null,
+
     // --- METADATOS ---
     val timestamp: Long = System.currentTimeMillis(),
 

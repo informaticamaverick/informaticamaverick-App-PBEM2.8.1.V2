@@ -97,4 +97,9 @@ data class MessageEntity(
     //Campos de para la solicitud de presupuesto
     val budgetRequestDescription: String? = null,
     val budgetRequestClientAddress: String? = null,
+
+    // 🔥 [NUEVO] Campos para Respuestas (Reply) estilo WhatsApp
+    val replyToId: String? = null,
+    val replyToContent: String? = null,
+    val replyToSenderName: String? = null
 )

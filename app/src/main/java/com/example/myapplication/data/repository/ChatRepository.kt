@@ -48,7 +48,9 @@ class ChatRepository @Inject constructor(
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
     private val calendarDao: CalendarDao, // 🔥 RE-AGREGADO: Necesario para sincronizar con el calendario
+    private val calendarRepository: CalendarRepository, // 🔥 NUEVO: Para delegar el guardado inteligente
     private val providerDao: ProviderDao, // 🔥 NUEVO: Necesario para sincronizar prestadores
+    private val categoryDao: com.example.myapplication.data.local.CategoryDao, // 🔥 NUEVO: Acceso a rubros locales
     private val firestore: FirebaseFirestore,
     private val database: FirebaseDatabase,
     private val auth: FirebaseAuth,
@@ -133,6 +135,8 @@ class ChatRepository @Inject constructor(
                             snapshot.child("appointmentTitle").getValue(String::class.java) ?: ""
                         val appointmentStatus =
                             snapshot.child("appointmentStatus").getValue(String::class.java)
+                        val categoryId =
+                            snapshot.child("categoryId").getValue(String::class.java)
                         
                         var localImagePath: String? = null
                         var localAudioPath: String? = null
@@ -195,6 +199,10 @@ class ChatRepository @Inject constructor(
                             receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java),
                             receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
                             receiptCode = snapshot.child("receiptCode").getValue(String::class.java),
+                            categoryId = categoryId, // 🔥 [NUEVO] Extraído del snapshot
+                            replyToId = snapshot.child("replyToId").getValue(String::class.java),
+                            replyToContent = snapshot.child("replyToContent").getValue(String::class.java),
+                            replyToSenderName = snapshot.child("replyToSenderName").getValue(String::class.java),
                             timestamp = snapshot.child("timestamp").getValue(Long::class.java)
                                 ?: System.currentTimeMillis(),
                             isRead = isReadInServer,
@@ -300,6 +308,7 @@ class ChatRepository @Inject constructor(
                             
                             val isReadInServer = snapshot.child("isRead").getValue(Boolean::class.java) ?: false
                             val msgTimestamp = snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis()
+                            val categoryId = snapshot.child("categoryId").getValue(String::class.java) // 🔥 [NUEVO]
 
                             scope.launch {
                                 if (chatDao.messageExists(msgId)) {
@@ -381,6 +390,10 @@ class ChatRepository @Inject constructor(
                                     receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java),
                                     receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
                                     receiptCode = snapshot.child("receiptCode").getValue(String::class.java),
+                                    categoryId = categoryId, // 🔥 [NUEVO]
+                                    replyToId = snapshot.child("replyToId").getValue(String::class.java),
+                                    replyToContent = snapshot.child("replyToContent").getValue(String::class.java),
+                                    replyToSenderName = snapshot.child("replyToSenderName").getValue(String::class.java),
                                     timestamp = msgTimestamp,
                                     isRead = isReadInServer,
                                     isSynced = true
@@ -542,7 +555,10 @@ class ChatRepository @Inject constructor(
                 "appointmentType" to message.appointmentType,
                 "providerAddress" to message.providerAddress,
                 "appointmentDate" to message.appointmentDate,
-                "appointmentTime" to message.appointmentTime
+                "appointmentTime" to message.appointmentTime,
+                "replyToId" to message.replyToId,
+                "replyToContent" to message.replyToContent,
+                "replyToSenderName" to message.replyToSenderName
             )
             // [SINCRONIZACIÓN] Asegurar que el estado del turno se envíe correctamente
             if (message.type == MessageType.VISIT) {
@@ -587,7 +603,10 @@ class ChatRepository @Inject constructor(
                 "timestamp" to message.timestamp,
                 "isRead" to false,
                 "isDelivered" to false,
-                "durationSeconds" to message.durationSeconds
+                "durationSeconds" to message.durationSeconds,
+                "replyToId" to message.replyToId,
+                "replyToContent" to message.replyToContent,
+                "replyToSenderName" to message.replyToSenderName
             )
 
             database.reference
@@ -710,85 +729,21 @@ class ChatRepository @Inject constructor(
     }
 
     private suspend fun saveToCalendar(message: MessageEntity, myUserId: String, providerPhotoUrl: String? = null) {
-        try {
-            val date = message.appointmentDate ?: return
-            val time = message.appointmentTime ?: ""
-
-            // Determinar tipo de evento prioritariamente por appointmentType
-            val eventType = when {
-                message.appointmentType == "TECHNICAL_VISIT" -> EventType.VISIT
-                message.appointmentType == "LOCAL_APPOINTMENT" -> EventType.APPOINTMENT
-                message.type == MessageType.APPOINTMENT_RECEIPT && (message.receiptIsTechnician == true) -> EventType.VISIT
-                message.type == MessageType.APPOINTMENT_RECEIPT -> EventType.APPOINTMENT
-                else -> EventType.VISIT
-            }
-
-            // Identificar quién es el prestador
-            val providerId = if (message.senderId == myUserId) message.receiverId else message.senderId
-
-            // Extraer datos del remitente
-            var providerName = message.receiptProviderName
-            var title = message.receiptService
-            var address = message.providerAddress ?: message.receiptAddress
-
-            if (providerName == null) {
-                // Si no es un recibo formal, buscamos el nombre del remitente en Firestore
-                try {
-                    val provDoc = firestore.collection("providers").document(providerId).get().await()
-                    val perfil = provDoc.get("perfil") as? Map<*, *>
-                    providerName = (perfil?.get("nombre") as? String)
-                        ?: provDoc.getString("nombre")
-                        ?: providerId
-                } catch (e: Exception) {
-                    providerName = "Prestador"
-                }
-            }
-
-            if (title == null || title.length > 30 && title.contains("-")) {
-                // Si el título es nulo o parece un ID, usamos el contenido del mensaje (que trae la nota del turno)
-                title = if (message.type == MessageType.VISIT && !message.content.contains("|")) {
-                    message.content 
-                } else if (message.receiptService != null) {
-                    message.receiptService
-                } else {
-                    eventType.label
-                }
-            }
-
-            if (address == null || address == "A convenir") {
-                address = message.providerAddress ?: message.receiptAddress ?: message.locationAddress ?: "A convenir"
-            }
-
-            // 🔥 [REGLA DE ORO] Intentar obtener la foto del proveedor si no está en el mensaje
-            var finalPhotoUrl: String? = message.imageUrl ?: providerPhotoUrl
-            if (finalPhotoUrl == null) {
-                try {
-                    val provDoc = firestore.collection("providers").document(providerId).get().await()
-                    finalPhotoUrl = provDoc.getString("photoUrl")
-                } catch (e: Exception) {
-                    Log.w("ChatRepository", "No se pudo recuperar la foto del proveedor para el calendario")
-                }
-            }
-
-            val event = CalendarEventEntity(
-                id = "evt_${message.id}",
-                date = date,
-                time = time,
-                type = eventType,
-                title = title ?: "Cita confirmada",
-                provider = providerName ?: "Prestador",
-                providerId = providerId,
-                address = address ?: "A convenir",
-                status = VisitStatus.CONFIRMED,
-                providerPhotoUrl = finalPhotoUrl,
-                avatarColorLong = 0xFF2197F5 // Azul Maverick por defecto
-            )
-
-            calendarDao.insertEvent(event)
-            Log.d("ChatRepository", "Cita guardada en calendario local: ${event.title} para el $date")
-        } catch (e: Exception) {
-            Log.e("ChatRepository", "Error guardando en calendario: ${e.message}")
-        }
+        val providerId = if (message.senderId == myUserId) message.receiverId else message.senderId
+        
+        calendarRepository.saveSmartEvent(
+            id = message.id,
+            rawDate = message.appointmentDate ?: return,
+            rawTime = message.appointmentTime ?: "",
+            title = message.receiptService ?: message.content,
+            providerId = providerId,
+            providerName = message.receiptProviderName,
+            providerPhotoUrl = message.imageUrl ?: providerPhotoUrl,
+            address = message.providerAddress ?: message.receiptAddress ?: message.locationAddress,
+            categoryId = message.categoryId,
+            appointmentType = message.appointmentType,
+            isTechnician = message.receiptIsTechnician
+        )
     }
 
     private fun syncReadStatusToRTDB(chatId: String, msgIds: List<String>) {

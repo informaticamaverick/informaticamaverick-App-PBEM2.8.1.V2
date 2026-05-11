@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
         CalendarEventEntity::class, // Tabla de Eventos del Calendario (NUEVO)
         FastCategoryEntity::class // Tabla de Categorías de Acceso Rápido (NUEVO)
     ],
-    version = 30, // 🔥 [INCREMENTADO] Se agregaron campos a CalendarEventEntity
+    version = 31, // 🔥 [INCREMENTADO] Se agregaron campos a CalendarEventEntity
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -114,7 +114,8 @@ abstract class AppDatabase : RoomDatabase() {
                         budgetDao.insertTender(tender)
                     }
 
-                    // 5. CARGA DE AGENDA / EVENTOS DE CALENDARIO (DESACTIVADO PARA USAR DATOS REALES)
+                    // 5. CARGA DE AGENDA / EVENTOS DE CALENDARIO (DESACTIVADO POR USUARIO)
+                    // val calendarDao = database.calendarDao()
                     // calendarDao.insertAllEvents(seedData.calendarEvents)
 
                     // 6. CARGA DE PRESUPUESTOS (DESACTIVADO POR USUARIO)

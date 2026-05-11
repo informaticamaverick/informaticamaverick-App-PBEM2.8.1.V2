@@ -2,7 +2,7 @@ package com.example.myapplication.presentation.util
 
 /**
  * MAVERICK CHAT ID HELPER
- * Genera IDs de conversación consistentes y unificados.
+ * Genera y gestiona IDs de conversación consistentes y unificados.
  */
 object ChatIdHelper {
     /**
@@ -11,5 +11,19 @@ object ChatIdHelper {
      */
     fun generateChatId(uid1: String, uid2: String): String {
         return listOf(uid1, uid2).sorted().joinToString("_")
+    }
+
+    /**
+     * Extrae el ID del otro participante a partir de un chatId y el ID del usuario actual.
+     */
+    fun extractOtherParticipantId(chatId: String, currentUserId: String): String {
+        return chatId.split("_").firstOrNull { it != currentUserId } ?: ""
+    }
+
+    /**
+     * Verifica si un usuario pertenece a una conversación específica.
+     */
+    fun isParticipant(chatId: String, userId: String): Boolean {
+        return chatId.contains(userId)
     }
 }

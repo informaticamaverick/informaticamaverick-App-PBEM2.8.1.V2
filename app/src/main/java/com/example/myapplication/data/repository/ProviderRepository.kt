@@ -114,15 +114,15 @@ class ProviderRepository @Inject constructor(
                 }
                 companiesList.add(CompanyProvider(
                     id = compDoc.id,
-                    name = compDoc.getString("nombreNegocio") ?: compDoc.getString("name") ?: "",
+                    name = compDoc.getString("nombre") ?: compDoc.getString("name") ?: compDoc.getString("nombreNegocio") ?: "",
                     razonSocial = compDoc.getString("razonSocial") ?: "",
-                    cuit = compDoc.getString("cuitNegocio") ?: compDoc.getString("cuit") ?: "",
-                    description = compDoc.getString("descripcion") ?: compDoc.getString("description") ?: "",
+                    cuit = compDoc.getString("cuit") ?: compDoc.getString("cuitNegocio") ?: "",
+                    description = compDoc.getString("description") ?: compDoc.getString("descripcion") ?: "",
                     rating = (compDoc.getDouble("rating") ?: 0.0).toFloat(),
-                    photoUrl = compDoc.getString("photoUrl"),
-                    bannerImageUrl = compDoc.getString("bannerImageUrl"),
+                    photoUrl = compDoc.getString("photoUrl") ?: compDoc.getString("imageUrl"),
+                    bannerImageUrl = compDoc.getString("bannerImageUrl") ?: compDoc.getString("bannerUrl"),
                     categories = (compDoc.get("categories") as? List<*>)?.map { it.toString() } ?: emptyList(),
-                    isVerified = compDoc.getBoolean("verificado") ?: false,
+                    isVerified = compDoc.getBoolean("verificado") ?: compDoc.getBoolean("isVerified") ?: false,
                     branches = branchesList
                 ))
             }
@@ -251,5 +251,23 @@ class ProviderRepository @Inject constructor(
      */
     suspend fun clearProviders() {
         providerDao.clearAllProviders()
+    }
+
+    // --- SECCIÓN: UTILIDADES DE DOMINIO ---
+
+    /**
+     * [REGLA DE ORO] Centraliza la lógica de visualización (Empresa vs Persona).
+     * Decora un objeto Provider con los datos de una empresa específica si se proporciona un companyId.
+     */
+    fun decorateProvider(provider: Provider, companyId: String?): Provider {
+        if (companyId == null) return provider
+        
+        val company = provider.companies.find { it.id == companyId }
+        return if (company != null) {
+            provider.copy(
+                displayName = company.name,
+                photoUrl = company.photoUrl ?: provider.photoUrl
+            )
+        } else provider
     }
 }

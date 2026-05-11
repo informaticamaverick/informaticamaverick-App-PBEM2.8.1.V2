@@ -193,8 +193,8 @@ fun ChatConversationScreen(
             budgetNotas = budgetObj?.optString("notas"),
             budgetValidezDias = budgetObj?.optInt("validezDias"),
             budgetTituloTrabajo = budgetObj?.optString("titulo"),
-            budgetCategorias = budgetObj?.optString("categorias"),
-            budgetClienteId = budgetObj?.optString("clienteId"),
+           // budgetCategorias = budgetObj?.optString("categorias"),
+           // budgetClienteId = budgetObj?.optString("clienteId"),
             calendarStartDate = entity.calendarStartDate,
             calendarEndDate = entity.calendarEndDate,
             availabilityJson = entity.availabilityJson,
@@ -210,7 +210,10 @@ fun ChatConversationScreen(
             receiptPrioritizeCompany = entity.receiptPrioritizeCompany,
             categoryId = entity.categoryId,
             budgetRequestDescription = entity.budgetRequestDescription,
-            budgetRequestClientAddress = entity.budgetRequestClientAddress
+            budgetRequestClientAddress = entity.budgetRequestClientAddress,
+            replyToId = entity.replyToId,
+            replyToContent = entity.replyToContent,
+            replyToSenderName = entity.replyToSenderName
         )
     }.toList() }
 
@@ -1033,7 +1036,7 @@ val prestador = remember(provider, businessEntity) {
                                 presupuestoNumero = msg.budgetNumero ?: "",
                                 tituloTrabajo = msg.budgetTituloTrabajo ?: "",
                                 clientName = userName,
-                                category = msg.budgetCategorias ?: "",
+                               // category = msg.budgetCategorias ?: "",
                                 onDismiss = { presupuestoMsgToView = null },
                                 onEnviar = { presupuestoMsgToView = null }
                             )

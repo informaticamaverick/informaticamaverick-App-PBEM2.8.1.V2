@@ -602,7 +602,8 @@ class BudgetViewModel @Inject constructor(
                         isActive = false,
                         awardedProviderId = budget.providerId,
                         awardedProviderName = budget.providerCompanyName ?: budget.providerName,
-                        awardedBudgetId = budget.budgetId
+                        awardedBudgetId = budget.budgetId,
+                        awardedProviderPhotoUrl = budget.providerPhotoUrl
                     )
                     repository.createNewTender(updatedTender)
                 }

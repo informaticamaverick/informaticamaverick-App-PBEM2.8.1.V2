@@ -149,7 +149,14 @@ fun PerfilUsuarioScreen(
         val hydratedActions = profileBeActions.map { action ->
             action.copy(onClick = { beViewModel.triggerAction(action.id) })
         }
-        beViewModel.setCustomActions(hydratedActions)
+        beViewModel.setCustomActions(hydratedActions, HUDContext.PROFILE)
+    }
+
+    // 🔥 LIMPIEZA SEGURA (HUD V5.1)
+    DisposableEffect(Unit) {
+        onDispose {
+            beViewModel.clearCustomActions(HUDContext.PROFILE)
+        }
     }
 
     // --- GESTIÓN DE SNACKBAR PARA FEEDBACK ---

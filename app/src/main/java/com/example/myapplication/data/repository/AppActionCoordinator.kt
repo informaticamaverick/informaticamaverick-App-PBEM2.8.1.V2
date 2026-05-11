@@ -14,7 +14,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class AppActionCoordinator @Inject constructor(
-    private val userRepository: UserRepository
+    userRepository: UserRepository
 ) {
     // Eventos de acciones globales (ej: clics en Be, disparadores de búsqueda)
     private val _actionEvent = MutableSharedFlow<String>()
@@ -84,7 +84,6 @@ class AppActionCoordinator @Inject constructor(
     val selectedAddressId = _selectedAddressId.asStateFlow()
 
     private val _gpsAddressOverride = MutableStateFlow<AddressInfo?>(null)
-    val gpsAddressOverride = _gpsAddressOverride.asStateFlow()
 
     fun selectAddress(addressId: String) {
         _selectedAddressId.value = addressId

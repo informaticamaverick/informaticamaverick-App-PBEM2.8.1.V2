@@ -142,7 +142,14 @@ fun RootNavigation() {
             )
         ) { backStackEntry ->
             val target = backStackEntry.arguments?.getString("target")
-            ClientAppNavigation(initialTarget = target)
+            ClientAppNavigation(
+                initialTarget = target,
+                onLogoutRequest = {
+                    navController.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

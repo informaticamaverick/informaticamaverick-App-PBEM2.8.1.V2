@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 49,
-    "identityHash": "ba8743747cfd4cad573feb6b87c4eca5",
+    "identityHash": "9b8700815fbf07c072cca93e4bad1b36",
     "entities": [
       {
         "tableName": "presupuestos",
@@ -639,7 +639,7 @@
       },
       {
         "tableName": "messages",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`messageId` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `text` TEXT, `timestamp` INTEGER NOT NULL, `isFromCurrentUser` INTEGER NOT NULL, `isRead` INTEGER NOT NULL, `isDelivered` INTEGER NOT NULL, `messageType` TEXT NOT NULL, `imageUrl` TEXT, `imageLocalPath` TEXT, `audioUrl` TEXT, `audioLocalPath` TEXT, `audioDuration` INTEGER, `latitude` REAL, `longitude` REAL, `locationAddress` TEXT, `documentUrl` TEXT, `documentLocalPath` TEXT, `fileName` TEXT, `fileSize` INTEGER, `fileMimeType` TEXT, `appointmentId` TEXT, `appointmentTitle` TEXT, `appointmentDate` TEXT, `appointmentTime` TEXT, `appointmentStatus` TEXT, `appointmentType` TEXT, `providerAddress` TEXT, `companyId` TEXT, `categoryId` TEXT, `rejectionReason` TEXT, `budgetDataJson` TEXT, `calendarStartDate` TEXT, `calendarEndDate` TEXT, `availabilityJson` TEXT, `bookedSlotsJson` TEXT, `calendarInviteMessageId` TEXT, `receiptService` TEXT, `receiptProviderName` TEXT, `receiptProfession` TEXT, `receiptAddress` TEXT, `receiptCode` TEXT, `receiptIsTechnician` INTEGER NOT NULL, `receiptPrioritizeCompany` INTEGER NOT NULL, `isSynced` INTEGER NOT NULL, `syncError` TEXT, `budgetRequestDescription` TEXT, `budgetRequestClientAddress` TEXT, PRIMARY KEY(`messageId`), FOREIGN KEY(`conversationId`) REFERENCES `conversations`(`conversationId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`messageId` TEXT NOT NULL, `conversationId` TEXT NOT NULL, `text` TEXT, `timestamp` INTEGER NOT NULL, `isFromCurrentUser` INTEGER NOT NULL, `isRead` INTEGER NOT NULL, `isDelivered` INTEGER NOT NULL, `messageType` TEXT NOT NULL, `imageUrl` TEXT, `imageLocalPath` TEXT, `audioUrl` TEXT, `audioLocalPath` TEXT, `audioDuration` INTEGER, `latitude` REAL, `longitude` REAL, `locationAddress` TEXT, `documentUrl` TEXT, `documentLocalPath` TEXT, `fileName` TEXT, `fileSize` INTEGER, `fileMimeType` TEXT, `appointmentId` TEXT, `appointmentTitle` TEXT, `appointmentDate` TEXT, `appointmentTime` TEXT, `appointmentStatus` TEXT, `appointmentType` TEXT, `providerAddress` TEXT, `companyId` TEXT, `categoryId` TEXT, `rejectionReason` TEXT, `budgetDataJson` TEXT, `calendarStartDate` TEXT, `calendarEndDate` TEXT, `availabilityJson` TEXT, `bookedSlotsJson` TEXT, `calendarInviteMessageId` TEXT, `receiptService` TEXT, `receiptProviderName` TEXT, `receiptProfession` TEXT, `receiptAddress` TEXT, `receiptCode` TEXT, `receiptIsTechnician` INTEGER NOT NULL, `receiptPrioritizeCompany` INTEGER NOT NULL, `isSynced` INTEGER NOT NULL, `syncError` TEXT, `budgetRequestDescription` TEXT, `budgetRequestClientAddress` TEXT, `replyToId` TEXT, `replyToContent` TEXT, `replyToSenderName` TEXT, PRIMARY KEY(`messageId`), FOREIGN KEY(`conversationId`) REFERENCES `conversations`(`conversationId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "messageId",
@@ -926,6 +926,24 @@
           {
             "fieldPath": "budgetRequestClientAddress",
             "columnName": "budgetRequestClientAddress",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "replyToId",
+            "columnName": "replyToId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "replyToContent",
+            "columnName": "replyToContent",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "replyToSenderName",
+            "columnName": "replyToSenderName",
             "affinity": "TEXT",
             "notNull": false
           }
@@ -1665,7 +1683,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ba8743747cfd4cad573feb6b87c4eca5')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9b8700815fbf07c072cca93e4bad1b36')"
     ]
   }
 }

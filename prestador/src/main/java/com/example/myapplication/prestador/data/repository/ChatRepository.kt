@@ -614,6 +614,9 @@ class ChatRepository @Inject constructor(
                     receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java) ?: false,
                     receiptPrioritizeCompany = snapshot.child("receiptPrioritizeCompany").getValue(Boolean::class.java) ?: false,
                     categoryId = snapshot.child("categoryId").getValue(String::class.java),
+                    replyToId = snapshot.child("replyToId").getValue(String::class.java),
+                    replyToContent = snapshot.child("replyToContent").getValue(String::class.java),
+                    replyToSenderName = snapshot.child("replyToSenderName").getValue(String::class.java)
                 )
                 scope.launch {
                     try {
@@ -1141,7 +1144,10 @@ class ChatRepository @Inject constructor(
                                             imageLocalPath = localImagePath,
                                             audioLocalPath = localAudioPath,
                                             imageUrl = if (localImagePath != null) "[Imagen]" else null,
-                                            audioUrl = if (localAudioPath != null) "[Audio]" else null
+                                            audioUrl = if (localAudioPath != null) "[Audio]" else null,
+                                            replyToId = snap.child("replyToId").getValue(String::class.java),
+                                            replyToContent = snap.child("replyToContent").getValue(String::class.java),
+                                            replyToSenderName = snap.child("replyToSenderName").getValue(String::class.java)
                                         )
                                         messageDao.insertMessage(msg)
                                         conversationDao.updateLastMessage(conversationId, msg.text ?: "", msgTimestamp, msgType)
