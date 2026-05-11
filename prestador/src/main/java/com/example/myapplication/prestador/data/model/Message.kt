@@ -96,7 +96,10 @@ data class Message(
     val isDelivered: Boolean = false,
     val isSynced: Boolean = false,
 
-
+    // 🔥 [NUEVO] Campos para Respuestas (Reply) estilo WhatsApp
+    val replyToId: String? = null,
+    val replyToContent: String? = null,
+    val replyToSenderName: String? = null
 ) {
     /**
      * Tipos de mensajes disponibles en el chat

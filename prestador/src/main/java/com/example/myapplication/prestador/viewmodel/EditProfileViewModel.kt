@@ -158,6 +158,33 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
+    /**
+     * [NUEVO] Sube el Banner de la Empresa
+     */
+    fun uploadCompanyBannerPhoto(uri: Uri, companyId: String) {
+        viewModelScope.launch {
+            try {
+                val userId = auth.currentUser?.uid ?: return@launch
+
+                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(context, uri, maxWidth = 800, maxHeight = 300, quality = 80)
+                    ?: return@launch
+                val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+
+                // GUARDAR EN ROOM Y FIREBASE
+                val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
+                val updateCompanies = current.companies.map { company ->
+                    if (company.id == companyId) company.copy(bannerImageUrl = base64)
+                    else company
+                }
+                val updatedProvider = current.copy(companies = updateCompanies)
+                providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+                _profileState.value = ProfileState.Success(updatedProvider)
+            } catch (e: Exception) {
+                android.util.Log.e("EditProfileViewModel", "Error subiendo banner empresa: ${e.message}")
+            }
+        }
+    }
+
 
     fun uploadBannerPhoto(uri: Uri) {
         viewModelScope.launch {
@@ -511,7 +538,9 @@ class EditProfileViewModel @Inject constructor(
                 val updatedProvider = currentProvider.copy(
                     name = name ?: currentProvider.name,
                     lastName = apellido ?: currentProvider.lastName,
-                    displayName = "${name ?: currentProvider.name} ${apellido ?: currentProvider.lastName}".trim(),
+                    displayName = if (name != null || apellido != null) {
+                        "${name ?: currentProvider.name} ${apellido ?: currentProvider.lastName}".trim()
+                    } else currentProvider.displayName,
                     email = email ?: currentProvider.email,
                     phoneNumber = phone ?: currentProvider.phoneNumber,
                     description = description ?: currentProvider.description,

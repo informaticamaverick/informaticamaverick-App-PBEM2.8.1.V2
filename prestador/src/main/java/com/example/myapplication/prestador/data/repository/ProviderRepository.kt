@@ -189,10 +189,17 @@ class ProviderRepository @Inject constructor(
                 val companyMap = mapOf(
                     "id" to company.id,
                     "name" to company.name,
+                    "nombre" to company.name, // Replicado para compatibilidad
+                    "nombreNegocio" to company.name, // Replicado para compatibilidad
                     "razonSocial" to company.razonSocial,
                     "cuit" to company.cuit,
+                    "cuitNegocio" to company.cuit, // Replicado para compatibilidad
                     "description" to company.description,
+                    "descripcion" to company.description, // Replicado para compatibilidad
                     "photoUrl" to company.photoUrl,
+                    "imageUrl" to company.photoUrl, // Replicado para compatibilidad
+                    "bannerImageUrl" to company.bannerImageUrl,
+                    "bannerUrl" to company.bannerImageUrl, // Replicado para compatibilidad
                     "rating" to company.rating,
                     "categories" to company.categories,
                     "verificado" to company.isVerified
