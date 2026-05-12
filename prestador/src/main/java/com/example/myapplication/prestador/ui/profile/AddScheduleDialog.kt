@@ -33,7 +33,8 @@ fun AddScheduleDialog(
     onDismiss: () -> Unit,
     onConfirm: (days: List<Int>, startTime: String, endTime: String, duration: Int, worksByAppointment: Boolean, scheduleType: String) -> Unit,
     colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
-    hasPhysicalLocation: Boolean = false
+    hasPhysicalLocation: Boolean = false,
+    showAppointmentToggle: Boolean = true
 ) {
     var selectedDays by remember { mutableStateOf(setOf(schedule?.dayOfWeek ?: 1)) }
     var worksByAppointment by remember { mutableStateOf(schedule?.worksByAppointment ?: true) }
@@ -167,6 +168,7 @@ fun AddScheduleDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
+                if (showAppointmentToggle) {
                 Surface(shape = RoundedCornerShape(12.dp), color = colors.textSecondary.copy(alpha = 0.07f), modifier = Modifier.fillMaxWidth()) {
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -182,6 +184,7 @@ fun AddScheduleDialog(
                             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = colors.primaryOrange)
                         )
                     }
+                }
                 }
                 AnimatedVisibility(visible = worksByAppointment) {
                     Column {

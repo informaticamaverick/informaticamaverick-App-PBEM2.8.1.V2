@@ -1,6 +1,7 @@
 package com.example.myapplication.prestador.data.repository
 
 import com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity
+import com.example.myapplication.prestador.data.local.entity.ScheduleType
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -23,6 +24,8 @@ class AvailabilityScheduleFirestoreSync @Inject constructor(
                 "startTime" to schedule.startTime,
                 "endTime" to schedule.endTime,
                 "appointmentDuration" to schedule.appointmentDuration,
+                "worksByAppointment" to schedule.worksByAppointment,
+                "scheduleType" to schedule.scheduleType,
                 "isActive" to schedule.isActive,
                 "createdAt" to schedule.createdAt,
                 "updatedAt" to schedule.updatedAt
@@ -71,6 +74,8 @@ class AvailabilityScheduleFirestoreSync @Inject constructor(
         val startTime = getString("startTime") ?: return null
         val endTime = getString("endTime") ?: return null
         val appointmentDuration = (getLong("appointmentDuration") ?: getDouble("appointmentDuration")?.toLong())?.toInt() ?: 30
+        val worksByAppointment = getBoolean("worksByAppointment") ?: true
+        val scheduleType = getString("scheduleType") ?: ScheduleType.TECHNICAL_VISIT.name
         val isActive = getBoolean("isActive") ?: true
         val createdAt = getLong("createdAt") ?: System.currentTimeMillis()
         val updatedAt = getLong("updatedAt") ?: System.currentTimeMillis()
@@ -82,6 +87,8 @@ class AvailabilityScheduleFirestoreSync @Inject constructor(
             startTime = startTime,
             endTime = endTime,
             appointmentDuration = appointmentDuration,
+            worksByAppointment = worksByAppointment,
+            scheduleType = scheduleType,
             isActive = isActive,
             createdAt = createdAt,
             updatedAt = updatedAt

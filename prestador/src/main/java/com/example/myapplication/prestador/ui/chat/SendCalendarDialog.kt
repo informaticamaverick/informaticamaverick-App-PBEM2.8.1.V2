@@ -27,6 +27,7 @@ import com.example.myapplication.prestador.data.local.entity.AvailabilitySchedul
 import com.example.myapplication.prestador.data.local.entity.toDayName
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
+import com.example.myapplication.prestador.viewmodel.BlockedDateViewModel
 import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
 import org.json.JSONArray
 import org.json.JSONObject
@@ -44,10 +45,12 @@ fun SendCalendarDialog(
     initialAppointmentType: String = "TECHNICAL_VISIT",
     showTypePicker: Boolean = true,
     availabilityViewModel: AvailabilityViewModel = hiltViewModel(),
+    blockedDateViewModel: BlockedDateViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel()
 ) {
     val colors = getPrestadorColors()
     val schedules by availabilityViewModel.schedules.collectAsState()
+    val blockedDatesActive by blockedDateViewModel.blockedDates.collectAsState()
     val profileState by editProfileViewModel.profileState.collectAsState()
 
     // Carga el perfil fresco desde Firestore cada vez que se abre el dialog
@@ -97,6 +100,9 @@ fun SendCalendarDialog(
         if (exact.isEmpty() && appointmentType == com.example.myapplication.prestador.data.local.entity.ScheduleType.LOCAL_APPOINTMENT.name)
             schedules.filter { it.scheduleType == com.example.myapplication.prestador.data.local.entity.ScheduleType.TECHNICAL_VISIT.name }
         else exact
+    }
+    val blockedSet = remember(blockedDatesActive) {
+        blockedDatesActive.map { it.date }.toSet()
     }
 
     var showRangePicker by remember { mutableStateOf(false) }
@@ -178,7 +184,8 @@ fun SendCalendarDialog(
     fun buildAvailabilityJson(
         list: List<AvailabilityScheduleEntity>,
         startMillis: Long,
-        endMillis: Long
+        endMillis: Long,
+        blockedDates: Set<String>
     ): String {
         val scheduleByDay = list.associateBy { it.dayOfWeek }
         val dateSdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -188,16 +195,18 @@ fun SendCalendarDialog(
         val endCal = Calendar.getInstance().apply { timeInMillis = endMillis }
 
         while (!cursor.after(endCal)) {
-            // Calendar
-            val entityDay = (cursor.get(Calendar.DAY_OF_WEEK) +5) %7 + 1
-            scheduleByDay[entityDay]?.let { s ->
-                val obj = JSONObject()
-                obj.put("date", dateSdf.format(cursor.time))
-                obj.put("dayOfWeek", s.dayOfWeek)
-                obj.put("startTime", s.startTime)
-                obj.put("endTime", s.endTime)
-                obj.put("durationMinutes", s.appointmentDuration)
-                array.put(obj)
+            val entityDay = (cursor.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
+            val dateStr = dateSdf.format(cursor.time)
+            if (dateStr !in blockedDates) {
+                scheduleByDay[entityDay]?.let { s ->
+                    val obj = JSONObject()
+                    obj.put("date", dateStr)
+                    obj.put("dayOfWeek", s.dayOfWeek)
+                    obj.put("startTime", s.startTime)
+                    obj.put("endTime", s.endTime)
+                    obj.put("durationMinutes", s.appointmentDuration)
+                    array.put(obj)
+                }
             }
             cursor.add(Calendar.DAY_OF_MONTH, 1)
         }
@@ -524,7 +533,7 @@ fun SendCalendarDialog(
                     onSend(
                         startDate,
                         endDate,
-                        buildAvailabilityJson(filteredSchedules, startMs, endMs),
+                        buildAvailabilityJson(filteredSchedules, startMs, endMs, blockedSet),
                         "[]",
                         appointmentType,
                         if (appointmentType == "LOCAL_APPOINTMENT") selectedAddress else null,
