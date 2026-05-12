@@ -53,6 +53,8 @@ import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import com.example.myapplication.prestador.ui.presupuesto.*
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -127,6 +129,9 @@ fun CompactTextField(
 @Composable
 fun BudgetItemRow(item: BudgetItem, suggestionItems: List<BudgetItem> = emptyList(), onUpdate: (BudgetItem) -> Unit) {
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val base = item.unitPrice * item.quantity
     val taxAmount = base * (item.taxPercentage / 100)
     val withTax = base + taxAmount
@@ -286,6 +291,9 @@ fun BudgetItemRow(item: BudgetItem, suggestionItems: List<BudgetItem> = emptyLis
 @Composable
 fun BudgetServiceRow(service: BudgetService, suggestionItems: List<BudgetService> = emptyList(), onUpdate: (BudgetService) -> Unit) {
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     var showSuggestions by remember { mutableStateOf(false) }
     val searchTerm = if (service.code.length >= 2) service.code else service.description
     val filtered = if (showSuggestions && searchTerm.length >= 2 && suggestionItems.isNotEmpty()) {
@@ -360,7 +368,7 @@ fun BudgetServiceRow(service: BudgetService, suggestionItems: List<BudgetService
                                     }
                                     Text(suggestion.description, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
                                 }
-                                Text("\$${"%.2f".format(suggestion.total)}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                                Text("$currencySymbol${"%.2f".format(suggestion.total)}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                             }
                             Icon(Icons.Default.NorthWest, contentDescription = "Usar", tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
                         }
@@ -391,6 +399,9 @@ fun BudgetServiceRow(service: BudgetService, suggestionItems: List<BudgetService
 @Composable
 fun BudgetProfessionalFeeRow(fee: BudgetProfessionalFee, suggestionItems: List<BudgetProfessionalFee> = emptyList(), onUpdate: (BudgetProfessionalFee) -> Unit) {
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     var showSuggestions by remember { mutableStateOf(false) }
     val searchTerm = if (fee.code.length >= 2) fee.code else fee.description
     val filtered = if (showSuggestions && searchTerm.length >= 2 && suggestionItems.isNotEmpty()) {
@@ -478,7 +489,7 @@ fun BudgetProfessionalFeeRow(fee: BudgetProfessionalFee, suggestionItems: List<B
                                     }
                                     Text(suggestion.description, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
                                 }
-                                Text("\$${"%.2f".format(suggestion.total)}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                                Text("$currencySymbol${"%.2f".format(suggestion.total)}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                             }
                             Icon(Icons.Default.NorthWest, contentDescription = "Usar", tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
                         }
@@ -498,6 +509,9 @@ fun ArticleSummaryRow(
     onDelete: (() -> Unit)? = null
 ) {
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val base = item.unitPrice * item.quantity
     val taxAmount = base * (item.taxPercentage / 100)
     val withTax = base + taxAmount
@@ -519,7 +533,7 @@ fun ArticleSummaryRow(
             Text(item.description.ifBlank { "(Sin desc.)" }, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall, color = colors.textPrimary, maxLines = 1)
             Text("${item.quantity} × \$${"%.2f".format(item.unitPrice)}", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = colors.textSecondary)
         }
-        Text("\$${"%.2f".format(total)}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, color = colors.primaryOrange)
+        Text("$currencySymbol${"%.2f".format(total)}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall, color = colors.primaryOrange)
         if (onEdit != null || onDelete != null) {
             IconButton(onClick = { onEdit?.invoke() }, modifier = Modifier.size(28.dp)) {
                 Icon(Icons.Default.Edit, contentDescription = "Editar", tint = colors.primaryOrange, modifier = Modifier.size(14.dp))
@@ -537,6 +551,9 @@ fun ArticleSummaryRow(
 @Composable
 fun ServiceSummaryRow(modifier: Modifier = Modifier, item: BudgetService, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null) {
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val accentColor = Color(0xFF3B82F6)
     Row(
         modifier = modifier
@@ -558,7 +575,7 @@ fun ServiceSummaryRow(modifier: Modifier = Modifier, item: BudgetService, onEdit
             maxLines = 1
         )
         Text(
-            "\$${"%.2f".format(item.total)}",
+            "$currencySymbol${"%.2f".format(item.total)}",
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelSmall,
             color = accentColor
@@ -580,6 +597,9 @@ fun ServiceSummaryRow(modifier: Modifier = Modifier, item: BudgetService, onEdit
 @Composable
 fun ProfessionalFeeSummaryRow(modifier: Modifier = Modifier, item: BudgetProfessionalFee, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null) {
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val accentColor = Color(0xFF8B5CF6)
     Row(
         modifier = modifier
@@ -601,7 +621,7 @@ fun ProfessionalFeeSummaryRow(modifier: Modifier = Modifier, item: BudgetProfess
             maxLines = 1
         )
         Text(
-            "\$${"%.2f".format(item.total)}",
+            "$currencySymbol${"%.2f".format(item.total)}",
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelSmall,
             color = accentColor
@@ -623,6 +643,9 @@ fun ProfessionalFeeSummaryRow(modifier: Modifier = Modifier, item: BudgetProfess
 @Composable
 fun TaxSummaryRow(modifier: Modifier = Modifier, item: BudgetTax, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null) {
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val accentColor = Color(0xFFEF4444)
     Row(
         modifier = modifier
@@ -644,7 +667,7 @@ fun TaxSummaryRow(modifier: Modifier = Modifier, item: BudgetTax, onEdit: (() ->
             maxLines = 1
         )
         Text(
-            "\$${"%.2f".format(item.amount)}",
+            "$currencySymbol${"%.2f".format(item.amount)}",
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelSmall,
             color = accentColor
@@ -695,6 +718,9 @@ fun AttachmentSummaryRow(modifier: Modifier = Modifier, item: BudgetAttachment) 
 @Composable
 fun MiscExpenseSummaryRow(modifier: Modifier = Modifier, item: BudgetMiscExpense, onEdit: (() -> Unit)? = null, onDelete: (() -> Unit)? = null) {
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val accentColor = Color(0xFF10B981)
     Row(
         modifier = modifier
@@ -716,7 +742,7 @@ fun MiscExpenseSummaryRow(modifier: Modifier = Modifier, item: BudgetMiscExpense
             maxLines = 1
         )
         Text(
-            "\$${"%.2f".format(item.amount)}",
+            "$currencySymbol${"%.2f".format(item.amount)}",
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelSmall,
             color = accentColor
@@ -737,6 +763,9 @@ fun MiscExpenseSummaryRow(modifier: Modifier = Modifier, item: BudgetMiscExpense
 
 @Composable
 fun TotalsSummary(modifier: Modifier = Modifier, isExpanded: Boolean, grandTotal: Double) {
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val priceTextStyle = if (isExpanded) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge
     val verticalPadding = if (isExpanded) 14.dp else 8.dp
     val gradient = Brush.linearGradient(colors = listOf(Color(0xFF1E293B), Color(0xFF334155)))
@@ -762,7 +791,7 @@ fun TotalsSummary(modifier: Modifier = Modifier, isExpanded: Boolean, grandTotal
                     letterSpacing = 1.sp
                 )
                 Text(
-                    text = "\$${"%.2f".format(grandTotal)}",
+                    text = "$currencySymbol${"%.2f".format(grandTotal)}",
                     style = priceTextStyle,
                     fontWeight = FontWeight.ExtraBold,
                     color = Color(0xFFFF6B35)
@@ -1174,7 +1203,13 @@ fun ArticleAutoCompleteFields(
     var codeText by remember { mutableStateOf("") }
     var codeExpanded by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val scope = rememberCoroutineScope()
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fieldFocused) {
+        if (fieldFocused) {
+            delay(300)
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
 
     val codeFiltered = remember(codeText, suggestions) {
         if (codeText.isBlank()) emptyList()
@@ -1210,7 +1245,7 @@ fun ArticleAutoCompleteFields(
                     .menuAnchor(MenuAnchorType.PrimaryEditable)
                     .fillMaxWidth()
                     .height(40.dp)
-                    .onFocusChanged { if (it.isFocused) scope.launch { delay(500); bringIntoViewRequester.bringIntoView() } },
+                    .onFocusChanged { fieldFocused = it.isFocused },
                 label = { Text("Buscar", style = MaterialTheme.typography.labelSmall) },
                 placeholder = { Text("Cód. o descripción", style = MaterialTheme.typography.labelSmall) }
             )
@@ -1287,7 +1322,13 @@ fun ServiceAutoCompleteFields(
     var codeText by remember { mutableStateOf("") }
     var codeExpanded by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val scope = rememberCoroutineScope()
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fieldFocused) {
+        if (fieldFocused) {
+            delay(300)
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
 
     val codeFiltered = remember(codeText, suggestions) {
         if (codeText.isBlank()) emptyList()
@@ -1314,7 +1355,7 @@ fun ServiceAutoCompleteFields(
                     .menuAnchor(MenuAnchorType.PrimaryEditable)
                     .fillMaxWidth()
                     .height(40.dp)
-                    .onFocusChanged { if (it.isFocused) scope.launch { delay(500); bringIntoViewRequester.bringIntoView() } },
+                    .onFocusChanged { fieldFocused = it.isFocused },
                 label = { Text("Buscar", style = MaterialTheme.typography.labelSmall) },
                 placeholder = { Text("Cód. o descripción", style = MaterialTheme.typography.labelSmall) }
             )
@@ -1391,7 +1432,13 @@ fun FeeAutoCompleteFields(
     var codeText by remember { mutableStateOf("") }
     var codeExpanded by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
-    val scope = rememberCoroutineScope()
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fieldFocused) {
+        if (fieldFocused) {
+            delay(300)
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
 
     val codeFiltered = remember(codeText, suggestions) {
         if (codeText.isBlank()) emptyList()
@@ -1418,7 +1465,7 @@ fun FeeAutoCompleteFields(
                     .menuAnchor(MenuAnchorType.PrimaryEditable)
                     .fillMaxWidth()
                     .height(40.dp)
-                    .onFocusChanged { if (it.isFocused) scope.launch { delay(500); bringIntoViewRequester.bringIntoView() } },
+                    .onFocusChanged { fieldFocused = it.isFocused },
                 label = { Text("Buscar", style = MaterialTheme.typography.labelSmall) },
                 placeholder = { Text("Cód. o descripción", style = MaterialTheme.typography.labelSmall) }
             )
@@ -1482,7 +1529,7 @@ fun FeeAutoCompleteFields(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DescriptionAutoCompleteField(
     label: String,
@@ -1492,12 +1539,24 @@ fun DescriptionAutoCompleteField(
     val colors = getPrestadorColors()
     var text by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    var fieldFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(fieldFocused) {
+        if (fieldFocused) {
+            delay(300)
+            bringIntoViewRequester.bringIntoView()
+        }
+    }
     val filtered = remember(text, suggestions) {
         if (text.isBlank()) emptyList() else suggestions.filter { it.contains(text, ignoreCase = true) }
     }
+    Box(modifier = Modifier.fillMaxWidth().bringIntoViewRequester(bringIntoViewRequester)) {
     ExposedDropdownMenuBox(expanded = expanded && filtered.isNotEmpty(), onExpandedChange = { expanded = it }, modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(value = text, onValueChange = { text = it; expanded = true },
-            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable).fillMaxWidth(),
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryEditable)
+                .fillMaxWidth()
+                .onFocusChanged { fieldFocused = it.isFocused },
             label = { Text(label, style = MaterialTheme.typography.labelSmall) }, singleLine = true,
             textStyle = MaterialTheme.typography.bodySmall,
             trailingIcon = if (text.isNotEmpty()) { { IconButton(onClick = { onSelect(text); text = "" }) { Icon(Icons.Default.AddCircle, null, tint = colors.primaryOrange) } } } else null,
@@ -1509,6 +1568,7 @@ fun DescriptionAutoCompleteField(
                     onClick = { onSelect(desc); text = ""; expanded = false })
             }
         }
+    }
     }
 }
 

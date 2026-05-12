@@ -57,6 +57,7 @@ fun ProfileScreen(
     onBack: () -> Unit = {},
     onEditProfile: () -> Unit = {},
     onSettings: () -> Unit = {},
+    onNavigateToCalendarioConfig: () -> Unit = {},
     viewModel: EditProfileViewModel = hiltViewModel(),
     scheduleVm: AvailabilityViewModel = hiltViewModel()
 ){
@@ -76,9 +77,6 @@ fun ProfileScreen(
     }
     var showServicioProviderDialog by remember { mutableStateOf(false) }
     var showHorariosDialog by remember { mutableStateOf(false) }
-    var horarioToEdit by remember { mutableStateOf<com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity?>(null) }
-    var showAddScheduleDialog by remember { mutableStateOf(false) }
-    var showDeleteScheduleDialog by remember { mutableStateOf<List<com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity>?>(null) }
     var editProviderDoesService by remember { mutableStateOf(provider?.doesService ?: false) }
     var editProviderDoesProduct by remember { mutableStateOf(provider?.doesProduct ?: false) }
 
@@ -439,6 +437,7 @@ fun ProfileScreen(
                                     }
                                     agrupados.forEach { (_, grupo) ->
                                         val dias = grupo.sortedBy { it.dayOfWeek }
+                                            .distinctBy { it.dayOfWeek }
                                             .joinToString(" · ") { it.dayOfWeek.toDayAbbr() }
                                         val primero = grupo.first()
                                         Surface(
@@ -470,33 +469,6 @@ fun ProfileScreen(
                                                         color = colors.textSecondary
                                                     )
                                                 }
-                                                // Editar
-                                                IconButton(
-                                                    onClick = {
-                                                        horarioToEdit = primero
-                                                        showAddScheduleDialog = true
-                                                    },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(
-                                                        Icons.Default.Edit,
-                                                        "Editar",
-                                                        tint = Color(0xFF7C3AED),
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                                // Eliminar
-                                                IconButton(
-                                                    onClick = { showDeleteScheduleDialog = grupo },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(
-                                                        Icons.Default.Delete,
-                                                        "Eliminar",
-                                                        tint = Color(0xFFFF5252),
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
                                             }
                                         }
                                     }
@@ -506,69 +478,18 @@ fun ProfileScreen(
                         confirmButton = {
                             Button(
                                 onClick = {
-                                    horarioToEdit = null
-                                    showAddScheduleDialog = true
+                                    showHorariosDialog = false
+                                    onNavigateToCalendarioConfig()
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED))
                             ) {
-                                Icon(Icons.Default.Add, null, Modifier.size(16.dp))
+                                Icon(Icons.Default.Settings, null, Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("Agregar")
+                                Text("Configurar")
                             }
                         },
                         dismissButton = {
                             TextButton(onClick = { showHorariosDialog = false }) { Text("Cerrar") }
-                        }
-                    )
-                }
-                // Dialog agregar/editar horario
-                if (showAddScheduleDialog) {
-                    AddScheduleDialog(
-                        schedule = horarioToEdit,
-                        onDismiss = {
-                            showAddScheduleDialog = false
-                            horarioToEdit = null
-                        },
-                        onConfirm = { days, startTime, endTime, duration, worksByAppointment, scheduleType ->
-                            if (horarioToEdit != null) {
-                                scheduleVm.updateSchedule(
-                                    horarioToEdit!!.copy(
-                                        dayOfWeek = days.first(),
-                                        startTime = startTime,
-                                        endTime = endTime,
-                                        appointmentDuration = duration,
-                                        worksByAppointment = worksByAppointment,
-                                        scheduleType = scheduleType
-                                    )
-                                )
-                            } else {
-                                days.forEach { day ->
-                                    scheduleVm.addSchedule(day, startTime, endTime, duration, worksByAppointment, scheduleType)
-                                }
-                            }
-                            showAddScheduleDialog = false
-                            horarioToEdit = null
-                        },
-                        colors = colors,
-                        hasPhysicalLocation = editProviderTurnosLocal
-                    )
-                }
-                // Dialog confirmar eliminación
-                showDeleteScheduleDialog?.let { grupo ->
-                    AlertDialog(
-                        onDismissRequest = { showDeleteScheduleDialog = null },
-                        title = { Text("Eliminar horario") },
-                        text = { Text("¿Eliminás este horario?") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                grupo.forEach { scheduleVm.deleteSchedule(it.id) }
-                                showDeleteScheduleDialog = null
-                            }) {
-                                Text("Eliminar", color = Color(0xFFFF5252))
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showDeleteScheduleDialog = null }) { Text("Cancelar") }
                         }
                     )
                 }
@@ -688,7 +609,36 @@ fun ProfileScreen(
                         }
                     }
 
-                    ProfileSectionCard(Icons.Default.Store, "Local / Taller", Color(0xFFE53935), colors) {
+                    ProfileSectionCard(
+                        icon = Icons.Default.Store,
+                        title = "Local / Taller",
+                        iconColor = Color(0xFFE53935),
+                        colors = colors,
+                        actionButton = {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { showHorariosDialog = true }
+                                    .background(Color(0xFF7C3AED).copy(alpha = 0.10f))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CalendarMonth,
+                                    contentDescription = "Horarios de Atención",
+                                    tint = Color(0xFF7C3AED),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    "Horarios",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFF7C3AED),
+                                    fontWeight = FontWeight.SemiBold,
+                                    lineHeight = 11.sp
+                                )
+                            }
+                        }
+                    ) {
                         if (!localEditando) {
                             // Modo lectura
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

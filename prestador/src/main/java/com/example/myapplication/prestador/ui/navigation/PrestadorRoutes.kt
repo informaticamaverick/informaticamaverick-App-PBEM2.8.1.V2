@@ -20,6 +20,7 @@ sealed class PrestadorRoutes(val route: String) {
     }
 
     object Presupuestos : PrestadorRoutes("presupuestos")
+    object PresupuestoConfig : PrestadorRoutes("presupuesto_config")
     object CreatePromotion : PrestadorRoutes("create_promotion")
     object PromotionsList : PrestadorRoutes("promotion_list")
     object PromotionDetail : PrestadorRoutes("promotion_detail/{promotionId}") {

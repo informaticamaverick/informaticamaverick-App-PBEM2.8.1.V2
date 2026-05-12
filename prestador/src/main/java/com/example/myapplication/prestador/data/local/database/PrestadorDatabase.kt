@@ -65,7 +65,7 @@ import com.example.myapplication.prestador.data.local.Converters
         BookedAppointmentEntity::class,
         BlockedDateEntity::class,
    ],
-    version = 50,
+    version = 52,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

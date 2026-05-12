@@ -35,6 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 //import com.example.myapplication.prestador.data.PrestadorProfile
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.PresupuestoViewModel
+import com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel
 import androidx.compose.runtime.collectAsState
 import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.ProfileState
@@ -55,6 +56,13 @@ import com.example.myapplication.prestador.ui.presupuesto.sheets.*
 import com.example.myapplication.prestador.ui.presupuesto.components.*
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.zIndex
 
 enum class SheetType { Article, Service, ProfessionalFee, Misc, Tax, Attachment, Sections, ClientPicker }
 
@@ -66,11 +74,13 @@ fun CrearPresupuestoPrestadorScreen(
     onBack: () -> Unit = {},
     viewModel: PresupuestoViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
+    configViewModel: PresupuestoConfigViewModel = hiltViewModel(),
     // direccionViewModel: DireccionViewModel = hiltViewModel() // ARCHIVO REDUNDANTE
 ) {
     val colors = getPrestadorColors()
     val profileState by editProfileViewModel.profileState.collectAsState()
     val businessEntity by editProfileViewModel.businessEntity.collectAsState()
+    val presupuestoConfig by configViewModel.config.collectAsState()
     // val consultorioUiState by direccionViewModel.consultorioState.collectAsState() // SSOT: Usar profileState
 
     val isProviderProfessional: Boolean = (profileState as? ProfileState.Success)?.provider?.serviceType
@@ -117,6 +127,18 @@ fun CrearPresupuestoPrestadorScreen(
 
     // --- SECCIÓN: CONTEXTO ---
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Recarga el config cada vez que esta pantalla vuelve al foco (ej: al volver desde PresupuestoConfigScreen)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                configViewModel.refreshConfig()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val items = remember { mutableStateListOf<BudgetItem>() }
     val services = remember { mutableStateListOf<BudgetService>() }
@@ -185,26 +207,27 @@ fun CrearPresupuestoPrestadorScreen(
     var showTaxDetail by remember { mutableStateOf(false) }
 
     // --- SECTION VISIBILITY STATES ---
-    var showArticlesSection by remember { mutableStateOf(true) }
-    var showServicesSection by remember { mutableStateOf(true) }
-    var showProfessionalFeesSection by remember { mutableStateOf(true) }
-    var showMiscSection by remember { mutableStateOf(true) }
-    var showTaxesSection by remember { mutableStateOf(true) }
-    var showAttachmentsSection by remember { mutableStateOf(true) }
+    var showArticlesSection by
+    remember(presupuestoConfig.showArticlesByDefault) {
+        mutableStateOf(presupuestoConfig.showArticlesByDefault) }
+    var showServicesSection by
+    remember(presupuestoConfig.showServicesByDefault) { mutableStateOf(presupuestoConfig.showServicesByDefault) }
+    var showProfessionalFeesSection by
+    remember(presupuestoConfig.showFeesByDefault) {
+        mutableStateOf(presupuestoConfig.showFeesByDefault) }
+    var showMiscSection by remember(presupuestoConfig.showMiscByDefault) {
+        mutableStateOf(presupuestoConfig.showMiscByDefault) }
+    var showTaxesSection by remember(presupuestoConfig.showTaxesByDefault) {
+        mutableStateOf(presupuestoConfig.showTaxesByDefault) }
+    var showAttachmentsSection by
+    remember(presupuestoConfig.showAttachmentsByDefault) {
+        mutableStateOf(presupuestoConfig.showAttachmentsByDefault) }
 
 
     // --- NEW FIELDS STATE ---
-    var validity by remember { mutableStateOf("7") }
+    var validity by remember(presupuestoConfig.validezDias) { mutableStateOf(presupuestoConfig.validezDias.toString()) }
     var notes by remember { mutableStateOf("") }
 
-    LaunchedEffect(isProviderProfessional) {
-        if (isProviderProfessional) {
-            showArticlesSection = false
-            showServicesSection = false
-            showMiscSection = false
-            showTaxesSection = false
-        }
-    }
 
     // --- CLIENTE STATE ---
     var clienteNombre by remember { mutableStateOf("") }
@@ -348,18 +371,19 @@ fun CrearPresupuestoPrestadorScreen(
                         "${tax.description};${tax.amount}"
                     }
 
-                    val nuevoPresupuesto = com.example.myapplication.prestador.data.local.entity.PresupuestoEntity(
+                val nuevoPresupuesto = com.example.myapplication.prestador.data.local.entity.PresupuestoEntity(
                         id = "pres_${System.currentTimeMillis()}",
-                        numeroPresupuesto = (if (isProviderProfessional) "C-%03d" else "P-%03d").format(presupuestos.size + 1),
+                        numeroPresupuesto = "${presupuestoConfig.prefijo}-%04d".format(presupuestoConfig.proximoNumero),
                         clienteId = clienteId,
                         prestadorId = prestadorId,
                         fecha = java.time.LocalDate.now().toString(),
-                        validezDias = validity.toIntOrNull() ?: 7,
+                        validezDias = validity.toIntOrNull() ?: presupuestoConfig.validezDias,
                         subtotal = subtotal,
                         impuestos = itemsTaxTotal + taxesSubtotal,
                         total = grandTotal,
                         estado = "Enviado",
                         notas = notes,
+                        notaLegal = presupuestoConfig.notaLegal,
                         itemsJson = itemsJson,
                         serviciosJson = serviciosJson,
                         honorariosJson = honorariosJson,
@@ -373,6 +397,7 @@ fun CrearPresupuestoPrestadorScreen(
                     pendingSimClienteName = clienteNombre.ifBlank { "Cliente" }
                     pendingSimTotal = grandTotal
                     pendingPresupuesto = nuevoPresupuesto
+                    configViewModel.setProximoNumero(presupuestoConfig.proximoNumero + 1)
                     val hasNewItems = items.isNotEmpty() || services.isNotEmpty() ||
                         professionalFees.isNotEmpty() || miscExpenses.isNotEmpty() || taxes.isNotEmpty()
                     if (hasNewItems) showSaveCatalogDialog = true else showPreviewDialog = true
@@ -384,18 +409,70 @@ fun CrearPresupuestoPrestadorScreen(
             }
         }
     ) { paddingValues ->
-        Box(modifier = Modifier
+        val monedaChanged = presupuestoConfig.moneda != presupuestoConfig.lastAcknowledgedMoneda
+        val monedaLabel = if (presupuestoConfig.moneda == "USD") "Dólares (US$)" else "Pesos ($)"
+
+        Column(modifier = Modifier
             .fillMaxSize()
             .padding(paddingValues)) {
+
+            // Banner de aviso cuando cambió la moneda
+            if (monedaChanged) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)),
+                    shape = RoundedCornerShape(10.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = Color(0xFF856404),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Cambiaste la moneda a $monedaLabel. Revisá los precios de tus artículos y servicios.",
+                            fontSize = 13.sp,
+                            color = Color(0xFF856404),
+                            modifier = Modifier.weight(1f),
+                            lineHeight = 18.sp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(
+                            onClick = { configViewModel.acknowledgeMonedaChange() },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Entendido",
+                                tint = Color(0xFF856404),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.weight(1f)) {
             LazyColumn(
                 state = lazyListState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
+                contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { Spacer(modifier = Modifier.height(8.dp)) }
-                val numeroPreview = (if (isProviderProfessional) "C-%03d" else "P-%03d").format(presupuestos.size + 1)
+                val numeroPreview = "${presupuestoConfig.prefijo}-%04d".format(presupuestoConfig.proximoNumero)
                 item { PrestadorHeader(prestador = prestador ?: return@item, numeroPresupuesto = numeroPreview,
                     onFilterClick = { sheetType = SheetType.Sections}) }
 
@@ -658,7 +735,7 @@ fun CrearPresupuestoPrestadorScreen(
                 }
 
                 // --- SECTIONS ---
-                if (showArticlesSection && !isProviderProfessional) {
+                if (showArticlesSection) {
                     item {
                         CollapsibleSection(
                             title = "Artículos",
@@ -684,7 +761,7 @@ fun CrearPresupuestoPrestadorScreen(
                     }
                 }
 
-                if (showServicesSection && !isProviderProfessional) {
+                if (showServicesSection) {
                     item {
                         CollapsibleSection(
                             title = "Mano de Obra / Servicios",
@@ -733,7 +810,7 @@ fun CrearPresupuestoPrestadorScreen(
                     }
                 }
 
-                if (showMiscSection && !isProviderProfessional) {
+                if (showMiscSection) {
                     item {
                         CollapsibleSection(
                             title = "Gastos Varios",
@@ -767,7 +844,7 @@ fun CrearPresupuestoPrestadorScreen(
                     }
                 }
 
-                if (showTaxesSection && !isProviderProfessional) {
+                if (showTaxesSection) {
                     item {
                         CollapsibleSection(
                             title = "Impuestos",
@@ -1042,7 +1119,9 @@ fun CrearPresupuestoPrestadorScreen(
                     providerAddress = providerDisplayAnddress,
                     isProfessional = isProviderProfessional,
                     presupuestoNumero = pendingPresupuesto?.numeroPresupuesto ?: "",
-                    category = selectedBudgetCategory
+                    category = selectedBudgetCategory,
+                    validezDias = validity.toIntOrNull() ?: presupuestoConfig.validezDias,
+                    notaLegal = presupuestoConfig.notaLegal
                 )
             }
             }
@@ -1057,18 +1136,15 @@ fun CrearPresupuestoPrestadorScreen(
                     DisposableEffect(view) {
                         val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
                         if (window != null) {
-                            @Suppress("DEPRECATION")
-                            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
-                            window.setGravity(android.view.Gravity.BOTTOM)
+                            WindowCompat.setDecorFitsSystemWindows(window, false)
                         }
                         onDispose {}
                     }
                     Surface(
                         modifier = Modifier
-                            .fillMaxWidth(0.97f)
-                            .fillMaxHeight(0.90f)
-                            .padding(bottom = 8.dp),
-                        shape = RoundedCornerShape(16.dp),
+                            .fillMaxSize()
+                            .statusBarsPadding(),
+                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                         color = colors.backgroundColor
                     ) {
                         when (sheetType) {
@@ -1202,6 +1278,7 @@ fun CrearPresupuestoPrestadorScreen(
                     }
                 }
             }
+            } // end inner Box
         }
     }
 

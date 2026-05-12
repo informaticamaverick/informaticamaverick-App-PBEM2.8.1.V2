@@ -56,9 +56,12 @@ fun BudgetChatSheet(
     onDismiss: () -> Unit,
     viewModel: PresupuestoViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
-    chatViewModel: com.example.myapplication.prestador.viewmodel.ChatViewModel = hiltViewModel()
+    chatViewModel: com.example.myapplication.prestador.viewmodel.ChatViewModel = hiltViewModel(),
+    configViewModel: com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel = hiltViewModel()
 ) {
     val colors = getPrestadorColors()
+    val presupuestoConfig by configViewModel.config.collectAsState()
+    val currencySymbol = when (presupuestoConfig.moneda) { "USD" -> "US$"; else -> "$" }
     val profileState by editProfileViewModel.profileState.collectAsState()
     val businessEntity by editProfileViewModel.businessEntity.collectAsState()
 
@@ -115,6 +118,14 @@ fun BudgetChatSheet(
     var tituloTrabajo by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var validity by remember { mutableStateOf("7") }
+
+    // --- SECTION VISIBILITY (from config defaults) ---
+    var showArticlesSection by remember(presupuestoConfig.showArticlesByDefault) { mutableStateOf(presupuestoConfig.showArticlesByDefault) }
+    var showServicesSection by remember(presupuestoConfig.showServicesByDefault) { mutableStateOf(presupuestoConfig.showServicesByDefault) }
+    var showFeesSection     by remember(presupuestoConfig.showFeesByDefault)     { mutableStateOf(presupuestoConfig.showFeesByDefault) }
+    var showMiscSection     by remember(presupuestoConfig.showMiscByDefault)     { mutableStateOf(presupuestoConfig.showMiscByDefault) }
+    var showTaxesSection    by remember(presupuestoConfig.showTaxesByDefault)    { mutableStateOf(presupuestoConfig.showTaxesByDefault) }
+    var showAttachmentsSection by remember(presupuestoConfig.showAttachmentsByDefault) { mutableStateOf(presupuestoConfig.showAttachmentsByDefault) }
 
     // --- CATEGORIA STATE ---
     val providerCategories = remember(provider) { provider?.categories ?: emptyList() }
@@ -335,6 +346,54 @@ fun BudgetChatSheet(
 
             HorizontalDivider(color = colors.border)
 
+            // Banner: aviso cuando cambió la moneda
+            val monedaChanged = presupuestoConfig.moneda != presupuestoConfig.lastAcknowledgedMoneda
+            val monedaLabel = if (presupuestoConfig.moneda == "USD") "Dólares (US$)" else "Pesos ($)"
+            if (monedaChanged) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3CD)),
+                    shape = RoundedCornerShape(10.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = Color(0xFF856404),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Cambiaste la moneda a $monedaLabel. Revisá los precios de tus artículos y servicios.",
+                            fontSize = 13.sp,
+                            color = Color(0xFF856404),
+                            modifier = Modifier.weight(1f),
+                            lineHeight = 18.sp
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(
+                            onClick = { configViewModel.acknowledgeMonedaChange() },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Entendido",
+                                tint = Color(0xFF856404),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // --- CONTENT ---
             LazyColumn(
                 state = lazyListState,
@@ -528,7 +587,7 @@ fun BudgetChatSheet(
                 }
 
                 // Articles
-                if (!isProfessional) item {
+                if (showArticlesSection) item {
                     CollapsibleSection(
                         title = "Artículos",
                         items = items,
@@ -552,7 +611,7 @@ fun BudgetChatSheet(
                     ) { _, _ -> }
                 }
                 // Services
-                if (!isProfessional) item {
+                if (showServicesSection) item {
                     CollapsibleSection(
                         title = "Mano de Obra / Servicios",
                         items = services,
@@ -576,7 +635,7 @@ fun BudgetChatSheet(
                     ) { _, _ -> }
                 }
                 // Professional Fees
-                item {
+                if (showFeesSection) item {
                     CollapsibleSection(
                         title = "Honorarios del Profesional",
                         items = professionalFees,
@@ -600,7 +659,7 @@ fun BudgetChatSheet(
                     ) { _, _ -> }
                 }
                 // Misc
-                if (!isProfessional) item {
+                if (showMiscSection) item {
                     CollapsibleSection(
                         title = "Gastos Varios",
                         items = miscExpenses,
@@ -643,7 +702,7 @@ fun BudgetChatSheet(
                     }
                 }
                 // Taxes
-                if (!isProfessional) item {
+                if (showTaxesSection) item {
                     CollapsibleSection(
                         title = "Impuestos",
                         items = taxes,
@@ -814,7 +873,7 @@ fun BudgetChatSheet(
                             color = Color(0xFF94A3B8)
                         )
                         Text(
-                            "$ ${String.format("%,.2f", grandTotal)}",
+                            "$currencySymbol ${String.format("%,.2f", grandTotal)}",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = Color.White

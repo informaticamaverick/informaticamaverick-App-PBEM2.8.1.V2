@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 50,
-    "identityHash": "5b453bb8eb549b56739db933fcc1fd55",
+    "version": 52,
+    "identityHash": "b8f186fbaeb36cbb2a83b335d1570788",
     "entities": [
       {
         "tableName": "presupuestos",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `numeroPresupuesto` TEXT NOT NULL, `clienteId` TEXT NOT NULL, `prestadorId` TEXT NOT NULL, `fecha` TEXT NOT NULL, `validezDias` INTEGER NOT NULL, `subtotal` REAL NOT NULL, `impuestos` REAL NOT NULL, `total` REAL NOT NULL, `estado` TEXT NOT NULL, `notas` TEXT NOT NULL, `tituloTrabajo` TEXT NOT NULL, `itemsJson` TEXT NOT NULL, `serviciosJson` TEXT NOT NULL, `honorariosJson` TEXT NOT NULL, `gastosJson` TEXT NOT NULL, `impuestosJson` TEXT NOT NULL, `appointmentId` TEXT, `firestoreId` TEXT, `syncedAt` INTEGER, `categorias` TEXT NOT NULL, `providerCompanyName` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `numeroPresupuesto` TEXT NOT NULL, `clienteId` TEXT NOT NULL, `prestadorId` TEXT NOT NULL, `fecha` TEXT NOT NULL, `validezDias` INTEGER NOT NULL, `subtotal` REAL NOT NULL, `impuestos` REAL NOT NULL, `total` REAL NOT NULL, `estado` TEXT NOT NULL, `notas` TEXT NOT NULL, `tituloTrabajo` TEXT NOT NULL, `itemsJson` TEXT NOT NULL, `serviciosJson` TEXT NOT NULL, `honorariosJson` TEXT NOT NULL, `gastosJson` TEXT NOT NULL, `impuestosJson` TEXT NOT NULL, `appointmentId` TEXT, `firestoreId` TEXT, `syncedAt` INTEGER, `categorias` TEXT NOT NULL, `providerCompanyName` TEXT, `notaLegal` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -139,6 +139,12 @@
             "columnName": "providerCompanyName",
             "affinity": "TEXT",
             "notNull": false
+          },
+          {
+            "fieldPath": "notaLegal",
+            "columnName": "notaLegal",
+            "affinity": "TEXT",
+            "notNull": true
           },
           {
             "fieldPath": "createdAt",
@@ -1739,7 +1745,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '5b453bb8eb549b56739db933fcc1fd55')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b8f186fbaeb36cbb2a83b335d1570788')"
     ]
   }
 }

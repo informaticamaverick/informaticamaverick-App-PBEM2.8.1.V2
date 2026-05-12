@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -77,7 +78,10 @@ fun MessageInputBar(
     onMicClick: () -> Unit,
     onCancelAudio: () -> Unit,
     isRecording: Boolean,
-    recordingTime: Int
+    recordingTime: Int,
+    replyingToContent: String? = null,
+    replyingToSender: String? = null,
+    onCancelReply: () -> Unit = {}
 ) {
     val colors = getPrestadorColors()
     val density = LocalDensity.current
@@ -220,6 +224,55 @@ fun MessageInputBar(
             micAlpha.snapTo(1f)
         }
     }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // ── Barra de preview de respuesta ──────────────────────────────────────
+        AnimatedVisibility(
+            visible = replyingToContent != null && !isRecording,
+            enter = androidx.compose.animation.expandVertically() + fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + fadeOut()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.surfaceColor)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color(0xFF2197F5))
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = replyingToSender ?: "",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2197F5),
+                        maxLines = 1
+                    )
+                    Text(
+                        text = replyingToContent ?: "",
+                        fontSize = 13.sp,
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(onClick = onCancelReply, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cancelar respuesta",
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
 
     Box(
         modifier = Modifier
@@ -514,7 +567,8 @@ fun MessageInputBar(
                 }
             }
         }
-    }
+    } // cierra Box interno
+    } // cierra Column wrapper
 }
 
 // Menú flotante de adjuntos con burbujas
@@ -696,3 +750,62 @@ fun TrashCanIcon(isLidOpen: Boolean, isRed: Boolean) {
 
 
 
+
+@Composable
+fun SwipeToReply(
+    onReply: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val coroutineScope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
+    val threshold = 120f
+    val iconAlpha by animateFloatAsState(
+        targetValue = (offsetX.value / threshold).coerceIn(0f, 1f),
+        label = "iconAlpha"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragEnd = {
+                        coroutineScope.launch {
+                            if (offsetX.value >= threshold) {
+                                onReply()
+                            }
+                            offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                        }
+                    },
+                    onDragCancel = {
+                        coroutineScope.launch {
+                            offsetX.animateTo(0f, spring(stiffness = Spring.StiffnessMedium))
+                        }
+                    }
+                ) { change, dragAmount ->
+                    change.consume()
+                    if (dragAmount.x > 0 || offsetX.value > 0) {
+                        coroutineScope.launch {
+                            val newVal = (offsetX.value + dragAmount.x).coerceIn(0f, threshold * 1.2f)
+                            offsetX.snapTo(newVal)
+                        }
+                    }
+                }
+            }
+    ) {
+        // Reply icon revealed on swipe
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = "Responder",
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = iconAlpha),
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 8.dp)
+                .size(24.dp)
+        )
+        // Message content shifts right
+        Box(modifier = Modifier.offset { IntOffset(offsetX.value.roundToInt(), 0) }) {
+            content()
+        }
+    }
+}

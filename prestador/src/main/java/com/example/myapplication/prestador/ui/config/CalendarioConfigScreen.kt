@@ -1,5 +1,11 @@
 package com.example.myapplication.prestador.ui.config
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -423,7 +429,7 @@ private fun BlockedDatesSection(
         blockedDates.filter { it.reason == BlockedDateReason.CUSTOM.name }
     }
 
-    var holidaysExpanded by remember { mutableStateOf(true) }
+    var holidaysExpanded by remember { mutableStateOf(false) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf("") }
@@ -480,7 +486,11 @@ private fun BlockedDatesSection(
                     )
                 }
 
-                if (holidaysExpanded) {
+                AnimatedVisibility(
+                    visible = holidaysExpanded,
+                    enter = expandVertically(animationSpec = tween(300)) + fadeIn(animationSpec = tween(300)),
+                    exit = shrinkVertically(animationSpec = tween(300)) + fadeOut(animationSpec = tween(200))
+                ) {
                     if (holidays.isEmpty()) {
                         Text(
                             text = "No se pudieron cargar los feriados todavía.",
@@ -488,44 +498,57 @@ private fun BlockedDatesSection(
                             color = colors.textSecondary
                         )
                     } else {
+                        val rows = holidays.chunked(2)
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            holidays.forEach { holiday ->
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = colors.primaryOrange.copy(alpha = 0.05f),
-                                    modifier = Modifier.fillMaxWidth()
+                            rows.forEach { rowItems ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = formatBlockedDate(holiday.date, "dd/MM"),
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = colors.primaryOrange
-                                            )
-                                            Text(
-                                                text = holiday.label,
-                                                fontSize = 13.sp,
-                                                color = colors.textPrimary
-                                            )
+                                    rowItems.forEach { holiday ->
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = colors.primaryOrange.copy(alpha = 0.05f),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                            ) {
+                                                Text(
+                                                    text = formatBlockedDate(holiday.date, "dd/MM"),
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = colors.primaryOrange
+                                                )
+                                                Text(
+                                                    text = holiday.label,
+                                                    fontSize = 11.sp,
+                                                    color = colors.textPrimary,
+                                                    maxLines = 2,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                )
+                                                Spacer(Modifier.height(4.dp))
+                                                Switch(
+                                                    checked = blockedDateViewModel.isDateBlocked(holiday.date),
+                                                    onCheckedChange = { blockedDateViewModel.toggleHoliday(holiday) },
+                                                    colors = SwitchDefaults.colors(
+                                                        checkedThumbColor = Color.White,
+                                                        checkedTrackColor = colors.primaryOrange
+                                                    ),
+                                                    modifier = Modifier.height(24.dp)
+                                                )
+                                            }
                                         }
-                                        Switch(
-                                            checked = blockedDateViewModel.isDateBlocked(holiday.date),
-                                            onCheckedChange = { blockedDateViewModel.toggleHoliday(holiday) },
-                                            colors = SwitchDefaults.colors(
-                                                checkedThumbColor = Color.White,
-                                                checkedTrackColor = colors.primaryOrange
-                                            )
-                                        )
+                                    }
+                                    // Celda vacía si la fila tiene solo 1 elemento
+                                    if (rowItems.size == 1) {
+                                        Spacer(modifier = Modifier.weight(1f))
                                     }
                                 }
                             }
                         }
                     }
-                }
+                } // AnimatedVisibility
             }
 
             HorizontalDivider(color = colors.divider)

@@ -39,6 +39,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
+import com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
@@ -76,11 +78,19 @@ fun BudgetPreviewPDFDialog(
     presupuestoNumero: String = "",
     tituloTrabajo: String = "",
     category: String = "",
-    validezDias: Int = 15
+    validezDias: Int = 15,
+    notaLegal: String = ""
 ){
     val coroutineScope = rememberCoroutineScope()
     val captureLayer = rememberGraphicsLayer()
     val context = LocalContext.current
+    val configViewModel: PresupuestoConfigViewModel = hiltViewModel()
+    val presupuestoConfig by configViewModel.config.collectAsState()
+    val notaLegalResolved = presupuestoConfig.notaLegal.ifBlank { notaLegal }
+    val currencySymbol = when (presupuestoConfig.moneda) {
+        "USD" -> "US$"
+        else  -> "$"
+    }
     //CONVERTIR ITEMS A FORMATO DE DISPLAY
 
     val displayItems = mutableListOf<PresupuestoItemDisplay>()
@@ -97,8 +107,8 @@ fun BudgetPreviewPDFDialog(
             PresupuestoItemDisplay(
                 cantidad = item.quantity.toString(),
                 descripcion = item.description,
-                unitario = "$ ${String.format("%,.2f", item.unitPrice)}",
-                total = "$ ${String.format("%,.2f", total)}"
+                unitario = "$currencySymbol ${String.format("%,.2f", item.unitPrice)}",
+                total = "$currencySymbol ${String.format("%,.2f", total)}"
             )
         )
     }
@@ -110,7 +120,7 @@ fun BudgetPreviewPDFDialog(
                 cantidad = "-",
                 descripcion = service.description,
                 unitario = "-",
-                total = "$ ${String.format("%,.2f", service.total)}",
+                total = "$currencySymbol ${String.format("%,.2f", service.total)}",
                 isSpecial = true
             )
         )
@@ -123,7 +133,7 @@ fun BudgetPreviewPDFDialog(
                 cantidad = "-",
                 descripcion = fee.description,
                 unitario = "-",
-                total = "$ ${String.format("%,.2f", fee.total)}",
+                total = "$currencySymbol ${String.format("%,.2f", fee.total)}",
                 isSpecial = true
             )
         )
@@ -136,7 +146,7 @@ fun BudgetPreviewPDFDialog(
                 cantidad = "-",
                 descripcion = expense.description,
                 unitario = "-",
-                total = "$ ${String.format("%,.2f", expense.amount)}"
+                total = "$currencySymbol ${String.format("%,.2f", expense.amount)}"
             )
         )
     }
@@ -242,7 +252,9 @@ fun BudgetPreviewPDFDialog(
                                 discountAmount = discountAmount,
                                 total = grandTotal,
                                 taxes = if (showTaxDetail) taxes else emptyList(),
-                                validezDias = validezDias
+                                validezDias = validezDias,
+                                notaLegal = notaLegalResolved,
+                                currencySymbol = currencySymbol
                             )
                         }
                     }
@@ -602,7 +614,9 @@ fun A4FooterSection(
     discountAmount: Double,
     total: Double,
     taxes: List<BudgetTax> = emptyList(),
-    validezDias: Int = 15
+    validezDias: Int = 15,
+    notaLegal: String = "",
+    currencySymbol: String = "$"
 ) {
     Column(
         modifier = Modifier
@@ -617,7 +631,8 @@ fun A4FooterSection(
         ) {
             // Nota Legal
             Text(
-                text = "Nota: Los precios están expresados en Pesos Argentinos.\nVálido por $validezDias días.",
+                text = if (notaLegal.isNotBlank()) notaLegal
+                       else "Nota: Los precios están expresados en Pesos Argentinos.\nVálido por $validezDias días.",
                 fontSize = 10.sp,
                 color = Slate400,
                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
@@ -639,7 +654,7 @@ fun A4FooterSection(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("Subtotal:", fontSize = 11.sp, color = Slate600)
-                    Text("$ ${String.format("%,.2f", subtotal)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate800)
+                    Text("$currencySymbol ${String.format("%,.2f", subtotal)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate800)
                 }
 
                 if (taxAmount > 0) {
@@ -657,7 +672,7 @@ fun A4FooterSection(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Text(
-                                    "+ $ ${String.format("%,.2f", tax.amount)}",
+                                    "+ $currencySymbol ${String.format("%,.2f", tax.amount)}",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Slate800
@@ -670,7 +685,7 @@ fun A4FooterSection(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text("Impuestos:", fontSize = 11.sp, color = Slate600)
-                            Text("$ ${String.format("%,.2f", taxAmount)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate800)
+                            Text("$currencySymbol ${String.format("%,.2f", taxAmount)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate800)
                         }
                     }
                 }
@@ -681,7 +696,7 @@ fun A4FooterSection(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("Descuento:", fontSize = 11.sp, color = Slate600)
-                        Text("- $ ${String.format("%,.2f", discountAmount)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate800)
+                        Text("- $currencySymbol ${String.format("%,.2f", discountAmount)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate800)
                     }
                 }
 
@@ -693,7 +708,7 @@ fun A4FooterSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("TOTAL", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Slate800)
-                    Text("$ ${String.format("%,.2f", total)}", fontSize = 20.sp, fontWeight = FontWeight.Black, color = MaverickBlueEnd)
+                    Text("$currencySymbol ${String.format("%,.2f", total)}", fontSize = 20.sp, fontWeight = FontWeight.Black, color = MaverickBlueEnd)
                 }
             }
         }
