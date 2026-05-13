@@ -200,6 +200,7 @@ class ProviderRepository @Inject constructor(
                     "imageUrl" to company.photoUrl, // Replicado para compatibilidad
                     "bannerImageUrl" to company.bannerImageUrl,
                     "bannerUrl" to company.bannerImageUrl, // Replicado para compatibilidad
+                    "email" to company.email,
                     "rating" to company.rating,
                     "categories" to company.categories,
                     "verificado" to company.isVerified

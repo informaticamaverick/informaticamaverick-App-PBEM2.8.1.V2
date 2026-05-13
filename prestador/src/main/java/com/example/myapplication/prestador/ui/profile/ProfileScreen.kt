@@ -26,6 +26,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -50,6 +54,26 @@ import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.ProfileState
 import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
 import com.example.myapplication.prestador.data.local.entity.toDayAbbr
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Snackbar
+import com.example.myapplication.prestador.viewmodel.UpdateState
+import androidx.compose.material.icons.filled.Save
+import com.example.myapplication.prestador.data.model.AddressProvider
+import com.example.myapplication.prestador.ui.components.AddressBottomSheet
+import com.example.myapplication.prestador.ui.components.AddressProviderCard
+import com.example.myapplication.prestador.ui.components.BeActionsBar
+import com.example.myapplication.prestador.ui.components.PrestadorAction
+import com.example.myapplication.prestador.ui.profile.dialogs.CambiarEmailDialog
+import com.example.myapplication.prestador.ui.profile.CategoriasSelector
+
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -66,7 +90,70 @@ fun ProfileScreen(
     val provider = (profileState as? ProfileState.Success)?.provider
     val horarios by scheduleVm.schedules.collectAsState()
     val listState = rememberLazyListState()
+    val isEditMode by viewModel.isEditMode.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    val servicios by viewModel.servicios.collectAsState()
+    val loadingServicios by viewModel.loadingServicios.collectAsState()
+
+    //Form fields para modo edición
+    var editName by remember { mutableStateOf("") }
+    var editApellido by remember { mutableStateOf("") }
+    var editPhone by remember { mutableStateOf("") }
+    var editEmail by remember { mutableStateOf("") }
+    var editDniCuit by remember { mutableStateOf("") }
+    var editProfesion by remember { mutableStateOf("") }
+    var editMatricula by remember { mutableStateOf("") }
+    var editTieneMatricula by remember { mutableStateOf(false) }
+    var editDescription by remember { mutableStateOf("") }
+    var editCategorias by remember { mutableStateOf("[]") }
     var showCompanyView by remember { mutableStateOf(false) }
+    var showEmpresaSheet by remember { mutableStateOf(false) }
+
+    //Inicializar campos al entrar en modo edición
+    LaunchedEffect(isEditMode) {
+        if (isEditMode && provider != null) {
+            editName = provider.name
+            editApellido = provider.apellido ?: ""
+            editPhone = provider.phone
+            editEmail = provider.email
+            editDniCuit = provider.dniCuit ?: ""
+            editProfesion = provider.profesion ?: ""
+            editMatricula = provider.matricula ?: ""
+            editTieneMatricula = provider.tieneMatricula
+            editDescription = provider.description ?: ""
+            editCategorias = try { org.json.JSONArray(provider.categories).toString() } catch (e: Exception) { "[]" }
+        }
+    }
+
+    // Observar resultado del guardado
+    LaunchedEffect(updateState) {
+        when (val s = updateState) {
+            is UpdateState.Success -> {
+                viewModel.setEditMode(false)
+                viewModel.resetUpdateState()
+                scope.launch { snackbarHostState.showSnackbar("Perfil actualizado ✓") }
+            }
+            is UpdateState.Error -> {
+                viewModel.resetUpdateState()
+                scope.launch { snackbarHostState.showSnackbar("Error: ${s.message}") }
+            }
+            else -> Unit
+        }
+    }
+
+    //Pickers de imagen
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
+        uri: Uri? ->
+        uri?.let { viewModel.uploadProfilePhoto(it) }
+    }
+    val bannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
+        uri: Uri? ->
+        uri?.let { viewModel.uploadBannerPhoto(it)}
+    }
+
     // Inicializar showCompanyView solo la primera vez que provider carga
     LaunchedEffect(provider?.id) {
         if (provider != null && !showCompanyView) {
@@ -119,13 +206,17 @@ fun ProfileScreen(
 
     Scaffold(
         containerColor = colors.backgroundColor,
-        bottomBar = {
-            ProfileBottomBar(
-                onEdit = onEditProfile,
-                onSettings = onSettings,
-                colors = colors
-            )
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    containerColor = colors.primaryOrange,
+                    contentColor = Color.White,
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
         },
+        bottomBar = {},
         topBar = {
             Surface(
                 modifier = Modifier
@@ -153,8 +244,30 @@ fun ProfileScreen(
                         modifier = Modifier.padding(start = 4.dp)
                     )
                     Spacer(Modifier.weight(1f))
-                    IconButton(onClick = onEditProfile) {
-                        Icon(Icons.Default.Edit, null, tint = colors.primaryOrange)
+
+                    if (!isEditMode) {
+                        IconButton(onClick = { viewModel.setEditMode(true)}) {
+                            Icon(Icons.Default.Edit, null, tint = colors.primaryOrange)
+                        }
+                    } else {
+                        IconButton(onClick = { viewModel.setEditMode(false)}) {
+                            Icon(Icons.Default.Close, null, tint = colors.textSecondary)
+                        }
+                        IconButton(onClick = {
+                            viewModel.updateProfile(
+                                name = editName,
+                                apellido = editApellido,
+                                email = editEmail,
+                                phone = editPhone,
+                                dniCuit = editDniCuit,
+                                profesion = editProfesion,
+                                tieneMatricula = editTieneMatricula,
+                                matricula = if (editTieneMatricula) editMatricula else null,
+                                description = editDescription
+                            )
+                        }){
+                            Icon(Icons.Default.Check, null, tint = colors.primaryOrange)
+                        }
                     }
                 }
             }
@@ -190,16 +303,56 @@ fun ProfileScreen(
                 onUpdateAllBranches = { updatedBranches ->
                     val updatedCompany = firstCompany.copy(branches = updatedBranches)
                     viewModel.addCompany(updatedCompany)
+                },
+                onAddBranch = { newBranch, esCasaCentral ->
+                    val updatedBranches = if (esCasaCentral) {
+                        listOf(newBranch) + firstCompany.branches
+                    } else {
+                        firstCompany.branches + newBranch
+                    }
+                    viewModel.addCompany(firstCompany.copy(branches = updatedBranches))
+                },
+                onUpdateCompany = { updatedCompany ->
+                    viewModel.addCompany(updatedCompany)
                 }
             )
             return@Scaffold
         }
 
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 100.dp)
-        ) {
+        val beActions = if (!isEditMode) {
+            listOf(
+                PrestadorAction("edit", Icons.Default.Edit, "Editar", tint = colors.primaryOrange) { viewModel.setEditMode(true) },
+                PrestadorAction("divider_1", Icons.Default.Edit, ""),
+                PrestadorAction("settings", Icons.Default.Settings, "Ajustes", tint = colors.primaryOrange, onClick = onSettings)
+            )
+        } else {
+            listOf(
+                PrestadorAction("cancel", Icons.Default.Close, "Cancelar", tint = Color(0xFFFF5252)) { viewModel.setEditMode(false) },
+                PrestadorAction("divider_1", Icons.Default.Edit, ""),
+                PrestadorAction("save", Icons.Default.Save, "Guardar", tint = colors.primaryOrange) {
+                    viewModel.updateProfile(
+                        name = editName,
+                        apellido = editApellido,
+                        email = editEmail,
+                        phone = editPhone,
+                        dniCuit = editDniCuit,
+                        profesion = editProfesion,
+                        tieneMatricula = editTieneMatricula,
+                        matricula = if (editTieneMatricula) editMatricula else null,
+                        description = editDescription
+                    )
+                },
+                PrestadorAction("divider_2", Icons.Default.Edit, ""),
+                PrestadorAction("empresa", Icons.Default.Business, "Empresa", tint = colors.primaryOrange) { showEmpresaSheet = true }
+            )
+        }
+
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 100.dp)
+            ) {
             // ── 1. HEADER BANNER ─────────────────────────────────────────
             item {
                 ProfileBannerHeaderView(
@@ -215,7 +368,10 @@ fun ProfileScreen(
                     onEdit = onEditProfile,
                     toggleImageUrl = firstCompany?.photoUrl,
                     onToggle = if (firstCompany != null) ({ showCompanyView = true }) else null,
-                    colors = colors
+                    colors = colors,
+                    isEditMode = isEditMode,
+                    onEditPhoto = { photoLauncher.launch("image/*") },
+                    onEditBanner = { bannerLauncher.launch("image/*")}
                 )
             }
 
@@ -225,7 +381,7 @@ fun ProfileScreen(
             item {
                 ProfileSectionCard(
                     icon = Icons.Default.Work,
-                    title = "Datos Profesionales",
+                    title = "Datos Personales",
                     iconColor = colors.primaryOrange,
                     colors = colors,
                     actionButton = {
@@ -253,63 +409,359 @@ fun ProfileScreen(
                         }
                     }
                 ) {
-                    if (!provider.profesion.isNullOrBlank()) {
-                        ProfileInfoRow("🎓", "Profesión", provider.profesion!!, colors)
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    if (!provider.dniCuit.isNullOrBlank()) {
-                        ProfileInfoRow("🆔", "DNI / CUIT", provider.dniCuit!!, colors)
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    if (provider.tieneMatricula && !provider.matricula.isNullOrBlank()) {
-                        ProfileInfoRow("📜", "Matrícula", provider.matricula!!, colors)
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    if (provider.email.isNotBlank()) {
-                        ProfileInfoRow("📧", "Email", provider.email, colors)
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    if (provider.phone.isNotBlank()) {
-                        ProfileInfoRow("📞", "Teléfono", provider.phone, colors)
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    // Direcciones
-                    val todasDirecciones = (listOfNotNull(provider.address)
-                            +
-                            provider.addresses.filter { it.id != "principal" })
-                        .distinctBy { it.fullString() }
-
-                    todasDirecciones.forEachIndexed { index, addr ->
-                        ProfileInfoRow(
-                            "📍",
-                            if (index == 0) "Dirección" else "Otra dirección",
-                            addr.fullString(),
-                            colors
+                    if (isEditMode) {
+                        val fieldColors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = colors.primaryOrange,
+                            unfocusedBorderColor = colors.border,
+                            focusedLabelColor = colors.primaryOrange,
+                            unfocusedLabelColor = colors.textSecondary,
+                            cursorColor = colors.primaryOrange,
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary
                         )
-                        if (index < todasDirecciones.lastIndex) Spacer(Modifier.height(8.dp))
+                        val fieldShape = RoundedCornerShape(10.dp)
+                        val textStyle = androidx.compose.ui.text.TextStyle(
+                            fontSize = 13.sp,
+                            color = colors.textPrimary
+                        )
+                        val labelStyle = @Composable { label: String ->
+                            Text(label, fontSize = 11.sp)
+                        }
+
+                        // Fila 1: Nombre + Apellido
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = editName,
+                                onValueChange = { editName = it },
+                                label = { labelStyle("Nombre") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = fieldShape,
+                                colors = fieldColors,
+                                textStyle = textStyle
+                            )
+                            OutlinedTextField(
+                                value = editApellido,
+                                onValueChange = { editApellido = it },
+                                label = { labelStyle("Apellido") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = fieldShape,
+                                colors = fieldColors,
+                                textStyle = textStyle
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        // Fila 2: DNI/CUIT + Teléfono
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = editDniCuit,
+                                onValueChange = { editDniCuit = it.filter { c -> c.isDigit() } },
+                                label = { labelStyle("DNI / CUIT") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = fieldShape,
+                                colors = fieldColors,
+                                textStyle = textStyle,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                            )
+                            OutlinedTextField(
+                                value = editPhone,
+                                onValueChange = { editPhone = it.filter { c -> c.isDigit() || c == '+' || c == '-' || c == ' ' } },
+                                label = { labelStyle("Teléfono") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = fieldShape,
+                                colors = fieldColors,
+                                textStyle = textStyle,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        // Fila 3: Email (solo lectura + Cambiar) + Profesión
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Email — solo lectura con botón Cambiar
+                            var showEmailDialog by remember { mutableStateOf(false) }
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                color = colors.surfaceElevated,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, colors.border)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Email,
+                                        contentDescription = null,
+                                        tint = colors.textSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Email", fontSize = 10.sp, color = colors.textSecondary)
+                                        Text(
+                                            text = editEmail.ifBlank { "—" },
+                                            fontSize = 13.sp,
+                                            color = colors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    TextButton(
+                                        onClick = { showEmailDialog = true },
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Cambiar", fontSize = 11.sp, color = colors.primaryOrange)
+                                    }
+                                }
+                            }
+                            if (showEmailDialog) {
+                                CambiarEmailDialog(onDismiss = { showEmailDialog = false })
+                            }
+                            OutlinedTextField(
+                                value = editProfesion,
+                                onValueChange = { editProfesion = it.uppercase().filter { c -> c.isLetterOrDigit() || c == ' ' } },
+                                label = { labelStyle("Profesión") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = fieldShape,
+                                colors = fieldColors,
+                                textStyle = textStyle,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Ascii,
+                                    capitalization = KeyboardCapitalization.Characters
+                                )
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        // Toggle + campo matrícula en la misma fila
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Toggle "Tengo matrícula"
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(colors.surfaceElevated)
+                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "Matrícula",
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary
+                                )
+                                Switch(
+                                    checked = editTieneMatricula,
+                                    onCheckedChange = { editTieneMatricula = it },
+                                    modifier = Modifier.scale(0.75f),
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = colors.primaryOrange,
+                                        uncheckedThumbColor = colors.textSecondary,
+                                        uncheckedTrackColor = colors.border
+                                    )
+                                )
+                            }
+                            // Campo matrícula aparece si toggle activo
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = editTieneMatricula,
+                                modifier = Modifier.weight(1f),
+                                enter = androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
+                                exit = androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut()
+                            ) {
+                                OutlinedTextField(
+                                    value = editMatricula,
+                                    onValueChange = { editMatricula = it.uppercase() },
+                                    label = { labelStyle("Nº Matrícula") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true,
+                                    shape = fieldShape,
+                                    colors = fieldColors,
+                                    textStyle = textStyle,
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Ascii,
+                                        capitalization = KeyboardCapitalization.Characters
+                                    )
+                                )
+                            }
+                        }
+                    } else {
+                        if (!provider.profesion.isNullOrBlank()) {
+                            ProfileInfoRow("🎓", "Profesión", provider.profesion!!, colors)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        if (!provider.dniCuit.isNullOrBlank()) {
+                            ProfileInfoRow("🆔", "DNI / CUIT", provider.dniCuit!!, colors)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        if (provider.tieneMatricula && !provider.matricula.isNullOrBlank()) {
+                            ProfileInfoRow("📜", "Matrícula", provider.matricula!!, colors)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        if (provider.email.isNotBlank()) {
+                            ProfileInfoRow("📧", "Email", provider.email, colors)
+                            Spacer(Modifier.height(8.dp))
+                        }
+                        if (provider.phone.isNotBlank()) {
+                            ProfileInfoRow("📞", "Teléfono", provider.phone, colors)
+                            Spacer(Modifier.height(8.dp))
+                        }
                     }
                 }
             }
 
             // ── 3. SOBRE MÍ ──────────────────────────────────────────────
-            if (!provider.description.isNullOrBlank()) {
+            if (!provider.description.isNullOrBlank() || isEditMode) {
                 item {
                     Spacer(Modifier.height(12.dp))
                     ProfileSectionCard(Icons.Default.Info, "Sobre mí", Color(0xFF3B82F6), colors) {
-                        Text(
-                            provider.description!!,
-                            fontSize = 14.sp,
-                            color = colors.textSecondary,
-                            lineHeight = 20.sp
-                        )
+                        if (isEditMode) {
+                            OutlinedTextField(
+                                value = editDescription,
+                                onValueChange = { editDescription = it },
+                                label = { Text("Descripción", fontSize = 11.sp) },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 3,
+                                maxLines = 6,
+                                shape = RoundedCornerShape(10.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF3B82F6),
+                                    unfocusedBorderColor = colors.border,
+                                    focusedLabelColor = Color(0xFF3B82F6),
+                                    unfocusedLabelColor = colors.textSecondary,
+                                    cursorColor = Color(0xFF3B82F6),
+                                    focusedTextColor = colors.textPrimary,
+                                    unfocusedTextColor = colors.textPrimary
+                                ),
+                                textStyle = androidx.compose.ui.text.TextStyle(
+                                    fontSize = 13.sp,
+                                    color = colors.textPrimary
+                                )
+                            )
+                        } else {
+                            Text(
+                                provider.description!!,
+                                fontSize = 14.sp,
+                                color = colors.textSecondary,
+                                lineHeight = 20.sp
+                            )
+                        }
                     }
                 }
             }
 
+            // ── 3b. MIS DIRECCIONES ──────────────────────────────────────
+            item {
+                val mapsContext = androidx.compose.ui.platform.LocalContext.current
+                var showAddressDialog by remember { mutableStateOf(false) }
+                var editingAddress by remember { mutableStateOf<AddressProvider?>(null) }
+
+                Spacer(Modifier.height(12.dp))
+                ProfileSectionCard(
+                    icon = Icons.Default.LocationOn,
+                    title = "Mis Direcciones",
+                    iconColor = colors.primaryOrange,
+                    colors = colors,
+                    actionButton = {
+                        if (isEditMode) {
+                            IconButton(onClick = {
+                                editingAddress = null
+                                showAddressDialog = true
+                            }) {
+                                Icon(Icons.Default.Add, null, tint = colors.primaryOrange)
+                            }
+                        }
+                    }
+                ) {
+                    if (provider.addresses.isEmpty()) {
+                        Text(
+                            "Sin direcciones registradas",
+                            fontSize = 13.sp,
+                            color = colors.textSecondary,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    } else {
+                        provider.addresses.forEachIndexed { index, addr ->
+                            AddressProviderCard(
+                                address = addr,
+                                isEditMode = isEditMode,
+                                onEdit = {
+                                    editingAddress = addr
+                                    showAddressDialog = true
+                                },
+                                onDelete = {
+                                    viewModel.removeAdditionalAddress(addr.id)
+                                },
+                                onOpenMaps = {
+                                    val query = buildString {
+                                        append(addr.calle)
+                                        if (addr.numero.isNotBlank()) append(" ${addr.numero}")
+                                        if (addr.localidad.isNotBlank()) append(", ${addr.localidad}")
+                                        if (addr.provincia.isNotBlank()) append(", ${addr.provincia}")
+                                    }
+                                    val encodedQuery = android.net.Uri.encode(query)
+                                    val mapUri = android.net.Uri.parse(
+                                        if (addr.latitude != null && addr.longitude != null && (addr.latitude != 0.0 || addr.longitude != 0.0))
+                                            "geo:${addr.latitude},${addr.longitude}?q=$encodedQuery"
+                                        else "geo:0,0?q=$encodedQuery"
+                                    )
+                                    val intent = android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW, mapUri
+                                    )
+                                    mapsContext.startActivity(intent)
+                                }
+                            )
+                            if (index < provider.addresses.lastIndex) {
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                    }
+                }
+
+                if (showAddressDialog) {
+                    AddressBottomSheet(
+                        initial = editingAddress ?: AddressProvider(),
+                        onDismiss = { showAddressDialog = false },
+                        onSave = { addr ->
+                            viewModel.saveAdditionalAddress(addr)
+                            showAddressDialog = false
+                        }
+                    )
+                }
+            }
+
+
             // ── 4. CATEGORÍAS ────────────────────────────────────────────
-            if (provider.categories.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(12.dp))
+            item {
+                Spacer(Modifier.height(12.dp))
+                if (isEditMode) {
+                    ProfileSectionCard(Icons.Default.Category, "Categorías", Color(0xFF00897B), colors) {
+                        CategoriasSelector(
+                            categoriasJson = editCategorias,
+                            onCategoriasActualizadas = { json ->
+                                editCategorias = json
+                                viewModel.updateCategorias(json)
+                            },
+                            serviciosFirebase = servicios
+                        )
+                    }
+                } else if (provider.categories.isNotEmpty()) {
                     ProfileSectionCard(Icons.Default.Category, "Categorías", Color(0xFF00897B), colors) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -919,6 +1371,169 @@ fun ProfileScreen(
 
             // ── 7. ESPACIADO FINAL ───────────────────────────────────────
             item { Spacer(Modifier.height(8.dp)) }
+        } // cierra LazyColumn
+
+        BeActionsBar(
+            visible = true,
+            actions = beActions,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 24.dp)
+        )
+
+        // ── SHEET CREAR EMPRESA ──────────────────────────────────────────
+        if (showEmpresaSheet) {
+            EmpresaBottomSheet(
+                colors = colors,
+                onDismiss = { showEmpresaSheet = false },
+                onAceptar = { nuevaEmpresa ->
+                    viewModel.addCompany(nuevaEmpresa)
+                    showEmpresaSheet = false
+                }
+            )
+        }
+
+        } // cierra Box
+    }
+}
+
+// ── BOTTOM SHEET CREAR EMPRESA ────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EmpresaBottomSheet(
+    colors: PrestadorColors,
+    onDismiss: () -> Unit,
+    onAceptar: (CompanyProvider) -> Unit
+) {
+    var nombreComercial by remember { mutableStateOf("") }
+    var razonSocial by remember { mutableStateOf("") }
+    var cuit by remember { mutableStateOf("") }
+    var emailCorporativo by remember { mutableStateOf("") }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surfaceColor,
+        tonalElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            // Encabezado
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Business,
+                    contentDescription = null,
+                    tint = colors.primaryOrange,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Datos de Empresa",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Cerrar",
+                        tint = Color(0xFFFF5252)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            val fieldColors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colors.primaryOrange,
+                unfocusedBorderColor = colors.textSecondary.copy(alpha = 0.4f),
+                focusedLabelColor = colors.primaryOrange,
+                unfocusedLabelColor = colors.textSecondary,
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary,
+                cursorColor = colors.primaryOrange
+            )
+
+            OutlinedTextField(
+                value = nombreComercial,
+                onValueChange = { nombreComercial = it },
+                label = { Text("Nombre Comercial") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = fieldColors,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = razonSocial,
+                onValueChange = { razonSocial = it },
+                label = { Text("Razón Social") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = fieldColors,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = cuit,
+                onValueChange = { cuit = it.filter { c -> c.isDigit() || c == '-' } },
+                label = { Text("CUIT") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                colors = fieldColors,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = emailCorporativo,
+                onValueChange = { emailCorporativo = it },
+                label = { Text("Email Corporativo") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth(),
+                colors = fieldColors,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    onAceptar(
+                        CompanyProvider(
+                            name = nombreComercial.trim(),
+                            razonSocial = razonSocial.trim(),
+                            cuit = cuit.trim(),
+                            email = emailCorporativo.trim()
+                        )
+                    )
+                },
+                enabled = nombreComercial.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.primaryOrange,
+                    disabledContainerColor = colors.primaryOrange.copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Aceptar", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+            }
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -938,7 +1553,10 @@ private fun ProfileBannerHeaderView(
     onEdit: () -> Unit,
     toggleImageUrl: String? = null,
     onToggle: (() -> Unit)? = null,
-    colors: PrestadorColors
+    colors: PrestadorColors,
+    isEditMode: Boolean = false,
+    onEditPhoto: () -> Unit = {},
+    onEditBanner: () -> Unit = {}
 ){
     Box(
         modifier = Modifier
@@ -950,6 +1568,7 @@ private fun ProfileBannerHeaderView(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(190.dp)
+                .then(if (isEditMode) Modifier.clickable { onEditBanner()} else Modifier)
         ) {
             val bannerModel: Any? = bannerImageUrl?.takeIf { it.isNotEmpty() }
             when {
@@ -1009,8 +1628,19 @@ private fun ProfileBannerHeaderView(
                 .size(90.dp)
                 .clip(CircleShape)
                 .border(3.dp, colors.primaryOrange, CircleShape)
+                .then(if (isEditMode) Modifier.clickable { onEditPhoto()} else Modifier )
         ) {
             ProfilePhoto(imageUrl = imageUrl, colors = colors)
+            if (isEditMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.CameraAlt, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+            }
         }
 
         // Nombre + Profesión + Badges (abajo)
@@ -1287,25 +1917,84 @@ private fun ProfileEmpresaCard(company: CompanyProvider, colors: PrestadorColors
 }
 
 @Composable
-private fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorColors, onUpdateBranch: (BranchProvider) -> Unit = {}) {
+private fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorColors, isEditMode: Boolean = false, onUpdateBranch: (BranchProvider) -> Unit = {}) {
     val branchName = branch.name.ifBlank { if (index == 0) "Casa Central" else "Sucursal ${index + 1}" }
-    val dir = branch.address.fullString()
+    var showAddressSheet by remember { mutableStateOf(false) }
 
-    // Título
+    // Badge Casa Central
+    if (index == 0) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF8B5CF6)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+            ) {
+                Icon(Icons.Default.LocationOn, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("CASA CENTRAL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+
+    // Nombre sucursal
     Text(branchName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+    if (index == 0) {
+        Text("Casa Central seleccionada", fontSize = 12.sp, color = Color(0xFF8B5CF6))
+    }
     Spacer(Modifier.height(12.dp))
 
-    if (dir.isNotBlank()) {
-        BranchInfoRow(
-            icon = Icons.Default.LocationOn,
-            iconColor = Color(0xFFE53935),
-            label = "Dirección",
-            value = dir,
-            colors = colors
+    // ── DIRECCIÓN con AddressProviderCard (reutiliza el mismo componente del perfil)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    if (branch.address.fullString().isNotBlank()) {
+        AddressProviderCard(
+            address = branch.address,
+            isEditMode = isEditMode,
+            onEdit = { showAddressSheet = true },
+            onDelete = {
+                onUpdateBranch(
+                    branch.copy(address = com.example.myapplication.prestador.data.model.AddressProvider())
+                )
+            },
+            onOpenMaps = {
+                val lat = branch.address.latitude
+                val lng = branch.address.longitude
+                if (lat != null && lng != null && (lat != 0.0 || lng != 0.0)) {
+                    val uri = android.net.Uri.parse("geo:$lat,$lng?q=$lat,$lng(${branch.address.label.ifBlank { branchName }})")
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri)
+                    context.startActivity(intent)
+                }
+            }
+        )
+    } else if (isEditMode) {
+        OutlinedButton(
+            onClick = { showAddressSheet = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF8B5CF6)),
+            border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.5f))
+        ) {
+            Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Agregar ubicación", fontSize = 13.sp)
+        }
+    }
+
+    if (showAddressSheet) {
+        AddressBottomSheet(
+            initial = branch.address,
+            onDismiss = { showAddressSheet = false },
+            onSave = { newAddr ->
+                onUpdateBranch(branch.copy(address = newAddr))
+                showAddressSheet = false
+            }
         )
     }
+    
     if (branch.workingHours.isNotBlank()) {
-        if (dir.isNotBlank()) Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(12.dp))
         BranchInfoRow(
             icon = Icons.Default.Schedule,
             iconColor = Color(0xFF8B5CF6),
@@ -1448,8 +2137,15 @@ private fun CompanyDetailView(
     onBack: () -> Unit,
     colors: PrestadorColors,
     onUpdateBranch: (BranchProvider) -> Unit = {},
-    onUpdateAllBranches: (List<BranchProvider>) -> Unit = {}
+    onUpdateAllBranches: (List<BranchProvider>) -> Unit = {},
+    onAddBranch: (BranchProvider, Boolean) -> Unit = { _, _ -> },
+    onUpdateCompany: (CompanyProvider) -> Unit = {}
 ) {
+    var isCompanyEditMode by remember { mutableStateOf(false) }
+    var showEmpresaEditSheet by remember { mutableStateOf(false) }
+    var showAddSucursalSheet by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 100.dp)
@@ -1646,6 +2342,10 @@ private fun CompanyDetailView(
                     ProfileInfoRow("🆔", "CUIT", company.cuit, colors)
                     Spacer(Modifier.height(8.dp))
                 }
+                if (company.email.isNotBlank()) {
+                    ProfileInfoRow("📧", "Email Corporativo", company.email, colors)
+                    Spacer(Modifier.height(8.dp))
+                }
                 if (company.description.isNotBlank()) {
                     Text(company.description, fontSize = 13.sp, color = colors.textSecondary, lineHeight = 18.sp)
                     Spacer(Modifier.height(8.dp))
@@ -1712,10 +2412,318 @@ private fun CompanyDetailView(
         item { Spacer(Modifier.height(12.dp)) }
 
         // ── SUCURSALES ───────────────────────────────────────────────────
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "SUCURSALES (${company.branches.size})",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp,
+                    color = colors.textSecondary
+                )
+                Spacer(Modifier.weight(1f))
+                if (isCompanyEditMode) {
+                    IconButton(
+                        onClick = { showAddSucursalSheet = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Agregar sucursal",
+                            tint = Color(0xFF8B5CF6),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         if (company.branches.isNotEmpty()) {
             item {
-                BranchesPager(branches = company.branches, colors = colors, onUpdateBranch = onUpdateBranch)
+                BranchesPager(branches = company.branches, colors = colors, isEditMode = isCompanyEditMode, onUpdateBranch = onUpdateBranch)
             }
+        }
+    } // cierra LazyColumn
+
+    // ── ACTIONS BAR ──────────────────────────────────────────────────────
+    BeActionsBar(
+        visible = true,
+        actions = if (!isCompanyEditMode) {
+            listOf(
+                PrestadorAction("edit", Icons.Default.Edit, "Editar", tint = colors.primaryOrange) { isCompanyEditMode = true }
+            )
+        } else {
+            listOf(
+                PrestadorAction("cancel", Icons.Default.Close, "Cancelar", tint = Color(0xFFFF5252)) { isCompanyEditMode = false },
+                PrestadorAction("divider_1", Icons.Default.Edit, ""),
+                PrestadorAction("save", Icons.Default.Save, "Guardar", tint = colors.primaryOrange) { isCompanyEditMode = false },
+                PrestadorAction("divider_2", Icons.Default.Edit, ""),
+                PrestadorAction("empresa", Icons.Default.Business, "Empresa", tint = colors.primaryOrange) { showEmpresaEditSheet = true }
+            )
+        },
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(bottom = 24.dp)
+    )
+
+    // ── SHEET AGREGAR SUCURSAL ────────────────────────────────────────────
+    if (showAddSucursalSheet) {
+        SucursalBottomSheet(
+            colors = colors,
+            onDismiss = { showAddSucursalSheet = false },
+            onAceptar = { branch, esCasaCentral ->
+                onAddBranch(branch, esCasaCentral)
+                showAddSucursalSheet = false
+            }
+        )
+    }
+
+    // ── SHEET EDITAR EMPRESA ──────────────────────────────────────────────
+    if (showEmpresaEditSheet) {
+        EmpresaEditBottomSheet(
+            company = company,
+            colors = colors,
+            onDismiss = { showEmpresaEditSheet = false },
+            onGuardar = { updatedCompany ->
+                onUpdateCompany(updatedCompany)
+                showEmpresaEditSheet = false
+            }
+        )
+    }
+
+    } // cierra Box
+}
+
+// ── BOTTOM SHEET AGREGAR SUCURSAL ─────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SucursalBottomSheet(
+    colors: PrestadorColors,
+    onDismiss: () -> Unit,
+    onAceptar: (BranchProvider, Boolean) -> Unit
+) {
+    var nombre by remember { mutableStateOf("") }
+    var esCasaCentral by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surfaceColor,
+        tonalElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Store, null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Editar Sucursal",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, null, tint = Color(0xFFFF5252))
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = nombre,
+                onValueChange = { nombre = it },
+                label = { Text("Nombre de Sucursal") },
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Store, null, tint = Color(0xFF8B5CF6)) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFF8B5CF6),
+                    unfocusedBorderColor = colors.textSecondary.copy(alpha = 0.4f),
+                    focusedLabelColor = Color(0xFF8B5CF6),
+                    unfocusedLabelColor = colors.textSecondary,
+                    focusedTextColor = colors.textPrimary,
+                    unfocusedTextColor = colors.textPrimary,
+                    cursorColor = Color(0xFF8B5CF6)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { esCasaCentral = !esCasaCentral }
+                    .padding(vertical = 4.dp)
+            ) {
+                Checkbox(
+                    checked = esCasaCentral,
+                    onCheckedChange = { esCasaCentral = it },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = Color(0xFF8B5CF6),
+                        uncheckedColor = colors.textSecondary
+                    )
+                )
+                Text("Es Casa Central / Sede Principal", color = colors.textPrimary, fontSize = 14.sp)
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = { onAceptar(BranchProvider(name = nombre.trim()), esCasaCentral) },
+                enabled = nombre.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF4CAF50),
+                    disabledContainerColor = Color(0xFF4CAF50).copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Aceptar", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+            }
+
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+// ── BOTTOM SHEET EDITAR EMPRESA ────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EmpresaEditBottomSheet(
+    company: CompanyProvider,
+    colors: PrestadorColors,
+    onDismiss: () -> Unit,
+    onGuardar: (CompanyProvider) -> Unit
+) {
+    var nombreComercial by remember { mutableStateOf(company.name) }
+    var razonSocial by remember { mutableStateOf(company.razonSocial) }
+    var cuit by remember { mutableStateOf(company.cuit) }
+    var emailCorporativo by remember { mutableStateOf(company.email) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surfaceColor,
+        tonalElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Business, null, tint = colors.primaryOrange, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "Datos de Empresa",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, null, tint = Color(0xFFFF5252))
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            val fieldColors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colors.primaryOrange,
+                unfocusedBorderColor = colors.textSecondary.copy(alpha = 0.4f),
+                focusedLabelColor = colors.primaryOrange,
+                unfocusedLabelColor = colors.textSecondary,
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary,
+                cursorColor = colors.primaryOrange
+            )
+
+            OutlinedTextField(
+                value = nombreComercial,
+                onValueChange = { nombreComercial = it },
+                label = { Text("Nombre Comercial") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = fieldColors,
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = razonSocial,
+                onValueChange = { razonSocial = it },
+                label = { Text("Razón Social") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = fieldColors,
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = cuit,
+                onValueChange = { cuit = it.filter { c -> c.isDigit() || c == '-' } },
+                label = { Text("CUIT") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                colors = fieldColors,
+                shape = RoundedCornerShape(12.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = emailCorporativo,
+                onValueChange = { emailCorporativo = it },
+                label = { Text("Email Corporativo") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                modifier = Modifier.fillMaxWidth(),
+                colors = fieldColors,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    onGuardar(
+                        company.copy(
+                            name = nombreComercial.trim(),
+                            razonSocial = razonSocial.trim(),
+                            cuit = cuit.trim(),
+                            email = emailCorporativo.trim()
+                        )
+                    )
+                },
+                enabled = nombreComercial.isNotBlank(),
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.primaryOrange,
+                    disabledContainerColor = colors.primaryOrange.copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Guardar", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+            }
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -1725,68 +2733,12 @@ private fun CompanyDetailView(
 private fun BranchesPager(
     branches: List<BranchProvider>,
     colors: PrestadorColors,
+    isEditMode: Boolean = false,
     onUpdateBranch: (BranchProvider) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(pageCount = { branches.size })
 
     Column {
-        // Tabs con nombre de cada sucursal
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            branches.forEachIndexed { index, branch ->
-                val isSelected = pagerState.currentPage == index
-                Surface(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { /* handled by pager */},
-                    shape = RoundedCornerShape(10.dp),
-                    color = if(isSelected) Color(0xFF8B5CF6) else colors.surfaceColor,
-                    border = if(isSelected) BorderStroke(1.dp, colors.textSecondary.copy(alpha = 0.2f)) else null
-                ) {
-                    if (index == 0) {
-                        Text(
-                            text = "Casa Central",
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isSelected) Color.White else colors.textSecondary,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp, horizontal = 4.dp)
-                        )
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp, horizontal = 4.dp)
-                        ) {
-                            Text(
-                                text = "Sucursal",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) Color.White else colors.textSecondary,
-                                textAlign = TextAlign.Center
-                            )
-                            Text(
-                                text = branch.name.ifBlank { "Sucursal ${index + 1}" },
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = if (isSelected) Color.White.copy(alpha = 0.85f) else colors.textSecondary.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
         // Pager de sucursales
         HorizontalPager(
             state = pagerState,
@@ -1801,7 +2753,7 @@ private fun BranchesPager(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    BranchSection(index = page, branch = branches[page], colors = colors, onUpdateBranch = onUpdateBranch)
+                    BranchSection(index = page, branch = branches[page], colors = colors, isEditMode = isEditMode, onUpdateBranch = onUpdateBranch)
                 }
             }
         }
