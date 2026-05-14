@@ -309,8 +309,8 @@ fun AddressBottomSheet(
                             if (!addresses.isNullOrEmpty()) {
                                 val addr = addresses[0]
                                 withContext(Dispatchers.Main) {
-                                    lat = "%.6f".format(addr.latitude)
-                                    lng = "%.6f".format(addr.longitude)
+                                    lat = "%.6f".format(java.util.Locale.US, addr.latitude)
+                                    lng = "%.6f".format(java.util.Locale.US, addr.longitude)
                                     if (province.isBlank() && addr.adminArea != null) province = addr.adminArea
                                     if (country.isBlank() && addr.countryName != null) country = addr.countryName
                                     if (postalCode.isBlank() && addr.postalCode != null) postalCode = addr.postalCode
@@ -468,19 +468,46 @@ fun AddressBottomSheet(
             // Botón Guardar
             Button(
                 onClick = {
-                    val newAddress = initial.copy(
-                        label    = label,
-                        calle    = street.trim(),
-                        numero   = number.trim(),
-                        localidad = city.trim(),
-                        provincia = province.trim(),
-                        codigoPostal = postalCode.trim(),
-                        pais     = country.trim(),
-                        latitude  = lat.toDoubleOrNull() ?: initial.latitude,
-                        longitude = lng.toDoubleOrNull() ?: initial.longitude
-                    )
-                    onSave(newAddress)
-                    scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
+                    scope.launch {
+                        // Auto-geocodificar si lat/lng están vacíos
+                        if (lat.isBlank() && street.isNotBlank()) {
+                            syncing = true
+                            val query = buildString {
+                                append(street.trim())
+                                if (number.isNotBlank()) append(" ${number.trim()}")
+                                if (city.isNotBlank()) append(", ${city.trim()}")
+                                if (province.isNotBlank()) append(", ${province.trim()}")
+                            }
+                            try {
+                                val addresses = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    @Suppress("DEPRECATION")
+                                    android.location.Geocoder(context, java.util.Locale.getDefault())
+                                        .getFromLocationName(query, 1)
+                                }
+                                if (!addresses.isNullOrEmpty()) {
+                                    lat = "%.6f".format(java.util.Locale.US, addresses[0].latitude)
+                                    lng = "%.6f".format(java.util.Locale.US, addresses[0].longitude)
+                                }
+                            } catch (_: Exception) {
+                            } finally {
+                                syncing = false
+                            }
+                        }
+                        val newAddress = initial.copy(
+                            label    = label,
+                            calle    = street.trim(),
+                            numero   = number.trim(),
+                            localidad = city.trim(),
+                            provincia = province.trim(),
+                            codigoPostal = postalCode.trim(),
+                            pais     = country.trim(),
+                            latitude  = lat.toDoubleOrNull() ?: initial.latitude,
+                            longitude = lng.toDoubleOrNull() ?: initial.longitude
+                        )
+                        onSave(newAddress)
+                        sheetState.hide()
+                        onDismiss()
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

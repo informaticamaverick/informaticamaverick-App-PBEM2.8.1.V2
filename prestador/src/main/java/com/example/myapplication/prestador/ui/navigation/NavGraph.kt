@@ -36,7 +36,6 @@ import com.example.myapplication.prestador.ui.presupuesto.PresupuestosScreen
 import com.example.myapplication.prestador.ui.promotion.CreatePromotionScreen
 import com.example.myapplication.prestador.ui.promotion.PromotionListScreen
 import com.example.myapplication.prestador.ui.promotion.PromotionDetailScreen
-import com.example.myapplication.prestador.ui.profile.EditProfileScreenUnified
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 
 
@@ -237,7 +236,7 @@ fun PrestadorNavGraph(
                 CalendarioConfigScreen(
                     onBack = { navController.navigateUp() },
                     onGoToEditProfile = {
-                        navController.navigate(PrestadorRoutes.EditProfile.route)
+                        navController.navigate(PrestadorRoutes.Profile.route)
                     }
                 )
             }
@@ -245,18 +244,9 @@ fun PrestadorNavGraph(
             composable(PrestadorRoutes.Profile.route) {
                 ProfileScreen(
                     onBack = { navController.navigateUp() },
-                    onEditProfile = {
-                        navController.navigate(PrestadorRoutes.EditProfile.route)
-                    },
                     onNavigateToCalendarioConfig = {
                         navController.navigate(PrestadorRoutes.CalendarioConfig.route)
                     }
-                )
-            }
-
-            composable(PrestadorRoutes.EditProfile.route) {
-                EditProfileScreenUnified(
-                    onBack = { navController.navigateUp() }
                 )
             }
 
