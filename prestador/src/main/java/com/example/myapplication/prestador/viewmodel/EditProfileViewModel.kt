@@ -4,13 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.prestador.data.local.entity.BusinessEntity
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.prestador.data.local.entity.SucursalEntity
 import com.example.myapplication.prestador.data.model.PrestadorProfileMode
 import com.example.myapplication.prestador.data.model.ServiceType
-import com.example.myapplication.prestador.data.repository.BusinessRepository
-import com.example.myapplication.prestador.data.repository.CompaniesFirestoreSync
 import com.example.myapplication.prestador.data.repository.ProviderRepository
-import com.example.myapplication.prestador.data.repository.SucursalRepository
 import com.example.myapplication.prestador.utils.ServiceTypeConfig
 import com.example.myapplication.prestador.utils.getServiceTypeConfig
 import com.google.firebase.auth.FirebaseAuth
@@ -23,7 +19,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.compose.runtime.currentRecomposeScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -35,7 +30,6 @@ import com.example.myapplication.prestador.data.model.CompanyProvider
 import com.example.myapplication.prestador.data.model.EmployeeProvider
 import com.example.myapplication.prestador.data.model.ServicioFirebase
 import com.example.myapplication.prestador.data.repository.ServiciosRepository
-import com.google.protobuf.Internal
 
 @HiltViewModel
 class EditProfileViewModel @Inject constructor(
@@ -94,6 +88,10 @@ class EditProfileViewModel @Inject constructor(
     // Configuración de tipo de servicio
     private val _serviceTypeConfig = MutableStateFlow(getServiceTypeConfig(ServiceType.TECHNICAL))
     val serviceTypeConfig: StateFlow<ServiceTypeConfig> = _serviceTypeConfig.asStateFlow()
+
+    // Tick que incrementa cada vez que un refresh de Firebase completa (para pull-to-refresh)
+    private val _refreshTick = MutableStateFlow(0)
+    val refreshTick: StateFlow<Int> = _refreshTick.asStateFlow()
 
     //Edit Mode
     private val _isEditMode = MutableStateFlow(false)
@@ -244,6 +242,22 @@ class EditProfileViewModel @Inject constructor(
                 if (_profileState.value is ProfileState.Loading) {
                     _profileState.value = ProfileState.Error(e.message ?: "Error al cargar perfil")
                 }
+            }
+        }
+    }
+
+    /** Llamado desde pull-to-refresh: recarga directo de Firebase sin mostrar loading global. */
+    fun refreshProfile() {
+        viewModelScope.launch {
+            val userId = auth.currentUser?.uid ?: run {
+                _refreshTick.value++
+                return@launch
+            }
+            try {
+                loadFromFirebase(userId)
+            } catch (_: Exception) {
+            } finally {
+                _refreshTick.value++
             }
         }
     }
@@ -424,7 +438,8 @@ class EditProfileViewModel @Inject constructor(
                         ?: doc.getBoolean("turnosEnLocal")
                         ?: false,
                     doesShipping = doc.getBoolean("envios") ?: bool(modalidad, "envios"),
-                    acceptsAppointments = bool(localMap, "turnosEnLocal"),
+                    acceptsAppointments = doc.getBoolean("acceptsAppointments") ?: bool(localMap, "turnosEnLocal"),
+                        trabajaConOtros = doc.getBoolean("trabajaConOtros") ?: bool(empresa, "trabajaConOtros"),
                     
                     isVerified = doc.getBoolean("verificado") ?: doc.getBoolean("isVerified") ?: false,
 
@@ -530,7 +545,8 @@ class EditProfileViewModel @Inject constructor(
         categorias: String? = null,
         latitud: Double? = null,
         longitud: Double? = null,
-        priorizarEmpresa: Boolean? = null
+        priorizarEmpresa: Boolean? = null,
+        acceptsAppointments: Boolean? = null
     ) {
         viewModelScope.launch {
             _updateState.value = UpdateState.Loading
@@ -560,8 +576,9 @@ class EditProfileViewModel @Inject constructor(
                     doesHomeVisits = vaDomicilio ?: currentProvider.doesHomeVisits,
                     hasPhysicalLocation = turnosEnLocal ?: currentProvider.hasPhysicalLocation,
                     doesShipping = envios ?: currentProvider.doesShipping,
-                    acceptsAppointments = currentProvider.acceptsAppointments,
+                    acceptsAppointments = acceptsAppointments ?: currentProvider.acceptsAppointments,
                     hasCompanyProfile = tieneEmpresa ?: currentProvider.hasCompanyProfile,
+                    trabajaConOtros = trabajaConOtros ?: currentProvider.trabajaConOtros,
                     doesService = doesService ?: currentProvider.doesService,
                     doesProduct = doesProduct ?: currentProvider.doesProduct,
                     workingHours = horarioLocal ?: currentProvider.workingHours,
@@ -658,6 +675,7 @@ class EditProfileViewModel @Inject constructor(
                 if (atencionUrgencias != null) updateData["atencionUrgencias"] = atencionUrgencias
                 if (vaDomicilio != null) updateData["vaDomicilio"] = vaDomicilio
                 if (envios != null) updateData["envios"] = envios
+                if (acceptsAppointments != null) updateData["acceptsAppointments"] = acceptsAppointments
                 if (doesService != null) updateData["doesService"] = doesService
                 if (doesProduct != null) updateData["doesProduct"] = doesProduct
 
@@ -782,6 +800,28 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
+    fun addGalleryImage(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
+                    context, uri, maxWidth = 800, maxHeight = 800, quality = 75
+                ) ?: return@launch
+                val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+                val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
+                val updatedList = current.galleryImages + base64
+                updateGalleryImages(org.json.JSONArray(updatedList).toString())
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun removeGalleryImage(imageData: String) {
+        val current = (profileState.value as? ProfileState.Success)?.provider ?: return
+        val updateList = current.galleryImages.filter { it != imageData }
+        updateGalleryImages(org.json.JSONArray(updateList).toString())
+    }
+
     fun updateCategorias(json: String) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
         val list = try {
@@ -886,6 +926,27 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
+    fun updateCompanyBannerPhoto(uri: android.net.Uri) {
+        viewModelScope.launch {
+            try {
+                val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
+                val company = current.companies.firstOrNull() ?: return@launch
+                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
+                    context, uri, maxWidth = 1200, maxHeight = 400, quality = 80
+                )
+                val base64 = bytes?.let { com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(it) } ?: return@launch
+                val updated = company.copy(bannerImageUrl = base64)
+                val updatedCompanies = current.companies.map { if (it.id == updated.id) updated else it }
+                val updatedProvider = current.copy(companies = updatedCompanies)
+                providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+                _profileState.value = ProfileState.Success(updatedProvider)
+            } catch (e: Exception) {
+                android.util.Log.e("EditProfileViewModel", "Error banner empresa: ${e.message}")
+            }
+        }
+    }
+
+
     fun addCompany(company: CompanyProvider, photoUri: android.net.Uri? = null) {
         viewModelScope.launch {
             try {
@@ -915,6 +976,8 @@ class EditProfileViewModel @Inject constructor(
             }
         }
     }
+
+
 
     fun removeCompany(companyId: String) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
