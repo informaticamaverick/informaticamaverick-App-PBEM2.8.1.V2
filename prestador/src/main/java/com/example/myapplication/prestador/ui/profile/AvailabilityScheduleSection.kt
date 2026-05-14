@@ -289,7 +289,7 @@ private fun ScheduleSumaryCard(
 ) {
     val dias = schedules.sortedBy {
         it.dayOfWeek
-    }.joinToString(" · ") {
+    }.distinctBy { it.dayOfWeek }.joinToString(" · ") {
         it.dayOfWeek.toDayAbbr()
     }
     val first = schedules.first()

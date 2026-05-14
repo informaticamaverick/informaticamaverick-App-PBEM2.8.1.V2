@@ -13,6 +13,8 @@ import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -218,6 +220,7 @@ fun ChatConversationScreen(
     }.toList() }
 
     var messageText by remember { mutableStateOf("") }
+    val pendingReply by chatViewModel.pendingReply.collectAsState()
     var zoomedImageUrl by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -692,6 +695,19 @@ fun ChatConversationScreen(
                         mappedMessages,
                         key = { message -> message.id }
                     ) { message ->
+                        SwipeToReply(
+                            onReply = {
+                                val senderName = if (message.isFromCurrentUser) "Tú" else userName
+                                val content = when (message.type) {
+                                    Message.MessageType.IMAGE -> "📷 Imagen"
+                                    Message.MessageType.AUDIO -> "🎤 Audio"
+                                    Message.MessageType.LOCATION -> "📍 Ubicación"
+                                    Message.MessageType.DOCUMENT -> "📄 Documento"
+                                    else -> message.text?.takeIf { it.isNotBlank() } ?: "Mensaje"
+                                }
+                                chatViewModel.setReply(message.id, content, senderName)
+                            }
+                        ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = if (message.isFromCurrentUser)
@@ -752,6 +768,7 @@ fun ChatConversationScreen(
                                 } else null
                             )
                         }
+                        } // cierra SwipeToReply
                     }
                 } // end LazyColumn
 
@@ -766,6 +783,9 @@ fun ChatConversationScreen(
                                     coroutineScope.launch { listState.animateScrollToItem(0) }
                                 }
                             },
+                            replyingToContent = pendingReply?.content,
+                            replyingToSender = pendingReply?.senderName,
+                            onCancelReply = { chatViewModel.clearReply() },
                             onAttachClick = { showAttachMenu = !showAttachMenu },
                             onCameraClick = {
                                 // Verificar si ya tiene permisos de cámara

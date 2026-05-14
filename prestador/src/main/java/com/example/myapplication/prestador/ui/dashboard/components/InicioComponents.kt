@@ -210,7 +210,7 @@ fun InicioScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.Settings, null, tint = colors.primaryOrange, modifier = Modifier.size(20.dp))
                                         Spacer(Modifier.width(12.dp))
-                                        Text("Configurar Servicio", fontSize = 14.sp, color = colors.textPrimary)
+                                        Text("Configuración", fontSize = 14.sp, color = colors.textPrimary)
                                     }
                                 },
                                 onClick = { showMenu = false; onNavigateToServiceConfig() }

@@ -67,6 +67,7 @@ fun PresupuestosScreen(
     onBack: () -> Unit = {},
     onCrearNuevo: () -> Unit = {},
     onVerDetalle: (Presupuesto) -> Unit = {},
+    onNavigateToConfig: () -> Unit = {},
     showTopBar: Boolean = true,
     viewModel: com.example.myapplication.prestador.viewmodel.PresupuestoViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 ) {
@@ -215,6 +216,11 @@ fun PresupuestosScreen(
                             )
                         }
                         // Botón filtro
+                        Row {
+                            IconButton(onClick = onNavigateToConfig) {
+                                Icon(Icons.Default.Settings, contentDescription = "Configuración", tint = Color.White)
+                            }
+
                         Box {
                             IconButton(onClick = { showFilterMenu = true }) {
                                 Icon(Icons.Default.FilterList, contentDescription = "Filtrar", tint = Color.White)
@@ -241,14 +247,23 @@ fun PresupuestosScreen(
                                     DropdownMenuItem(
                                         text = {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Box(Modifier.size(12.dp).clip(CircleShape).background(estado.color))
+                                                Box(
+                                                    Modifier.size(12.dp).clip(CircleShape)
+                                                        .background(estado.color)
+                                                )
                                                 Spacer(Modifier.width(8.dp))
                                                 Text(estado.displayName)
                                             }
                                         },
                                         onClick = { filtroEstado = estado; showFilterMenu = false },
-                                        leadingIcon = { if (filtroEstado == estado) Icon(Icons.Default.Check, null) }
+                                        leadingIcon = {
+                                            if (filtroEstado == estado) Icon(
+                                                Icons.Default.Check,
+                                                null
+                                            )
+                                        }
                                     )
+                                }
                                 }
                             }
                         }

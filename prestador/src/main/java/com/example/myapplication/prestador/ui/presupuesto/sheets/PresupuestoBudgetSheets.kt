@@ -31,6 +31,8 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import java.util.UUID
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,6 +57,9 @@ fun AddArticleSheetContent(
     onDismiss: () -> Unit = {}
 ){
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val isEditMode = itemToEdit != null
     var currentItem by remember { mutableStateOf(itemToEdit ?: BudgetItem()) }
 
@@ -278,7 +283,7 @@ fun AddArticleSheetContent(
                             color = colors.textPrimary
                         )
                         Text(
-                            "${item.quantity} u.  •  \$${"%.2f".format(item.unitPrice)}  =  \$${"%.2f".format(item.quantity * item.unitPrice)}",
+                            "${item.quantity} u.  •  $currencySymbol${"%.2f".format(item.unitPrice)}  =  $currencySymbol${"%.2f".format(item.quantity * item.unitPrice)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = colors.textSecondary
                         )
@@ -330,6 +335,9 @@ fun AddServiceSheetContent(
     onDismiss: () -> Unit = {}
 ){
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val isEditMode = itemToEdit != null
     var currentItem by remember { mutableStateOf(itemToEdit ?: BudgetService()) }
     var pendingItemToSave by remember { mutableStateOf<BudgetService?>(null) }
@@ -430,7 +438,7 @@ fun AddServiceSheetContent(
                             color = colors.textPrimary
                         )
                         Text(
-                            "\$${"%.2f".format(item.total)}",
+                            "$currencySymbol${"%.2f".format(item.total)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = colors.textSecondary
                         )
@@ -470,7 +478,7 @@ fun AddServiceSheetContent(
                     Row(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF3B82F6).copy(alpha = 0.06f)).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(buildString { if (saved.code.isNotBlank()) append("[${saved.code}] "); append(saved.description) }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
-                            Text("\$${"%.2f".format(saved.total)}", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                            Text("$currencySymbol${"%.2f".format(saved.total)}", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
                         }
                         IconButton(onClick = { currentItem = saved.copy(id = currentItem.id) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Edit, contentDescription = "Editar", tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
@@ -502,6 +510,9 @@ fun AddProfessionalFeeSheetContent(
     onDismiss: () -> Unit = {}
 ){
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val isEditMode = itemToEdit != null
     var currentItem by remember { mutableStateOf(itemToEdit ?: BudgetProfessionalFee()) }
     var pendingItemToSave by remember { mutableStateOf<BudgetProfessionalFee?>(null) }
@@ -616,7 +627,7 @@ fun AddProfessionalFeeSheetContent(
                             color = colors.textPrimary
                         )
                         Text(
-                            "\$${"%.2f".format(item.total)}",
+                            "$currencySymbol${"%.2f".format(item.total)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = colors.textSecondary
                         )
@@ -657,7 +668,7 @@ fun AddProfessionalFeeSheetContent(
                     Row(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF8B5CF6).copy(alpha = 0.06f)).padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(buildString { if (saved.code.isNotBlank()) append("[${saved.code}] "); append(saved.description) }, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
-                            Text("\$${"%.2f".format(saved.total)}", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                            Text("$currencySymbol${"%.2f".format(saved.total)}", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
                         }
                         IconButton(onClick = { currentItem = saved.copy(id = currentItem.id) }, modifier = Modifier.size(32.dp)) {
                             Icon(Icons.Default.Edit, contentDescription = "Editar", tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
@@ -694,6 +705,9 @@ fun AddMiscExpenseSheetContent(
     onDismiss: () -> Unit = {}
 ){
     val colors = getPrestadorColors()
+    val configVm: PresupuestoConfigViewModel = hiltViewModel()
+    val pConfig by configVm.config.collectAsState()
+    val currencySymbol = if (pConfig.moneda == "USD") "US$" else "$"
     val isEditMode = itemToEdit != null
 
     var description by remember { mutableStateOf(itemToEdit?.description ?: "") }
@@ -810,7 +824,7 @@ fun AddMiscExpenseSheetContent(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(desc, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
-                                Text("\$${"%.2f".format(amt)}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+                                Text("$currencySymbol${"%.2f".format(amt)}", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                             }
                             Icon(Icons.Default.NorthWest, contentDescription = "Usar", tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
                         }
@@ -879,7 +893,7 @@ fun AddMiscExpenseSheetContent(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(expense.description, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-                            if (!editingThis) Text("$ ${"%.2f".format(expense.amount)}", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                            if (!editingThis) Text("$currencySymbol ${"%.2f".format(expense.amount)}", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
                         }
                         IconButton(onClick = { editingThis = !editingThis }, modifier = Modifier.size(32.dp)) {
                             Icon(if (editingThis) Icons.Default.Close else Icons.Default.Edit, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
@@ -965,7 +979,7 @@ fun AddMiscExpenseSheetContent(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(desc, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-                                    if (!editingThis) Text("$ ${"%.2f".format(amount)}", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
+                                    if (!editingThis) Text("$currencySymbol ${"%.2f".format(amount)}", style = MaterialTheme.typography.labelSmall, color = colors.textSecondary)
                                 }
                                 IconButton(onClick = { editingThis = !editingThis }, modifier = Modifier.size(32.dp)) {
                                     Icon(if (editingThis) Icons.Default.Close else Icons.Default.Edit, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(18.dp))

@@ -74,6 +74,8 @@ import com.example.myapplication.prestador.ui.profile.PROVINCIAS_ARGENTINA
 import com.example.myapplication.prestador.ui.profile.DireccionSection
 import com.example.myapplication.prestador.ui.profile.SucursalesSection
 import com.example.myapplication.prestador.ui.profile.HorarioSelectorField
+import com.example.myapplication.prestador.ui.profile.AvailabilityScheduleSection
+import com.example.myapplication.prestador.ui.profile.RentalSpacesSection
 import com.example.myapplication.prestador.ui.profile.dialogs.CambiarEmailDialog
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import androidx.compose.ui.text.style.TextAlign
@@ -1528,29 +1530,6 @@ fun ServiceConfigSection(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun RentalSpacesSection(colors: PrestadorColors, providerId: String?) {
-    TODO("Not yet implemented")
-}
-
-@Composable
-fun AvailabilityScheduleSection(colors: PrestadorColors) {
-    // --- SECCIÓN: HORARIOS DE DISPONIBILIDAD ---
-    // Implementación básica para evitar el crash por TODO()
-    Column(modifier = Modifier.padding(16.dp)) {
-        Text(
-            text = "Configuración de Horarios",
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.textPrimary
-        )
-        Text(
-            text = "Próximamente: Podrás configurar tus horarios de atención detallados aquí.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = colors.textSecondary
-        )
     }
 }
 

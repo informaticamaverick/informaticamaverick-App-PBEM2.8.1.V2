@@ -23,7 +23,8 @@ import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 @Composable
 fun ConfiguracionScreen(
     onBack: () -> Unit = {},
-    onNavigateToCalendario: () -> Unit = {}
+    onNavigateToCalendario: () -> Unit = {},
+    onNavigateToPresupuestoConfig: () -> Unit = {}
 ) {
     val colors = getPrestadorColors()
 
@@ -73,7 +74,7 @@ fun ConfiguracionScreen(
                 title = "Configuración de presupuesto",
                 subtitle = "Validez por defecto, nota legal y más",
                 colors = colors,
-                onClick = {}
+                onClick = onNavigateToPresupuestoConfig
             )
 
             Spacer(modifier = Modifier.height(8.dp))

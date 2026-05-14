@@ -30,6 +30,7 @@ import com.example.myapplication.prestador.ui.success.PrestadorSuccessScreen
 import com.example.myapplication.prestador.ui.dashboard.PrestadorDashboardScreen
 import com.example.myapplication.prestador.ui.config.ConfiguracionScreen
 import com.example.myapplication.prestador.ui.config.CalendarioConfigScreen
+import com.example.myapplication.prestador.ui.config.PresupuestoConfigScreen
 import com.example.myapplication.prestador.ui.presupuesto.CrearPresupuestoPrestadorScreen
 import com.example.myapplication.prestador.ui.presupuesto.PresupuestosScreen
 import com.example.myapplication.prestador.ui.promotion.CreatePromotionScreen
@@ -37,8 +38,7 @@ import com.example.myapplication.prestador.ui.promotion.PromotionListScreen
 import com.example.myapplication.prestador.ui.promotion.PromotionDetailScreen
 import com.example.myapplication.prestador.ui.profile.EditProfileScreenUnified
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-// import com.example.myapplication.prestador.viewmodel.ChatSimulationViewModel
-import com.example.myapplication.prestador.ui.config.CalendarioConfigScreen
+
 
 import com.example.myapplication.prestador.ui.profile.ProfileScreen
 import com.example.myapplication.prestador.ui.client.ClientePerfilScreen
@@ -226,15 +226,9 @@ fun PrestadorNavGraph(
                     onBack = { navController.navigateUp() },
                     onNavigateToCalendario = {
                         navController.navigate(PrestadorRoutes.CalendarioConfig.route)
-                    }
-                )
-            }
-
-            composable(PrestadorRoutes.CalendarioConfig.route) {
-                CalendarioConfigScreen(
-                    onBack = { navController.navigateUp() },
-                    onGoToEditProfile = {
-                        navController.navigate(PrestadorRoutes.EditProfile.route)
+                    },
+                    onNavigateToPresupuestoConfig = {
+                        navController.navigate(PrestadorRoutes.PresupuestoConfig.route)
                     }
                 )
             }
@@ -253,6 +247,9 @@ fun PrestadorNavGraph(
                     onBack = { navController.navigateUp() },
                     onEditProfile = {
                         navController.navigate(PrestadorRoutes.EditProfile.route)
+                    },
+                    onNavigateToCalendarioConfig = {
+                        navController.navigate(PrestadorRoutes.CalendarioConfig.route)
                     }
                 )
             }
@@ -297,6 +294,7 @@ fun PrestadorNavGraph(
                     appointmentId = appointmentId,
                     onBack = {
                         when (origin) {
+
                             "chat" -> navController.navigate("chat") {
                                 popUpTo(PrestadorRoutes.CrearPresupuesto.route) { inclusive = true }
                             }
@@ -320,9 +318,19 @@ fun PrestadorNavGraph(
                         },
                         onVerDetalle = { presupuesto ->
                             // TODO: Navegar a detalle de presupuesto
+                        },
+                        onNavigateToConfig = {
+
+                            navController.navigate(PrestadorRoutes.PresupuestoConfig.route)
                         }
                     )
                 }
+            }
+
+            composable(PrestadorRoutes.PresupuestoConfig.route) {
+                PresupuestoConfigScreen(
+                    onBack = { navController.popBackStack() }
+                )
             }
 
             composable(PrestadorRoutes.CreatePromotion.route) {

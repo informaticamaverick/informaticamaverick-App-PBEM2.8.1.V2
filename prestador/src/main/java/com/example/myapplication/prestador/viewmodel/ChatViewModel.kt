@@ -141,8 +141,23 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    // ── Reply / Quote ──────────────────────────────────────────────────────────
+    data class ReplyInfo(val messageId: String, val content: String, val senderName: String)
+
+    private val _pendingReply = MutableStateFlow<ReplyInfo?>(null)
+    val pendingReply: StateFlow<ReplyInfo?> = _pendingReply.asStateFlow()
+
+    fun setReply(messageId: String, content: String, senderName: String) {
+        _pendingReply.value = ReplyInfo(messageId, content, senderName)
+    }
+
+    fun clearReply() {
+        _pendingReply.value = null
+    }
+
     fun sendMessage(text: String) {
         if (text.isBlank() || currentConversationId.isEmpty()) return
+        val reply = _pendingReply.value
         viewModelScope.launch {
             try {
                 repository.sendMessage(
@@ -150,8 +165,12 @@ class ChatViewModel @Inject constructor(
                     text,
                     myUserId,
                     currentCompanyId,
-                    currentCategoryId
+                    currentCategoryId,
+                    replyToId = reply?.messageId,
+                    replyToContent = reply?.content,
+                    replyToSenderName = reply?.senderName
                 )
+                _pendingReply.value = null
             } catch (e: Exception) {
                 _errorMessage.value = "Error al enviar mensaje: ${e.message}"
             }

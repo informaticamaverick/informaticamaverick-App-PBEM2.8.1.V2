@@ -84,7 +84,10 @@ class ChatRepository @Inject constructor(
         text: String,
         myUserId: String,
         companyId: String? = null,
-        categoryId: String? = null
+        categoryId: String? = null,
+        replyToId: String? = null,
+        replyToContent: String? = null,
+        replyToSenderName: String? = null
     ): MessageEntity {
         val receiverId = conversationDao.getConversationById(conversationId)?.userId ?: ""
         val message = MessageEntity(
@@ -95,28 +98,35 @@ class ChatRepository @Inject constructor(
             isFromCurrentUser = true,
             messageType = "TEXT",
             companyId = companyId,
-            categoryId = categoryId
+            categoryId = categoryId,
+            replyToId = replyToId,
+            replyToContent = replyToContent,
+            replyToSenderName = replyToSenderName
         )
         messageDao.insertMessage(message)
         conversationDao.updateLastMessage(conversationId, text, message.timestamp, "TEXT")
         updateConversationMetadata(conversationId, myUserId, receiverId, text, message.timestamp)
         try {
+            val rtdbData = hashMapOf<String, Any?>(
+                "messageId" to message.messageId,
+                "chatId" to conversationId,
+                "senderId" to myUserId,
+                "receiverId" to receiverId,
+                "text" to text,
+                "content" to text,
+                "type" to "TEXT",
+                "timestamp" to message.timestamp,
+                "isRead" to false,
+                "isDelivered" to false,
+                "companyId" to companyId,
+                "categoryId" to categoryId,
+                "replyToId" to replyToId,
+                "replyToContent" to replyToContent,
+                "replyToSenderName" to replyToSenderName
+            )
             database.reference.child("chats").child(conversationId)
                 .child("messages").child(message.messageId)
-                .setValue(hashMapOf(
-                    "messageId" to message.messageId,
-                    "chatId" to conversationId,
-                    "senderId" to myUserId,
-                    "receiverId" to receiverId,
-                    "text" to text,
-                    "content" to text,
-                    "type" to "TEXT",
-                    "timestamp" to message.timestamp,
-                    "isRead" to false,
-                    "isDelivered" to false,
-                    "companyId" to companyId,
-                    "categoryId" to categoryId
-                )).await()
+                .setValue(rtdbData).await()
             messageDao.markAsSynced(message.messageId)
         } catch (e: Exception) {
             Log.e("ChatRepo", "Error RTDB sendMessage: ${e.message}")

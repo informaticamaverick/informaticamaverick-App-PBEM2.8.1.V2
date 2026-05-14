@@ -35,6 +35,7 @@ import com.example.myapplication.prestador.data.model.CompanyProvider
 import com.example.myapplication.prestador.data.model.EmployeeProvider
 import com.example.myapplication.prestador.data.model.ServicioFirebase
 import com.example.myapplication.prestador.data.repository.ServiciosRepository
+import com.google.protobuf.Internal
 
 @HiltViewModel
 class EditProfileViewModel @Inject constructor(
@@ -93,6 +94,13 @@ class EditProfileViewModel @Inject constructor(
     // Configuración de tipo de servicio
     private val _serviceTypeConfig = MutableStateFlow(getServiceTypeConfig(ServiceType.TECHNICAL))
     val serviceTypeConfig: StateFlow<ServiceTypeConfig> = _serviceTypeConfig.asStateFlow()
+
+    //Edit Mode
+    private val _isEditMode = MutableStateFlow(false)
+    val isEditMode: StateFlow<Boolean> = _isEditMode.asStateFlow()
+
+    fun setEditMode(enabled: Boolean) { _isEditMode.value = enabled }
+    fun toogleEditMode() { _isEditMode.value = !_isEditMode.value}
 
 
     fun uploadProfilePhoto(uri: Uri) {
@@ -374,6 +382,7 @@ class EditProfileViewModel @Inject constructor(
                         name = compDoc.getString("nombreNegocio") ?: compDoc.getString("name") ?: "",
                         razonSocial = compDoc.getString("razonSocial") ?: "",
                         cuit = compDoc.getString("cuitNegocio") ?: compDoc.getString("cuit") ?: "",
+                        email = compDoc.getString("email") ?: "",
                         description = compDoc.getString("descripcion") ?: compDoc.getString("description") ?: "",
                         rating = (compDoc.getDouble("rating") ?: 0.0).toFloat(),
                         photoUrl = compDoc.getString("photoUrl"),
