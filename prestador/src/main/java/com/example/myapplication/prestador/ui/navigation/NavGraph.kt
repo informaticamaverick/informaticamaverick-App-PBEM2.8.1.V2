@@ -37,7 +37,9 @@ import com.example.myapplication.prestador.ui.promotion.CreatePromotionScreen
 import com.example.myapplication.prestador.ui.promotion.PromotionListScreen
 import com.example.myapplication.prestador.ui.promotion.PromotionDetailScreen
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.ProfileState
 
 import com.example.myapplication.prestador.ui.profile.ProfileScreen
 import com.example.myapplication.prestador.ui.client.ClientePerfilScreen
@@ -233,11 +235,41 @@ fun PrestadorNavGraph(
             }
 
             composable(PrestadorRoutes.CalendarioConfig.route) {
+                val profileVm: EditProfileViewModel = hiltViewModel()
+                val profileState by profileVm.profileState.collectAsState()
+                val firstCompany = (profileState as? ProfileState.Success)
+                    ?.provider?.companies?.firstOrNull()
+
                 CalendarioConfigScreen(
                     onBack = { navController.navigateUp() },
                     onGoToEditProfile = {
                         navController.navigate(PrestadorRoutes.Profile.route)
+                    },
+                    onNavigateToCalendarioEmpresa = {
+                        if (firstCompany != null) {
+                            navController.navigate(
+                                PrestadorRoutes.CalendarioConfigEntity.createRoute(
+                                    firstCompany.id,
+                                    firstCompany.name.ifBlank { "Empresa" }
+                                )
+                            )
+                        }
                     }
+                )
+            }
+
+            composable(
+                route = PrestadorRoutes.CalendarioConfigEntity.route,
+                arguments = listOf(
+                    navArgument("owner_id") { type = NavType.StringType },
+                    navArgument("owner_name") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val ownerName = backStackEntry.arguments?.getString("owner_name") ?: ""
+                CalendarioConfigScreen(
+                    onBack = { navController.navigateUp() },
+                    onGoToEditProfile = { navController.navigate(PrestadorRoutes.Profile.route) },
+                    ownerName = ownerName
                 )
             }
 
@@ -246,6 +278,9 @@ fun PrestadorNavGraph(
                     onBack = { navController.navigateUp() },
                     onNavigateToCalendarioConfig = {
                         navController.navigate(PrestadorRoutes.CalendarioConfig.route)
+                    },
+                    onNavigateToCalendarioConfigEntity = { ownerId, ownerName ->
+                        navController.navigate(PrestadorRoutes.CalendarioConfigEntity.createRoute(ownerId, ownerName))
                     }
                 )
             }

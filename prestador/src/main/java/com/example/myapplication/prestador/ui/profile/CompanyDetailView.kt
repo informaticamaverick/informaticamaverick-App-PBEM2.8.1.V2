@@ -55,7 +55,14 @@ import com.example.myapplication.prestador.ui.components.PrestadorAction
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 
 @Composable
-internal fun BranchSection(index: Int, branch: BranchProvider, colors: PrestadorColors, isEditMode: Boolean = false, onUpdateBranch: (BranchProvider) -> Unit = {}) {
+internal fun BranchSection(
+    index: Int,
+    branch: BranchProvider,
+    colors: PrestadorColors,
+    isEditMode: Boolean = false,
+    onUpdateBranch: (BranchProvider) -> Unit = {},
+    onNavigateToCalendarioConfig: (ownerId: String, ownerName: String) -> Unit = { _, _ -> }
+) {
     val branchName = branch.name.ifBlank { if (index == 0) "Casa Central" else "Sucursal ${index + 1}" }
     var showAddressSheet by remember { mutableStateOf(false) }
     var showNuevoMiembroSheet by remember { mutableStateOf(false) }
@@ -79,10 +86,39 @@ internal fun BranchSection(index: Int, branch: BranchProvider, colors: Prestador
         Spacer(Modifier.height(8.dp))
     }
 
-    // Nombre sucursal
-    Text(branchName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
-    if (index == 0) {
-        Text("Casa Central seleccionada", fontSize = 12.sp, color = Color(0xFF8B5CF6))
+    // Nombre sucursal + botón Horarios
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(branchName, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+            if (index == 0) {
+                Text("Casa Central seleccionada", fontSize = 12.sp, color = Color(0xFF8B5CF6))
+            }
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onNavigateToCalendarioConfig(branch.id, branchName) }
+                .background(Color(0xFF8B5CF6).copy(alpha = 0.10f))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Icon(
+                Icons.Default.CalendarMonth,
+                contentDescription = "Horarios de Atención",
+                tint = Color(0xFF8B5CF6),
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                "Horarios",
+                fontSize = 9.sp,
+                color = Color(0xFF8B5CF6),
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 11.sp
+            )
+        }
     }
     Spacer(Modifier.height(12.dp))
 
@@ -414,6 +450,7 @@ internal fun CompanyDetailView(
     paddingValues: PaddingValues,
     onBack: () -> Unit,
     colors: PrestadorColors,
+    onNavigateToCalendarioConfig: (ownerId: String, ownerName: String) -> Unit = { _, _ -> },
     onUpdateBranch: (BranchProvider) -> Unit = {},
     onUpdateAllBranches: (List<BranchProvider>) -> Unit = {},
     onAddBranch: (BranchProvider, Boolean) -> Unit = { _, _ -> },
@@ -512,7 +549,41 @@ internal fun CompanyDetailView(
                 )
             }
 
-            ProfileSectionCard(Icons.Default.Business, "Datos del Negocio", Color(0xFF8B5CF6), colors) {
+            ProfileSectionCard(
+                Icons.Default.Business,
+                "Datos del Negocio",
+                Color(0xFF8B5CF6),
+                colors,
+                actionButton = {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                onNavigateToCalendarioConfig(
+                                    company.id,
+                                    company.name.ifBlank { "Empresa" }
+                                )
+                            }
+                            .background(Color(0xFF8B5CF6).copy(alpha = 0.10f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.CalendarMonth,
+                            contentDescription = "Horarios de Atención",
+                            tint = Color(0xFF8B5CF6),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            "Horarios",
+                            fontSize = 9.sp,
+                            color = Color(0xFF8B5CF6),
+                            fontWeight = FontWeight.SemiBold,
+                            lineHeight = 11.sp
+                        )
+                    }
+                }
+            ) {
                 if (company.name.isNotBlank()) {
                     ProfileInfoRow("🏬", "Nombre Comercial", company.name, colors)
                     Spacer(Modifier.height(8.dp))
@@ -628,7 +699,13 @@ internal fun CompanyDetailView(
 
         if (company.branches.isNotEmpty()) {
             item {
-                BranchesPager(branches = company.branches, colors = colors, isEditMode = isCompanyEditMode, onUpdateBranch = onUpdateBranch)
+                BranchesPager(
+                    branches = company.branches,
+                    colors = colors,
+                    isEditMode = isCompanyEditMode,
+                    onUpdateBranch = onUpdateBranch,
+                    onNavigateToCalendarioConfig = onNavigateToCalendarioConfig
+                )
             }
         }
     } // cierra LazyColumn
@@ -1139,7 +1216,8 @@ private fun BranchesPager(
     branches: List<BranchProvider>,
     colors: PrestadorColors,
     isEditMode: Boolean = false,
-    onUpdateBranch: (BranchProvider) -> Unit = {}
+    onUpdateBranch: (BranchProvider) -> Unit = {},
+    onNavigateToCalendarioConfig: (ownerId: String, ownerName: String) -> Unit = { _, _ -> }
 ) {
     val pagerState = rememberPagerState(pageCount = { branches.size })
 
@@ -1158,7 +1236,7 @@ private fun BranchesPager(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(Modifier.padding(16.dp)) {
-                    BranchSection(index = page, branch = branches[page], colors = colors, isEditMode = isEditMode, onUpdateBranch = onUpdateBranch)
+                    BranchSection(index = page, branch = branches[page], colors = colors, isEditMode = isEditMode, onUpdateBranch = onUpdateBranch, onNavigateToCalendarioConfig = onNavigateToCalendarioConfig)
                 }
             }
         }

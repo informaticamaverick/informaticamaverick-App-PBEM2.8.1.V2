@@ -21,12 +21,14 @@ import java.net.URL
 import java.util.Calendar
 import java.util.UUID
 import javax.inject.Inject
+import androidx.lifecycle.SavedStateHandle
 
 @HiltViewModel
 class BlockedDateViewModel @Inject constructor(
     private val repository: BlockedDateRepository,
     private val sync: BlockedDateFirestoreSync,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     data class HolidayItem(val date: String, val label: String)
@@ -38,7 +40,9 @@ class BlockedDateViewModel @Inject constructor(
         data class Error(val msg: String) : UiState()
     }
 
-    private val providerId get() = auth.currentUser?.uid ?: ""
+    // Usa owner_id de los args de navegación si está disponible (empresa/sucursal),
+    // de lo contrario usa el uid del prestador autenticado.
+    private val providerId get() = savedStateHandle.get<String>("owner_id") ?: auth.currentUser?.uid ?: ""
 
     val blockedDates: StateFlow<List<BlockedDateEntity>> = repository
         .getActiveByProvider(providerId)

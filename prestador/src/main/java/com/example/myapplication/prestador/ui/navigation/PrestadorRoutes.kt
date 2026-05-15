@@ -13,6 +13,12 @@ sealed class PrestadorRoutes(val route: String) {
     object CalendarioConfig : PrestadorRoutes("calendario_config")
 
     object CalendarConfig : PrestadorRoutes("calendario_config")
+
+    // Configuración de horarios para empresa o sucursal específica
+    object CalendarioConfigEntity : PrestadorRoutes("calendario_config_entity/{owner_id}/{owner_name}") {
+        fun createRoute(ownerId: String, ownerName: String) =
+            "calendario_config_entity/$ownerId/${android.net.Uri.encode(ownerName)}"
+    }
     object CrearPresupuesto : PrestadorRoutes("crear_presupuesto?origin={origin}&appointmentId={appointmentId}") {
         fun createRoute(origin: String, appointmentId: String = "") =
             "crear_presupuesto?origin=$origin&appointmentId=$appointmentId"
