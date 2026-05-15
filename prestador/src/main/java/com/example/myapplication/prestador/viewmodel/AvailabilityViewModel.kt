@@ -11,16 +11,20 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
+import androidx.lifecycle.SavedStateHandle
 
 @HiltViewModel
 class AvailabilityViewModel @Inject constructor(
     private val repository: AvailabilityScheduleRepository,
     private val sync: AvailabilityScheduleFirestoreSync,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
+    // Usa owner_id de los args de navegación si está disponible (empresa/sucursal),
+    // de lo contrario usa el uid del prestador autenticado.
     private val providerId: String
-        get() = auth.currentUser?.uid ?: ""
+        get() = savedStateHandle.get<String>("owner_id") ?: auth.currentUser?.uid ?: ""
 
     val schedules: StateFlow<List<AvailabilityScheduleEntity>> = repository
         .getActiveSchedulesByProvider(providerId)

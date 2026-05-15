@@ -947,7 +947,7 @@ class EditProfileViewModel @Inject constructor(
     }
 
 
-    fun addCompany(company: CompanyProvider, photoUri: android.net.Uri? = null) {
+    fun addCompany(company: CompanyProvider, photoUri: android.net.Uri? = null, priorizarEmpresa: Boolean? = null) {
         viewModelScope.launch {
             try {
                 val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
@@ -968,7 +968,11 @@ class EditProfileViewModel @Inject constructor(
                     current.companies + finalCompany
                 }
 
-                val updatedProvider = current.copy(companies = updatedCompanies, hasCompanyProfile = true)
+                val updatedProvider = current.copy(
+                    companies = updatedCompanies,
+                    hasCompanyProfile = true,
+                    priorizarEmpresa = priorizarEmpresa ?: current.priorizarEmpresa
+                )
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
                 _profileState.value = ProfileState.Success(updatedProvider)
             } catch (e: Exception) {

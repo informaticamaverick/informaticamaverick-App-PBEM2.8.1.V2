@@ -87,6 +87,7 @@ fun ProfileScreen(
     onBack: () -> Unit = {},
     onSettings: () -> Unit = {},
     onNavigateToCalendarioConfig: () -> Unit = {},
+    onNavigateToCalendarioConfigEntity: (ownerId: String, ownerName: String) -> Unit = { _, _ -> },
     viewModel: EditProfileViewModel = hiltViewModel(),
     scheduleVm: AvailabilityViewModel = hiltViewModel()
 ){
@@ -344,6 +345,7 @@ fun ProfileScreen(
                 paddingValues = padding,
                 onBack = { showCompanyView = false },
                 colors = colors,
+                onNavigateToCalendarioConfig = onNavigateToCalendarioConfigEntity,
                 onUpdateBranch = { updatedBranch ->
                     val updatedCompany = firstCompany.copy(
                         branches = firstCompany.branches.map {
@@ -875,8 +877,7 @@ fun ProfileScreen(
                                         turnosEnLocal = editProviderTurnosLocal,
                                         vaDomicilio = editProviderVaDomicilio,
                                         envios = editProviderEnvios,
-                                        acceptsAppointments = editProviderAcceptsTurnos
-                                    )
+                                        acceptsAppointments = editProviderAcceptsTurnos)
                                     showServicioProviderDialog = false
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
@@ -1007,6 +1008,7 @@ fun ProfileScreen(
                         ) {
                             activeServices.forEach { (icon, label, _) ->
                                 Surface(
+                                    
                                     shape = RoundedCornerShape(20.dp),
                                     color = Color(0xFF3B82F6).copy(alpha = 0.1f),
                                     border = BorderStroke(1.dp, Color(0xFF3B82F6).copy(alpha = 0.25f))
@@ -1515,7 +1517,7 @@ fun ProfileScreen(
                 colors = colors,
                 onDismiss = { showEmpresaSheet = false },
                 onAceptar = { nuevaEmpresa ->
-                    viewModel.addCompany(nuevaEmpresa)
+                    empresaPendiente = nuevaEmpresa
                     showEmpresaSheet = false
                     showPriorizarDialog = true
                 }
@@ -1533,8 +1535,7 @@ fun ProfileScreen(
                     confirmButton = {
                         Button(
                             onClick = {
-                                viewModel.addCompany(empresaPendiente!!)
-                                viewModel.updateProfile(priorizarEmpresa = true)
+                                viewModel.addCompany(empresaPendiente!!, priorizarEmpresa = true)
                                 empresaPendiente = null
                                 showPriorizarDialog = false
                             },
@@ -1544,9 +1545,7 @@ fun ProfileScreen(
                     dismissButton = {
                             TextButton(
                                 onClick = {
-                                    viewModel.addCompany(empresaPendiente!!)
-                                    viewModel.updateProfile(priorizarEmpresa =
-                                        false)
+                                    viewModel.addCompany(empresaPendiente!!, priorizarEmpresa = false)
                                     empresaPendiente = null
                                     showPriorizarDialog = false
                                 }

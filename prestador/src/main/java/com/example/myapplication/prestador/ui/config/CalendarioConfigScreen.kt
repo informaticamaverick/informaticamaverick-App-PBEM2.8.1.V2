@@ -36,6 +36,8 @@ import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.AlertDialog
@@ -67,12 +69,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.serialization.RouteEncoder
 import com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity
 import com.example.myapplication.prestador.data.local.entity.BlockedDateEntity
 import com.example.myapplication.prestador.data.local.entity.BlockedDateReason
@@ -85,6 +89,7 @@ import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
 import com.example.myapplication.prestador.viewmodel.BlockedDateViewModel
 import com.example.myapplication.prestador.viewmodel.ProviderViewModel
 import com.google.firebase.auth.FirebaseAuth
+import org.w3c.dom.Text
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -93,6 +98,8 @@ import java.util.Locale
 fun CalendarioConfigScreen(
     onBack: () -> Unit,
     onGoToEditProfile: () -> Unit = {},
+    ownerName: String = "",
+    onNavigateToCalendarioEmpresa: () -> Unit = {},
     providerViewModel: ProviderViewModel = hiltViewModel(),
     availabilityViewModel: AvailabilityViewModel = hiltViewModel(),
     blockedDateViewModel: BlockedDateViewModel = hiltViewModel()
@@ -191,12 +198,22 @@ fun CalendarioConfigScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = colors.textPrimary)
             }
-            Text(
-                "Horarios de atención",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = colors.textPrimary
-            )
+            Column(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+                Text(
+                    "Horarios de atención",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary
+                )
+                if (ownerName.isNotBlank()) {
+                    Text(
+                        ownerName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF8B5CF6),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
         HorizontalDivider(color = colors.divider)
 
@@ -239,9 +256,9 @@ fun CalendarioConfigScreen(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             HorarioSection(
-                title = "VISITAS TÉCNICAS",
-                icon = Icons.Default.DirectionsCar,
-                subtitle = "Días y horarios para visitas técnicas",
+                title = if (ownerName.isNotBlank()) "HORARIOS DE ATENCIÓN" else "VISITAS TÉCNICAS",
+                icon = if (ownerName.isNotBlank()) Icons.Default.Schedule else Icons.Default.DirectionsCar,
+                subtitle = if (ownerName.isNotBlank()) "Días y horarios de atención del negocio" else "Días y horarios para visitas técnicas",
                 schedules = visitSchedules,
                 onAdd = { showAddVisita = true },
                 onEdit = { group ->
@@ -252,7 +269,7 @@ fun CalendarioConfigScreen(
                 colors = colors
             )
 
-            if (hasLocalFisico && !tieneEmpresa) {
+            if (hasLocalFisico && !tieneEmpresa && ownerName.isBlank()) {
                 HorarioSection(
                     title = "TURNO EN LOCAL",
                     icon = Icons.Default.Store,
@@ -268,7 +285,37 @@ fun CalendarioConfigScreen(
                 )
             }
 
-            if (tieneEmpresa) {
+            if (tieneEmpresa && ownerName.isBlank()) {
+                Surface(
+                    onClick = onNavigateToCalendarioEmpresa,
+                    shape = RoundedCornerShape(12.dp),
+                    color = colors.surfaceColor,
+                    tonalElevation = 1.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(Color(0xFF8B5CF6).copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Business, null, tint = Color(0xFF8B5CF6), modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Horarios de la empresa", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
+                            Text("Configurar horarios del negocio", fontSize = 12.sp, color = colors.textSecondary, lineHeight = 16.sp)
+                        }
+                        Icon(Icons.Default.ChevronRight, null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+
+            if (tieneEmpresa && ownerName.isBlank()) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = colors.primaryOrange.copy(alpha = 0.08f),
@@ -757,6 +804,8 @@ private fun HorarioSection(
     onDelete: (List<AvailabilityScheduleEntity>) -> Unit,
     colors: PrestadorColors
 ) {
+    val schedulesByDay = schedules.groupBy { it.dayOfWeek }
+
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = colors.surfaceColor,
@@ -767,12 +816,16 @@ private fun HorarioSection(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // Cabecera
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(38.dp)
@@ -799,56 +852,74 @@ private fun HorarioSection(
 
             HorizontalDivider(color = colors.divider)
 
-            if (schedules.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.CalendarMonth, null, tint = colors.textSecondary.copy(alpha = 0.4f), modifier = Modifier.size(32.dp))
-                    Spacer(Modifier.height(6.dp))
-                    Text("Sin horarios configurados", color = colors.textSecondary, fontSize = 13.sp)
-                    Text("Tocá Agregar para configurar", color = colors.textSecondary.copy(alpha = 0.6f), fontSize = 12.sp)
-                }
-            } else {
-                val grouped = schedules.groupBy {
-                    Triple(it.startTime, it.endTime, it.appointmentDuration)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    grouped.forEach { (_, group) ->
-                        val first = group.first()
-                        val dias = group
-                            .sortedBy { it.dayOfWeek }
-                            .distinctBy { it.dayOfWeek }
-                            .joinToString(" · ") { it.dayOfWeek.toDayAbbr() }
+            // Fila por cada día de la semana (Lun → Dom)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                (1..7).forEach { day ->
+                    val daySchedules = schedulesByDay[day] ?: emptyList()
+                    val hasSchedule = daySchedules.isNotEmpty()
+                    val first = daySchedules.firstOrNull()
 
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = colors.primaryOrange.copy(alpha = 0.05f),
-                            modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (hasSchedule) colors.primaryOrange.copy(alpha = 0.06f)
+                                else colors.divider.copy(alpha = 0.3f)
+                            )
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Chip del día
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(
+                                    if (hasSchedule) colors.primaryOrange
+                                    else colors.textSecondary.copy(alpha = 0.15f),
+                                    RoundedCornerShape(10.dp)
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Schedule, null, tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(dias, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.primaryOrange)
-                                    Text(
-                                        "${first.startTime} - ${first.endTime}" +
-                                            if (first.worksByAppointment) "  ·  Turnos ${first.appointmentDuration} min" else "  ·  Sin turnos",
-                                        fontSize = 13.sp,
-                                        color = colors.textPrimary
-                                    )
-                                }
-                                IconButton(onClick = { onEdit(group) }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.Edit, "Editar", tint = colors.primaryOrange, modifier = Modifier.size(18.dp))
-                                }
-                                IconButton(onClick = { onDelete(group) }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.Default.Delete, "Eliminar", tint = Color(0xFFFF5252), modifier = Modifier.size(18.dp))
-                                }
+                            Text(
+                                text = day.toDayAbbr(),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (hasSchedule) Color.White else colors.textSecondary
+                            )
+                        }
+
+                        Spacer(Modifier.width(12.dp))
+
+                        if (hasSchedule && first != null) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${first.startTime}  →  ${first.endTime}",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = colors.textPrimary
+                                )
+                                Text(
+                                    text = if (first.worksByAppointment) "Turnos cada ${first.appointmentDuration} min" else "Sin turnos fijos",
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary
+                                )
+                            }
+                            IconButton(onClick = { onEdit(daySchedules) }, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Default.Edit, "Editar", tint = colors.primaryOrange, modifier = Modifier.size(17.dp))
+                            }
+                            IconButton(onClick = { onDelete(daySchedules) }, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Default.Delete, "Eliminar", tint = Color(0xFFFF5252), modifier = Modifier.size(17.dp))
+                            }
+                        } else {
+                            Text(
+                                text = "Sin horario",
+                                fontSize = 13.sp,
+                                color = colors.textSecondary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = onAdd, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Default.Add, "Agregar", tint = colors.textSecondary.copy(alpha = 0.5f), modifier = Modifier.size(17.dp))
                             }
                         }
                     }
