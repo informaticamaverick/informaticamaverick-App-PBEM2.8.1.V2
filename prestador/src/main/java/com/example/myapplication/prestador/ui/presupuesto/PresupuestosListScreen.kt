@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.presupuesto
+﻿package com.example.myapplication.prestador.ui.presupuesto
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -25,9 +25,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.PresupuestoViewModel
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
-import com.example.myapplication.prestador.viewmodel.ProfileState
+import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoViewModel
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable

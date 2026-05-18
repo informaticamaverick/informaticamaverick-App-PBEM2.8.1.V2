@@ -75,11 +75,24 @@ interface ConversationDao {
     fun getLockedConversations(): Flow<List<ConversationEntity>>
 
     @Query("""
-        SELECT * FROM conversations 
-        WHERE (:companyId IS NULL) 
-           OR (:companyId = 'personal' AND companyId IS NULL) 
-           OR (companyId = :companyId) 
-        ORDER BY lastMessageTimestamp DESC
+        SELECT * FROM conversations c1
+        WHERE (
+            (:companyId IS NULL)
+            OR (:companyId = 'personal' AND c1.companyId IS NULL)
+            OR (c1.companyId = :companyId)
+        )
+        AND c1.conversationId = (
+            SELECT c2.conversationId FROM conversations c2
+            WHERE c2.userId = c1.userId
+              AND (
+                (:companyId IS NULL)
+                OR (:companyId = 'personal' AND c2.companyId IS NULL)
+                OR (c2.companyId = :companyId)
+              )
+            ORDER BY c2.lastMessageTimestamp DESC
+            LIMIT 1
+        )
+        ORDER BY c1.lastMessageTimestamp DESC
     """)
     fun getConversationsByCompany(companyId: String?): Flow<List<ConversationEntity>>
 

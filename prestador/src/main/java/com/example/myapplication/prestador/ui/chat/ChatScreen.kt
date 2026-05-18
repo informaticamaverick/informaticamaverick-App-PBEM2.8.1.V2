@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.chat
+﻿package com.example.myapplication.prestador.ui.chat
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
@@ -9,8 +9,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.data.ChatData
-//import com.example.myapplication.prestador.viewmodel.ChatSimulationViewModel
-import com.example.myapplication.prestador.viewmodel.ChatViewModel
+//import com.example.myapplication.prestador.viewmodel.chat.ChatSimulationViewModel
+import com.example.myapplication.prestador.viewmodel.chat.ChatViewModel
+import com.example.myapplication.prestador.viewmodel.chat.InboxType
 import com.google.firebase.auth.FirebaseAuth
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -43,10 +44,17 @@ fun PrestadorChatScreen(
     LaunchedEffect(providerId) {
         if (providerId.isNotEmpty()) {
             chatViewModel.syncConversations()
+            chatViewModel.loadProviderProfile(providerId)
+            chatViewModel.refreshProviderProfile(providerId)
         }
     }
 
     val realConversations by chatViewModel.conversations.collectAsState()
+    val selectedInbox by chatViewModel.selectedInbox.collectAsState()
+    val hasCompanyInbox by chatViewModel.hasCompanyInbox.collectAsState()
+    val providerPhotoUrl by chatViewModel.providerPhotoUrl.collectAsState()
+    val companyPhotoUrl by chatViewModel.companyPhotoUrl.collectAsState()
+    val companyName by chatViewModel.companyName.collectAsState()
     val realConversationList = remember(realConversations) {
         realConversations.map { entity ->
             ChatData.Conversation(
@@ -63,6 +71,7 @@ fun PrestadorChatScreen(
             )
         }
     }
+
 
     LaunchedEffect(realConversationList.size) {
         println("PrestadorChatScreen - ${realConversationList.size} conversaciones reales")
@@ -131,6 +140,12 @@ fun PrestadorChatScreen(
                     isDeletionMode = false
                 },
                 onRequestDeleteConfirmation = { showConfirmDeleteDialog = true },
+                selectedInbox = selectedInbox,
+                hasCompanyInbox = hasCompanyInbox,
+                providerPhotoUrl = providerPhotoUrl,
+                companyName = companyName ?: "",
+                onInboxChange = { chatViewModel.selectInbox(it) },
+                companyPhotoUrl = companyPhotoUrl,
             )
         } else {
             val userName = realConversations.firstOrNull { it.userId == chatUserId }?.userName ?: "Usuario"

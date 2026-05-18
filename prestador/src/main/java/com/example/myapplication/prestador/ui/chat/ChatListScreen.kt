@@ -45,9 +45,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import coil.compose.AsyncImage
 import com.example.myapplication.prestador.data.ChatData
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.theme.PrestadorColors
+import com.example.myapplication.prestador.viewmodel.chat.InboxType
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -83,7 +87,13 @@ fun ChatListScreen(
     onShowDateRangeDialog: () -> Unit,
     onShowLockDialog: () -> Unit,
     onRequestDeleteConfirmation: () -> Unit,
-    onDeleteSelected: (Set<String>) -> Unit
+    onDeleteSelected: (Set<String>) -> Unit,
+    selectedInbox: InboxType = InboxType.PERSONAL,
+    hasCompanyInbox: Boolean = false,
+    providerPhotoUrl: String? = null,
+    companyPhotoUrl: String? = null,
+    companyName: String = "",
+    onInboxChange: (InboxType) -> Unit = {}
 ) {
     val colors = getPrestadorColors()
 
@@ -253,6 +263,32 @@ fun ChatListScreen(
                 }
                 Spacer(Modifier.height(8.dp))
             }
+            //Selector de bandeja: avatares Personal / Empresa
+            if (!isSearchActive && !isDeletionMode && hasCompanyInbox) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    InboxAvatarTab(
+                        photoUrl = providerPhotoUrl,
+                        label = "Personal",
+                        isSelected = selectedInbox == InboxType.PERSONAL,
+                        onClick = { onInboxChange(InboxType.PERSONAL) },
+                        colors = colors
+                    )
+                    InboxAvatarTab(
+                        photoUrl = companyPhotoUrl,
+                        label = companyName.ifBlank { "Empresa" },
+                        isSelected = selectedInbox == InboxType.EMPRESA,
+                        onClick = { onInboxChange(InboxType.EMPRESA) },
+                        colors = colors
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+            }
             // Barra de filtros avanzados
             if (!isSearchActive && !isDeletionMode) {
                 FilterBar(
@@ -390,7 +426,9 @@ fun ChatListScreen(
                 }
                 // Resultados
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
                         .background(colors.backgroundColor)
                 ) {
                     items(sortedConversations, key = { it.conversationId }) { conversation ->
@@ -809,5 +847,73 @@ private fun formatTimestamp(timestamp: Long): String {
             val dateFormat = SimpleDateFormat("dd/MM/yy", Locale.getDefault())
             dateFormat.format(Date(timestamp))
         }
+    }
+}
+
+@Composable
+private fun InboxAvatarTab(
+    photoUrl: String?,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    colors: PrestadorColors
+) {
+    // Decodifica base64 a Bitmap si el string no es una URL http
+    val base64Bitmap = remember(photoUrl) {
+        if (!photoUrl.isNullOrBlank() && !photoUrl.startsWith("http")) {
+            try {
+                val bytes = android.util.Base64.decode(photoUrl, android.util.Base64.DEFAULT)
+                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            } catch (e: Exception) { null }
+        } else null
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable { onClick() }
+            .padding(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .border(
+                    width = if (isSelected) 3.dp else 1.dp,
+                    color = if (isSelected) colors.primaryOrange else Color.Gray.copy(alpha = 0.4f),
+                    shape = CircleShape
+                )
+                .background(colors.primaryOrange.copy(alpha = 0.15f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                base64Bitmap != null -> Image(
+                    bitmap = base64Bitmap.asImageBitmap(),
+                    contentDescription = label,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+                !photoUrl.isNullOrBlank() -> AsyncImage(
+                    model = photoUrl,
+                    contentDescription = label,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+                else -> Text(
+                    text = label.take(1).uppercase(),
+                    color = colors.primaryOrange,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) colors.primaryOrange else Color.Gray,
+            maxLines = 1
+        )
     }
 }

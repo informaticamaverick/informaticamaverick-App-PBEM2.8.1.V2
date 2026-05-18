@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.profile
+﻿package com.example.myapplication.prestador.ui.profile
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -30,9 +30,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
-import com.example.myapplication.prestador.viewmodel.EmpleadosViewModel
-import com.example.myapplication.prestador.viewmodel.EmpleadoActionState
-import com.example.myapplication.prestador.viewmodel.EmpleadosUiState
+import com.example.myapplication.prestador.viewmodel.empresa.EmpleadosViewModel
+import com.example.myapplication.prestador.viewmodel.empresa.EmpleadoActionState
+import com.example.myapplication.prestador.viewmodel.empresa.EmpleadosUiState
 import com.example.myapplication.prestador.data.local.entity.EmpleadoEntity
 import com.example.myapplication.prestador.ui.profile.sections.ArchiveroSection
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors

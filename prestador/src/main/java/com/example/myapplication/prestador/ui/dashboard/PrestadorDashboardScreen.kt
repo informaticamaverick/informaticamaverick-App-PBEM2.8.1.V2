@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.dashboard
+﻿package com.example.myapplication.prestador.ui.dashboard
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -31,9 +31,9 @@ import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-import com.example.myapplication.prestador.viewmodel.NotificacionesViewModel
+import com.example.myapplication.prestador.viewmodel.dashboard.NotificacionesViewModel
 import com.example.myapplication.prestador.ui.notifications.NotificacionesScreen
-import com.example.myapplication.prestador.viewmodel.ChatViewModel
+import com.example.myapplication.prestador.viewmodel.chat.ChatViewModel
 
 
 
@@ -57,7 +57,7 @@ fun PrestadorDashboardScreen(
     onNavigateToPromotion: () -> Unit = {},
     onNavigateToPromotionList: () -> Unit = {},
     onNavigateToThemeDemo: () -> Unit = {},
-  //  fastSimulationViewModel: com.example.myapplication.prestador.viewmodel.FastSimulationViewModel = hiltViewModel(),
+  //  fastSimulationViewModel: com.example.myapplication.prestador.viewmodel.oportunidades.FastSimulationViewModel = hiltViewModel(),
     notificacionesViewModel: NotificacionesViewModel = hiltViewModel(),
     chatViewModel: ChatViewModel = hiltViewModel(),
     onNavigateToClientePerfil: (clientId: String) -> Unit = {},

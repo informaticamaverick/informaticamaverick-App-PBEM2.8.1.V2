@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.client
+﻿package com.example.myapplication.prestador.ui.client
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -35,8 +35,8 @@ import com.example.myapplication.prestador.data.model.ClienteDireccion
 import com.example.myapplication.prestador.data.model.ClienteEmpresa
 import com.example.myapplication.prestador.data.model.ClienteProfile
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.ClientePerfilUiState
-import com.example.myapplication.prestador.viewmodel.ClientePerfilViewModel
+import com.example.myapplication.prestador.viewmodel.cliente.ClientePerfilUiState
+import com.example.myapplication.prestador.viewmodel.cliente.ClientePerfilViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 

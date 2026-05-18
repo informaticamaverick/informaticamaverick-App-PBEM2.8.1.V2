@@ -26,9 +26,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity
 import com.example.myapplication.prestador.data.local.entity.toDayName
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
-import com.example.myapplication.prestador.viewmodel.BlockedDateViewModel
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.calendar.AvailabilityViewModel
+import com.example.myapplication.prestador.viewmodel.calendar.BlockedDateViewModel
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -59,7 +59,7 @@ fun SendCalendarDialog(
     }
 
     // Fuente única de verdad: leemos del ViewModel directamente
-    val provider = (profileState as? com.example.myapplication.prestador.viewmodel.ProfileState.Success)?.provider
+    val provider = (profileState as? com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success)?.provider
     val localActivo = provider?.hasPhysicalLocation ?: false
     val empresaActiva = provider?.hasCompanyProfile ?: false
     val canUseLocalAppointment = localActivo || empresaActiva
@@ -73,9 +73,6 @@ fun SendCalendarDialog(
     else null
 
     var appointmentType by remember { mutableStateOf(initialAppointmentType) }
-    LaunchedEffect(canUseLocalAppointment) {
-        if (!canUseLocalAppointment) appointmentType = "TECHNICAL_VISIT"
-    }
 
     var selectedAddress by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(appointmentType, localActivo, mostrarBranchesEmpresa) {
@@ -96,10 +93,7 @@ fun SendCalendarDialog(
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
 
     val filteredSchedules = remember(schedules, appointmentType) {
-        val exact = schedules.filter { it.scheduleType == appointmentType }
-        if (exact.isEmpty() && appointmentType == com.example.myapplication.prestador.data.local.entity.ScheduleType.LOCAL_APPOINTMENT.name)
-            schedules.filter { it.scheduleType == com.example.myapplication.prestador.data.local.entity.ScheduleType.TECHNICAL_VISIT.name }
-        else exact
+        schedules.filter { it.scheduleType == appointmentType }
     }
     val blockedSet = remember(blockedDatesActive) {
         blockedDatesActive.map { it.date }.toSet()
@@ -439,7 +433,13 @@ fun SendCalendarDialog(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
 
-        if (filteredSchedules.isEmpty()) {
+        if (appointmentType == "LOCAL_APPOINTMENT" && !canUseLocalAppointment) {
+                        Text(
+                            text = "Turno en local desactivado.\nActivá \"Turno en local\" en tu perfil para ofrecer turnos en tu establecimiento.",
+                            fontSize = 13.sp,
+                            color = colors.textSecondary
+                        )
+                    } else if (filteredSchedules.isEmpty()) {
                         Text(
                             text = "No tenés horarios de ${if (appointmentType == "TECHNICAL_VISIT") "Visita Técnica" else "Turno en Local"} configurados.\nAndá a Disponibilidad para agregar horarios.",
                             fontSize = 13.sp,

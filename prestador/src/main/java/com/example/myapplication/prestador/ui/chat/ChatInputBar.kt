@@ -18,7 +18,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
@@ -768,7 +768,7 @@ fun SwipeToReply(
         modifier = Modifier
             .fillMaxWidth()
             .pointerInput(Unit) {
-                detectDragGestures(
+                detectHorizontalDragGestures(
                     onDragEnd = {
                         coroutineScope.launch {
                             if (offsetX.value >= threshold) {
@@ -784,9 +784,9 @@ fun SwipeToReply(
                     }
                 ) { change, dragAmount ->
                     change.consume()
-                    if (dragAmount.x > 0 || offsetX.value > 0) {
+                    if (dragAmount > 0 || offsetX.value > 0) {
                         coroutineScope.launch {
-                            val newVal = (offsetX.value + dragAmount.x).coerceIn(0f, threshold * 1.2f)
+                            val newVal = (offsetX.value + dragAmount).coerceIn(0f, threshold * 1.2f)
                             offsetX.snapTo(newVal)
                         }
                     }

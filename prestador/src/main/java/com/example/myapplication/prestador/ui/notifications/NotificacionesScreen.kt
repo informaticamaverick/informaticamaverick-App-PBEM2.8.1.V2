@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.notifications
+﻿package com.example.myapplication.prestador.ui.notifications
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
@@ -34,7 +34,7 @@ import com.example.myapplication.prestador.data.model.NotificacionItem
 import com.example.myapplication.prestador.data.model.TipoNotificacion
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.NotificacionesViewModel
+import com.example.myapplication.prestador.viewmodel.dashboard.NotificacionesViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 

@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.presupuesto
+﻿package com.example.myapplication.prestador.ui.presupuesto
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -37,8 +37,8 @@ import com.example.myapplication.prestador.ui.presupuesto.BudgetProfessionalFee
 import com.example.myapplication.prestador.ui.presupuesto.BudgetMiscExpense
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
-import com.example.myapplication.prestador.viewmodel.ProfileState
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 
 
 // Enums para estado del presupuesto
@@ -69,7 +69,7 @@ fun PresupuestosScreen(
     onVerDetalle: (Presupuesto) -> Unit = {},
     onNavigateToConfig: () -> Unit = {},
     showTopBar: Boolean = true,
-    viewModel: com.example.myapplication.prestador.viewmodel.PresupuestoViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    viewModel: com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 ) {
     val colors = getPrestadorColors()
     val editProfileViewModel: EditProfileViewModel = hiltViewModel()

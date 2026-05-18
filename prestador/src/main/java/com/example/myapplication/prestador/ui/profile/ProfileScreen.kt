@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.profile
+﻿package com.example.myapplication.prestador.ui.profile
 
 import android.text.Layout
 import androidx.compose.animation.core.animateFloatAsState
@@ -54,9 +54,9 @@ import com.example.myapplication.prestador.data.model.BranchProvider
 import com.example.myapplication.prestador.data.model.CompanyProvider
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
-import com.example.myapplication.prestador.viewmodel.ProfileState
-import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.profile.ProfileState
+import com.example.myapplication.prestador.viewmodel.calendar.AvailabilityViewModel
 import com.example.myapplication.prestador.data.local.entity.toDayAbbr
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -70,7 +70,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Snackbar
-import com.example.myapplication.prestador.viewmodel.UpdateState
+import com.example.myapplication.prestador.viewmodel.profile.UpdateState
 import androidx.compose.material.icons.filled.Save
 import com.example.myapplication.prestador.data.model.AddressProvider
 import com.example.myapplication.prestador.ui.components.AddressBottomSheet

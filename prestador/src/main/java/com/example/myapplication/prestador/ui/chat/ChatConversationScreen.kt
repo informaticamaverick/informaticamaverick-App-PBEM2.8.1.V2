@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.chat
+﻿package com.example.myapplication.prestador.ui.chat
 
 import android.Manifest
 import android.app.Activity
@@ -58,7 +58,7 @@ import com.example.myapplication.prestador.utils.NotificationHelper
 import com.example.myapplication.prestador.utils.displayAddress
 import com.example.myapplication.prestador.utils.displayCompanyOrFullName
 import com.example.myapplication.prestador.utils.PrestadorProfile
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -82,7 +82,7 @@ fun ChatConversationScreen(
     val context = LocalContext.current
     val notificationHelper = remember { NotificationHelper(context) }
 
-    val chatViewModel: com.example.myapplication.prestador.viewmodel.ChatViewModel = hiltViewModel()
+    val chatViewModel: com.example.myapplication.prestador.viewmodel.chat.ChatViewModel = hiltViewModel()
     val chatId = remember(userId, providerId) {
         com.example.myapplication.prestador.utils.ChatIdHelper.generateChatId(userId, providerId)
     }
@@ -263,9 +263,9 @@ fun ChatConversationScreen(
 
     val currentServiceType = remember(profileState) {
         when (profileState) {
-            is com.example.myapplication.prestador.viewmodel.ProfileState.Success ->
+            is com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success ->
                 com.example.myapplication.prestador.data.model.ServiceType.fromString(
-                    (profileState as com.example.myapplication.prestador.viewmodel.ProfileState.Success).provider.serviceType
+                    (profileState as com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success).provider.serviceType
                 )
 
             else -> com.example.myapplication.prestador.data.model.ServiceType.PROFESSIONAL
@@ -276,12 +276,12 @@ fun ChatConversationScreen(
     // no necesariamente el UID de Auth.
     val effectiveProviderId = remember(profileState, providerId) {
         val fromProfile =
-            (profileState as? com.example.myapplication.prestador.viewmodel.ProfileState.Success)?.provider?.id
+            (profileState as? com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success)?.provider?.id
         if (!fromProfile.isNullOrBlank()) fromProfile else providerId
     }
 
     val provider =
-        (profileState as? com.example.myapplication.prestador.viewmodel.ProfileState.Success)?.provider
+        (profileState as? com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success)?.provider
     val providerDisplayName = provider?.displayCompanyOrFullName(businessEntity).orEmpty()
     val providerDisplayAddress = provider?.displayAddress(businessEntity).orEmpty()
     // Estado para guardar datos de cita temporalmente

@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.promotion
+﻿package com.example.myapplication.prestador.ui.promotion
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.CreatePromotionViewModel
+import com.example.myapplication.prestador.viewmodel.promotion.CreatePromotionViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

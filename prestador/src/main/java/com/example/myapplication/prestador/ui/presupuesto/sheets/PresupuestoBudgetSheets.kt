@@ -31,7 +31,7 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel
+import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoConfigViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import java.util.UUID
 import androidx.compose.foundation.lazy.LazyColumn

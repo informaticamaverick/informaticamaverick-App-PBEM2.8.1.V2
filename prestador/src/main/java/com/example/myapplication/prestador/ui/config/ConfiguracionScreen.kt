@@ -24,7 +24,9 @@ import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 fun ConfiguracionScreen(
     onBack: () -> Unit = {},
     onNavigateToCalendario: () -> Unit = {},
-    onNavigateToPresupuestoConfig: () -> Unit = {}
+    onNavigateToPresupuestoConfig: () -> Unit = {},
+    onNavigateToApariencia: () -> Unit = {},
+    onNavigateToNotificaciones: () -> Unit = {}
 ) {
     val colors = getPrestadorColors()
 
@@ -87,6 +89,30 @@ fun ConfiguracionScreen(
                 subtitle = "Días, horarios y duración de turnos",
                 colors = colors,
                 onClick = onNavigateToCalendario
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            ConfigSectionLabel("Apariencia", colors)
+
+            ConfigMenuItem(
+                icon = Icons.Default.Palette,
+                title = "Tema",
+                subtitle = "Claro, oscuro o seguir el sistema",
+                colors = colors,
+                onClick = onNavigateToApariencia
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            ConfigSectionLabel("Notificaciones", colors)
+
+            ConfigMenuItem(
+                icon = Icons.Default.Notifications,
+                title = "Notificaciones",
+                subtitle = "Mensajes, presupuestos y pedidos",
+                colors = colors,
+                onClick = onNavigateToNotificaciones
             )
         }
     }

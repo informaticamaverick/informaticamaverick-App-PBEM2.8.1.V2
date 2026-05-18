@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.presupuesto
+﻿package com.example.myapplication.prestador.ui.presupuesto
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -39,7 +39,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel
+import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoConfigViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
