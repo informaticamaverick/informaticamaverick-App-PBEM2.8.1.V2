@@ -6,19 +6,26 @@ import com.example.myapplication.prestador.data.local.entity.AvailabilitySchedul
 import com.example.myapplication.prestador.data.repository.AvailabilityScheduleFirestoreSync
 import com.example.myapplication.prestador.data.repository.AvailabilityScheduleRepository
 import com.google.firebase.auth.FirebaseAuth
-import dagger.hilt.android.lifecycle.HiltViewModel
+import com.google.firebase.firestore.FirebaseFirestore
+import com.example.myapplication.prestador.data.repository.SucursalFirestoreSync
+
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
 import androidx.lifecycle.SavedStateHandle
+import dagger.hilt.android.lifecycle.HiltViewModel
 
 @HiltViewModel
 class AvailabilityViewModel @Inject constructor(
     private val repository: AvailabilityScheduleRepository,
     private val sync: AvailabilityScheduleFirestoreSync,
     private val auth: FirebaseAuth,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    private val firestore: FirebaseFirestore,
+    private val sucursalSync: SucursalFirestoreSync
 ) : ViewModel() {
 
     // Usa owner_id de los args de navegación si está disponible (empresa/sucursal),
@@ -108,11 +115,16 @@ class AvailabilityViewModel @Inject constructor(
 
                 val syncResult = sync.upsertSchedule(schedule)
                 if (syncResult.isFailure) {
-                    _uiState.value = UiState.Error(
-                        "Horario guardado localmente, pero falló la sincronización: ${syncResult.exceptionOrNull()?.message ?: "Error"}"
-                    )
+                    val err = syncResult.exceptionOrNull()?.message ?: "Error desconocido"
+                    android.util.Log.e("HORARIO_SYNC", "❌ Falló sync Firestore: $err")
+                    _uiState.value = UiState.Error("Horario guardado localmente, pero falló la sincronización: $err")
                     return@launch
                 }
+
+                android.util.Log.d("HORARIO_SYNC", "✅ Horario subido a Firestore. providerId=${schedule.providerId}")
+
+                // Actualizar campo `horario` en la sucursal de Firestore para que el cliente lo lea
+                syncHorarioToBranches(providerId)
 
                 _uiState.value = UiState.Success("Horario agregado correctamente")
             } catch (e: Exception) {
@@ -147,6 +159,9 @@ class AvailabilityViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Actualizar campo `horario` en la sucursal de Firestore para que el cliente lo lea
+                syncHorarioToBranches(providerId)
+
                 _uiState.value = UiState.Success("Horario actualizado correctamente")
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "Error al actualizar horario")
@@ -169,6 +184,9 @@ class AvailabilityViewModel @Inject constructor(
                     return@launch
                 }
 
+                // Actualizar campo `horario` en la sucursal de Firestore para que el cliente lo lea
+                syncHorarioToBranches(providerId)
+
                 _uiState.value = UiState.Success("Horario eliminado correctamente")
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "Error al eliminar horario")
@@ -178,6 +196,58 @@ class AvailabilityViewModel @Inject constructor(
 
     fun resetState() {
         _uiState.value = UiState.Idle
+    }
+
+    /** Devuelve los horarios activos de cualquier owner (empresa o prestador personal) desde Room */
+    fun schedulesForOwner(ownerId: String): Flow<List<AvailabilityScheduleEntity>> =
+        repository.getActiveSchedulesByProvider(ownerId)
+
+    /** Carga desde Firestore → Room los horarios de un owner específico */
+    fun pullSchedulesForOwner(ownerId: String) {
+        viewModelScope.launch {
+            if (ownerId.isNotBlank()) sync.pullSchedulesToRoom(ownerId)
+        }
+    }
+
+    /**
+     * Cuando el owner_id es una empresa (no el UID del prestador),
+     * formatea todos los horarios activos y actualiza el campo `horario`
+     * en cada branch de esa empresa en Firestore para que el cliente lo lea.
+     */
+    private suspend fun syncHorarioToBranches(companyId: String) {
+        val prestadorUid = auth.currentUser?.uid ?: return
+        if (companyId == prestadorUid) return
+
+        val dayNames = mapOf(
+            1 to "Lunes", 2 to "Martes", 3 to "Miércoles",
+            4 to "Jueves", 5 to "Viernes", 6 to "Sábado", 7 to "Domingo"
+        )
+
+        val horarioTexto = repository.getActiveSchedulesByProviderOnce(companyId)
+            .sortedBy { it.dayOfWeek }
+            .groupBy { it.dayOfWeek }
+            .entries
+            .joinToString("\n") { (day, slots) ->
+                val slotStr = slots.joinToString(", ") { "${it.startTime} - ${it.endTime}" }
+                "${dayNames[day] ?: "Día $day"}: $slotStr"
+            }
+
+        // Obtener branches de Firestore directamente (SucursalEntity fue deprecado)
+        val branchesSnapshot = firestore
+            .collection("providers").document(prestadorUid)
+            .collection("companies").document(companyId)
+            .collection("branches")
+            .get().await()
+
+        branchesSnapshot.documents.forEach { branchDoc ->
+            sucursalSync.updateHorarioField(
+                providerId = prestadorUid,
+                companyId = companyId,
+                branchId = branchDoc.id,
+                horario = horarioTexto
+            )
+        }
+        android.util.Log.d("HORARIO_SYNC", "✅ Campo horario actualizado en ${branchesSnapshot.size()} sucursales. companyId=$companyId")
     }
 
     // Helpers de validación

@@ -119,7 +119,11 @@ class ProviderRepository @Inject constructor(
                 "atencionUrgencias" to provider.works24h,
                 "vaDomicilio" to provider.doesHomeVisits,
                 "envios" to provider.doesShipping,
-                "turnosEnLocal" to provider.hasPhysicalLocation
+                "turnosEnLocal" to provider.hasPhysicalLocation,
+                "acceptsAppointments" to provider.acceptsAppointments,
+                "trabajaConOtros" to provider.trabajaConOtros,
+                "workingHours" to provider.workingHours,
+                "horarioLocal" to provider.workingHours
                 // Nota: el mapa "local" (con dirección, horario, turnosEnLocal) solo se escribe
                 // desde EditProfileViewModel.updateProfile para evitar sobreescribir datos locales.
             )

@@ -3,7 +3,6 @@
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -58,7 +57,7 @@ fun NotificacionesScreen(
             .fillMaxSize()
             .background(colors.backgroundColor)
     ) {
-        // ── HEADER ───────────────────────────────────────────────────
+        // HEADER
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -92,7 +91,7 @@ fun NotificacionesScreen(
                     Text(
                         text = if (unreadCount > 0) "$unreadCount sin leer" else "Todo al día ✓",
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = Color.White.copy(alpha = 0.85f)
                     )
                 }
                 if (unreadCount > 0) {
@@ -110,7 +109,7 @@ fun NotificacionesScreen(
                             ) {
                                 Icon(
                                     Icons.Default.DoneAll,
-                                    contentDescription = "Marcar todas leídas",
+                                    contentDescription = "Marcar todas leidas",
                                     tint = Color.White,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -130,14 +129,14 @@ fun NotificacionesScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // ── FILTROS — Tipo ────────────────────────────────────────
+        // FILTROS CHIPS
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
                 FiltroChip(
-                    label = "🔔 Todos",
+                    label = "Todos",
                     selected = filtroTipo == null,
                     onClick = { viewModel.setFiltroTipo(null) },
                     colors = colors
@@ -155,7 +154,7 @@ fun NotificacionesScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // ── TOGGLE Solo no leídas ─────────────────────────────────
+        // TOGGLE solo no leidas
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -173,7 +172,7 @@ fun NotificacionesScreen(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "Solo no leídas",
+                    "Solo no leidas",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = colors.textPrimary
@@ -192,7 +191,7 @@ fun NotificacionesScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ── LISTA ─────────────────────────────────────────────────
+        // LISTA
         if (notificaciones.isEmpty()) {
             EmptyState(colors)
         } else {
@@ -228,7 +227,7 @@ fun NotificacionesScreen(
     }
 }
 
-// ── EMPTY STATE ───────────────────────────────────────────────────
+// EMPTY STATE
 @Composable
 private fun EmptyState(colors: PrestadorColors) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -238,12 +237,12 @@ private fun EmptyState(colors: PrestadorColors) {
         ) {
             Box(
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(96.dp)
                     .background(
                         Brush.radialGradient(
                             listOf(
                                 colors.primaryOrange.copy(alpha = 0.15f),
-                                colors.primaryOrange.copy(alpha = 0.04f)
+                                colors.primaryOrange.copy(alpha = 0.03f)
                             )
                         ),
                         CircleShape
@@ -254,7 +253,7 @@ private fun EmptyState(colors: PrestadorColors) {
                     Icons.Default.NotificationsNone,
                     contentDescription = null,
                     tint = colors.primaryOrange,
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(46.dp)
                 )
             }
             Text(
@@ -264,7 +263,7 @@ private fun EmptyState(colors: PrestadorColors) {
                 color = colors.textPrimary
             )
             Text(
-                "Estás al día con todo ✓",
+                "Estas al dia con todo",
                 fontSize = 14.sp,
                 color = colors.textSecondary
             )
@@ -272,7 +271,7 @@ private fun EmptyState(colors: PrestadorColors) {
     }
 }
 
-// ── HEADER DE GRUPO ───────────────────────────────────────────────
+// HEADER DE GRUPO
 @Composable
 private fun GrupoHeader(label: String, colors: PrestadorColors) {
     Row(
@@ -283,10 +282,10 @@ private fun GrupoHeader(label: String, colors: PrestadorColors) {
     ) {
         Text(
             text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
             color = colors.textSecondary,
-            letterSpacing = 0.6.sp
+            letterSpacing = 0.8.sp
         )
         Spacer(Modifier.width(8.dp))
         HorizontalDivider(
@@ -297,7 +296,7 @@ private fun GrupoHeader(label: String, colors: PrestadorColors) {
     }
 }
 
-// ── CHIP DE FILTRO ────────────────────────────────────────────────
+// CHIP DE FILTRO
 @Composable
 private fun FiltroChip(
     label: String,
@@ -310,7 +309,7 @@ private fun FiltroChip(
         shape = RoundedCornerShape(50),
         color = if (selected) colors.primaryOrange else colors.surfaceColor,
         border = if (selected) null else BorderStroke(1.dp, colors.border),
-        shadowElevation = if (selected) 2.dp else 0.dp
+        shadowElevation = if (selected) 3.dp else 0.dp
     ) {
         Text(
             text = label,
@@ -322,7 +321,7 @@ private fun FiltroChip(
     }
 }
 
-// ── CARD DE NOTIFICACIÓN ──────────────────────────────────────────
+// CARD DE NOTIFICACION
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NotificacionCard(
@@ -335,8 +334,8 @@ private fun NotificacionCard(
 
     val infiniteTransition = rememberInfiniteTransition(label = "dot")
     val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.5f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1000), RepeatMode.Reverse),
+        initialValue = 0.4f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
         label = "dot"
     )
 
@@ -355,7 +354,7 @@ private fun NotificacionCard(
                     .fillMaxSize()
                     .clip(RoundedCornerShape(16.dp))
                     .background(colors.error)
-                    .padding(end = 24.dp),
+                    .padding(end = 20.dp),
                 contentAlignment = Alignment.CenterEnd
             ) {
                 Column(
@@ -368,24 +367,31 @@ private fun NotificacionCard(
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
-                    Text("Eliminar", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "Eliminar",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }
     ) {
+        // Fondo OPACO - evita que el rojo del swipe traspase
+        val cardBg = if (!notif.leida) colors.surfaceElevated else colors.surfaceColor
+        val borderColor = if (!notif.leida) accentColor.copy(alpha = 0.4f) else colors.border
+        val borderWidth = if (!notif.leida) 1.dp else 0.7.dp
+
         Surface(
             onClick = onTap,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            color = if (!notif.leida) colors.primaryOrange.copy(alpha = 0.05f) else colors.surfaceColor,
-            border = BorderStroke(
-                width = if (!notif.leida) 1.dp else 0.8.dp,
-                color = if (!notif.leida) colors.primaryOrange.copy(alpha = 0.25f) else colors.border
-            ),
-            shadowElevation = if (!notif.leida) 2.dp else 0.dp
+            color = cardBg,
+            border = BorderStroke(borderWidth, borderColor),
+            shadowElevation = if (!notif.leida) 3.dp else 1.dp
         ) {
             Row(modifier = Modifier.fillMaxWidth()) {
-                // Acento lateral izquierdo para no leídas
+                // Barra lateral de color (solo no leidas)
                 if (!notif.leida) {
                     Box(
                         modifier = Modifier
@@ -399,23 +405,27 @@ private fun NotificacionCard(
                 }
                 Row(
                     modifier = Modifier
-                        .padding(14.dp)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
                         .fillMaxWidth(),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Ícono con fondo del color del tipo
+                    // Icono con fondo coloreado
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
-                            .background(accentColor.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                            .size(44.dp)
+                            .background(
+                                accentColor.copy(alpha = 0.15f),
+                                RoundedCornerShape(12.dp)
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(notif.tipo.emoji, fontSize = 22.sp)
+                        Text(notif.tipo.emoji, fontSize = 21.sp)
                     }
 
                     Spacer(Modifier.width(12.dp))
 
                     Column(Modifier.weight(1f)) {
+                        // Titulo + punto pulsante
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.fillMaxWidth()
@@ -423,11 +433,12 @@ private fun NotificacionCard(
                             Text(
                                 notif.titulo,
                                 fontSize = 14.sp,
-                                fontWeight = if (!notif.leida) FontWeight.Bold else FontWeight.SemiBold,
+                                fontWeight = if (!notif.leida) FontWeight.Bold else FontWeight.Medium,
                                 color = colors.textPrimary,
                                 modifier = Modifier.weight(1f)
                             )
                             if (!notif.leida) {
+                                Spacer(Modifier.width(6.dp))
                                 Box(
                                     Modifier
                                         .size(8.dp)
@@ -439,13 +450,14 @@ private fun NotificacionCard(
                             }
                         }
 
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(3.dp))
 
                         Text(
                             notif.mensaje,
                             fontSize = 13.sp,
                             color = colors.textSecondary,
-                            lineHeight = 19.sp
+                            lineHeight = 18.sp,
+                            maxLines = 2
                         )
 
                         Spacer(Modifier.height(8.dp))
@@ -456,13 +468,16 @@ private fun NotificacionCard(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = accentColor.copy(alpha = 0.1f)
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        accentColor.copy(alpha = 0.12f),
+                                        RoundedCornerShape(50)
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     "${notif.tipo.emoji} ${notif.tipo.label}",
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                                     fontSize = 11.sp,
                                     color = accentColor,
                                     fontWeight = FontWeight.SemiBold
@@ -471,7 +486,7 @@ private fun NotificacionCard(
                             Text(
                                 tiempoRelativo(notif.fechaMs),
                                 fontSize = 11.sp,
-                                color = colors.textSecondary.copy(alpha = 0.7f)
+                                color = colors.textSecondary.copy(alpha = 0.65f)
                             )
                         }
                     }
@@ -481,7 +496,7 @@ private fun NotificacionCard(
     }
 }
 
-// ── HELPERS ───────────────────────────────────────────────────────
+// HELPERS
 
 private fun tipoColor(tipo: TipoNotificacion): Color = when (tipo) {
     TipoNotificacion.MENSAJE     -> Color(0xFF3B82F6)
@@ -502,7 +517,7 @@ private fun tiempoRelativo(ms: Long): String {
         minutos < 60  -> "hace ${minutos}m"
         horas   < 24  -> "hace ${horas}h"
         dias    == 1L -> "ayer"
-        dias    < 7   -> "hace ${dias} días"
+        dias    < 7   -> "hace ${dias} dias"
         else          -> SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(ms))
     }
 }
@@ -524,4 +539,3 @@ private fun agruparPorFecha(items: List<NotificacionItem>): List<Pair<String, Li
         if (anteriores.isNotEmpty()) add("ANTERIORES"  to anteriores)
     }
 }
-

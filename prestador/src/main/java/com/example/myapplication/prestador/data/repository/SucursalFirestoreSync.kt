@@ -53,6 +53,32 @@ class SucursalFirestoreSync @Inject constructor(
         }
     }
 
+    /**
+     * Actualiza solo el campo `horario` (y `workingHours`) de una sucursal en Firestore,
+     * sin tocar el resto de los datos.
+     */
+    suspend fun updateHorarioField(
+        providerId: String,
+        companyId: String,
+        branchId: String,
+        horario: String
+    ): Result<Unit> {
+        return try {
+            branchesRef(providerId, companyId)
+                .document(branchId)
+                .update(
+                    mapOf(
+                        "horario" to horario,
+                        "workingHours" to horario,
+                        "updatedAt" to System.currentTimeMillis()
+                    )
+                ).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun eliminarSucursal(
         sucursalId: String,
         providerId: String,

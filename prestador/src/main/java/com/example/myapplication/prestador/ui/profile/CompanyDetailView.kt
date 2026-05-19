@@ -464,6 +464,20 @@ internal fun CompanyDetailView(
     var showAddSucursalSheet by remember { mutableStateOf(false) }
     var showDeleteEmpresaDialog by remember { mutableStateOf(false) }
 
+    var editNombreComercial by remember { mutableStateOf("") }
+    var editRazonSocial by remember { mutableStateOf("") }
+    var editCuit by remember { mutableStateOf("") }
+    var editEmailCorp by remember { mutableStateOf("") }
+
+    LaunchedEffect(isCompanyEditMode) {
+        if (isCompanyEditMode) {
+            editNombreComercial = company.name
+            editRazonSocial = company.razonSocial
+            editCuit = company.cuit
+            editEmailCorp = company.email
+        }
+    }
+
     val listState = rememberLazyListState()
     val headerMaxHeight = 330.dp
     val headerMinHeight = 140.dp
@@ -584,25 +598,82 @@ internal fun CompanyDetailView(
                     }
                 }
             ) {
-                if (company.name.isNotBlank()) {
-                    ProfileInfoRow("🏬", "Nombre Comercial", company.name, colors)
+
+                if (isCompanyEditMode) {
+                    val fieldColors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF8B5CF6),
+                        unfocusedBorderColor = colors.textSecondary.copy(alpha = 0.4f),
+                        focusedLabelColor = Color(0xFF8B5CF6),
+                        unfocusedLabelColor = colors.textSecondary,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary,
+                        cursorColor = Color(0xFF8B5CF6)
+                    )
+                        OutlinedTextField(
+                            value = editNombreComercial,
+                            onValueChange = { editNombreComercial = it },
+                            label = { Text("Nombre Comercial") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = fieldColors,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = editRazonSocial,
+                        onValueChange = { editRazonSocial = it },
+                        label = { Text("Razón Social") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = editCuit,
+                        onValueChange = { editCuit = it.filter { c ->
+                            c.isDigit() || c == '-'
+                        }},
+                        label = { Text("CUIT") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = editEmailCorp,
+                        onValueChange = { editEmailCorp = it },
+                        label = { Text("Email Corporativo") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = fieldColors,
+                        shape = RoundedCornerShape(12.dp)
+                    )
                     Spacer(Modifier.height(8.dp))
-                }
-                if (company.razonSocial.isNotBlank()) {
-                    ProfileInfoRow("🏢", "Razón Social", company.razonSocial, colors)
-                    Spacer(Modifier.height(8.dp))
-                }
-                if (company.cuit.isNotBlank()) {
-                    ProfileInfoRow("🆔", "CUIT", company.cuit, colors)
-                    Spacer(Modifier.height(8.dp))
-                }
-                if (company.email.isNotBlank()) {
-                    ProfileInfoRow("📧", "Email Corporativo", company.email, colors)
-                    Spacer(Modifier.height(8.dp))
-                }
-                if (company.description.isNotBlank()) {
-                    Text(company.description, fontSize = 13.sp, color = colors.textSecondary, lineHeight = 18.sp)
-                    Spacer(Modifier.height(8.dp))
+                } else {
+                    if (company.name.isNotBlank()) {
+                        ProfileInfoRow("🏬", "Nombre Comercial", company.name, colors)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (company.razonSocial.isNotBlank()) {
+                        ProfileInfoRow("🏢", "Razón Social", company.razonSocial, colors)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (company.cuit.isNotBlank()) {
+                        ProfileInfoRow("🆔", "CUIT", company.cuit, colors)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (company.email.isNotBlank()) {
+                        ProfileInfoRow("📧", "Email Corporativo", company.email, colors)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (company.description.isNotBlank()) {
+                        Text(company.description, fontSize = 13.sp, color = colors.textSecondary, lineHeight = 18.sp)
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
 
                 // Servicios activos con etiquetas
@@ -704,7 +775,10 @@ internal fun CompanyDetailView(
                     colors = colors,
                     isEditMode = isCompanyEditMode,
                     onUpdateBranch = onUpdateBranch,
-                    onNavigateToCalendarioConfig = onNavigateToCalendarioConfig
+                    // Siempre usamos company.id como owner_id — los horarios pertenecen a la empresa, no a la sucursal
+                    onNavigateToCalendarioConfig = { _, branchName ->
+                        onNavigateToCalendarioConfig(company.id, branchName)
+                    }
                 )
             }
         }
@@ -863,9 +937,17 @@ internal fun CompanyDetailView(
             listOf(
                 PrestadorAction("cancel", Icons.Default.Close, "Cancelar", tint = Color(0xFFFF5252)) { isCompanyEditMode = false },
                 PrestadorAction("divider_1", Icons.Default.Edit, ""),
-                PrestadorAction("save", Icons.Default.Save, "Guardar", tint = colors.primaryOrange) { isCompanyEditMode = false },
-                PrestadorAction("divider_2", Icons.Default.Edit, ""),
-                PrestadorAction("empresa", Icons.Default.Business, "Empresa", tint = colors.primaryOrange) { showEmpresaEditSheet = true },
+                PrestadorAction("save", Icons.Default.Save, "Guardar", tint = colors.primaryOrange) {
+                    onUpdateCompany(
+                        company.copy(
+                            name = editNombreComercial.trim(),
+                            razonSocial = editRazonSocial.trim(),
+                            cuit = editCuit.trim(),
+                            email = editEmailCorp.trim()
+                        )
+                    )
+                    isCompanyEditMode = false
+                },
                 PrestadorAction("delete", Icons.Default.Delete, "Eliminar", tint = Color(0xFFFF5252)) { showDeleteEmpresaDialog = true }
             )
         },

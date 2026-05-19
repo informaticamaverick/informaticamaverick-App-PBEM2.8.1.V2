@@ -1,5 +1,6 @@
 package com.example.myapplication.prestador.data.repository
 
+import android.R
 import android.util.Log
 import java.util.Collections
 import com.example.myapplication.prestador.data.local.dao.ConversationDao
@@ -27,6 +28,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.net.Uri
+import android.provider.Settings
 import android.text.SpannedString
 import com.example.myapplication.prestador.data.local.dao.BookedAppointmentDao
 import com.google.firebase.database.ChildEvent
@@ -52,6 +54,8 @@ class ChatRepository @Inject constructor(
     private var messageChildListener: ChildEventListener? = null
     private var globalListener: ListenerRegistration? = null
     private val globalRtdbListeners = mutableMapOf<String, ChildEventListener>()
+    private var companyListener: ListenerRegistration? = null
+    private val companyRtdbListeners = mutableMapOf<String, ChildEventListener>()
     private val notifiedMessageIds = mutableSetOf<String>()
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -971,6 +975,69 @@ class ChatRepository @Inject constructor(
                 }
             }
     }
+    fun syncConversationsForCompany(companyId: String) {
+        firestore.collection("chats")
+            .whereArrayContains("participants", companyId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    Log.e("ChatRepo", "Error sync empresa: ${error?.message}")
+                    return@addSnapshotListener
+                }
+                scope.launch {
+                    for (doc in snapshot.documents) {
+                        @Suppress("UNCHECKED_CAST")
+                        val participants = doc.get("participants") as? List<String> ?: continue
+                        val otherUserId = participants.firstOrNull { it != companyId } ?: continue
+                        val existing = conversationDao.getConversationById(doc.id)
+                        val storedName = existing?.userName ?: ""
+                        val nameSeemsBad = storedName.isBlank()
+                                || storedName == otherUserId
+                                || storedName == "Cliente"
+                                || storedName.length > 20 && storedName.none { it == ' ' }
+                                || storedName.matches(Regex("^[A-Za-z0-9_-]{20,}$"))
+                        var displayName = storedName.takeIf { !nameSeemsBad } ?: otherUserId
+                        var freshAvatarUrl: String? = existing?.userAvatarUrl
+                        if (existing == null || !userDataCache.containsKey(otherUserId) || nameSeemsBad) {
+                            val resolved = resolveParticipantData(otherUserId, freshAvatarUrl)
+                            if (resolved == null) {
+                                Log.w("ChatRepo", "Cliente $otherUserId no encontrado. Saltando.")
+                                continue
+                            }
+                            displayName = resolved.first
+                            freshAvatarUrl = resolved.second
+                            userDataCache[otherUserId] = resolved
+                        } else {
+                            userDataCache[otherUserId]?.let {
+                                displayName = it.first
+                                freshAvatarUrl = it.second
+                            }
+                        }
+
+                        val conversation = ConversationEntity(
+                            conversationId = doc.id,
+                            userId = otherUserId,
+                            userName = displayName,
+                            userAvatarUrl = freshAvatarUrl,
+                            lastMessage = doc.getString("lastMessage") ?: "",
+                            lastMessageTimestamp = doc.getLong("lastMessageTimestamp") ?: 0L,
+                            unreadCount = existing?.unreadCount ?: 0,
+                            notificationsEnabled = existing?.notificationsEnabled ?: true,
+                            isVisible = existing?.isVisible ?: true,
+                            isLocked = existing?.isLocked ?: false,
+                            isSynced = true,
+                            companyId = companyId
+                        )
+
+                        if (existing == null) {
+                            conversationDao.insertConversation(conversation)
+                        } else if (existing.lastMessage != conversation.lastMessage || existing.lastMessageTimestamp != conversation.lastMessageTimestamp
+                            || existing.userName != conversation.userName || existing.userAvatarUrl != conversation.userAvatarUrl) {
+                            conversationDao.updateConversation(conversation)
+                        }
+                    }
+                }
+            }
+    }
 
     fun getConversationsByProvider(providerId: String): Flow<List<ConversationEntity>> =
         conversationDao.getAllConversations()
@@ -1228,6 +1295,152 @@ class ChatRepository @Inject constructor(
         }
         globalRtdbListeners.clear()
     }
+
+    fun startGlobalListeningForCompany(companyId: String) {
+        val listeningStartAt = System.currentTimeMillis()
+        if (companyListener != null) return
+
+        companyListener = firestore.collection("chats")
+            .whereArrayContains("participants", companyId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null)
+                    return@addSnapshotListener
+
+                val currentChatIds = snapshot.documents.map { it.id }.toSet()
+                val toRenove = companyRtdbListeners.keys.filter { it !in currentChatIds }
+                toRenove.forEach { convId ->
+                    val ref = database.reference.child("chats").child(convId).child("messages")
+                    companyRtdbListeners[convId]?.let { ref.removeEventListener(it) }
+                    companyRtdbListeners.remove(convId)
+                }
+
+                for (chatDoc in snapshot.documents) {
+                    val conversationId = chatDoc.id
+                    if (companyRtdbListeners.containsKey(conversationId)) continue
+                    val ref = database.reference.child("chats").child(conversationId).child("messages")
+                        .orderByChild("timestamp").limitToLast(1)
+                    val listener = object  : ChildEventListener {
+                        override fun onChildAdded(snap: DataSnapshot, prev: String?) {
+                            val senderId = snap.child("senderId").getValue(String::class.java) ?: return
+                            if (senderId == companyId) return
+                            val msgId = snap.child("messageId").getValue(String::class.java) ?: snap.key ?: return
+                            val msgType = snap.child("type").getValue(String::class.java) ?: "TEXT"
+                            val appointmentStatus = snap.child("appointmentStatus").getValue(String::class.java)
+                            val appointmentTitle = snap.child("appointmentTitle").getValue(String::class.java)
+                            val msgTimestamp = snap.child("timestamp").getValue(Long::class.java) ?: 0L
+                            val isNewMessage = msgTimestamp >= listeningStartAt - 10_000L
+                            scope.launch {
+                                try {
+                                    val existingConv = conversationDao.getConversationById(conversationId)
+                                    if (existingConv == null) {
+                                        conversationDao.insertConversation(
+                                            ConversationEntity(
+                                                conversationId = conversationId,
+                                                userId = senderId,
+                                                userName = senderId,
+                                                isSynced = false,
+                                                lastMessageTimestamp = msgTimestamp,
+                                                lastMessage = snap.child("text").getValue(String::class.java) ?: "",
+                                                companyId = companyId
+                                            )
+                                        )
+                                    }
+
+                                    val existsInRoom = messageDao.getMessageById(msgId) != null
+                                    if (!existsInRoom) {
+                                        val rawContent = snap.child("content").getValue(String::class.java) ?: ""
+                                        var localImagePath: String? = null
+                                        var localAudioPath: String? = null
+
+                                        if (msgType == "IMAGE" && rawContent.isNotEmpty() && !rawContent.startsWith("http")) {
+                                            localImagePath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "IMG_", ".webp")
+                                        } else if (msgType == "AUDIO" && rawContent.isNotEmpty() && rawContent.startsWith("http")) {
+                                            localAudioPath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "AUD_", ".3gp")
+                                        }
+                                        val msg = MessageEntity(
+                                            messageId = msgId,
+                                            conversationId = conversationId,
+                                            text = snap.child("text").getValue(String::class.java) ?: "",
+                                            timestamp = msgTimestamp,
+                                            isFromCurrentUser = false,
+                                            messageType = if (msgType == "VISIT") "APPOINTMENT_REQUEST" else msgType,
+                                            appointmentTitle = appointmentTitle,
+                                            appointmentDate = snap.child("appointmentDate").getValue(
+                                                String::class.java),
+                                            appointmentTime = snap.child("appointmentTime").getValue(
+                                                String::class.java),
+                                            appointmentStatus = appointmentStatus,
+                                            appointmentType = snap.child("appointmentType").getValue(String::class.java),
+                                            providerAddress = snap.child("providerAddress").getValue(
+                                                String::class.java),
+                                            imageLocalPath = localImagePath,
+                                            audioLocalPath = localAudioPath,
+                                            imageUrl = if (localAudioPath != null) "[IMAGEN]" else null,
+                                            audioUrl = if (localAudioPath != null) "[AUDIO]" else null,
+                                            replyToId = snap.child("replyToId").getValue(String::class.java),
+                                            replyToContent = snap.child("replyToContent").getValue(String::class.java),
+                                            replyToSenderName = snap.child("replyToSenderName").getValue(String::class.java)
+                                        )
+                                        messageDao.insertMessage(msg)
+
+                                        conversationDao
+                                            .updateLastMessage(conversationId, msg.text ?: "", msgTimestamp, msgType)
+                                        conversationDao.incrementUnreadCount(conversationId)
+                                    }
+                                    if (!isNewMessage) return@launch
+                                    if (!notifiedMessageIds.add(msgId))
+                                        return@launch
+                                    val senderName = conversationDao.getConversationById(conversationId)?.userName ?: senderId
+                                    notificationHelper.showChatNotification(
+                                        senderId = senderId,
+                                        senderName = senderName,
+                                        msgType = msgType,
+                                        appointmentStatus = appointmentStatus,
+                                        appointmentTitle = appointmentTitle
+                                    )
+
+                                    val (gTitulo, gMensaje, gTipo) = when (msgType) {
+                                        "AUDIO" -> Triple(senderName, " Te envió un audio", TipoNotificacion.MENSAJE)
+                                            "IMAGE" -> Triple(senderName, " Te envió una imagen", TipoNotificacion.MENSAJE)
+                                            else -> Triple(senderName, " Nuevo mensaje", TipoNotificacion.MENSAJE)
+
+                                    }
+
+                                    notificacionRepository.guardar(
+                                        NotificacionItem(
+                                            tipo = gTipo,
+                                            titulo = gTitulo,
+                                            mensaje = gMensaje,
+                                            fechaMs = System.currentTimeMillis(),
+                                            leida = false,
+                                            accionRoute = "open_chat/$senderId"
+                                        )
+                                    )
+                                } catch (e: Exception) {
+                                    Log.e("ChatRepo", "Error procesando mensaje empresa: ${e.message}")
+                                }
+                            }
+                        }
+                        override fun onChildChanged(snap: DataSnapshot, prev: String?) {}
+                        override fun onChildRemoved(snap: DataSnapshot) {}
+                        override fun onChildMoved(snap: DataSnapshot, prev: String?) {}
+                        override fun onCancelled(error: DatabaseError) {}
+                    }
+                    ref.addChildEventListener(listener)
+                    companyRtdbListeners[conversationId] = listener
+                }
+            }
+    }
+
+    fun stopGlobalListeningForCompany() {
+        companyListener?.remove()
+        companyListener = null
+        companyRtdbListeners.forEach { (convId, listener) ->
+            database.reference.child("chats").child("messages").removeEventListener(listener)
+        }
+        companyRtdbListeners.clear()
+    }
+
 
     suspend fun deleteConversations(userIds: Set<String>) {
         for (userId in userIds) {

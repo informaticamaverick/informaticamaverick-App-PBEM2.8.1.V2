@@ -2,7 +2,6 @@ package com.example.myapplication.prestador.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import androidx.room.ForeignKey
 import androidx.room.Index
 
 enum class ScheduleType { TECHNICAL_VISIT, LOCAL_APPOINTMENT }
@@ -13,14 +12,6 @@ enum class ScheduleType { TECHNICAL_VISIT, LOCAL_APPOINTMENT }
  */
 @Entity(
     tableName = "availability_schedules",
-    foreignKeys = [
-        ForeignKey(
-            entity = ProviderEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["providerId"],
-            onDelete = ForeignKey.NO_ACTION
-        )
-    ],
     indices = [Index(value = ["providerId"])]
 )
 data class AvailabilityScheduleEntity(

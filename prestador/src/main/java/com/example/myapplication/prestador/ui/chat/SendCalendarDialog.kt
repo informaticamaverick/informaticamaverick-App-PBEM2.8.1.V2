@@ -29,6 +29,7 @@ import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.calendar.AvailabilityViewModel
 import com.example.myapplication.prestador.viewmodel.calendar.BlockedDateViewModel
 import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
+import kotlinx.coroutines.flow.flowOf
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -42,6 +43,7 @@ fun SendCalendarDialog(
     onSend: (startDate: String, endDate: String, availabilityJson: String, bookedSlotsJson: String, appointmentType: String, providerAddress: String?, serviceCategory: String) -> Unit,
     hasPhysicalLocation: Boolean = false,
     tieneEmpresa: Boolean = false,
+    companyId: String = "",
     initialAppointmentType: String = "TECHNICAL_VISIT",
     showTypePicker: Boolean = true,
     availabilityViewModel: AvailabilityViewModel = hiltViewModel(),
@@ -72,6 +74,9 @@ fun SendCalendarDialog(
         provider?.addresses?.find { it.id == "local" }?.fullString() ?: provider?.address?.fullString()
     else null
 
+    // ID real de la empresa: primero el que viene como parámetro, si no el primero disponible en el perfil
+    val resolvedCompanyId = companyId.ifBlank { provider?.companies?.firstOrNull()?.id ?: "" }
+
     var appointmentType by remember { mutableStateOf(initialAppointmentType) }
 
     var selectedAddress by remember { mutableStateOf<String?>(null) }
@@ -92,8 +97,35 @@ fun SendCalendarDialog(
     }
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
 
-    val filteredSchedules = remember(schedules, appointmentType) {
-        schedules.filter { it.scheduleType == appointmentType }
+    // Cuando es turno en local de empresa, cargar los horarios de la empresa desde Firestore → Room
+    LaunchedEffect(appointmentType, resolvedCompanyId) {
+        if (appointmentType == "LOCAL_APPOINTMENT" && resolvedCompanyId.isNotBlank()) {
+            availabilityViewModel.pullSchedulesForOwner(resolvedCompanyId)
+        }
+    }
+
+    // Horarios de la empresa (flujo separado por companyId)
+    val companySchedulesFlow = remember(resolvedCompanyId) {
+        if (resolvedCompanyId.isNotBlank())
+            availabilityViewModel.schedulesForOwner(resolvedCompanyId)
+        else
+            kotlinx.coroutines.flow.flowOf(emptyList())
+    }
+    val companySchedules by companySchedulesFlow.collectAsState(initial = emptyList())
+
+    // Usar empresa si el provider tiene empresa pero no local propio
+    // (fallback a los params externos si el profile interno aún no cargó)
+    val usarHorariosEmpresa = resolvedCompanyId.isNotBlank() &&
+            appointmentType == "LOCAL_APPOINTMENT" &&
+            (mostrarBranchesEmpresa || (tieneEmpresa && !hasPhysicalLocation))
+
+    val filteredSchedules = remember(schedules, companySchedules, appointmentType, usarHorariosEmpresa) {
+        when {
+            // Turno en local de empresa: mostrar TODOS los horarios de la empresa
+            // (sin filtrar por scheduleType, ya que cualquier horario configurado es su horario de atención)
+            usarHorariosEmpresa -> companySchedules
+            else -> schedules.filter { it.scheduleType == appointmentType }
+        }
     }
     val blockedSet = remember(blockedDatesActive) {
         blockedDatesActive.map { it.date }.toSet()

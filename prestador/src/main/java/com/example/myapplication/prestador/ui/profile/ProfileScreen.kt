@@ -366,6 +366,9 @@ fun ProfileScreen(
                     }
                     viewModel.addCompany(firstCompany.copy(branches = updatedBranches))
                 },
+                onUpdateCompany = { updatedCompany ->
+                    viewModel.addCompany(updatedCompany)
+                },
                 onDeleteCompany = {
                     viewModel.removeCompany(firstCompany.id)
                 },

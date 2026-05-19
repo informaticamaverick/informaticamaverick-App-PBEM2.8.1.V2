@@ -15,10 +15,12 @@ import com.google.firebase.auth.FirebaseAuth
 
 import com.example.myapplication.prestador.data.model.NotificacionItem
 import com.example.myapplication.prestador.data.model.TipoNotificacion
+import com.example.myapplication.prestador.data.repository.AppSettingsRepository
 import com.example.myapplication.prestador.data.repository.NotificacionRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -27,6 +29,9 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     @Inject
     lateinit var notificacionRepository: NotificacionRepository
+
+    @Inject
+    lateinit var appSettingsRepository: AppSettingsRepository
 
     private val jobScope = CoroutineScope(Dispatchers.IO)
 
@@ -85,6 +90,23 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
         // ──────────────────────────────────────────────────────────────────────────────
+
+        val msgType = message.data["type"] ?: ""
+        val notifEnabled = kotlinx.coroutines.runBlocking {
+            when {
+                chatId.isNotEmpty() && tenderId.isEmpty() ->
+                    appSettingsRepository.notifMessages.first()
+
+                msgType == "presupuesto" ->
+                    appSettingsRepository.notifPresupuestos.first()
+
+                msgType == "pedido" ->
+                    appSettingsRepository.notifPedidos.first()
+
+                else -> true
+            }
+        }
+        if (!notifEnabled) return
 
         val channelId = if (tenderId.isNotEmpty()) "tender_notifications" else "chat_messages"
         val channelName = if (tenderId.isNotEmpty()) "Licitaciones" else "Mensajes de chat"

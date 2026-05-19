@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.prestador.data.model.AddressProvider
@@ -364,7 +366,8 @@ fun AddressBottomSheet(
                     shape = fieldShape,
                     colors = fieldColors,
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
             }
 
@@ -394,13 +397,20 @@ fun AddressBottomSheet(
                 )
                 OutlinedTextField(
                     value = postalCode,
-                    onValueChange = { postalCode = it },
+                    onValueChange = { raw ->
+                        val filtered = raw.uppercase().filter { c -> c.isLetter() || c.isDigit() }
+                        val letra = filtered.firstOrNull()?.takeIf { it.isLetter() }?.toString() ?: ""
+                        val digitos = filtered.drop(if (letra.isNotEmpty()) 1 else 0).filter { c -> c.isDigit() }.take(4)
+                        postalCode = (letra + digitos).take(5)
+                    },
                     label = { Text("CP", fontSize = 11.sp) },
+                    placeholder = { Text("T4000", fontSize = 11.sp ) },
                     textStyle = textStyle,
                     shape = fieldShape,
                     colors = fieldColors,
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
                 )
             }
 

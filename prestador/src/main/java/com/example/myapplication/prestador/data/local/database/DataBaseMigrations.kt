@@ -871,6 +871,31 @@ NO ACTION
         }
     }
 
+    // Migración 52→53: elimina FK de availability_schedules para soportar IDs de empresa/sucursal
+    val MIGRATION_52_53 = object : Migration(52, 53) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS availability_schedules_new (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    providerId TEXT NOT NULL,
+                    dayOfWeek INTEGER NOT NULL,
+                    startTime TEXT NOT NULL,
+                    endTime TEXT NOT NULL,
+                    appointmentDuration INTEGER NOT NULL,
+                    worksByAppointment INTEGER NOT NULL DEFAULT 1,
+                    scheduleType TEXT NOT NULL DEFAULT 'TECHNICAL_VISIT',
+                    isActive INTEGER NOT NULL DEFAULT 1,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("INSERT INTO availability_schedules_new SELECT * FROM availability_schedules")
+            db.execSQL("DROP TABLE availability_schedules")
+            db.execSQL("ALTER TABLE availability_schedules_new RENAME TO availability_schedules")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_availability_schedules_providerId ON availability_schedules(providerId)")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_6_7,
         MIGRATION_7_8,
@@ -911,7 +936,8 @@ NO ACTION
         MIGRATION_48_49,
         MIGRATION_49_50,
         MIGRATION_50_51,
-        MIGRATION_51_52
+        MIGRATION_51_52,
+        MIGRATION_52_53
     )
 }
 

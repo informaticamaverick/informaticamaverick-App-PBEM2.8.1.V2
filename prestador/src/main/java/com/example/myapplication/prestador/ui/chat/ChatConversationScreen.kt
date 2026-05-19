@@ -71,6 +71,7 @@ fun ChatConversationScreen(
     userName: String,
     userPhotoUrl: String? = null,
     providerId: String,  // Ahora es requerido, se pasa desde ChatScreen
+    conversationId: String? = null, // Si se provee, se usa directamente (ej: chat de empresa)
     onBack: () -> Unit,
     onNavigateToPresupuesto: () -> Unit = {},
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
@@ -83,8 +84,8 @@ fun ChatConversationScreen(
     val notificationHelper = remember { NotificationHelper(context) }
 
     val chatViewModel: com.example.myapplication.prestador.viewmodel.chat.ChatViewModel = hiltViewModel()
-    val chatId = remember(userId, providerId) {
-        com.example.myapplication.prestador.utils.ChatIdHelper.generateChatId(userId, providerId)
+    val chatId = remember(userId, providerId, conversationId) {
+        conversationId ?: com.example.myapplication.prestador.utils.ChatIdHelper.generateChatId(userId, providerId)
     }
 
     // Estado para saber si este chat está visible
@@ -943,6 +944,7 @@ fun ChatConversationScreen(
                         onDismiss = { showSendCalendarDialog = false },
                         hasPhysicalLocation = provider?.hasPhysicalLocation ?: false,
                         tieneEmpresa = provider?.hasCompanyProfile ?: false,
+                        companyId = provider?.companies?.firstOrNull()?.id ?: "",
                         initialAppointmentType = pendingAppointmentType,
                         showTypePicker = false,
                         onSend = { startDate, endDate, availabilityJson, bookedSlotsJson, appointmentType, providerAddress, serviceCategory ->

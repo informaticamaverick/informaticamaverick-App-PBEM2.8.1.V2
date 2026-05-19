@@ -158,7 +158,9 @@ class ChatViewModel @Inject constructor(
     }
 
     fun loadMessagesByConversation(conversationId: String) {
+        if (currentConversationId == conversationId) return
         currentConversationId = conversationId
+        _messages.value = emptyList() // limpiar inmediatamente para evitar flash de mensajes anteriores
 
         repository.startListening(conversationId, myUserId)
         viewModelScope.launch {
@@ -746,6 +748,17 @@ class ChatViewModel @Inject constructor(
         if (myUserId.isEmpty()) return
         repository.syncConversationsFromFirestore(myUserId)
         repository.startGlobalListening(myUserId)
+
+        // Sync empresa si el prestador tiene compañia
+        viewModelScope.launch {
+            _providerProfile.collect { profile ->
+                val companyId = profile?.companies?.firstOrNull()?.id
+                if (!companyId.isNullOrEmpty()) {
+                    repository.syncConversationsForCompany(companyId)
+                    repository.startGlobalListeningForCompany(companyId)
+                }
+            }
+        }
     }
 
     override fun onCleared() {
@@ -756,6 +769,7 @@ class ChatViewModel @Inject constructor(
         recordingTimerJob?.cancel()
         repository.stopListening()
         repository.stopGlobalListening()
+        repository.stopGlobalListeningForCompany()
     }
 
     fun deleteConversations(userIds: Set<String>) {

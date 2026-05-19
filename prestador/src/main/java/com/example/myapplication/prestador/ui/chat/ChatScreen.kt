@@ -81,6 +81,7 @@ fun PrestadorChatScreen(
     }
 
     var activeChatUserId by remember { mutableStateOf<String?>(initialChatUserId) }
+    var activeChatConvId by remember { mutableStateOf<String?>(null) }
     
     // Eliminado: Dependencia de chatSimulationViewModel para navegación automática.
     // En el futuro, se debe implementar un mecanismo basado en notificaciones reales 
@@ -105,7 +106,7 @@ fun PrestadorChatScreen(
 
     BackHandler {
         when {
-            activeChatUserId != null -> { activeChatUserId = null; inputText = "" }
+            activeChatUserId != null -> { activeChatUserId = null; activeChatConvId = null; inputText = "" }
             isSearchActive -> { isSearchActive = false; searchQuery = "" }
             isDeletionMode -> { isDeletionMode = false; selectedChatsForDeletion = emptySet() }
             else -> onBack()
@@ -128,7 +129,7 @@ fun PrestadorChatScreen(
                 onSortModeChange = { sortMode = it },
                 onDeletionModeChange = { isDeletionMode = it },
                 onChatSelectionChange = { selectedChatsForDeletion = it },
-                onChatClick = { userId -> activeChatUserId = userId },
+                onChatClick = { userId, convId -> activeChatUserId = userId; activeChatConvId = convId },
                 onBack = onBack,
                 onShowNotificationDialog = { showNotificationDialog = true },
                 onShowVisibilityDialog = { showVisibilityDialog = true },
@@ -155,7 +156,8 @@ fun PrestadorChatScreen(
                 userName = userName,
                 userPhotoUrl = userPhotoUrl,
                 providerId = providerId,
-                onBack = { activeChatUserId = null; inputText = "" },
+                conversationId = activeChatConvId,
+                onBack = { activeChatUserId = null; activeChatConvId = null; inputText = "" },
                 onNavigateToPresupuesto = onNavigateToPresupuesto,
                 onNavigateToClientePerfil = { onNavigateToClientePerfil(chatUserId)},
                 autoOpenCalendarDialog = autoOpenCalendarDialog,

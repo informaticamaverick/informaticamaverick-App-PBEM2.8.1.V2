@@ -80,7 +80,7 @@ fun ChatListScreen(
     onSortModeChange: (SortMode) -> Unit,
     onDeletionModeChange: (Boolean) -> Unit,
     onChatSelectionChange: (Set<String>) -> Unit,
-    onChatClick: (String) -> Unit,
+    onChatClick: (userId: String, conversationId: String) -> Unit,
     onBack: () -> Unit,
     onShowNotificationDialog: () -> Unit,
     onShowVisibilityDialog: () -> Unit,
@@ -351,7 +351,7 @@ fun ChatListScreen(
                                     }
                                     onChatSelectionChange(newSelection)
                                 } else {
-                                    onChatClick(conversation.userId)
+                                    onChatClick(conversation.userId, conversation.conversationId)
                                 }
                             },
                             onLongClick = {
@@ -439,7 +439,7 @@ fun ChatListScreen(
                             onClick = {
                                 onSearchActiveChange(false)
                                 onSearchQueryChange("")
-                                onChatClick(conversation.userId)
+                                onChatClick(conversation.userId, conversation.conversationId)
                             },
                             onLongClick = { }
                         )
