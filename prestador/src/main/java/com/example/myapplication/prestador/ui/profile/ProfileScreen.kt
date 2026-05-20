@@ -1,25 +1,17 @@
 ﻿package com.example.myapplication.prestador.ui.profile
 
-import android.text.Layout
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,25 +26,17 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import androidx.room.util.TableInfo
 import coil.compose.AsyncImage
-import com.example.myapplication.prestador.data.model.BranchProvider
 import com.example.myapplication.prestador.data.model.CompanyProvider
-import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.profile.ProfileState
@@ -61,7 +45,8 @@ import com.example.myapplication.prestador.data.local.entity.toDayAbbr
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -71,14 +56,18 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Snackbar
 import com.example.myapplication.prestador.viewmodel.profile.UpdateState
+import com.example.myapplication.prestador.viewmodel.profile.PasswordChangeState
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.prestador.data.model.AddressProvider
 import com.example.myapplication.prestador.ui.components.AddressBottomSheet
 import com.example.myapplication.prestador.ui.components.AddressProviderCard
 import com.example.myapplication.prestador.ui.components.BeActionsBar
 import com.example.myapplication.prestador.ui.components.PrestadorAction
-import com.example.myapplication.prestador.ui.profile.CategoriasSelector
-import org.w3c.dom.Text
+import androidx.compose.ui.graphics.Brush
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -107,6 +96,7 @@ fun ProfileScreen(
     val updateState by viewModel.updateState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val passwordChangeState by viewModel.passwordChangeState.collectAsState()
 
     val servicios by viewModel.servicios.collectAsState()
     val loadingServicios by viewModel.loadingServicios.collectAsState()
@@ -122,10 +112,42 @@ fun ProfileScreen(
     var editTieneMatricula by remember { mutableStateOf(false) }
     var editDescription by remember { mutableStateOf("") }
     var editCategorias by remember { mutableStateOf("[]") }
+
+    // Detectar si la cuenta está vinculada con Google
+    val isGoogleUser = remember {
+        com.google.firebase.auth.FirebaseAuth.getInstance()
+            .currentUser?.providerData
+            ?.any { it.providerId == "google.com" } == true
+    }
+
+    //Errores de validación
+    var errorName by remember { mutableStateOf<String?>(null) }
+    var errorApellido by remember { mutableStateOf<String?>(null)}
+    var errorPhone by remember { mutableStateOf<String?>(null) }
+    var errorCategorias by remember { mutableStateOf<String?>(null) }
+    var errorPhoto by remember { mutableStateOf(false) }
+
+    //Diálogo de cambios sin guardar
+    var showDiscardDialog by remember { mutableStateOf(false) }
+    var discardNavigatesBack by remember { mutableStateOf(false) }
+
     var showCompanyView by remember { mutableStateOf(false) }
     var showEmpresaSheet by remember { mutableStateOf(false) }
     var empresaPendiente by remember { mutableStateOf<CompanyProvider?>(null) }
     var showPriorizarDialog by remember { mutableStateOf(false) }
+    var showSavedCheck by remember { mutableStateOf(false) }
+
+
+    fun validateProfile(): Boolean {
+        errorName = if (editName.isBlank()) "El nombre es obligatorio" else null
+        errorApellido = if (editApellido.isBlank()) "El apellido es obligatorio"
+        else null
+        errorPhone = if (editPhone.length < 7) "Teléfono inválido" else null
+        val cats = try { org.json.JSONArray(editCategorias)} catch (e: Exception) { org.json.JSONArray()}
+        errorCategorias = if (cats.length() == 0) "Seleccioná al menos una categoría" else null
+        errorPhoto = provider?.imageUrl.isNullOrEmpty()
+        return errorName == null && errorApellido == null && errorPhone == null && errorCategorias == null && !errorPhoto
+    }
 
     //Inicializar campos al entrar en modo edición
     LaunchedEffect(isEditMode) {
@@ -147,9 +169,10 @@ fun ProfileScreen(
     LaunchedEffect(updateState) {
         when (val s = updateState) {
             is UpdateState.Success -> {
-                viewModel.setEditMode(false)
                 viewModel.resetUpdateState()
-                scope.launch { snackbarHostState.showSnackbar("Perfil actualizado ✓") }
+                showSavedCheck = true
+                kotlinx.coroutines.delay(2500)
+                viewModel.setEditMode(false)
             }
             is UpdateState.Error -> {
                 viewModel.resetUpdateState()
@@ -286,7 +309,14 @@ fun ProfileScreen(
                         .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = {
+                        if (isEditMode) {
+                            discardNavigatesBack = true
+                            showDiscardDialog = true
+                        } else {
+                            onBack()
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = colors.primaryOrange)
                     }
                     Text(
@@ -307,17 +337,19 @@ fun ProfileScreen(
                             Icon(Icons.Default.Close, null, tint = colors.textSecondary)
                         }
                         IconButton(onClick = {
-                            viewModel.updateProfile(
-                                name = editName,
-                                apellido = editApellido,
-                                email = editEmail,
-                                phone = editPhone,
-                                dniCuit = editDniCuit,
-                                profesion = editProfesion,
-                                tieneMatricula = editTieneMatricula,
-                                matricula = if (editTieneMatricula) editMatricula else null,
-                                description = editDescription
-                            )
+                            if (validateProfile()) {
+                                viewModel.updateProfile(
+                                    name = editName,
+                                    apellido = editApellido,
+                                    email = editEmail,
+                                    phone = editPhone,
+                                    dniCuit = editDniCuit,
+                                    profesion = editProfesion,
+                                    tieneMatricula = editTieneMatricula,
+                                    matricula = if (editTieneMatricula) editMatricula else null,
+                                    description = editDescription
+                                )
+                            }
                         }){
                             Icon(Icons.Default.Check, null, tint = colors.primaryOrange)
                         }
@@ -389,17 +421,19 @@ fun ProfileScreen(
                 PrestadorAction("cancel", Icons.Default.Close, "Cancelar", tint = Color(0xFFFF5252)) { viewModel.setEditMode(false) },
                 PrestadorAction("divider_1", Icons.Default.Edit, ""),
                 PrestadorAction("save", Icons.Default.Save, "Guardar", tint = colors.primaryOrange) {
-                    viewModel.updateProfile(
-                        name = editName,
-                        apellido = editApellido,
-                        email = editEmail,
-                        phone = editPhone,
-                        dniCuit = editDniCuit,
-                        profesion = editProfesion,
-                        tieneMatricula = editTieneMatricula,
-                        matricula = if (editTieneMatricula) editMatricula else null,
-                        description = editDescription
-                    )
+                    if (validateProfile()) {
+                        viewModel.updateProfile(
+                            name = editName,
+                            apellido = editApellido,
+                            email = editEmail,
+                            phone = editPhone,
+                            dniCuit = editDniCuit,
+                            profesion = editProfesion,
+                            tieneMatricula = editTieneMatricula,
+                            matricula = if (editTieneMatricula) editMatricula else null,
+                            description = editDescription
+                        )
+                    }
                 },
                 PrestadorAction("divider_2", Icons.Default.Edit, ""),
                 PrestadorAction("empresa", Icons.Default.Business, "Empresa", tint = colors.primaryOrange) { showEmpresaSheet = true }
@@ -477,6 +511,17 @@ fun ProfileScreen(
                             focusedTextColor = colors.textPrimary,
                             unfocusedTextColor = colors.textPrimary
                         )
+                        @Composable fun changedColors(changed: Boolean) = if (changed)
+                            OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFFFF9800),
+                                unfocusedBorderColor = Color(0xFFFF9800),
+                                focusedLabelColor = Color(0xFFFF9800),
+                                unfocusedLabelColor = Color(0xFFFF9800),
+                                cursorColor = colors.primaryOrange,
+                                focusedTextColor = colors.textPrimary,
+                                unfocusedTextColor = colors.textPrimary
+                            )
+                        else fieldColors
                         val fieldShape = RoundedCornerShape(10.dp)
                         val textStyle = androidx.compose.ui.text.TextStyle(
                             fontSize = 13.sp,
@@ -486,6 +531,23 @@ fun ProfileScreen(
                             Text(label, fontSize = 11.sp)
                         }
 
+                        // Error foto de perfil
+                        if (errorPhoto) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFF5252).copy(alpha = 0.10f))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(Icons.Default.Warning, null, tint = Color(0xFFFF5252), modifier = Modifier.size(14.dp))
+                                Text("Agregá una foto de perfil", fontSize = 11.sp, color = Color(0xFFFF5252))
+                            }
+                        }
+
                         // Fila 1: Nombre + Apellido
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -493,23 +555,25 @@ fun ProfileScreen(
                         ) {
                             OutlinedTextField(
                                 value = editName,
-                                onValueChange = { editName = it },
+                                onValueChange = { editName = it; errorName = null },
                                 label = { labelStyle("Nombre") },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = fieldShape,
-                                colors = fieldColors,
-                                textStyle = textStyle
+                                colors = changedColors(editName != (provider?.name ?: "")),
+                                supportingText = errorName?.let { { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 10.sp)} }
                             )
                             OutlinedTextField(
                                 value = editApellido,
-                                onValueChange = { editApellido = it },
+                                onValueChange = { editApellido = it; errorApellido = null },
                                 label = { labelStyle("Apellido") },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = fieldShape,
-                                colors = fieldColors,
-                                textStyle = textStyle
+                                colors = changedColors(editApellido != (provider?.apellido ?: "")),
+                                textStyle = textStyle,
+                                isError = errorApellido != null,
+                                supportingText = errorApellido?.let { { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 10.sp) } }
                             )
                         }
                         Spacer(Modifier.height(8.dp))
@@ -525,20 +589,22 @@ fun ProfileScreen(
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = fieldShape,
-                                colors = fieldColors,
+                                colors = changedColors(editDniCuit != (provider?.dniCuit ?: "")),
                                 textStyle = textStyle,
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
                             OutlinedTextField(
                                 value = editPhone,
-                                onValueChange = { editPhone = it.filter { c -> c.isDigit() || c == '+' || c == '-' || c == ' ' } },
+                                onValueChange = { editPhone = it.filter { c -> c.isDigit() || c == '+' || c == '-' || c == ' ' }; errorPhone = null },
                                 label = { labelStyle("Teléfono") },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = fieldShape,
-                                colors = fieldColors,
+                                colors = changedColors(editPhone != (provider?.phone ?: "")),
                                 textStyle = textStyle,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                isError = errorPhone != null,
+                                supportingText = errorPhone?.let { { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 10.sp) } }
                             )
                         }
                         Spacer(Modifier.height(8.dp))
@@ -550,6 +616,20 @@ fun ProfileScreen(
                         ) {
                             // Email — solo lectura con botón Cambiar
                             var showEmailDialog by remember { mutableStateOf(false) }
+                            var showGoogleEmailInfo by remember { mutableStateOf(false) }
+                            if (showGoogleEmailInfo) {
+                                AlertDialog(
+                                    onDismissRequest = { showGoogleEmailInfo = false },
+                                    icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = colors.textSecondary) },
+                                    title = { Text("Email de Google", fontWeight = FontWeight.Bold) },
+                                    text = { Text("Tu cuenta está vinculada con Google. El email es administrado por Google y no puede cambiarse desde aquí.") },
+                                    confirmButton = {
+                                        TextButton(onClick = { showGoogleEmailInfo = false }) {
+                                            Text("Entendido", color = colors.primaryOrange)
+                                        }
+                                    }
+                                )
+                            }
                             Surface(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(10.dp),
@@ -577,11 +657,27 @@ fun ProfileScreen(
                                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                         )
                                     }
-                                    TextButton(
-                                        onClick = { showEmailDialog = true },
-                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text("Cambiar", fontSize = 11.sp, color = colors.primaryOrange)
+                                    if (isGoogleUser) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier.clickable { showGoogleEmailInfo = true }
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Lock,
+                                                contentDescription = "Cuenta Google",
+                                                tint = colors.textSecondary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text("Google", fontSize = 10.sp, color = colors.textSecondary)
+                                        }
+                                    } else {
+                                        TextButton(
+                                            onClick = { showEmailDialog = true },
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text("Cambiar", fontSize = 11.sp, color = colors.primaryOrange)
+                                        }
                                     }
                                 }
                             }
@@ -595,7 +691,7 @@ fun ProfileScreen(
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = fieldShape,
-                                colors = fieldColors,
+                                colors = changedColors(editProfesion != (provider?.profesion ?: "")),
                                 textStyle = textStyle,
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Ascii,
@@ -604,6 +700,39 @@ fun ProfileScreen(
                             )
                         }
                         Spacer(Modifier.height(8.dp))
+                        // Botón cambiar contraseña (solo cuentas email)
+                        if (!isGoogleUser) {
+                            var showPasswordDialog by remember { mutableStateOf(false) }
+                            if (showPasswordDialog) {
+                                CambiarPasswordDialog(
+                                    colors = colors,
+                                    passwordChangeState = passwordChangeState,
+                                    onConfirm = { current, nuevo ->
+                                        viewModel.changePassword(current, nuevo)
+                                    },
+                                    onDismiss = {
+                                        viewModel.resetPasswordChangeState()
+                                        showPasswordDialog = false
+                                    }
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = { showPasswordDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, colors.border),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primaryOrange)
+                            ) {
+                                Icon(
+                                    Icons.Default.Lock,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Cambiar contraseña", fontSize = 13.sp)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
                         // Toggle + campo matrícula en la misma fila
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -650,7 +779,7 @@ fun ProfileScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     shape = fieldShape,
-                                    colors = fieldColors,
+                                    colors = changedColors(editMatricula != (provider?.matricula ?: "")),
                                     textStyle = textStyle,
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Ascii,
@@ -690,9 +819,10 @@ fun ProfileScreen(
                     Spacer(Modifier.height(12.dp))
                     ProfileSectionCard(Icons.Default.Info, "Sobre mí", Color(0xFF3B82F6), colors) {
                         if (isEditMode) {
+                            val maxDescription = 300
                             OutlinedTextField(
                                 value = editDescription,
-                                onValueChange = { editDescription = it },
+                                onValueChange = { if (it.length <= maxDescription) editDescription = it },
                                 label = { Text("Descripción", fontSize = 11.sp) },
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 3,
@@ -709,8 +839,18 @@ fun ProfileScreen(
                                 ),
                                 textStyle = androidx.compose.ui.text.TextStyle(
                                     fontSize = 13.sp,
-                                    color = colors.textPrimary
-                                )
+                                    color = colors.textPrimary,
+                                    ),
+                                supportingText = {
+                                    Text(
+                                        text = "${editDescription.length} / $maxDescription",
+                                        modifier = Modifier.fillMaxWidth(),
+                                        textAlign = TextAlign.End,
+                                        fontSize = 11.sp,
+                                        color = if(editDescription.length >= maxDescription) Color(0xFFEF4444) else colors.textSecondary
+                                    )
+                                },
+
                             )
                         } else {
                             Text(
@@ -809,15 +949,24 @@ fun ProfileScreen(
             item {
                 Spacer(Modifier.height(12.dp))
                 if (isEditMode) {
-                    ProfileSectionCard(Icons.Default.Category, "Categorías", Color(0xFF00897B), colors) {
+                    ProfileSectionCard(Icons.Default.Category, "Categorías", if (errorCategorias != null) Color(0xFFFF5252) else Color(0xFF00897B), colors) {
                         CategoriasSelector(
                             categoriasJson = editCategorias,
                             onCategoriasActualizadas = { json ->
                                 editCategorias = json
+                                errorCategorias = null
                                 viewModel.updateCategorias(json)
                             },
                             serviciosFirebase = servicios
                         )
+                        if (errorCategorias != null) {
+                            Text(
+                                errorCategorias!!,
+                                color = Color(0xFFFF5252),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
                     }
                 } else if (provider.categories.isNotEmpty()) {
                     ProfileSectionCard(Icons.Default.Category, "Categorías", Color(0xFF00897B), colors) {
@@ -1514,6 +1663,66 @@ fun ProfileScreen(
                 .padding(bottom = 24.dp)
         )
 
+
+            // TOAST GUARDADO
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showSavedCheck,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 100.dp)
+                    .zIndex(99f),
+                enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()
+            ) {
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(2000)
+                    showSavedCheck = false
+                }
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = colors.surfaceElevated,
+                    shadowElevation = 12.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(Color(0xFFFF9800), Color(0xFFFF5722))
+                                    ),
+                                    shape = androidx.compose.foundation.shape.CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                "¡Perfil guardado!",
+                                color = colors.textPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                "Los cambios se aplicaron correctamente",
+                                color = colors.textSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+
         // ── SHEET CREAR EMPRESA ──────────────────────────────────────────
         if (showEmpresaSheet) {
             EmpresaBottomSheet(
@@ -1559,6 +1768,28 @@ fun ProfileScreen(
 
         } // cierra Box
         } // cierra PullToRefreshBox
+    }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("¿Descartar cambios?", fontWeight = FontWeight.Bold) },
+            text = { Text("Tenés cambios sin guardar. ¿Querés descartarlos?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardDialog = false
+                    viewModel.setEditMode(false)
+                    if (discardNavigatesBack) onBack()
+                }) {
+                    Text("Descartar", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false; discardNavigatesBack = false }) {
+                    Text("Seguir editando")
+                }
+            }
+        )
     }
 }
 
@@ -1642,5 +1873,141 @@ private fun CambiarEmailDialog(onDismiss: () -> Unit) {
                 if (!success) TextButton(onClick = onDismiss) { Text("Cancelar") }
             }
         )
+
 }
 
+@Composable
+private fun CambiarPasswordDialog(
+    colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
+    passwordChangeState: PasswordChangeState,
+    onConfirm: (currentPassword: String, newPassword: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var currentPass by remember { mutableStateOf("") }
+    var newPass by remember { mutableStateOf("") }
+    var confirmPass by remember { mutableStateOf("") }
+    var showCurrent by remember { mutableStateOf(false) }
+    var showNew by remember { mutableStateOf(false) }
+    var localError by remember { mutableStateOf<String?>(null) }
+
+    // Cerrar automáticamente al éxito
+    LaunchedEffect(passwordChangeState) {
+        if (passwordChangeState is PasswordChangeState.Success) {
+            kotlinx.coroutines.delay(1500)
+            onDismiss()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { if (passwordChangeState !is PasswordChangeState.Loading) onDismiss() },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Lock, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(20.dp))
+                Text("Cambiar contraseña", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            when (passwordChangeState) {
+                is PasswordChangeState.Success -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF10B981))
+                        Text("¡Contraseña actualizada!", color = Color(0xFF10B981), fontWeight = FontWeight.Medium)
+                    }
+                }
+                else -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        // Contraseña actual
+                        OutlinedTextField(
+                            value = currentPass,
+                            onValueChange = { currentPass = it; localError = null },
+                            label = { Text("Contraseña actual", fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = if (showCurrent) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showCurrent = !showCurrent }) {
+                                    Icon(
+                                        if (showCurrent) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                        )
+                        // Nueva contraseña
+                        OutlinedTextField(
+                            value = newPass,
+                            onValueChange = { newPass = it; localError = null },
+                            label = { Text("Nueva contraseña", fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = if (showNew) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showNew = !showNew }) {
+                                    Icon(
+                                        if (showNew) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            supportingText = { Text("Mínimo 6 caracteres", fontSize = 10.sp, color = colors.textSecondary) }
+                        )
+                        // Confirmar nueva contraseña
+                        OutlinedTextField(
+                            value = confirmPass,
+                            onValueChange = { confirmPass = it; localError = null },
+                            label = { Text("Confirmar contraseña", fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            isError = confirmPass.isNotEmpty() && confirmPass != newPass
+                        )
+                        // Errores
+                        val errorMsg = localError
+                            ?: (passwordChangeState as? PasswordChangeState.Error)?.message
+                        if (errorMsg != null) {
+                            Text(errorMsg, color = Color(0xFFFF5252), fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (passwordChangeState !is PasswordChangeState.Success) {
+                Button(
+                    onClick = {
+                        when {
+                            currentPass.isBlank() || newPass.isBlank() || confirmPass.isBlank() ->
+                                localError = "Completá todos los campos"
+                            newPass.length < 6 ->
+                                localError = "La nueva contraseña debe tener al menos 6 caracteres"
+                            newPass != confirmPass ->
+                                localError = "Las contraseñas no coinciden"
+                            else -> onConfirm(currentPass, newPass)
+                        }
+                    },
+                    enabled = passwordChangeState !is PasswordChangeState.Loading,
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange)
+                ) {
+                    if (passwordChangeState is PasswordChangeState.Loading) {
+                        CircularProgressIndicator(Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text("Confirmar")
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            if (passwordChangeState !is PasswordChangeState.Loading && passwordChangeState !is PasswordChangeState.Success) {
+                TextButton(onClick = onDismiss) { Text("Cancelar") }
+            }
+        }
+    )
+}

@@ -528,6 +528,40 @@ class EditProfileViewModel @Inject constructor(
     fun resetUpdateState() {
         _updateState.value = UpdateState.Idle
     }
+
+    // ── CAMBIAR CONTRASEÑA ────────────────────────────────────────────────────
+    private val _passwordChangeState = MutableStateFlow<PasswordChangeState>(PasswordChangeState.Idle)
+    val passwordChangeState: StateFlow<PasswordChangeState> = _passwordChangeState.asStateFlow()
+
+    fun changePassword(currentPassword: String, newPassword: String) {
+        val user = auth.currentUser ?: run {
+            _passwordChangeState.value = PasswordChangeState.Error("Usuario no autenticado")
+            return
+        }
+        val email = user.email ?: run {
+            _passwordChangeState.value = PasswordChangeState.Error("No se pudo obtener el email")
+            return
+        }
+        viewModelScope.launch {
+            _passwordChangeState.value = PasswordChangeState.Loading
+            try {
+                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(email, currentPassword)
+                user.reauthenticate(credential).await()
+                user.updatePassword(newPassword).await()
+                _passwordChangeState.value = PasswordChangeState.Success
+            } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
+                _passwordChangeState.value = PasswordChangeState.Error("La contraseña actual es incorrecta")
+            } catch (e: com.google.firebase.auth.FirebaseAuthWeakPasswordException) {
+                _passwordChangeState.value = PasswordChangeState.Error("La contraseña nueva es muy débil")
+            } catch (e: Exception) {
+                _passwordChangeState.value = PasswordChangeState.Error(e.message ?: "Error al cambiar contraseña")
+            }
+        }
+    }
+
+    fun resetPasswordChangeState() {
+        _passwordChangeState.value = PasswordChangeState.Idle
+    }
     
     fun toggleProfileMode() {
         _profileMode.update { currentMode ->
@@ -841,6 +875,13 @@ sealed class PhotoUploadState {
     object Loading : PhotoUploadState()
     data class Success(val url: String) : PhotoUploadState()
     data class Error(val message: String) : PhotoUploadState()
+}
+
+sealed class PasswordChangeState {
+    object Idle : PasswordChangeState()
+    object Loading : PasswordChangeState()
+    object Success : PasswordChangeState()
+    data class Error(val message: String) : PasswordChangeState()
 }
 
 /**

@@ -178,11 +178,11 @@ val LOCALIDADES_POR_PROVINCIA: Map<String, List<Localidad>> = mapOf(
         Localidad("Tolhuin", "9423")
     ),
     "Tucum\u00e1n" to listOf(
-        Localidad("San Miguel de Tucuman", "4000"), Localidad("Tafi Viejo", "4103"),
-        Localidad("Concepcion", "4149"), Localidad("Banda del Rio Sali", "4006"),
+        Localidad("San Miguel de Tucumán", "4000"), Localidad("Tafi Viejo", "4103"),
+        Localidad("Concepción", "4149"), Localidad("Banda del Rio Sali", "4006"),
         Localidad("Yerba Buena", "4107"), Localidad("Aguilares", "4158"),
         Localidad("Monteros", "4144"), Localidad("Simoca", "4130"),
-        Localidad("Famailla", "4132"), Localidad("Lules", "4128"),
+        Localidad("Famaillá", "4132"), Localidad("Lules", "4128"),
         Localidad("Alderetes", "4005"), Localidad("Las Talitas", "4009"),
         Localidad("Bella Vista", "4012"), Localidad("Tafi del Valle", "4137"),
         Localidad("Acheral", "4124"), Localidad("Graneros", "4162"),
