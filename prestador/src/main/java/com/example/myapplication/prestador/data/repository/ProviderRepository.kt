@@ -114,6 +114,7 @@ class ProviderRepository @Inject constructor(
                 "serviceType" to provider.serviceType,
                 "createdAt" to provider.createdAt,
                 "updatedAt" to System.currentTimeMillis(),
+                "visible" to !provider.priorizarEmpresa,
                 "doesService" to provider.doesService,
                 "doesProduct" to provider.doesProduct,
                 "atencionUrgencias" to provider.works24h,
@@ -208,7 +209,8 @@ class ProviderRepository @Inject constructor(
                     "email" to company.email,
                     "rating" to company.rating,
                     "categories" to company.categories,
-                    "verificado" to company.isVerified
+                    "verificado" to company.isVerified,
+                    "visible" to provider.priorizarEmpresa
                 )
                 batch.set(companyDocRef, companyMap, SetOptions.merge())
 
@@ -569,8 +571,8 @@ class ProviderRepository @Inject constructor(
                 ))
         }
 
-        val savedServiceType =
-            providerDao.getProviderByIdOnce(userId)?.serviceType
+        val localCached = providerDao.getProviderByIdOnce(userId)
+        val savedServiceType = localCached?.serviceType
         val provider = ProviderEntity(
             id = userId,
             name = str(perfil, "nombre") ?: "",
@@ -593,8 +595,8 @@ class ProviderRepository @Inject constructor(
             address = addressesList.firstOrNull(),
             companies = companiesList,
             hasCompanyProfile = bool(empresa, "tieneEmpresa"),
-            priorizarEmpresa = bool(empresa, "priorizarEmpresa") ||
-                    (doc.getBoolean("priorizarEmpresa") ?: false),
+            priorizarEmpresa = localCached?.priorizarEmpresa
+                ?: (bool(empresa, "priorizarEmpresa") || (doc.getBoolean("priorizarEmpresa") ?: false)),
             works24h = doc.getBoolean("atencionUrgencias") ?:
             bool(modalidad, "atencionUrgencias"),
             doesHomeVisits = doc.getBoolean("vaDomicilio") ?:
@@ -630,6 +632,26 @@ class ProviderRepository @Inject constructor(
             true).await()
         Log.d(TAG, "✅ Perfil completo cargado desde Firestore y guardado en Room")
             return provider
+    }
+
+    suspend fun actualizarModoEmpresa(uid: String, priorizarEmpresa: Boolean) {
+        firestore.collection("providers").document(uid)
+            .update(
+                mapOf(
+                    "empresa.priorizarEmpresa" to priorizarEmpresa,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+            ).await()
+    }
+
+    suspend fun actualizarVisibilidadPerfil(uid: String, priorizarEmpresa: Boolean, companyIds: List<String>) {
+        val providerRef = firestore.collection("providers").document(uid)
+        providerRef.update("visible", !priorizarEmpresa).await()
+        companyIds.forEach { companyId ->
+            providerRef.collection("companies").document(companyId)
+                .update("visible", priorizarEmpresa)
+                .await()
+        }
     }
 
 }

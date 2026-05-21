@@ -16,6 +16,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -41,6 +42,8 @@ class EditProfileViewModel @Inject constructor(
 
     private val _profileState = MutableStateFlow<ProfileState>(ProfileState.Loading)
     val profileState: StateFlow<ProfileState> = _profileState.asStateFlow()
+
+    private var loadProfileJob: Job? = null
 
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
@@ -95,6 +98,45 @@ class EditProfileViewModel @Inject constructor(
 
     fun setEditMode(enabled: Boolean) { _isEditMode.value = enabled }
     fun toogleEditMode() { _isEditMode.value = !_isEditMode.value}
+
+    private val _companyError = MutableStateFlow<String?>(null)
+    val companyError: StateFlow<String?> = _companyError.asStateFlow()
+
+    fun clearCompanyError() { _companyError.value = null }
+
+    fun toggleModoEmpresa(activarEmpresa: Boolean) {
+        viewModelScope.launch {
+            val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
+            val uid = auth.currentUser?.uid ?: return@launch
+
+            // Cancelar carga en background para evitar que sobreescriba el estado
+            loadProfileJob?.cancel()
+
+            // Actualizar estado local y Room PRIMERO (fuente de verdad)
+            val updated = current.copy(priorizarEmpresa = activarEmpresa)
+            _profileState.value = ProfileState.Success(updated)
+            providerRepository.saveProvider(updated)
+
+            // Firebase: fire-and-forget (no revertir en error para no trabar el switch)
+            try {
+                providerRepository.actualizarModoEmpresa(uid, activarEmpresa)
+                val companyIds = current.companies.map { it.id }
+                providerRepository.actualizarVisibilidadPerfil(uid, activarEmpresa, companyIds)
+            } catch (e: Exception) {
+                android.util.Log.e("EditProfileVM", "Error Firebase toggleModoEmpresa: ${e.message}")
+            }
+        }
+    }
+
+    fun refreshFromRoom() {
+        viewModelScope.launch {
+            val userId = auth.currentUser?.uid ?: return@launch
+            val cached = providerRepository.getProviderByIdOnce(userId) ?: return@launch
+            _profileState.value = ProfileState.Success(cached)
+        }
+    }
+
+
 
 
     fun uploadProfilePhoto(uri: Uri) {
@@ -208,7 +250,8 @@ class EditProfileViewModel @Inject constructor(
     }
 
     fun loadProfile() {
-        viewModelScope.launch {
+        loadProfileJob?.cancel()
+        loadProfileJob = viewModelScope.launch {
             val userId = auth.currentUser?.uid ?: run {
                 _profileState.value = ProfileState.Error("Usuario no autenticado")
                 return@launch
@@ -738,11 +781,12 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    fun updateCompanyBannerPhoto(uri: android.net.Uri) {
+    fun updateCompanyBannerPhoto(uri: android.net.Uri, companyId: String? = null) {
         viewModelScope.launch {
             try {
                 val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
-                val company = current.companies.firstOrNull() ?: return@launch
+                val company = (if (companyId != null) current.companies.find { it.id == companyId } else null)
+                    ?: current.companies.firstOrNull() ?: return@launch
                 val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
                     context, uri, maxWidth = 1200, maxHeight = 400, quality = 80
                 )
@@ -774,8 +818,25 @@ class EditProfileViewModel @Inject constructor(
                 } else company
 
                 // Reemplazar si ya existe el mismo ID, si no agregar
-                val updatedCompanies = if (current.companies.any { it.id == finalCompany.id }) {
-                    current.companies.map { if (it.id == finalCompany.id) finalCompany else it }
+                val isUpdate = current.companies.any { it.id == finalCompany.id }
+
+                if (!isUpdate) {
+                    //MÁXIMO 3 empresas
+                    if (current.companies.size >= 3) {
+                        _companyError.value = "Solo podés tener hasta 3 empresa de distintas categorias"
+                        return@launch
+                    }
+                    //Categorías únicas entre empresas
+                    val categoriasExistentes = current.companies.flatMap { it.categories }.toSet()
+                    val categoriasDuplicadas = finalCompany.categories.filter { it in categoriasExistentes }
+                    if ( categoriasDuplicadas.isNotEmpty()) {
+                        _companyError.value = "ya tenés una empresa con la categoría ${categoriasDuplicadas.first()}"
+                        return@launch
+                    }
+                }
+
+                val updatedCompanies = if (isUpdate) {
+                    current.companies.map { if(it.id == finalCompany.id) finalCompany else it }
                 } else {
                     current.companies + finalCompany
                 }

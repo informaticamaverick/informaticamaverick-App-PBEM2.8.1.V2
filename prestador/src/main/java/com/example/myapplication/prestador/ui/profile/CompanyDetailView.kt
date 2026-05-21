@@ -53,6 +53,10 @@ import com.example.myapplication.prestador.ui.components.AddressProviderCard
 import com.example.myapplication.prestador.ui.components.BeActionsBar
 import com.example.myapplication.prestador.ui.components.PrestadorAction
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
+import com.example.myapplication.prestador.utils.formatearCuit
+import com.example.myapplication.prestador.utils.errorCuitMensaje
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 
 @Composable
 internal fun BranchSection(
@@ -440,6 +444,7 @@ internal fun CompanyDetailView(
     paddingValues: PaddingValues,
     onBack: () -> Unit,
     colors: PrestadorColors,
+    otherAvatars: List<Pair<String?, () -> Unit>> = emptyList(),
     onNavigateToCalendarioConfig: (ownerId: String, ownerName: String) -> Unit = { _, _ -> },
     onUpdateBranch: (BranchProvider) -> Unit = {},
     onUpdateAllBranches: (List<BranchProvider>) -> Unit = {},
@@ -447,7 +452,9 @@ internal fun CompanyDetailView(
     onUpdateCompany: (CompanyProvider) -> Unit = {},
     onDeleteCompany: () -> Unit = {},
     onEditCompanyPhoto: () -> Unit = {},
-    onEditCompanyBanner: () -> Unit = {}
+    onEditCompanyBanner: () -> Unit = {},
+    bloqueada: Boolean = false,
+    onSettings: () -> Unit = {},
 ) {
     var isCompanyEditMode by remember { mutableStateOf(false) }
     var showEmpresaEditSheet by remember { mutableStateOf(false) }
@@ -456,7 +463,7 @@ internal fun CompanyDetailView(
 
     var editNombreComercial by remember { mutableStateOf("") }
     var editRazonSocial by remember { mutableStateOf("") }
-    var editCuit by remember { mutableStateOf("") }
+    var editCuit by remember { mutableStateOf(TextFieldValue("")) }
     var editEmailCorp by remember { mutableStateOf("") }
 
     //Errores de validación
@@ -472,7 +479,7 @@ internal fun CompanyDetailView(
 
     fun validateCompany(): Boolean {
         errorNombreComercial = if (editNombreComercial.isBlank()) "El nombre es obligatorio" else null
-        errorCuit = if (editCuit.length < 11) "CUIT inválido" else null
+        errorCuit = errorCuitMensaje(editCuit.text)
         errorEmail = if (!editEmailCorp.contains("@")) "Email inválido" else null
         errorPhoto = company.photoUrl.isNullOrEmpty()
         return errorNombreComercial == null && errorCuit == null && errorEmail == null && !errorPhoto
@@ -482,7 +489,7 @@ internal fun CompanyDetailView(
         if (isCompanyEditMode) {
             editNombreComercial = company.name
             editRazonSocial = company.razonSocial
-            editCuit = company.cuit
+            editCuit = TextFieldValue(formatearCuit(company.cuit))
             editEmailCorp = company.email
         }
     }
@@ -639,12 +646,27 @@ internal fun CompanyDetailView(
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = editCuit,
-                        onValueChange = { editCuit = it.filter { c -> c.isDigit() || c == '-' }; errorCuit = null },
+                        onValueChange = { nuevo ->
+                            val soloDigitos = nuevo.text.filter { it.isDigit() }.take(11)
+                            val formateado = formatearCuit(soloDigitos)
+                            val digitosAntesCursor = nuevo.text.take(nuevo.selection.start).count {
+                                it.isDigit() }
+                            var conteo = 0
+                            var nuevoCursor = formateado.length
+                            for (i in formateado.indices) {
+                                if (formateado[i].isDigit()) conteo++
+                                if (conteo == digitosAntesCursor) {
+                                    nuevoCursor = i + 1; break
+                                }
+                            }
+                            editCuit = TextFieldValue(formateado, TextRange(nuevoCursor))
+                            errorCuit = null
+                        },
                         label = { Text("CUIT") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth(),
-                        colors = changedColors(editCuit != company.cuit),
+                        colors = changedColors(editCuit.text != company.cuit),
                         shape = RoundedCornerShape(12.dp),
                         isError = errorCuit != null,
                         supportingText = errorCuit?.let { { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 10.sp) } }
@@ -857,11 +879,12 @@ internal fun CompanyDetailView(
             }
         }
 
-        // Logo + Nombre empresa (Row al BottomStart, igual que prestador)
+        // Logo + Nombre empresa (centrado verticalmente, igual que perfil prestador)
         Row(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+                .align(Alignment.Center)
+                .padding(horizontal = 20.dp)
+                .padding(top = 24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -929,17 +952,35 @@ internal fun CompanyDetailView(
             }
         }
 
-        // Toggle: foto prestador (volver a perfil personal)
-        Box(
+        // Avatares de toggle: prestador personal + otras empresas (bottom-end)
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 14.dp)
-                .size(52.dp)
-                .clip(CircleShape)
-                .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
-                .clickable { onBack() }
+                .padding(end = 16.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ProfilePhoto(imageUrl = providerImageUrl, colors = colors, isCompany = true)
+            // Primero las otras empresas (si hay)
+            otherAvatars.forEach { (photoUrl, onClick) ->
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                        .clickable { onClick() }
+                ) {
+                    ProfilePhoto(imageUrl = photoUrl, colors = colors, isCompany = true)
+                }
+            }
+            // Luego el avatar del prestador personal (volver)
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                    .clickable { onBack() }
+            ) {
+                ProfilePhoto(imageUrl = providerImageUrl, colors = colors, isCompany = true)
+            }
         }
     }
 
@@ -960,7 +1001,7 @@ internal fun CompanyDetailView(
                             company.copy(
                             name = editNombreComercial.trim(),
                             razonSocial = editRazonSocial.trim(),
-                            cuit = editCuit.trim(),
+                            cuit = editCuit.text.trim(),
                             email = editEmailCorp.trim()
                         )
                         )
@@ -1078,6 +1119,71 @@ internal fun CompanyDetailView(
                             color = colors.textSecondary,
                             fontSize = 11.sp
                         )
+                    }
+                }
+            }
+        }
+
+        //Overlay empresa bloqueada
+        if (bloqueada) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colors.backgroundColor.copy(alpha = 0.82f))
+                    .zIndex(5f),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = colors.surfaceColor.copy(alpha = 0.95f),
+                    shadowElevation = 16.dp,
+                    modifier = Modifier
+                        .padding(horizontal = 32.dp)
+                        .fillMaxWidth()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(colors.primaryOrange.copy(alpha = 0.12f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = colors.primaryOrange,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Empresa desactivada",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Para usar el perfil de empresa activá el modo empresa desde Ajustes.",
+                            fontSize = 13.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        Button(
+                            onClick = onSettings,
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Settings, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Ir a Ajustes")
+                        }
                     }
                 }
             }

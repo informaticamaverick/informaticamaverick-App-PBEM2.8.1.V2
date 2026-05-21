@@ -1,7 +1,13 @@
 ﻿package com.example.myapplication.prestador.ui.profile
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.BorderStroke
@@ -19,7 +25,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -47,6 +52,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -60,6 +66,7 @@ import com.example.myapplication.prestador.viewmodel.profile.PasswordChangeState
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.prestador.data.model.AddressProvider
@@ -68,6 +75,14 @@ import com.example.myapplication.prestador.ui.components.AddressProviderCard
 import com.example.myapplication.prestador.ui.components.BeActionsBar
 import com.example.myapplication.prestador.ui.components.PrestadorAction
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.myapplication.prestador.utils.formatearCuit
+import com.example.myapplication.prestador.utils.errorCuitMensaje
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -75,6 +90,7 @@ import androidx.compose.ui.graphics.Brush
 fun ProfileScreen(
     onBack: () -> Unit = {},
     onSettings: () -> Unit = {},
+    onLogout: () -> Unit = {},
     onNavigateToCalendarioConfig: () -> Unit = {},
     onNavigateToCalendarioConfigEntity: (ownerId: String, ownerName: String) -> Unit = { _, _ -> },
     viewModel: EditProfileViewModel = hiltViewModel(),
@@ -83,20 +99,35 @@ fun ProfileScreen(
     val colors = getPrestadorColors()
     val profileState by viewModel.profileState.collectAsState()
     val provider = (profileState as? ProfileState.Success)?.provider
+    val perfilBloqueado = (provider?.priorizarEmpresa == true) && (provider.companies.isNotEmpty())
     val refreshTick by viewModel.refreshTick.collectAsState()
     val horarios by scheduleVm.schedules.collectAsState()
     val listState = rememberLazyListState()
     val isEditMode by viewModel.isEditMode.collectAsState()
 
     var isRefreshing by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
     LaunchedEffect(refreshTick) {
         if (refreshTick > 0) isRefreshing = false
+    }
+
+    // Recargar desde Room al volver de Ajustes (para sincronizar priorizarEmpresa)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshFromRoom()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val updateState by viewModel.updateState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val passwordChangeState by viewModel.passwordChangeState.collectAsState()
+    val companyError by viewModel.companyError.collectAsState()
 
     val servicios by viewModel.servicios.collectAsState()
     val loadingServicios by viewModel.loadingServicios.collectAsState()
@@ -106,7 +137,8 @@ fun ProfileScreen(
     var editApellido by remember { mutableStateOf("") }
     var editPhone by remember { mutableStateOf("") }
     var editEmail by remember { mutableStateOf("") }
-    var editDniCuit by remember { mutableStateOf("") }
+    var editDniCuit by remember { mutableStateOf(TextFieldValue("")) }
+    var errorDniCuit by remember { mutableStateOf<String?>(null) }
     var editProfesion by remember { mutableStateOf("") }
     var editMatricula by remember { mutableStateOf("") }
     var editTieneMatricula by remember { mutableStateOf(false) }
@@ -131,22 +163,38 @@ fun ProfileScreen(
     var showDiscardDialog by remember { mutableStateOf(false) }
     var discardNavigatesBack by remember { mutableStateOf(false) }
 
-    var showCompanyView by remember { mutableStateOf(false) }
+    var selectedCompanyId by remember { mutableStateOf<String?>(null) }
     var showEmpresaSheet by remember { mutableStateOf(false) }
     var empresaPendiente by remember { mutableStateOf<CompanyProvider?>(null) }
     var showPriorizarDialog by remember { mutableStateOf(false) }
     var showSavedCheck by remember { mutableStateOf(false) }
 
 
+    fun calcularProgresoPerfil(): Float {
+        val campos = listOf(
+            !provider?.name.isNullOrBlank(),
+            !provider?.apellido.isNullOrBlank(),
+            !provider?.phone.isNullOrBlank(),
+            !provider?.imageUrl.isNullOrBlank(),
+            !provider?.description.isNullOrBlank(),
+            !provider?.profesion.isNullOrBlank(),
+            try { org.json.JSONArray(provider?.categories ?: "[]").length() > 0 } catch (e: Exception) { false },
+            !provider?.bannerImageUrl.isNullOrBlank(),
+            provider?.addresses?.isNotEmpty() == true || provider?.companies?.isNotEmpty() == true,
+            horarios.isNotEmpty()
+        )
+        val completados = campos.count { it }
+        return completados / campos.size.toFloat()
+    }
+
+
     fun validateProfile(): Boolean {
-        errorName = if (editName.isBlank()) "El nombre es obligatorio" else null
-        errorApellido = if (editApellido.isBlank()) "El apellido es obligatorio"
-        else null
         errorPhone = if (editPhone.length < 7) "Teléfono inválido" else null
+        errorDniCuit = errorCuitMensaje(editDniCuit.text)
         val cats = try { org.json.JSONArray(editCategorias)} catch (e: Exception) { org.json.JSONArray()}
-        errorCategorias = if (cats.length() == 0) "Seleccioná al menos una categoría" else null
+        errorCategorias = if (cats.length() == 0 ) "Seleccioná al menos una categoriá" else null
         errorPhoto = provider?.imageUrl.isNullOrEmpty()
-        return errorName == null && errorApellido == null && errorPhone == null && errorCategorias == null && !errorPhoto
+        return errorName == null && errorApellido == null && errorPhone == null && errorDniCuit== null && errorCategorias == null && !errorPhoto
     }
 
     //Inicializar campos al entrar en modo edición
@@ -156,7 +204,7 @@ fun ProfileScreen(
             editApellido = provider.apellido ?: ""
             editPhone = provider.phone
             editEmail = provider.email
-            editDniCuit = provider.dniCuit ?: ""
+            editDniCuit = TextFieldValue(formatearCuit(provider.dniCuit ?: ""))
             editProfesion = provider.profesion ?: ""
             editMatricula = provider.matricula ?: ""
             editTieneMatricula = provider.tieneMatricula
@@ -182,6 +230,13 @@ fun ProfileScreen(
         }
     }
 
+    LaunchedEffect(companyError) {
+        companyError?.let {
+            scope.launch { snackbarHostState.showSnackbar(it) }
+            viewModel.clearCompanyError()
+        }
+    }
+
     //Pickers de imagen
     val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         uri: Uri? ->
@@ -200,23 +255,16 @@ fun ProfileScreen(
     val companyPhotoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         uri: Uri? ->
         uri?.let {
-            val company = (viewModel.profileState.value as?
-                    ProfileState.Success)?.provider?.companies?.firstOrNull()
+            val companies = (viewModel.profileState.value as? ProfileState.Success)?.provider?.companies
+            val company = companies?.find { c -> c.id == selectedCompanyId } ?: companies?.firstOrNull()
             if (company != null) viewModel.addCompany(company, uri)
         }
     }
     val companyBannerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let { viewModel.updateCompanyBannerPhoto(it) }
+        uri?.let { viewModel.updateCompanyBannerPhoto(it, selectedCompanyId) }
     }
 
-    // Inicializar showCompanyView solo la primera vez que provider carga
-    LaunchedEffect(provider?.id) {
-        if (provider != null && !showCompanyView) {
-            showCompanyView = provider.hasCompanyProfile &&
-                provider.priorizarEmpresa == true &&
-                provider.companies.isNotEmpty()
-        }
-    }
+
     var showServicioProviderDialog by remember { mutableStateOf(false) }
     var showHorariosDialog by remember { mutableStateOf(false) }
     var editProviderDoesService by remember { mutableStateOf(provider?.doesService ?: false) }
@@ -276,7 +324,7 @@ fun ProfileScreen(
         label = "headerHeight"
     )
     val avatarSize by animateDpAsState(
-        targetValue = 90.dp - (35.dp * collapseFraction),
+        targetValue = 110.dp - (55.dp * collapseFraction),
         label = "avatarSize"
     )
 
@@ -328,9 +376,13 @@ fun ProfileScreen(
                     )
                     Spacer(Modifier.weight(1f))
 
-                    if (!isEditMode) {
+                    if (!isEditMode && !perfilBloqueado) {
                         IconButton(onClick = { viewModel.setEditMode(true)}) {
                             Icon(Icons.Default.Edit, null, tint = colors.primaryOrange)
+                        }
+                    } else if (!isEditMode && perfilBloqueado) {
+                        IconButton(onClick = {}, enabled = false) {
+                            Icon(Icons.Default.Lock, null, tint = colors.textSecondary)
                         }
                     } else {
                         IconButton(onClick = { viewModel.setEditMode(false)}) {
@@ -343,7 +395,7 @@ fun ProfileScreen(
                                     apellido = editApellido,
                                     email = editEmail,
                                     phone = editPhone,
-                                    dniCuit = editDniCuit,
+                                    dniCuit = editDniCuit.text,
                                     profesion = editProfesion,
                                     tieneMatricula = editTieneMatricula,
                                     matricula = if (editTieneMatricula) editMatricula else null,
@@ -358,6 +410,11 @@ fun ProfileScreen(
             }
         }
     ) { padding ->
+        if (profileState is ProfileState.Loading) {
+            ProfileSkeletonScreen(padding = padding, colors = colors)
+            return@Scaffold
+        }
+
         if (provider == null) {
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -369,52 +426,63 @@ fun ProfileScreen(
         }
 
         val firstCompany = provider.companies.firstOrNull()
+        val selectedCompany = provider.companies.find { it.id == selectedCompanyId }
 
-        if (showCompanyView && firstCompany != null) {
+        if (selectedCompany != null) {
             CompanyDetailView(
-                company = firstCompany,
+                company = selectedCompany,
                 providerImageUrl = provider.imageUrl,
                 paddingValues = padding,
-                onBack = { showCompanyView = false },
+                onBack = { selectedCompanyId = null },
                 colors = colors,
+                otherAvatars = provider.companies
+                    .filter { it.id != selectedCompany.id }
+                    .map { c -> Pair(c.photoUrl) { selectedCompanyId = c.id } },
                 onNavigateToCalendarioConfig = onNavigateToCalendarioConfigEntity,
                 onUpdateBranch = { updatedBranch ->
-                    val updatedCompany = firstCompany.copy(
-                        branches = firstCompany.branches.map {
+                    val updatedCompany = selectedCompany.copy(
+                        branches = selectedCompany.branches.map {
                             if (it.id == updatedBranch.id) updatedBranch else it
                         }
                     )
                     viewModel.addCompany(updatedCompany)
                 },
                 onUpdateAllBranches = { updatedBranches ->
-                    val updatedCompany = firstCompany.copy(branches = updatedBranches)
+                    val updatedCompany = selectedCompany.copy(branches = updatedBranches)
                     viewModel.addCompany(updatedCompany)
                 },
                 onAddBranch = { newBranch, esCasaCentral ->
                     val updatedBranches = if (esCasaCentral) {
-                        listOf(newBranch) + firstCompany.branches
+                        listOf(newBranch) + selectedCompany.branches
                     } else {
-                        firstCompany.branches + newBranch
+                        selectedCompany.branches + newBranch
                     }
-                    viewModel.addCompany(firstCompany.copy(branches = updatedBranches))
+                    viewModel.addCompany(selectedCompany.copy(branches = updatedBranches))
                 },
                 onUpdateCompany = { updatedCompany ->
                     viewModel.addCompany(updatedCompany)
                 },
                 onDeleteCompany = {
-                    viewModel.removeCompany(firstCompany.id)
+                    viewModel.removeCompany(selectedCompany.id)
+                    selectedCompanyId = null
                 },
                 onEditCompanyPhoto = { companyPhotoLauncher.launch("image/*") },
                 onEditCompanyBanner = { companyBannerLauncher.launch("image/*") },
+                bloqueada = !provider.priorizarEmpresa,
+                onSettings = onSettings,
             )
             return@Scaffold
         }
 
         val beActions = if (!isEditMode) {
             listOf(
-                PrestadorAction("edit", Icons.Default.Edit, "Editar", tint = colors.primaryOrange) { viewModel.setEditMode(true) },
+                PrestadorAction("edit", Icons.Default.Edit, "Editar", tint = if (perfilBloqueado) colors.textSecondary else colors.primaryOrange) {
+                    if (!perfilBloqueado) viewModel.setEditMode(true)
+                },
                 PrestadorAction("divider_1", Icons.Default.Edit, ""),
-                PrestadorAction("settings", Icons.Default.Settings, "Ajustes", tint = colors.primaryOrange, onClick = onSettings)
+                PrestadorAction("settings", Icons.Default.Settings, "Ajustes", tint = colors.primaryOrange, onClick = onSettings),
+                PrestadorAction("divider_2", Icons.Default.Edit, ""),
+                PrestadorAction("logout", Icons.Default.ExitToApp, "Salir", tint = Color(0xFFFF5252)) { showLogoutDialog = true }
             )
         } else {
             listOf(
@@ -427,7 +495,7 @@ fun ProfileScreen(
                             apellido = editApellido,
                             email = editEmail,
                             phone = editPhone,
-                            dniCuit = editDniCuit,
+                            dniCuit = editDniCuit.text,
                             profesion = editProfesion,
                             tieneMatricula = editTieneMatricula,
                             matricula = if (editTieneMatricula) editMatricula else null,
@@ -467,9 +535,140 @@ fun ProfileScreen(
             // ── 1. ESPACIADO PARA HEADER COLAPSABLE ──────────────────────
             item { Spacer(Modifier.height(headerMaxHeight)) }
 
-            item { Spacer(Modifier.height(16.dp)) }
+            item { Spacer(Modifier.height(24.dp)) }
+
+                //Banner modo empresa
+                if (provider.priorizarEmpresa && provider.companies.isNotEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Business,
+                                    contentDescription = null,
+                                    tint = Color(0xFFF57C00),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Modo empresa Activo",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFF57C00)
+                                    )
+                                    Text(
+                                        "Tu perfil personal está desactivado. Desactivá esta opción en Ajustes para habilitarlo.",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF795548),
+                                        lineHeight = 15.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    item { Spacer(Modifier.height(8.dp))}
+                }
+
+                //Barra de progreso
+                item {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = isEditMode,
+                        enter = androidx.compose.animation.fadeIn(
+                            animationSpec = androidx.compose.animation.core.tween(400)
+                        ) + androidx.compose.animation.slideInVertically(
+                            animationSpec = androidx.compose.animation.core.tween(400),
+                            initialOffsetY = { -it }
+                        ),
+                        exit = androidx.compose.animation.fadeOut(
+                            animationSpec = androidx.compose.animation.core.tween(300)
+                        ) + androidx.compose.animation.slideOutVertically(
+                            animationSpec = androidx.compose.animation.core.tween(300),
+                            targetOffsetY = { -it }
+                        )
+                    ) {
+                    val progreso = calcularProgresoPerfil()
+                    val progresoAnimado by animateFloatAsState(
+                        targetValue = progreso,
+                        animationSpec = androidx.compose.animation.core.tween(1000),
+                        label = "progresoAnim"
+                    )
+                    val porcentaje = (progreso * 100).toInt()
+                    val mensajeMotivacional = when {
+                        porcentaje < 40 -> "¡Empezá a completar tu perfil y conseguí más clientes!"
+                        porcentaje < 70 -> "¡vas bien! Completá más datos para aparecer en más búsquedas."
+                        porcentaje < 100 -> "¡Casi listo! Un perfil completo genera más confianza."
+                        else -> "¡Perfil completo! Tenés las mejores chances de aparecer en búsquedas. 🚀"
+                    }
+
+                    androidx.compose.material3.Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = colors.surfaceColor
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Completud del perfil",
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "$porcentaje%",
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.primaryOrange,
+                                    fontSize = 16.sp
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { progresoAnimado },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = if (porcentaje == 100) Color(0xFF10B981) else colors.primaryOrange,
+                                trackColor = colors.border
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = colors.textSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = mensajeMotivacional,
+                                    color = colors.textSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                    } // cierra AnimatedVisibility
+                }
 
             // ── 2. DATOS PROFESIONALES ───────────────────────────────────
+                val perfilBloqueado = provider.priorizarEmpresa && provider.companies.isNotEmpty()
             item {
                 ProfileSectionCard(
                     icon = Icons.Default.Work,
@@ -584,14 +783,29 @@ fun ProfileScreen(
                         ) {
                             OutlinedTextField(
                                 value = editDniCuit,
-                                onValueChange = { editDniCuit = it.filter { c -> c.isDigit() } },
+                                onValueChange = { nuevo ->
+                                    val soloDigitos = nuevo.text.filter { it.isDigit() }.take(11)
+                                    val formateado = formatearCuit(soloDigitos)
+                                    val digitosAntesCursor = nuevo.text.take(nuevo.selection.start).count { it.isDigit() }
+                                    var conteo = 0
+                                    var nuevoCursor = formateado.length
+                                    for (i in formateado.indices) {
+                                        if (formateado[i].isDigit()) conteo++
+                                        if (conteo == digitosAntesCursor) { nuevoCursor = i + 1; break }
+                                    }
+                                    editDniCuit = TextFieldValue(formateado, TextRange(nuevoCursor))
+                                    errorDniCuit = null
+                                },
                                 label = { labelStyle("DNI / CUIT") },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = fieldShape,
-                                colors = changedColors(editDniCuit != (provider?.dniCuit ?: "")),
+                                colors = changedColors(editDniCuit.text != (provider?.dniCuit ?: "")),
                                 textStyle = textStyle,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                isError = errorDniCuit != null,
+                                supportingText = errorDniCuit?.let { { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 10.sp) } },
+
                             )
                             OutlinedTextField(
                                 value = editPhone,
@@ -1622,9 +1836,75 @@ fun ProfileScreen(
                 }
             }
 
+
             // ── 7. ESPACIADO FINAL ───────────────────────────────────────
+
             item { Spacer(Modifier.height(8.dp)) }
         } // cierra LazyColumn
+
+            // ── OVERLAY PERFIL BLOQUEADO (ventana transparente) ──────────
+            if (perfilBloqueado && !isEditMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.backgroundColor.copy(alpha = 0.82f))
+                        .zIndex(5f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = colors.surfaceColor.copy(alpha = 0.95f),
+                        shadowElevation = 16.dp,
+                        modifier = Modifier
+                            .padding(horizontal = 32.dp)
+                            .fillMaxWidth()
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .background(colors.primaryOrange.copy(alpha = 0.12f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = colors.primaryOrange,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "Perfil personal desactivado",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = colors.textPrimary
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Estás usando el perfil de empresa como principal. Para editar tu perfil personal, desactivá el modo empresa desde Ajustes.",
+                                fontSize = 13.sp,
+                                color = colors.textSecondary,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
+                            Spacer(Modifier.height(20.dp))
+                            Button(
+                                onClick = onSettings,
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Settings, null, Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Ir a Ajustes")
+                            }
+                        }
+                    }
+                }
+            }
 
         // ── HEADER COLAPSABLE (overlay) ───────────────────────────────
         Box(
@@ -1644,8 +1924,9 @@ fun ProfileScreen(
                 isVerified = provider.verificado,
                 paddingValues = padding,
                 onBack = onBack,
-                toggleImageUrl = firstCompany?.photoUrl,
-                onToggle = if (firstCompany != null) ({ showCompanyView = true }) else null,
+                companyAvatars = provider.companies.map { company ->
+                    Pair(company.photoUrl) { selectedCompanyId = company.id }
+                },
                 colors = colors,
                 isEditMode = isEditMode,
                 onEditPhoto = { photoLauncher.launch("image/*") },
@@ -1735,6 +2016,8 @@ fun ProfileScreen(
                 }
             )
         }
+
+
             if (showPriorizarDialog && empresaPendiente != null) {
                 AlertDialog(
                     onDismissRequest = {
@@ -1789,6 +2072,16 @@ fun ProfileScreen(
                     Text("Seguir editando")
                 }
             }
+        )
+    }
+
+    if (showLogoutDialog) {
+        LogoutConfirmDialog(
+            onConfirm = {
+                showLogoutDialog = false
+                onLogout()
+            },
+            onDismiss = { showLogoutDialog = false }
         )
     }
 }
@@ -2007,6 +2300,188 @@ private fun CambiarPasswordDialog(
         dismissButton = {
             if (passwordChangeState !is PasswordChangeState.Loading && passwordChangeState !is PasswordChangeState.Success) {
                 TextButton(onClick = onDismiss) { Text("Cancelar") }
+            }
+        }
+    )
+
+}
+
+@Composable
+private fun ProfileSkeletonScreen(
+    padding: PaddingValues,
+    colors: com.example.myapplication.prestador.ui.theme.PrestadorColors
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "skeleton")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 0.55f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
+    val shimmerColor = colors.border.copy(alpha = shimmerAlpha)
+    val headerMaxHeight = 330.dp
+
+    Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 100.dp)
+        ) {
+            item { Spacer(Modifier.height(headerMaxHeight)) }
+            item { Spacer(Modifier.height(24.dp)) }
+            item { SkeletonSectionCard(shimmerColor = shimmerColor, colors = colors, lines = 4) }
+            item { Spacer(Modifier.height(12.dp)) }
+            item { SkeletonSectionCard(shimmerColor = shimmerColor, colors = colors, lines = 2) }
+            item { Spacer(Modifier.height(12.dp)) }
+            item { SkeletonSectionCard(shimmerColor = shimmerColor, colors = colors, lines = 3) }
+        }
+
+        // Header overlay — imita el banner real
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(headerMaxHeight)
+                .align(Alignment.TopStart)
+                .background(colors.surfaceColor)
+        ) {
+            // Banner shimmer (parte superior)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.55f)
+                    .background(shimmerColor)
+            )
+            // Avatar + nombre centrado abajo
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 20.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(110.dp)
+                        .clip(CircleShape)
+                        .background(shimmerColor)
+                )
+                Box(
+                    modifier = Modifier
+                        .width(160.dp)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(shimmerColor)
+                )
+                Box(
+                    modifier = Modifier
+                        .width(100.dp)
+                        .height(12.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(shimmerColor)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SkeletonSectionCard(
+    shimmerColor: Color,
+    colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
+    lines: Int
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(shimmerColor)
+                )
+                Box(
+                    modifier = Modifier
+                        .width(120.dp)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(shimmerColor)
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = colors.divider)
+            Spacer(Modifier.height(14.dp))
+            repeat(lines) { index ->
+                val widthFraction = when (index % 3) {
+                    0 -> 0.9f
+                    1 -> 0.7f
+                    else -> 0.55f
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(widthFraction)
+                        .height(13.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(shimmerColor)
+                )
+                if (index < lines - 1) Spacer(Modifier.height(10.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun LogoutConfirmDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = getPrestadorColors()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surfaceColor,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.ExitToApp,
+                contentDescription = null,
+                tint = Color(0xFFFF5252),
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = {
+            Text(
+                text = "Cerrar sesión",
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary
+            )
+        },
+        text = {
+            Text(
+                text = "¿Estás seguro que querés cerrar sesión?",
+                color = colors.textSecondary
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
+            ) {
+                Text("Cerrar sesión", color = Color.White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar", color = colors.primaryOrange)
             }
         }
     )
