@@ -82,6 +82,7 @@ fun InicioScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showCompletarDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
     val shadowAlpha by animateFloatAsState(
         targetValue = if (scrollState.value > 0) 1f else 0f,
@@ -224,7 +225,7 @@ fun InicioScreen(
                                         Text("Cerrar Sesion", fontSize = 14.sp, color = colors.error)
                                     }
                                 },
-                                onClick = { showMenu = false; onLogout() }
+                                onClick = { showMenu = false; showLogoutDialog = true }
                             )
                         }
                     }
@@ -232,6 +233,50 @@ fun InicioScreen(
 
                 // Botón conectar/desconectar Fast
                 Spacer(Modifier.height(14.dp))
+
+    if (showLogoutDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            containerColor = colors.surfaceColor,
+            icon = {
+                androidx.compose.material3.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.ExitToApp,
+                    contentDescription = null,
+                    tint = colors.error,
+                    modifier = androidx.compose.ui.Modifier.size(32.dp)
+                )
+            },
+            title = {
+                androidx.compose.material3.Text(
+                    text = "Cerrar sesión",
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = colors.textPrimary
+                )
+            },
+            text = {
+                androidx.compose.material3.Text(
+                    text = "¿Estás seguro que querés cerrar sesión?",
+                    color = colors.textSecondary
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = { showLogoutDialog = false; onLogout() },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = colors.error
+                    )
+                ) {
+                    androidx.compose.material3.Text("Cerrar sesión", color = androidx.compose.ui.graphics.Color.White)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showLogoutDialog = false }) {
+                    androidx.compose.material3.Text("Cancelar", color = colors.primaryOrange)
+                }
+            }
+        )
+    }
+
                 var isConnecting by remember { mutableStateOf(false) }
                 val sweepAngle = remember { androidx.compose.animation.core.Animatable(0f) }
                 val pulseScale = remember { androidx.compose.animation.core.Animatable(1f) }

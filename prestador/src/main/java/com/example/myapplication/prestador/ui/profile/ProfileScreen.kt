@@ -83,6 +83,7 @@ import com.example.myapplication.prestador.utils.formatearCuit
 import com.example.myapplication.prestador.utils.errorCuitMensaje
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
+import com.example.myapplication.prestador.viewmodel.localidades.LocalidadesViewModel
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -1426,13 +1427,18 @@ fun ProfileScreen(
                     var geocodedLat by remember { mutableStateOf<Double?>(null) }
                     var geocodedLng by remember { mutableStateOf<Double?>(null) }
 
-                    val provinciasFiltradas = if (localProvincia.isBlank()) emptyList()
-                        else PROVINCIAS_ARGENTINA.filter { it.contains(localProvincia.trim(), ignoreCase = true) }
-                    val localidadesDeProvincia = LOCALIDADES_POR_PROVINCIA.entries
-                        .firstOrNull { it.key.equals(localProvincia.trim(), ignoreCase = true) }?.value ?: emptyList()
-                    val localidadesFiltradas = if (localLocalidad.isBlank()) localidadesDeProvincia
-                        else localidadesDeProvincia.filter { it.nombre.contains(localLocalidad.trim(), ignoreCase = true) }
+                    val localidadesVm: LocalidadesViewModel = hiltViewModel()
+                    val todasProvincias by localidadesVm.provincias.collectAsState()
+                    val todasLocalidades by localidadesVm.localidades.collectAsState()
 
+                    LaunchedEffect(localProvincia) {
+                        localidadesVm.cargarLocalidades(localProvincia)
+                    }
+
+                    val provinciasFiltradas = if (localProvincia.isBlank()) emptyList()
+                    else todasProvincias.filter { it.contains(localProvincia.trim(), ignoreCase = true) }
+                    val localidadesFiltradas = if (localLocalidad.isBlank()) todasLocalidades
+                    else todasLocalidades.filter { it.nombre.contains(localLocalidad.trim(), ignoreCase = true) }
                     val locationPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
                         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
                     ) { granted ->
@@ -1607,8 +1613,10 @@ fun ProfileScreen(
                                                             .fillMaxWidth()
                                                             .clickable {
                                                                 localLocalidad = loc.nombre
-                                                                localCp = loc.codigoPostal
                                                                 mostrarSugerenciasLocalidad = false
+                                                                localidadesVm.cargarCodigoPostal(loc.nombre, localProvincia) { cp ->
+                                                                    if (cp.isNotBlank()) localCp = cp
+                                                                }
                                                             }
                                                             .padding(horizontal = 12.dp, vertical = 10.dp),
                                                         horizontalArrangement = Arrangement.SpaceBetween

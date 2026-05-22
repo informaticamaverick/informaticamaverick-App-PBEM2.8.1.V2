@@ -45,8 +45,7 @@ internal fun ProfileBannerHeaderView(
     isVerified: Boolean,
     paddingValues: PaddingValues,
     onBack: () -> Unit,
-    toggleImageUrl: String? = null,
-    onToggle: (() -> Unit)? = null,
+    companyAvatars: List<Pair<String?, () -> Unit>> = emptyList(),
     colors: PrestadorColors,
     isEditMode: Boolean = false,
     onEditPhoto: () -> Unit = {},
@@ -116,11 +115,12 @@ internal fun ProfileBannerHeaderView(
             }
         }
 
-        // Avatar + Nombre + Profesión + Badges (abajo, en Row)
+        // Avatar + Nombre + Profesión + Badges (centrado verticalmente en el header)
         Row(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+                .align(Alignment.Center)
+                .padding(horizontal = 20.dp)
+                .padding(top = 24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -206,18 +206,25 @@ internal fun ProfileBannerHeaderView(
             }
         }
 
-        // Botón toggle empresa (bottom-end) — solo si hay empresa
-        if (onToggle != null) {
-            Box(
+        // Avatares de empresas (bottom-end) — uno por cada empresa
+        if (companyAvatars.isNotEmpty()) {
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 12.dp)
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
-                    .clickable { onToggle() }
+                    .padding(end = 16.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ProfilePhoto(imageUrl = toggleImageUrl, colors = colors)
+                companyAvatars.forEach { (photoUrl, onClick) ->
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                            .clickable { onClick() }
+                    ) {
+                        ProfilePhoto(imageUrl = photoUrl, colors = colors)
+                    }
+                }
             }
         }
     }

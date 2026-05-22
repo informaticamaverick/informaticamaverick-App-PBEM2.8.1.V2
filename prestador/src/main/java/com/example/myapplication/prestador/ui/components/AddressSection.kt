@@ -27,14 +27,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
-import com.example.myapplication.prestador.ui.profile.LOCALIDADES_POR_PROVINCIA
-import com.example.myapplication.prestador.ui.profile.PROVINCIAS_ARGENTINA
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.myapplication.prestador.viewmodel.localidades.LocalidadesViewModel
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TARJETA de dirección (modo vista)
@@ -223,12 +223,16 @@ fun AddressBottomSheet(
     var syncing  by remember { mutableStateOf(false) }
     var mostrarSugerenciasProv by remember { mutableStateOf(false) }
     var mostrarSugerenciasLoc by remember { mutableStateOf(false) }
+    val localidadesVm: LocalidadesViewModel = hiltViewModel()
+    val todasProvincias by localidadesVm.provincias.collectAsState()
+    val todasLocalidades by localidadesVm.localidades.collectAsState()
+
+    LaunchedEffect(province) { localidadesVm.cargarLocalidades(province) }
+
     val provinciasFiltradas = if (province.isBlank()) emptyList()
-    else PROVINCIAS_ARGENTINA.filter { it.contains(province.trim(), ignoreCase = true) }
-    val localidadesDeProvincia = LOCALIDADES_POR_PROVINCIA.entries
-        .firstOrNull { it.key.equals(province.trim(), ignoreCase = true) }?.value ?: emptyList()
-    val localidadesFiltradas = if (city.isBlank()) localidadesDeProvincia
-    else localidadesDeProvincia.filter { it.nombre.contains(city.trim(), ignoreCase = true) }
+    else todasProvincias.filter { it.contains(province.trim(), ignoreCase = true) }
+    val localidadesFiltradas = if (city.isBlank()) todasLocalidades
+    else todasLocalidades.filter { it.nombre.contains(city.trim(), ignoreCase = true) }
 
 
 
@@ -427,8 +431,10 @@ fun AddressBottomSheet(
                                         .fillMaxWidth()
                                         .clickable {
                                             city = loc.nombre
-                                            postalCode = loc.codigoPostal
                                             mostrarSugerenciasLoc = false
+                                            localidadesVm.cargarCodigoPostal(loc.nombre, province) { cp ->
+                                                if (cp.isNotBlank()) postalCode = cp
+                                            }
                                         }
                                         .padding(horizontal = 16.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,

@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,14 +30,9 @@ import com.example.myapplication.prestador.ui.register.components.FloatingLabelT
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.myapplication.prestador.viewmodel.localidades.LocalidadesViewModel
 
-internal val PROVINCIAS_ARGENTINA = listOf(
-    "Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
-    "C\u00f3rdoba", "Corrientes", "Entre R\u00edos", "Formosa", "Jujuy",
-    "La Pampa", "La Rioja", "Mendoza", "Misiones", "Neuqu\u00e9n",
-    "R\u00edo Negro", "Salta", "San Juan", "San Luis", "Santa Cruz",
-    "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucum\u00e1n"
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,6 +42,7 @@ fun DireccionSection(
     expanded: Boolean = false,
     onExpandChange: () -> Unit = {},
     extraContent: (@Composable ColumnScope.() -> Unit)? = null,
+    localidadesViewModel: LocalidadesViewModel = hiltViewModel(),
     onGuardar: (
         pais: String,
         provincia: String,
@@ -79,12 +74,16 @@ fun DireccionSection(
     var geocodedLng by remember { mutableStateOf(direccion?.longitud) }
     var geocodingAddressLoading by remember { mutableStateOf(false) }
     var geocodingAddressResult by remember { mutableStateOf<String?>(null) }
+    val todasProvincias by localidadesViewModel.provincias.collectAsState()
+    val todasLocalidades by localidadesViewModel.localidades.collectAsState()
+
+    LaunchedEffect(provincia) { localidadesViewModel.cargarLocalidades(provincia)}
+
     val provinciasFiltradas = if (provincia.isBlank()) emptyList()
-        else PROVINCIAS_ARGENTINA.filter { it.contains(provincia.trim(), ignoreCase = true) }
-    val localidadesDeProvincia = LOCALIDADES_POR_PROVINCIA.entries
-        .firstOrNull { it.key.equals(provincia.trim(), ignoreCase = true) }?.value ?: emptyList()
-    val localidadesFiltradas = if (localidad.isBlank()) localidadesDeProvincia
-        else localidadesDeProvincia.filter { it.nombre.contains(localidad.trim(), ignoreCase = true) }
+    else todasProvincias.filter { it.contains(provincia.trim(), ignoreCase = true) }
+    val localidadesFiltradas = if (localidad.isBlank()) todasLocalidades
+    else todasLocalidades.filter { it.nombre.contains(localidad.trim(), ignoreCase = true)}
+
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -311,7 +310,7 @@ fun DireccionSection(
                 val localidadInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 val localidadFocused by localidadInteraction.collectIsFocusedAsState()
                 LaunchedEffect(localidadFocused) {
-                    if (localidadFocused && localidadesDeProvincia.isNotEmpty()) mostrarSugerenciasLocalidad = true
+                    if (localidadFocused && todasLocalidades.isNotEmpty()) mostrarSugerenciasLocalidad = true
                     if (!localidadFocused) mostrarSugerenciasLocalidad = false
                 }
                 OutlinedTextField(
@@ -357,8 +356,10 @@ fun DireccionSection(
                                         .fillMaxWidth()
                                         .clickable {
                                             localidad = loc.nombre
-                                            codigoPostal = loc.codigoPostal
-                                            mostrarSugerenciasLocalidad = false
+                                           mostrarSugerenciasLocalidad = false
+                                           localidadesViewModel.cargarCodigoPostal(loc.nombre, provincia) { cp ->
+                                               if (cp.isNotBlank()) codigoPostal = cp
+                                           }
                                         }
                                         .padding(horizontal = 16.dp, vertical = 12.dp),
                                     verticalAlignment = Alignment.CenterVertically,

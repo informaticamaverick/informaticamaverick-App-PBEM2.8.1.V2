@@ -40,6 +40,7 @@ import kotlinx.coroutines.tasks.await
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.selection.selectable
+import com.example.myapplication.prestador.viewmodel.localidades.LocalidadesViewModel
 
 @Composable
 fun SucursalesSection(
@@ -47,7 +48,8 @@ fun SucursalesSection(
     onUploadImage: suspend (Uri) -> String?,
     onSucursalAgregada: () -> Unit = {},
     refreshTrigger: Int = 0,
-    viewModel: SucursalesViewModel = hiltViewModel()
+    viewModel: SucursalesViewModel = hiltViewModel(),
+    localidadesViewModel: LocalidadesViewModel = hiltViewModel(),
 ) {
     val sucursales by viewModel.sucursales.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
@@ -59,13 +61,17 @@ fun SucursalesSection(
     var nuevaLocalidad by remember { mutableStateOf("") }
     var mostrarSugerenciasProvincia by remember { mutableStateOf(false) }
     var mostrarSugerenciasLocalidad by remember { mutableStateOf(false) }
+    val todasProvincias by localidadesViewModel.provincias.collectAsState()
+    val todasLocalidades by localidadesViewModel.localidades.collectAsState()
+
+    LaunchedEffect(nuevaProvincia) {
+        localidadesViewModel.cargarLocalidades(nuevaProvincia)
+    }
+
     val provinciasFiltradas: List<String> = if (nuevaProvincia.isBlank()) emptyList()
-    else PROVINCIAS_ARGENTINA.filter { p -> p.contains(nuevaProvincia.trim(), ignoreCase = true) }
-    val localidadesDeProvincia: List<Localidad> = LOCALIDADES_POR_PROVINCIA.entries
-        .firstOrNull { e -> e.key.equals(nuevaProvincia.trim(), ignoreCase = true) }?.value ?: emptyList()
-    val localidadesFiltradas: List<Localidad> = if (nuevaLocalidad.isBlank())
-        localidadesDeProvincia
-    else localidadesDeProvincia.filter { l -> l.nombre.contains(nuevaLocalidad.trim(), ignoreCase = true) }
+    else todasProvincias.filter { p -> p.contains(nuevaProvincia.trim(), ignoreCase = true) }
+    val localidadesFiltradas: List<Localidad> = if (nuevaLocalidad.isBlank()) todasLocalidades
+    else todasLocalidades.filter { l-> l.nombre.contains(nuevaLocalidad.trim(), ignoreCase = true) }
     var nuevaCalle by remember { mutableStateOf("") }
     var nuevoNumero by remember { mutableStateOf("") }
     var nuevoCp by remember { mutableStateOf("") }
@@ -304,7 +310,7 @@ fun SucursalesSection(
                             androidx.compose.foundation.interaction.MutableInteractionSource() }
                         val localidadFocused by localidadInteraction.collectIsFocusedAsState()
                         LaunchedEffect(localidadFocused) {
-                            if (localidadFocused && localidadesDeProvincia.isNotEmpty())
+                            if (localidadFocused && todasProvincias.isNotEmpty())
                                 mostrarSugerenciasLocalidad = true
                             if (!localidadFocused) mostrarSugerenciasLocalidad = false
                         }
@@ -359,8 +365,10 @@ fun SucursalesSection(
                                                 .fillMaxWidth()
                                                 .clickable {
                                                     nuevaLocalidad = loc.nombre
-                                                    nuevoCp = loc.codigoPostal
                                                     mostrarSugerenciasLocalidad = false
+                                                    localidadesViewModel.cargarCodigoPostal(loc.nombre, nuevaProvincia) { cp ->
+                                                        if (cp.isNotBlank()) nuevoCp = cp
+                                                    }
                                                 }
                                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically,
