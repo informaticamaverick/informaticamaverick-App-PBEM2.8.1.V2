@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.presupuesto.components
+﻿package com.example.myapplication.prestador.ui.presupuesto.components
 
 import android.accessibilityservice.GestureDescription
 import android.os.Build
@@ -54,7 +54,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import com.example.myapplication.prestador.ui.presupuesto.*
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel
+import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoConfigViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 

@@ -33,12 +33,12 @@ import com.example.myapplication.prestador.data.local.entity.ClienteEntity
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.PresupuestoViewModel
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
-import com.example.myapplication.prestador.viewmodel.ProfileState
+import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoViewModel
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 import com.example.myapplication.prestador.utils.displayAddress
 import com.example.myapplication.prestador.utils.displayCompanyOrFullName
-import com.example.myapplication.prestador.viewmodel.ChatViewModel
+import com.example.myapplication.prestador.viewmodel.chat.ChatViewModel
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -56,8 +56,8 @@ fun BudgetChatSheet(
     onDismiss: () -> Unit,
     viewModel: PresupuestoViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
-    chatViewModel: com.example.myapplication.prestador.viewmodel.ChatViewModel = hiltViewModel(),
-    configViewModel: com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel = hiltViewModel()
+    chatViewModel: com.example.myapplication.prestador.viewmodel.chat.ChatViewModel = hiltViewModel(),
+    configViewModel: com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoConfigViewModel = hiltViewModel()
 ) {
     val colors = getPrestadorColors()
     val presupuestoConfig by configViewModel.config.collectAsState()

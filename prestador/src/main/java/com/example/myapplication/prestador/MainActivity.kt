@@ -1,7 +1,10 @@
-package com.example.myapplication.prestador
+﻿package com.example.myapplication.prestador
 
 import android.content.Intent
 import android.os.Bundle
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -9,10 +12,12 @@ import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.example.myapplication.prestador.data.migration.FirestoreMigration
+import com.example.myapplication.prestador.data.repository.ThemeMode
 import com.example.myapplication.prestador.ui.navigation.PrestadorNavGraph
 import com.example.myapplication.prestador.ui.theme.PrestadorTheme
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
-import com.example.myapplication.prestador.viewmodel.ProfileState
+import com.example.myapplication.prestador.viewmodel.config.AppSettingsViewModel
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.hilt.android.AndroidEntryPoint
@@ -23,6 +28,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private val editProfileViewModel: EditProfileViewModel by viewModels()
+    private val appSettingsViewModel: AppSettingsViewModel by viewModels()
 
 
     private fun presenceRef() = com.google.firebase.auth.FirebaseAuth.getInstance()
@@ -86,11 +92,15 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            PrestadorTheme {
+            val themeMode by appSettingsViewModel.themeMode.collectAsState()
+            val isDark = when (themeMode) {
+                ThemeMode.LIGHT  -> false
+                ThemeMode.DARK   -> true
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+            PrestadorTheme(darkTheme = isDark, dynamicColor = false) {
                 val navController = rememberNavController()
-                PrestadorNavGraph(
-                    navController = navController
-                )
+                PrestadorNavGraph(navController = navController)
             }
         }
 

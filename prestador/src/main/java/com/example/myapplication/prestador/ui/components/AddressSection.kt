@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.prestador.data.model.AddressProvider
@@ -25,6 +27,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import com.example.myapplication.prestador.ui.profile.LOCALIDADES_POR_PROVINCIA
+import com.example.myapplication.prestador.ui.profile.PROVINCIAS_ARGENTINA
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TARJETA de dirección (modo vista)
@@ -211,6 +221,16 @@ fun AddressBottomSheet(
     var lat      by remember { mutableStateOf(initial.latitude?.let { if (it != 0.0) "%.6f".format(it) else "" } ?: "") }
     var lng      by remember { mutableStateOf(initial.longitude?.let { if (it != 0.0) "%.6f".format(it) else "" } ?: "") }
     var syncing  by remember { mutableStateOf(false) }
+    var mostrarSugerenciasProv by remember { mutableStateOf(false) }
+    var mostrarSugerenciasLoc by remember { mutableStateOf(false) }
+    val provinciasFiltradas = if (province.isBlank()) emptyList()
+    else PROVINCIAS_ARGENTINA.filter { it.contains(province.trim(), ignoreCase = true) }
+    val localidadesDeProvincia = LOCALIDADES_POR_PROVINCIA.entries
+        .firstOrNull { it.key.equals(province.trim(), ignoreCase = true) }?.value ?: emptyList()
+    val localidadesFiltradas = if (city.isBlank()) localidadesDeProvincia
+    else localidadesDeProvincia.filter { it.nombre.contains(city.trim(), ignoreCase = true) }
+
+
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = colors.primaryOrange,
@@ -364,43 +384,143 @@ fun AddressBottomSheet(
                     shape = fieldShape,
                     colors = fieldColors,
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
             }
 
             // Localidad
-            OutlinedTextField(
-                value = city,
-                onValueChange = { city = it },
-                label = { Text("Localidad", fontSize = 11.sp) },
-                textStyle = textStyle,
-                shape = fieldShape,
-                colors = fieldColors,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            // Provincia + CP
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = province,
-                    onValueChange = { province = it },
-                    label = { Text("Provincia", fontSize = 11.sp) },
+                    value = city,
+                    onValueChange = { city = it; mostrarSugerenciasLoc = true },
+                    label = { Text("Localidad", fontSize = 11.sp) },
                     textStyle = textStyle,
                     shape = fieldShape,
                     colors = fieldColors,
-                    modifier = Modifier.weight(2f),
-                    singleLine = true
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    trailingIcon = {
+                        if (city.isNotEmpty()) {
+                            IconButton(onClick = { city = ""; postalCode = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = null)
+                            }
+                        }
+                    }
                 )
+                AnimatedVisibility(
+                    visible = mostrarSugerenciasLoc && localidadesFiltradas.isNotEmpty(),
+                    enter = fadeIn(tween(200)) + expandVertically(tween(250)),
+                    exit = fadeOut(tween(150)) + shrinkVertically(tween(200))
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp),
+                        color = colors.surfaceElevated,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
+                        shadowElevation = 4.dp
+                    ) {
+                        Column {
+                            localidadesFiltradas.take(6).forEachIndexed { index, loc ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            city = loc.nombre
+                                            postalCode = loc.codigoPostal
+                                            mostrarSugerenciasLoc = false
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(Icons.Default.LocationCity, null, tint = colors.primaryOrange, modifier = Modifier.size(14.dp))
+                                    Column {
+                                        Text(loc.nombre, fontSize = 13.sp, color = colors.textPrimary)
+                                        Text("CP ${loc.codigoPostal}", fontSize = 10.sp, color = colors.textSecondary)
+                                    }
+                                }
+                                if (index < localidadesFiltradas.take(6).lastIndex)
+                                    HorizontalDivider(color = colors.border)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Provincia + CP
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(modifier = Modifier.weight(2f)) {
+                    OutlinedTextField(
+                        value = province,
+                        onValueChange = { province = it; mostrarSugerenciasProv = it.isNotEmpty(); city = ""; postalCode = "" },
+                        label = { Text("Provincia", fontSize = 11.sp) },
+                        textStyle = textStyle,
+                        shape = fieldShape,
+                        colors = fieldColors,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        trailingIcon = {
+                            if (province.isNotEmpty()) {
+                                IconButton(onClick = { province = ""; mostrarSugerenciasProv = false; city = ""; postalCode = "" } ) {
+                                    Icon(Icons.Default.Clear, contentDescription = null)
+                                }
+                            }
+                        }
+                    )
+                    AnimatedVisibility(
+                        visible = mostrarSugerenciasProv && provinciasFiltradas.isNotEmpty(),
+                        enter = fadeIn(tween(200)) + expandVertically(tween(250)),
+                        exit = fadeOut(tween(150)) + shrinkVertically(tween(200))
+                    ) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp),
+                            color = colors.surfaceElevated,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
+                            shadowElevation = 4.dp
+                        ) {
+                            Column {
+                                provinciasFiltradas.take(6).forEachIndexed { index, prov ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                province = prov
+                                                mostrarSugerenciasProv = false
+                                                city = ""
+                                                postalCode = ""
+                                            }
+                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.LocationOn, null, tint = colors.primaryOrange, modifier = Modifier.size(14.dp))
+                                        Text(prov, fontSize = 13.sp, color = colors.textPrimary)
+                                    }
+                                    if (index < provinciasFiltradas.take(6).lastIndex)
+                                        HorizontalDivider(color = colors.border)
+                                }
+                            }
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = postalCode,
-                    onValueChange = { postalCode = it },
+                    onValueChange = { raw ->
+                        val filtered = raw.uppercase().filter { c -> c.isLetter() || c.isDigit() }
+                        val letra = filtered.firstOrNull()?.takeIf { it.isLetter() }?.toString() ?: ""
+                        val digitos = filtered.drop(if (letra.isNotEmpty()) 1 else 0).filter { c -> c.isDigit() }.take(4)
+                        postalCode = (letra + digitos).take(5)
+                    },
                     label = { Text("CP", fontSize = 11.sp) },
+                    placeholder = { Text("T4000", fontSize = 11.sp ) },
                     textStyle = textStyle,
                     shape = fieldShape,
                     colors = fieldColors,
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text)
                 )
             }
 

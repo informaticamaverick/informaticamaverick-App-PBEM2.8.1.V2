@@ -17,6 +17,7 @@ import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.google.firebase.firestore.Source
 
 /**
  * REPOSITORY para Providers
@@ -113,12 +114,17 @@ class ProviderRepository @Inject constructor(
                 "serviceType" to provider.serviceType,
                 "createdAt" to provider.createdAt,
                 "updatedAt" to System.currentTimeMillis(),
+                "visible" to !provider.priorizarEmpresa,
                 "doesService" to provider.doesService,
                 "doesProduct" to provider.doesProduct,
                 "atencionUrgencias" to provider.works24h,
                 "vaDomicilio" to provider.doesHomeVisits,
                 "envios" to provider.doesShipping,
-                "turnosEnLocal" to provider.hasPhysicalLocation
+                "turnosEnLocal" to provider.hasPhysicalLocation,
+                "acceptsAppointments" to provider.acceptsAppointments,
+                "trabajaConOtros" to provider.trabajaConOtros,
+                "workingHours" to provider.workingHours,
+                "horarioLocal" to provider.workingHours
                 // Nota: el mapa "local" (con dirección, horario, turnosEnLocal) solo se escribe
                 // desde EditProfileViewModel.updateProfile para evitar sobreescribir datos locales.
             )
@@ -203,7 +209,8 @@ class ProviderRepository @Inject constructor(
                     "email" to company.email,
                     "rating" to company.rating,
                     "categories" to company.categories,
-                    "verificado" to company.isVerified
+                    "verificado" to company.isVerified,
+                    "visible" to provider.priorizarEmpresa
                 )
                 batch.set(companyDocRef, companyMap, SetOptions.merge())
 
@@ -337,4 +344,314 @@ class ProviderRepository @Inject constructor(
             .replace(Regex("[^a-zA-Z0-9-_.~%]"), "")
             .lowercase()
     }
+
+    /**
+     * Obtiene datos del provider desde Firestore y actualiza roon.
+     * Si Firestore fall, Room ya tiene los datos del último login.
+     */
+    suspend fun fetchAndUpdateFromFirestore(uid: String) {
+        try {
+            val doc = firestore.collection("providers").document(uid).get().await()
+            if (!doc.exists()) return
+
+            val perfil = doc.get("perfil") as? Map<String, Any>
+            val nombre = perfil?.get("nombre") as? String ?: doc.getString("nombre") ?: ""
+            val apellido = doc.getString("apellido") ?: ""
+            val tipo = doc.getString("serviceType") ?: "TECHNICAL"
+            val imagen = perfil?.get("imageBase64") as? String
+                ?: doc.getString("imageBase64")
+                ?: doc.getString("imageUrl")
+
+            val existing = providerDao.getProviderByIdOnce(uid)
+            val updated = existing?.copy(
+                name = nombre, lastName = apellido,
+                serviceType = tipo, photoUrl = imagen
+            ) ?: ProviderEntity(
+                id = uid, email = doc.getString("email") ?: "",
+                phoneNumber = doc.getString("phoneNumber") ?: "",
+                displayName = nombre, name = nombre, lastName = apellido,
+                serviceType = tipo, photoUrl = imagen,
+                createdAt = System.currentTimeMillis()
+            )
+            providerDao.insertProvider(updated)
+            Log.d(TAG, "✅ Provider actualizado en Room desde Firestore")
+        } catch (e: Exception) {
+            Log.d(TAG, "⚠️ fetchAndUpdateFromFirestore: ${e.message} — usando Room")
+        }
+    }
+
+    //Sección: MéTODOS MOVIDOS DESDE EditProfileViewModel
+
+    // ─── SECCIÓN: MÉTODOS MOVIDOS DESDE EditProfileViewModel
+
+    suspend fun updateProfilePhotoOnFirestore(userId: String, base64:
+    String) {
+        firestore.collection("providers").document(userId)
+            .update(mapOf("perfil.imageUrl" to base64, "updatedAt" to
+                    System.currentTimeMillis()))
+            .await()
+    }
+
+    suspend fun updateBannerOnFirestore(userId: String, base64: String) {
+        // "providers" corregido (era "providerss" con typo)
+        firestore.collection("providers").document(userId)
+            .update(mapOf("perfil.bannerImageUrl" to base64, "updatedAt" to
+                    System.currentTimeMillis()))
+            .await()
+    }
+
+    suspend fun updateGalleryImagesOnFirestore(userId: String, images:
+    List<String>) {
+        firestore.collection("providers").document(userId)
+            .set(mapOf("galleryImages" to images), SetOptions.merge())
+            .await()
+    }
+
+    /**
+     * Carga el perfil completo desde Firestore (incluye addresses,
+    companies,
+     * branches y employees), guarda en Room y lo retorna.
+     */
+    suspend fun loadFullProfileFromFirestore(userId: String):
+            ProviderEntity? {
+        val doc =
+            firestore.collection("providers").document(userId).get(Source.SERVER).await()
+        if (!doc.exists()) return null
+
+        val perfil = doc.get("perfil") as? Map<String, Any>
+        val ubicacion = doc.get("ubicacion") as? Map<String, Any>
+        val localMap = doc.get("local") as? Map<String, Any>
+        val empresa = doc.get("empresa") as? Map<String, Any>
+        val modalidad = doc.get("modalidad") as? Map<String, Any>
+
+        fun str(map: Map<String, Any>?, key: String) = map?.get(key) as?
+                String ?: doc.getString(key)
+        fun bool(map: Map<String, Any>?, key: String, default: Boolean =
+            false) =
+            map?.get(key) as? Boolean ?: doc.getBoolean(key) ?: default
+
+        // 1. Direcciones
+        val addressesList = mutableListOf<com.example.myapplication.prestador.data.model.AddressProvider>()
+        val addressesSnapshot =
+            doc.reference.collection("addresses").get().await()
+        if (!addressesSnapshot.isEmpty) {
+            addressesSnapshot.documents.forEach { addrDoc ->
+                addressesList.add(com.example.myapplication.prestador.data.model.AddressProvider(id = addrDoc.id,
+                    calle = addrDoc.getString("calle") ?: "",
+                    numero = addrDoc.getString("numero") ?: "",
+                    localidad = addrDoc.getString("localidad") ?: "",
+                    provincia = addrDoc.getString("provincia") ?: "",
+                    pais = addrDoc.getString("pais") ?: "Argentina",
+                    codigoPostal = addrDoc.getString("codigoPostal") ?: "",
+                    latitude = addrDoc.getDouble("latitude"),
+                    longitude = addrDoc.getDouble("longitude")
+                ))
+            }
+        } else if (ubicacion != null) {
+            addressesList.add(com.example.myapplication.prestador.data.model
+                .AddressProvider(
+                    id = "default",
+                    calle = str(ubicacion, "direccion") ?: "",
+                    numero = "",
+                    localidad = "",
+                    provincia = str(ubicacion, "provincia") ?: "",
+                    pais = str(ubicacion, "pais") ?: "Argentina",
+                    codigoPostal = str(ubicacion, "codigoPostal") ?: ""
+                ))
+        }
+        if (bool(localMap, "turnosEnLocal")) {
+            val localCalle = str(localMap, "direccionLocal") ?: ""
+            val localProvincia = str(localMap, "provinciaLocal") ?: ""
+            val localCp = str(localMap, "codigoPostalLocal") ?: ""
+            if (localCalle.isNotBlank() || localProvincia.isNotBlank()) {
+                addressesList.removeIf { it.id == "local" }
+                addressesList.add(com.example.myapplication.prestador.data.model.AddressProvider(id = "local", calle = localCalle, numero = "",
+                    localidad = "", provincia = localProvincia,
+                    pais = "Argentina", codigoPostal = localCp
+                ))
+            }
+        }
+
+        // 2. Empresas / Sucursales / Empleados
+        val companiesList = mutableListOf<com.example.myapplication.prestador.data.model.CompanyProvider>()
+        val companiesSnapshot =
+            doc.reference.collection("companies").get().await()
+        for (compDoc in companiesSnapshot.documents) {
+            val branchesList = mutableListOf<com.example.myapplication.prestador.data.model.BranchProvider>()
+            val branchesSnapshot =
+                compDoc.reference.collection("branches").get().await()
+            for (branchDoc in branchesSnapshot.documents) {
+                val employeesList = mutableListOf<com.example.myapplication.
+                prestador.data.model.EmployeeProvider>()
+
+                branchDoc.reference.collection("employees").get().await().documents.forEach {
+                        empDoc ->
+                    employeesList.add(com.example.myapplication.prestador.data.model.EmployeeProvider(id = empDoc.id,
+                        name = empDoc.getString("name") ?: "",
+                        lastName = empDoc.getString("lastName") ?: "",
+                        position = empDoc.getString("position") ?: "",
+                        detail = empDoc.getString("detail") ?: "",
+                        photoUrl = empDoc.getString("photoUrl")
+                    ))
+                }
+                val branchAddrMap = branchDoc.get("address") as? Map<String,
+                        Any>
+                val branchAddr = if (branchAddrMap != null) {
+
+                    com.example.myapplication.prestador.data.model.AddressProvider(
+                        id = branchAddrMap["id"] as? String ?:
+                        UUID.randomUUID().toString(),
+                        calle = branchAddrMap["calle"] as? String ?: "",
+                        numero = branchAddrMap["numero"] as? String ?: "",
+                        localidad = branchAddrMap["localidad"] as? String ?:
+                        "",
+                        provincia = branchAddrMap["provincia"] as? String ?:
+                        "",
+                        pais = branchAddrMap["pais"] as? String ?:
+                        "Argentina",
+                        codigoPostal = branchAddrMap["codigoPostal"] as?
+                                String ?: "",
+                        latitude = branchAddrMap["latitude"] as? Double,
+                        longitude = branchAddrMap["longitude"] as? Double
+                    )
+                } else {
+
+                    com.example.myapplication.prestador.data.model.AddressProvider(
+                        id = branchDoc.getString("direccionId") ?:
+                        UUID.randomUUID().toString(),
+                        calle = branchDoc.getString("direccionId") ?: "",
+                        provincia = branchDoc.getString("provincia") ?: "",
+                        codigoPostal = branchDoc.getString("codigoPostal")
+                            ?: ""
+                    )
+                }
+                branchesList.add(com.example.myapplication.prestador.data.model.BranchProvider(id = branchDoc.id,
+                    name = branchDoc.getString("nombre") ?:
+                    branchDoc.getString("name") ?: "",
+                    address = branchAddr,
+                    workingHours = branchDoc.getString("horario") ?:
+                    branchDoc.getString("workingHours") ?: "",
+                    employees = employeesList,
+                    galleryImages = (branchDoc.get("galleryImages") as?
+                            List<*>)?.map { it.toString() } ?: emptyList(),
+                    doesService = branchDoc.getBoolean("doesService") ?:
+                    false,
+                    doesProduct = branchDoc.getBoolean("doesProduct") ?:
+                    false,
+                    works24h = branchDoc.getBoolean("works24h") ?: false,
+                    hasPhysicalLocation =
+                        branchDoc.getBoolean("hasPhysicalLocation") ?: false,
+                    doesHomeVisits = branchDoc.getBoolean("doesHomeVisits")
+                        ?: false,
+                    doesShipping = branchDoc.getBoolean("doesShipping") ?:
+                    false,
+                    acceptsAppointments =
+                        branchDoc.getBoolean("acceptsAppointments") ?: false,
+                    rating = (branchDoc.getDouble("rating") ?:
+                    0.0).toFloat()
+                ))
+            }
+            companiesList.add(com.example.myapplication.prestador.data.model
+                .CompanyProvider(
+                    id = compDoc.id,
+                    name = compDoc.getString("nombreNegocio") ?:
+                    compDoc.getString("name") ?: "",
+                    razonSocial = compDoc.getString("razonSocial") ?: "",
+                    cuit = compDoc.getString("cuitNegocio") ?:
+                    compDoc.getString("cuit") ?: "",
+                    email = compDoc.getString("email") ?: "",
+                    description = compDoc.getString("descripcion") ?:
+                    compDoc.getString("description") ?: "",
+                    rating = (compDoc.getDouble("rating") ?: 0.0).toFloat(),
+                    photoUrl = compDoc.getString("photoUrl"),
+                    categories = (compDoc.get("categories") as? List<*>)?.map {
+                        it.toString() } ?: emptyList(),
+                    isVerified = compDoc.getBoolean("verificado") ?: false,
+                    branches = branchesList
+                ))
+        }
+
+        val localCached = providerDao.getProviderByIdOnce(userId)
+        val savedServiceType = localCached?.serviceType
+        val provider = ProviderEntity(
+            id = userId,
+            name = str(perfil, "nombre") ?: "",
+            lastName = str(perfil, "apellido") ?: "",
+            displayName = "${str(perfil, "nombre")} ${str(perfil,
+                "apellido")}".trim(),
+            email = str(perfil, "email") ?: "",
+            emails = (doc.get("emails") as? List<*>)?.map { it.toString() }
+                ?: listOfNotNull(str(perfil, "email")),
+            phoneNumber = str(perfil, "telefono") ?: "",
+            photoUrl = str(perfil, "imageUrl")?.takeIf { it.isNotBlank() }
+                ?: str(perfil, "imageBase64")?.takeIf { it.isNotBlank() }
+                ?: doc.getString("imageUrl")?.takeIf { it.isNotBlank() }
+                ?: doc.getString("imageBase64")?.takeIf { it.isNotBlank() },
+            description = str(perfil, "description") ?: "",
+            cuilCuit = str(perfil, "dniCuit"),
+            profesion = str(perfil, "profesion"),
+            matricula = str(perfil, "matricula"),
+            addresses = addressesList,
+            address = addressesList.firstOrNull(),
+            companies = companiesList,
+            hasCompanyProfile = bool(empresa, "tieneEmpresa"),
+            priorizarEmpresa = localCached?.priorizarEmpresa
+                ?: (bool(empresa, "priorizarEmpresa") || (doc.getBoolean("priorizarEmpresa") ?: false)),
+            works24h = doc.getBoolean("atencionUrgencias") ?:
+            bool(modalidad, "atencionUrgencias"),
+            doesHomeVisits = doc.getBoolean("vaDomicilio") ?:
+            bool(modalidad, "vaDomicilio"),
+            hasPhysicalLocation = (localMap?.get("turnosEnLocal") as?
+                    Boolean) ?: doc.getBoolean("turnosEnLocal") ?: false,
+            doesShipping = doc.getBoolean("envios") ?: bool(modalidad,
+                "envios"),
+            acceptsAppointments = doc.getBoolean("acceptsAppointments") ?:
+            bool(localMap, "turnosEnLocal"),
+            trabajaConOtros = doc.getBoolean("trabajaConOtros") ?:
+            bool(empresa, "trabajaConOtros"),
+            isVerified = doc.getBoolean("verificado") ?:
+            doc.getBoolean("isVerified") ?: false,
+            isSubscribed = true,
+            doesService = doc.getBoolean("doesService") ?: false,
+            doesProduct = doc.getBoolean("doesProduct") ?: false,
+            rating = (doc.getDouble("rating") ?: 0.0).toFloat(),
+            categories = (doc.get("servicios") as? List<*>)?.map {
+                it.toString() } ?: emptyList(),
+            createdAt = doc.getLong("createdAt") ?:
+            System.currentTimeMillis(),
+            workingHours = str(localMap, "horarioLocal") ?: "",
+            galleryImages = (doc.get("galleryImages") as? List<*>)?.map {
+                it.toString() } ?: emptyList(),
+            serviceType = savedServiceType ?: "TECHNICAL"
+        )
+
+        providerDao.insertProvider(provider)
+        // Temporal: mantener isSubscribed=true en Firestore hasta que haya lógica de pagos
+
+        firestore.collection("providers").document(userId).update("isSubscribed",
+            true).await()
+        Log.d(TAG, "✅ Perfil completo cargado desde Firestore y guardado en Room")
+            return provider
+    }
+
+    suspend fun actualizarModoEmpresa(uid: String, priorizarEmpresa: Boolean) {
+        firestore.collection("providers").document(uid)
+            .update(
+                mapOf(
+                    "empresa.priorizarEmpresa" to priorizarEmpresa,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+            ).await()
+    }
+
+    suspend fun actualizarVisibilidadPerfil(uid: String, priorizarEmpresa: Boolean, companyIds: List<String>) {
+        val providerRef = firestore.collection("providers").document(uid)
+        providerRef.update("visible", !priorizarEmpresa).await()
+        companyIds.forEach { companyId ->
+            providerRef.collection("companies").document(companyId)
+                .update("visible", priorizarEmpresa)
+                .await()
+        }
+    }
+
 }

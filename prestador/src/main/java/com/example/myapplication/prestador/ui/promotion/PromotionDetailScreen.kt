@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.promotion
+﻿package com.example.myapplication.prestador.ui.promotion
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -26,7 +26,7 @@ import coil.compose.AsyncImage
 import com.example.myapplication.prestador.data.model.PromotionStatus
 import com.example.myapplication.prestador.data.model.PromotionType
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.CreatePromotionViewModel
+import com.example.myapplication.prestador.viewmodel.promotion.CreatePromotionViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 

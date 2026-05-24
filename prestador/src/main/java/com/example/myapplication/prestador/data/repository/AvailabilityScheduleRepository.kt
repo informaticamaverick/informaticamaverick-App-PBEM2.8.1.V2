@@ -38,6 +38,10 @@ class AvailabilityScheduleRepository @Inject constructor(
     fun getActiveSchedulesByProvider(providerId: String): Flow<List<AvailabilityScheduleEntity>> {
         return scheduleDao.getActiveSchedulesByProvider(providerId)
     }
+
+    suspend fun getActiveSchedulesByProviderOnce(providerId: String): List<AvailabilityScheduleEntity> {
+        return scheduleDao.getActiveSchedulesByProviderOnce(providerId)
+    }
     
     fun getAllSchedulesByProvider(providerId: String): Flow<List<AvailabilityScheduleEntity>> {
         return scheduleDao.getAllSchedulesByProvider(providerId)

@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.config
+﻿package com.example.myapplication.prestador.ui.config
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -30,7 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.prestador.data.repository.PresupuestoConfig
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.PresupuestoConfigViewModel
+import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoConfigViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

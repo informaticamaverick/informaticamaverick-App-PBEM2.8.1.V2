@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.config
+﻿package com.example.myapplication.prestador.ui.config
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -85,9 +85,9 @@ import com.example.myapplication.prestador.data.local.entity.toDayAbbr
 import com.example.myapplication.prestador.ui.profile.AddScheduleDialog
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
-import com.example.myapplication.prestador.viewmodel.BlockedDateViewModel
-import com.example.myapplication.prestador.viewmodel.ProviderViewModel
+import com.example.myapplication.prestador.viewmodel.calendar.AvailabilityViewModel
+import com.example.myapplication.prestador.viewmodel.calendar.BlockedDateViewModel
+import com.example.myapplication.prestador.viewmodel.profile.ProviderViewModel
 import com.google.firebase.auth.FirebaseAuth
 import org.w3c.dom.Text
 import java.text.SimpleDateFormat

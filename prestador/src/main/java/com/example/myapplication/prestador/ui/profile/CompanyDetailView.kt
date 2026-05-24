@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -40,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -53,6 +53,10 @@ import com.example.myapplication.prestador.ui.components.AddressProviderCard
 import com.example.myapplication.prestador.ui.components.BeActionsBar
 import com.example.myapplication.prestador.ui.components.PrestadorAction
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
+import com.example.myapplication.prestador.utils.formatearCuit
+import com.example.myapplication.prestador.utils.errorCuitMensaje
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 
 @Composable
 internal fun BranchSection(
@@ -169,16 +173,6 @@ internal fun BranchSection(
         )
     }
     
-    if (branch.workingHours.isNotBlank()) {
-        Spacer(Modifier.height(12.dp))
-        BranchInfoRow(
-            icon = Icons.Default.Schedule,
-            iconColor = Color(0xFF8B5CF6),
-            label = "Horario",
-            value = branch.workingHours,
-            colors = colors
-        )
-    }
     // Chips de servicios activos de esta sede
     val activeServices = buildList<Pair<ImageVector, String>> {
         if (branch.doesService)          add(Icons.Default.Build         to "Realiza servicios")
@@ -450,6 +444,7 @@ internal fun CompanyDetailView(
     paddingValues: PaddingValues,
     onBack: () -> Unit,
     colors: PrestadorColors,
+    otherAvatars: List<Pair<String?, () -> Unit>> = emptyList(),
     onNavigateToCalendarioConfig: (ownerId: String, ownerName: String) -> Unit = { _, _ -> },
     onUpdateBranch: (BranchProvider) -> Unit = {},
     onUpdateAllBranches: (List<BranchProvider>) -> Unit = {},
@@ -457,12 +452,47 @@ internal fun CompanyDetailView(
     onUpdateCompany: (CompanyProvider) -> Unit = {},
     onDeleteCompany: () -> Unit = {},
     onEditCompanyPhoto: () -> Unit = {},
-    onEditCompanyBanner: () -> Unit = {}
+    onEditCompanyBanner: () -> Unit = {},
+    bloqueada: Boolean = false,
+    onSettings: () -> Unit = {},
 ) {
     var isCompanyEditMode by remember { mutableStateOf(false) }
     var showEmpresaEditSheet by remember { mutableStateOf(false) }
     var showAddSucursalSheet by remember { mutableStateOf(false) }
     var showDeleteEmpresaDialog by remember { mutableStateOf(false) }
+
+    var editNombreComercial by remember { mutableStateOf("") }
+    var editRazonSocial by remember { mutableStateOf("") }
+    var editCuit by remember { mutableStateOf(TextFieldValue("")) }
+    var editEmailCorp by remember { mutableStateOf("") }
+
+    //Errores de validación
+    var errorNombreComercial by remember { mutableStateOf<String?>(null) }
+    var errorCuit by remember { mutableStateOf<String?>(null) }
+    var errorEmail by remember { mutableStateOf<String?>(null) }
+    var errorPhoto by remember { mutableStateOf(false) }
+
+    //Diálogo de cambios sin guardar
+    var showDiscardDialog by remember { mutableStateOf(false) }
+    var discardNavigateBack by remember { mutableStateOf(false) }
+    var showSavedCheck by remember { mutableStateOf(false) }
+
+    fun validateCompany(): Boolean {
+        errorNombreComercial = if (editNombreComercial.isBlank()) "El nombre es obligatorio" else null
+        errorCuit = errorCuitMensaje(editCuit.text)
+        errorEmail = if (!editEmailCorp.contains("@")) "Email inválido" else null
+        errorPhoto = company.photoUrl.isNullOrEmpty()
+        return errorNombreComercial == null && errorCuit == null && errorEmail == null && !errorPhoto
+    }
+
+    LaunchedEffect(isCompanyEditMode) {
+        if (isCompanyEditMode) {
+            editNombreComercial = company.name
+            editRazonSocial = company.razonSocial
+            editCuit = TextFieldValue(formatearCuit(company.cuit))
+            editEmailCorp = company.email
+        }
+    }
 
     val listState = rememberLazyListState()
     val headerMaxHeight = 330.dp
@@ -554,55 +584,128 @@ internal fun CompanyDetailView(
                 "Datos del Negocio",
                 Color(0xFF8B5CF6),
                 colors,
-                actionButton = {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                onNavigateToCalendarioConfig(
-                                    company.id,
-                                    company.name.ifBlank { "Empresa" }
-                                )
-                            }
-                            .background(Color(0xFF8B5CF6).copy(alpha = 0.10f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.CalendarMonth,
-                            contentDescription = "Horarios de Atención",
-                            tint = Color(0xFF8B5CF6),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            "Horarios",
-                            fontSize = 9.sp,
-                            color = Color(0xFF8B5CF6),
-                            fontWeight = FontWeight.SemiBold,
-                            lineHeight = 11.sp
-                        )
-                    }
-                }
             ) {
-                if (company.name.isNotBlank()) {
-                    ProfileInfoRow("🏬", "Nombre Comercial", company.name, colors)
+
+                if (isCompanyEditMode) {
+                    val fieldColors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF8B5CF6),
+                        unfocusedBorderColor = colors.textSecondary.copy(alpha = 0.4f),
+                        focusedLabelColor = Color(0xFF8B5CF6),
+                        unfocusedLabelColor = colors.textSecondary,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary,
+                        cursorColor = Color(0xFF8B5CF6)
+                    )
+                    @Composable fun changedColors(changed: Boolean) = if (changed)
+                        OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFFFF9800),
+                            unfocusedBorderColor = Color(0xFFFF9800),
+                            focusedLabelColor = Color(0xFFFF9800),
+                            unfocusedLabelColor = Color(0xFFFF9800),
+                            cursorColor = Color(0xFF8B5CF6),
+                            focusedTextColor = colors.textPrimary,
+                            unfocusedTextColor = colors.textPrimary
+                        )
+                    else fieldColors
+                    if (errorPhoto) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFFF5252).copy(alpha = 0.10f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.Warning, null, tint = Color(0xFFFF5252), modifier = Modifier.size(14.dp))
+                            Text("Agregá un logo de empresa", fontSize = 11.sp, color = Color(0xFFFF5252))
+                        }
+                    }
+                        OutlinedTextField(
+                            value = editNombreComercial,
+                            onValueChange = { editNombreComercial = it; errorNombreComercial = null },
+                            label = { Text("Nombre Comercial") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = changedColors(editNombreComercial != company.name),
+                            shape = RoundedCornerShape(12.dp),
+                            isError = errorNombreComercial != null,
+                            supportingText = errorNombreComercial?.let { { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 10.sp) } }
+                        )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = editRazonSocial,
+                        onValueChange = { editRazonSocial = it },
+                        label = { Text("Razón Social") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = changedColors(editRazonSocial != company.razonSocial),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = editCuit,
+                        onValueChange = { nuevo ->
+                            val soloDigitos = nuevo.text.filter { it.isDigit() }.take(11)
+                            val formateado = formatearCuit(soloDigitos)
+                            val digitosAntesCursor = nuevo.text.take(nuevo.selection.start).count {
+                                it.isDigit() }
+                            var conteo = 0
+                            var nuevoCursor = formateado.length
+                            for (i in formateado.indices) {
+                                if (formateado[i].isDigit()) conteo++
+                                if (conteo == digitosAntesCursor) {
+                                    nuevoCursor = i + 1; break
+                                }
+                            }
+                            editCuit = TextFieldValue(formateado, TextRange(nuevoCursor))
+                            errorCuit = null
+                        },
+                        label = { Text("CUIT") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = changedColors(editCuit.text != company.cuit),
+                        shape = RoundedCornerShape(12.dp),
+                        isError = errorCuit != null,
+                        supportingText = errorCuit?.let { { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 10.sp) } }
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = editEmailCorp,
+                        onValueChange = { editEmailCorp = it; errorEmail = null },
+                        label = { Text("Email Corporativo") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = changedColors(editEmailCorp != company.email),
+                        shape = RoundedCornerShape(12.dp),
+                        isError = errorEmail != null,
+                        supportingText = errorEmail?.let { { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 10.sp) } }
+                    )
                     Spacer(Modifier.height(8.dp))
-                }
-                if (company.razonSocial.isNotBlank()) {
-                    ProfileInfoRow("🏢", "Razón Social", company.razonSocial, colors)
-                    Spacer(Modifier.height(8.dp))
-                }
-                if (company.cuit.isNotBlank()) {
-                    ProfileInfoRow("🆔", "CUIT", company.cuit, colors)
-                    Spacer(Modifier.height(8.dp))
-                }
-                if (company.email.isNotBlank()) {
-                    ProfileInfoRow("📧", "Email Corporativo", company.email, colors)
-                    Spacer(Modifier.height(8.dp))
-                }
-                if (company.description.isNotBlank()) {
-                    Text(company.description, fontSize = 13.sp, color = colors.textSecondary, lineHeight = 18.sp)
-                    Spacer(Modifier.height(8.dp))
+                } else {
+                    if (company.name.isNotBlank()) {
+                        ProfileInfoRow("🏬", "Nombre Comercial", company.name, colors)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (company.razonSocial.isNotBlank()) {
+                        ProfileInfoRow("🏢", "Razón Social", company.razonSocial, colors)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (company.cuit.isNotBlank()) {
+                        ProfileInfoRow("🆔", "CUIT", company.cuit, colors)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (company.email.isNotBlank()) {
+                        ProfileInfoRow("📧", "Email Corporativo", company.email, colors)
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (company.description.isNotBlank()) {
+                        Text(company.description, fontSize = 13.sp, color = colors.textSecondary, lineHeight = 18.sp)
+                        Spacer(Modifier.height(8.dp))
+                    }
                 }
 
                 // Servicios activos con etiquetas
@@ -704,7 +807,10 @@ internal fun CompanyDetailView(
                     colors = colors,
                     isEditMode = isCompanyEditMode,
                     onUpdateBranch = onUpdateBranch,
-                    onNavigateToCalendarioConfig = onNavigateToCalendarioConfig
+                    // Siempre usamos company.id como owner_id — los horarios pertenecen a la empresa, no a la sucursal
+                    onNavigateToCalendarioConfig = { _, branchName ->
+                        onNavigateToCalendarioConfig(company.id, branchName)
+                    }
                 )
             }
         }
@@ -759,18 +865,26 @@ internal fun CompanyDetailView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(Modifier.size(36.dp), CircleShape, Color.Black.copy(alpha = 0.35f)) {
-                    IconButton(onClick = onBack, Modifier.fillMaxSize()) {
+                    IconButton(onClick = {
+                        if (isCompanyEditMode) {
+                            discardNavigateBack = true
+                            showDiscardDialog = true
+                        } else {
+                            onBack()
+                        }
+                    }, Modifier.fillMaxSize()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
             }
         }
 
-        // Logo + Nombre empresa (Row al BottomStart, igual que prestador)
+        // Logo + Nombre empresa (centrado verticalmente, igual que perfil prestador)
         Row(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+                .align(Alignment.Center)
+                .padding(horizontal = 20.dp)
+                .padding(top = 24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -838,17 +952,35 @@ internal fun CompanyDetailView(
             }
         }
 
-        // Toggle: foto prestador (volver a perfil personal)
-        Box(
+        // Avatares de toggle: prestador personal + otras empresas (bottom-end)
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 14.dp)
-                .size(52.dp)
-                .clip(CircleShape)
-                .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
-                .clickable { onBack() }
+                .padding(end = 16.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ProfilePhoto(imageUrl = providerImageUrl, colors = colors, isCompany = true)
+            // Primero las otras empresas (si hay)
+            otherAvatars.forEach { (photoUrl, onClick) ->
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                        .clickable { onClick() }
+                ) {
+                    ProfilePhoto(imageUrl = photoUrl, colors = colors, isCompany = true)
+                }
+            }
+            // Luego el avatar del prestador personal (volver)
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                    .clickable { onBack() }
+            ) {
+                ProfilePhoto(imageUrl = providerImageUrl, colors = colors, isCompany = true)
+            }
         }
     }
 
@@ -863,9 +995,19 @@ internal fun CompanyDetailView(
             listOf(
                 PrestadorAction("cancel", Icons.Default.Close, "Cancelar", tint = Color(0xFFFF5252)) { isCompanyEditMode = false },
                 PrestadorAction("divider_1", Icons.Default.Edit, ""),
-                PrestadorAction("save", Icons.Default.Save, "Guardar", tint = colors.primaryOrange) { isCompanyEditMode = false },
-                PrestadorAction("divider_2", Icons.Default.Edit, ""),
-                PrestadorAction("empresa", Icons.Default.Business, "Empresa", tint = colors.primaryOrange) { showEmpresaEditSheet = true },
+                PrestadorAction("save", Icons.Default.Save, "Guardar", tint = colors.primaryOrange) {
+                    if (validateCompany()) {
+                        onUpdateCompany(
+                            company.copy(
+                            name = editNombreComercial.trim(),
+                            razonSocial = editRazonSocial.trim(),
+                            cuit = editCuit.text.trim(),
+                            email = editEmailCorp.trim()
+                        )
+                        )
+                        showSavedCheck = true
+                    }
+                },
                 PrestadorAction("delete", Icons.Default.Delete, "Eliminar", tint = Color(0xFFFF5252)) { showDeleteEmpresaDialog = true }
             )
         },
@@ -922,7 +1064,154 @@ internal fun CompanyDetailView(
             )
         }
 
-    } // cierra Box
+        // TOAST GUARDADO EMPRESA
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSavedCheck,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 100.dp)
+                .zIndex(99f),
+            enter = androidx.compose.animation.slideInVertically { it } + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.slideOutVertically { it } + androidx.compose.animation.fadeOut()
+        ) {
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(2000)
+                showSavedCheck = false
+                isCompanyEditMode = false
+            }
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = colors.surfaceElevated,
+                shadowElevation = 12.dp
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color(0xFFFF9800), Color(0xFFFF5722))
+                                ),
+                                shape = androidx.compose.foundation.shape.CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            "¡Empresa guardada!",
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Los cambios se aplicaron correctamente",
+                            color = colors.textSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        //Overlay empresa bloqueada
+        if (bloqueada) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colors.backgroundColor.copy(alpha = 0.82f))
+                    .zIndex(5f),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = colors.surfaceColor.copy(alpha = 0.95f),
+                    shadowElevation = 16.dp,
+                    modifier = Modifier
+                        .padding(horizontal = 32.dp)
+                        .fillMaxWidth()
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(colors.primaryOrange.copy(alpha = 0.12f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = colors.primaryOrange,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Empresa desactivada",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 17.sp,
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Para usar el perfil de empresa activá el modo empresa desde Ajustes.",
+                            fontSize = 13.sp,
+                            color = colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        Button(
+                            onClick = onSettings,
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Settings, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Ir a Ajustes")
+                        }
+                    }
+                }
+            }
+        }
+
+        } // cierra Box
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text("¿Descartar cambios?", fontWeight = FontWeight.Bold) },
+            text = { Text("Tenés cambios sin guardar. ¿Querés descartarlos?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardDialog = false
+                    isCompanyEditMode = false
+                    if (discardNavigateBack) onBack()
+                }) {
+                    Text("Descartar", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false; discardNavigateBack = false }) {
+                    Text("Seguir editando")
+                }
+            }
+        )
+    }
 }
 
 // ── BOTTOM SHEET AGREGAR SUCURSAL ─────────────────────────────────────────────
@@ -1448,4 +1737,7 @@ internal fun BranchServicioSwitch(
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
+
+
+
 }

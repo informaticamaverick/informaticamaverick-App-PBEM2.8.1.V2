@@ -41,17 +41,17 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.data.model.ServiceType
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.utils.getServiceTypeConfig
-import com.example.myapplication.prestador.viewmodel.ChatViewModel
-import com.example.myapplication.prestador.viewmodel.CalendarViewModel
+import com.example.myapplication.prestador.viewmodel.chat.ChatViewModel
+import com.example.myapplication.prestador.viewmodel.calendar.CalendarViewModel
 import com.example.myapplication.prestador.data.local.entity.BookedAppointmentEntity
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import com.example.myapplication.prestador.ui.calendar.dialogs.*
 import com.example.myapplication.prestador.utils.ServiceTypeConfig
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
 import androidx.compose.ui.window.Dialog
-import com.example.myapplication.prestador.viewmodel.EmpleadosViewModel
+import com.example.myapplication.prestador.viewmodel.empresa.EmpleadosViewModel
 
 
 // Modelo de datos para las citas del prestador
@@ -110,8 +110,8 @@ fun PrestadorCalendarScreen(
     val serviceTypeConfig by remember {
         derivedStateOf {
             when (profileState) {
-                is com.example.myapplication.prestador.viewmodel.ProfileState.Success -> {
-                    val provider = (profileState as com.example.myapplication.prestador.viewmodel.ProfileState.Success).provider
+                is com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success -> {
+                    val provider = (profileState as com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success).provider
                     println("🔥 CALENDAR: ServiceType cambió a ${provider.serviceType}")
                     getServiceTypeConfig(ServiceType.fromString(provider.serviceType))
                 }
@@ -196,8 +196,8 @@ fun PrestadorCalendarScreen(
     // Obtener providerId del perfil
     val providerId = remember(profileState) {
         when (profileState) {
-            is com.example.myapplication.prestador.viewmodel.ProfileState.Success ->
-                (profileState as com.example.myapplication.prestador.viewmodel.ProfileState.Success).provider.id
+            is com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success ->
+                (profileState as com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success).provider.id
             else -> ""
         }
     }
@@ -205,8 +205,8 @@ fun PrestadorCalendarScreen(
     // Obtener serviceType actual
     val currentServiceType = remember(profileState) {
         when (profileState) {
-            is com.example.myapplication.prestador.viewmodel.ProfileState.Success ->
-                ServiceType.fromString((profileState as com.example.myapplication.prestador.viewmodel.ProfileState.Success).provider.serviceType)
+            is com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success ->
+                ServiceType.fromString((profileState as com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success).provider.serviceType)
             else -> ServiceType.PROFESSIONAL
         }
     }
@@ -220,7 +220,7 @@ fun PrestadorCalendarScreen(
     val empleadosState by empleadosViewModel.uiState.collectAsState()
     val availableEmployees = remember(empleadosState) {
         when (val state = empleadosState) {
-            is com.example.myapplication.prestador.viewmodel.EmpleadosUiState.Success ->
+            is com.example.myapplication.prestador.viewmodel.empresa.EmpleadosUiState.Success ->
                 state.empleados.filter { it.activo }.map { it.id to it.nombreCompleto() }
             else -> emptyList()
         }

@@ -130,7 +130,7 @@ internal fun ProfileBannerHeaderView(
                     .border(3.dp, colors.primaryOrange, CircleShape)
                     .then(if (isEditMode) Modifier.clickable { onEditPhoto() } else Modifier)
             ) {
-                ProfilePhoto(imageUrl = imageUrl, colors = colors)
+                ProfilePhoto(imageUrl = imageUrl, colors = colors, isCompany = true)
                 if (isEditMode) {
                     Box(
                         modifier = Modifier
@@ -239,7 +239,7 @@ private fun BannerGradient(colors: PrestadorColors) {
 }
 
 @Composable
-internal fun ProfilePhoto(imageUrl: String?, colors: PrestadorColors, isCompany: Boolean = false) {
+internal fun ProfilePhoto(imageUrl: String?, colors: PrestadorColors, isCompany: Boolean = false, name: String = "") {
     when {
         !imageUrl.isNullOrEmpty() && imageUrl.startsWith("http") -> {
             AsyncImage(
@@ -259,7 +259,7 @@ internal fun ProfilePhoto(imageUrl: String?, colors: PrestadorColors, isCompany:
             if (bmp != null) {
                 Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             } else {
-                PhotoPlaceholder(colors, isCompany)
+                PhotoPlaceholder(colors, isCompany, name)
             }
         }
         else -> PhotoPlaceholder(colors, isCompany)
@@ -267,16 +267,30 @@ internal fun ProfilePhoto(imageUrl: String?, colors: PrestadorColors, isCompany:
 }
 
 @Composable
-private fun PhotoPlaceholder(colors: PrestadorColors, isCompany: Boolean = false) {
+private fun PhotoPlaceholder(colors: PrestadorColors, isCompany: Boolean = false, name: String = "") {
+    val initials = name.trim().split("")
+        .filter { it.isNotEmpty() }
+        .take(2)
+        .joinToString("") { it.first().uppercaseChar().toString() }
+
     Box(
-        Modifier.fillMaxSize().background(colors.primaryOrange.copy(alpha = 0.1f)),
+        Modifier.fillMaxSize().background(colors.primaryOrange.copy(alpha = 0.15f)),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            if (isCompany) Icons.Default.Business else Icons.Default.Person,
-            null,
-            Modifier.size(28.dp),
-            tint = colors.primaryOrange.copy(alpha = 0.5f)
-        )
+        if (initials.isNotEmpty() && !isCompany) {
+            Text(
+                text = initials,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.primaryOrange
+            )
+        } else {
+            Icon(
+                if (isCompany) Icons.Default.Business else Icons.Default.Person,
+                null,
+                Modifier.size(28.dp),
+                tint = colors.primaryOrange.copy(alpha = 0.5f)
+            )
+        }
     }
 }

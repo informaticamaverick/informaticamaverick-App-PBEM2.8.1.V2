@@ -703,7 +703,7 @@ object DatabaseMigrations {
         }
     }
 
-    val MIGRATION_38_39 = object : Migration(39, 39) {
+    val MIGRATION_38_39 = object : Migration(38, 39) {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL(
                 "ALTER TABLE 'providers' ADD COLUMN 'priorizarEmpresa' INTEGER NOT NULL DEFAULT 0"
@@ -843,6 +843,59 @@ NO ACTION
         }
     }
 
+    val MIGRATION_49_50 = object : Migration(49, 50) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            //Nuevo campos en Presupuestos
+            db.execSQL("ALTER TABLE presupuestos ADD COLUMN honorariosJson TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE presupuestos ADD COLUMN gastosJson TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE presupuestos ADD COLUMN impuestosJson TEXT NOT NULL DEFAULT ''")
+                    db.execSQL("ALTER TABLE presupuestos ADD COLUMN appointmentId TEXT DEFAULT NULL")
+                    db.execSQL("ALTER TABLE presupuestos ADD COLUMN firestoreId TEXT DEFAULT NULL")
+                    db.execSQL("ALTER TABLE presupuestos ADD COLUMN syncedAt INTEGER DEFAULT NULL")
+        }
+    }
+
+    val MIGRATION_50_51 =object : Migration(50, 51) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Nota legal en presupuestos
+            db.execSQL("ALTER TABLE presupuestos ADD COLUMN notaLegal TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
+    val MIGRATION_51_52 = object : Migration(51, 52) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            //Campos de respuesta estilo WhatsApp en messages
+            db.execSQL("ALTER TABLE messages ADD COLUMN replyToId TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE messages ADD COLUMN replyToContent TEXT DEFAULT NULL")
+            db.execSQL("ALTER TABLE messages ADD COLUMN replyToSenderName TEXT DEFAULT NULL,")
+        }
+    }
+
+    // Migración 52→53: elimina FK de availability_schedules para soportar IDs de empresa/sucursal
+    val MIGRATION_52_53 = object : Migration(52, 53) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS availability_schedules_new (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    providerId TEXT NOT NULL,
+                    dayOfWeek INTEGER NOT NULL,
+                    startTime TEXT NOT NULL,
+                    endTime TEXT NOT NULL,
+                    appointmentDuration INTEGER NOT NULL,
+                    worksByAppointment INTEGER NOT NULL DEFAULT 1,
+                    scheduleType TEXT NOT NULL DEFAULT 'TECHNICAL_VISIT',
+                    isActive INTEGER NOT NULL DEFAULT 1,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("INSERT INTO availability_schedules_new SELECT * FROM availability_schedules")
+            db.execSQL("DROP TABLE availability_schedules")
+            db.execSQL("ALTER TABLE availability_schedules_new RENAME TO availability_schedules")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_availability_schedules_providerId ON availability_schedules(providerId)")
+        }
+    }
+
     val ALL_MIGRATIONS = arrayOf(
         MIGRATION_6_7,
         MIGRATION_7_8,
@@ -880,7 +933,11 @@ NO ACTION
         MIGRATION_45_46,
         MIGRATION_46_47,
         MIGRATION_47_48,
-        MIGRATION_48_49
+        MIGRATION_48_49,
+        MIGRATION_49_50,
+        MIGRATION_50_51,
+        MIGRATION_51_52,
+        MIGRATION_52_53
     )
 }
 

@@ -33,7 +33,7 @@ import com.example.myapplication.prestador.data.model.AddressProvider
 import com.example.myapplication.prestador.data.model.BranchProvider
 import com.example.myapplication.prestador.data.model.EmployeeProvider
 import com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField
-import com.example.myapplication.prestador.viewmodel.SucursalesViewModel
+import com.example.myapplication.prestador.viewmodel.empresa.SucursalesViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.tasks.await

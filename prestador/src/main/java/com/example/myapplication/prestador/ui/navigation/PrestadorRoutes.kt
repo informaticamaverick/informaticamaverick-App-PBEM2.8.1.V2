@@ -37,5 +37,7 @@ sealed class PrestadorRoutes(val route: String) {
     object ClientePerfil : PrestadorRoutes("cliente_perfil/{clientId}") {
         fun createRoute(clientId: String) = "cliente_perfil/$clientId"
     }
+    object AparienciaConfig : PrestadorRoutes("apariencia_config")
+    object NotificacionesConfig : PrestadorRoutes("notificaciones_config")
 }
 

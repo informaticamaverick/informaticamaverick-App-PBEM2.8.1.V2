@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.dashboard.components
+﻿package com.example.myapplication.prestador.ui.dashboard.components
 
 import android.R
 import android.view.RoundedCorner
@@ -40,14 +40,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.room.util.TableInfo
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.DashboardUiState
-import com.example.myapplication.prestador.viewmodel.DashboardViewModel
+import com.example.myapplication.prestador.viewmodel.dashboard.DashboardUiState
+import com.example.myapplication.prestador.viewmodel.dashboard.DashboardViewModel
 import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.example.myapplication.prestador.data.model.OportunidadItem
 import com.example.myapplication.prestador.data.local.entity.ClienteEntity
-import com.example.myapplication.prestador.viewmodel.OportunidadesViewModel
+import com.example.myapplication.prestador.viewmodel.oportunidades.OportunidadesViewModel
 @Composable
 fun InicioScreen(
     state: DashboardUiState,

@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.profile
+﻿package com.example.myapplication.prestador.ui.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,7 +22,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity
 import com.example.myapplication.prestador.data.local.entity.toDayName
 import com.example.myapplication.prestador.data.local.entity.toDayAbbr
-import com.example.myapplication.prestador.viewmodel.AvailabilityViewModel
+import com.example.myapplication.prestador.viewmodel.calendar.AvailabilityViewModel
 
 @Composable
 fun AvailabilityScheduleSection(

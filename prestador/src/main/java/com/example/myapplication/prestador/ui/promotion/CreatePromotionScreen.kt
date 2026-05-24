@@ -1,4 +1,4 @@
-
+﻿
 package com.example.myapplication.prestador.ui.promotion
 
 import android.net.Uri
@@ -38,9 +38,9 @@ import com.example.myapplication.prestador.data.model.PromotionType
 import com.example.myapplication.prestador.data.model.ProviderPromotion
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
-import com.example.myapplication.prestador.viewmodel.CreatePromotionViewModel
-import com.example.myapplication.prestador.viewmodel.EditProfileViewModel
-import com.example.myapplication.prestador.viewmodel.ProfileState
+import com.example.myapplication.prestador.viewmodel.promotion.CreatePromotionViewModel
+import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
+import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 import kotlinx.coroutines.flow.flowOf
 
 private const val TITLE_MAX = 60

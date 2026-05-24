@@ -30,6 +30,9 @@ interface AvailabilityScheduleDao {
     
     @Query("SELECT * FROM availability_schedules WHERE providerId = :providerId AND isActive = 1 ORDER BY dayOfWeek, startTime")
     fun getActiveSchedulesByProvider(providerId: String): Flow<List<AvailabilityScheduleEntity>>
+
+    @Query("SELECT * FROM availability_schedules WHERE providerId = :providerId AND isActive = 1 ORDER BY dayOfWeek, startTime")
+    suspend fun getActiveSchedulesByProviderOnce(providerId: String): List<AvailabilityScheduleEntity>
     
     @Query("SELECT * FROM availability_schedules WHERE providerId = :providerId ORDER BY dayOfWeek, startTime")
     fun getAllSchedulesByProvider(providerId: String): Flow<List<AvailabilityScheduleEntity>>

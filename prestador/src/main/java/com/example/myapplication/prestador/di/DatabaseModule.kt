@@ -24,10 +24,10 @@ object DatabaseModule {
         return Room.databaseBuilder(
             context,
             PrestadorDatabase::class.java,
-            "prestador_database_v21" // Actualizado a v21
+            "prestador_database_V21"
         )
             .addMigrations(*DatabaseMigrations.ALL_MIGRATIONS)
-            .fallbackToDestructiveMigration() // TEMPORAL: borra BD si hay error de migración
+            .fallbackToDestructiveMigration()
             .build()
     }
 

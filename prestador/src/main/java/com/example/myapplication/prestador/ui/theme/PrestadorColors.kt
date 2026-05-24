@@ -1,8 +1,10 @@
 package com.example.myapplication.prestador.ui.theme
 
 import androidx.compose.runtime.Composable
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
+
+val LocalIsDarkTheme = compositionLocalOf { false }
 
 data class PrestadorColors(
     // Colores principales (naranja no cambia)
@@ -33,7 +35,8 @@ data class PrestadorColors(
 )
 
 @Composable
-fun getPrestadorColors(darkTheme: Boolean = isSystemInDarkTheme()): PrestadorColors {
+fun getPrestadorColors(): PrestadorColors {
+    val darkTheme = LocalIsDarkTheme.current
     return if (darkTheme) {
         // Modo Oscuro
         PrestadorColors(

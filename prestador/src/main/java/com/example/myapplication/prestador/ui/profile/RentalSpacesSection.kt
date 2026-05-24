@@ -1,4 +1,4 @@
-package com.example.myapplication.prestador.ui.profile
+﻿package com.example.myapplication.prestador.ui.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.data.local.entity.RentalSpaceEntity
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
-import com.example.myapplication.prestador.viewmodel.RentalSpacesViewModel
+import com.example.myapplication.prestador.viewmodel.rental.RentalSpacesViewModel
 
 /**
  * Sección para gestionar espacios de alquiler (canchas, salones, etc.)
