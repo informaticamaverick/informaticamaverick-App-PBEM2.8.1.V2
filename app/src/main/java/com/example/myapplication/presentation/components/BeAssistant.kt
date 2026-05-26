@@ -48,7 +48,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -68,16 +73,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-//import com.example.myapplication.presentation.client.BeSearchReaction
 import androidx.compose.ui.window.Popup
-import com.example.myapplication.presentation.components.Utilidades.CyberColorsV3
-import com.example.myapplication.presentation.components.Utilidades.MenuCP
-import com.example.myapplication.presentation.components.Utilidades.CyberTypography
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoDarkGlassBackground
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoGlassBrush
-import com.example.myapplication.presentation.registry.BeDictionary
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.presentation.designsystem.components.*
+import com.example.myapplication.presentation.designsystem.components.MaverickColors.BentoDarkGlassBackground
+import com.example.myapplication.presentation.designsystem.components.MaverickColors.BentoGlassBrush
+import com.example.myapplication.presentation.registry.BeDictionaryConversation
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -100,7 +102,7 @@ data class BeMessage(
     val textColor: Color = Color(0xFF05070A),
     val emotion: BeEmotion = BeEmotion.NORMAL,
     val isCentered: Boolean = false,
-    val categories: List<com.example.myapplication.data.local.CategoryEntity> = emptyList() // NUEVO: Categorías para búsqueda rápida
+    val categories: List<CategoryEntity> = emptyList() // NUEVO: Categorías para búsqueda rápida
 )
 
 // --- Paleta ROG Local para evitar conflictos si no están en scope ---
@@ -142,7 +144,6 @@ fun BeAssistantSearchFab(
     onSetState: (BeState) -> Unit = {},
     resetTrigger: Int = 0,
     // NUEVO: Reacción de búsqueda desde BeInteractionViewModel
-    //searchReaction: BeSearchReaction? = null,
     onReactionActionClick: (String) -> Unit = {},
     onReactionResultClick: (Any) -> Unit = {},
     onReactionCloseClick: () -> Unit = {},
@@ -162,7 +163,9 @@ fun BeAssistantSearchFab(
     isDragging: Boolean = false,
     isToolbarStable: Boolean = true,
     onUpdatePosition: (Float, Float) -> Unit = { _, _ -> },
-    onSetDragging: (Boolean) -> Unit = {}
+    onSetDragging: (Boolean) -> Unit = {},
+    // NUEVOS: SSOT TÁCTICO (Cerebro)
+    beBrainViewModel: com.example.myapplication.presentation.global.BeBrainViewModel? = null
 ) {
 
     // 🔥 PAGER STATE PARA TIPS INFINITOS (USAMOS INT.MAX_VALUE / 2 COMO OFFSET INICIAL)
@@ -323,10 +326,11 @@ fun BeAssistantSearchFab(
     // ==========================================================================================
     // --- RENDERIZADO PRINCIPAL ---
     // ==========================================================================================
+
     Box(
         modifier = modifier.fillMaxSize()
             .zIndex(if (isDragging || state == BeState.TALKING || isSearchActive) 200f else 100f),
-        contentAlignment = if (isSearchActive) Alignment.TopEnd else Alignment.BottomEnd
+        contentAlignment = Alignment.TopStart // Nivel raíz para libertad de coordenadas
     ) {
         // --- CAPA 0: SCRIM GLOBAL (CIERRE POR TOQUE EXTERNO) ---
         AnimatedVisibility(
@@ -491,43 +495,7 @@ fun BeAssistantSearchFab(
                     .align(Alignment.BottomEnd),
                 contentAlignment = Alignment.CenterEnd
             ) {
-                // --- SECCIÓN: ORQUESTACIÓN DE ACCIONES TÁCTICAS (HUD V7) ---
-                // Si estamos en Chat y la multiselección está activa, inyectamos las herramientas aquí directamente
-                // para asegurar que el flujo visual sea consistente con el diseño Maverick.
-                val chatMultiSelectActions = remember {
-                    listOf(
-                        BeSmallActionModel(
-                            id = "chat_cancel",
-                            icon = Icons.Default.Close,
-                            label = "CERRAR",
-                            tint = Color.Red
-                        ),
-                        BeSmallActionModel(id = "divider_v1", icon = Icons.Default.Remove, label = ""),
-                        BeSmallActionModel(
-                            id = "chat_select_all",
-                            icon = Icons.Default.SelectAll,
-                            label = "TODOS",
-                            tint = Color(0xFF2197F5) // MaverickBlue
-                        ),
-                        BeSmallActionModel(id = "divider_v2", icon = Icons.Default.Remove, label = ""),
-                        BeSmallActionModel(
-                            id = "chat_delete_multi",
-                            icon = Icons.Default.Delete,
-                            label = "ELIMINAR",
-                            tint = Color.Red
-                        )
-                    )
-                }
-
-                val finalActions = remember(currentActions, isMultiSelectionActive, toolboxKey) {
-                    if (isMultiSelectionActive && (toolboxKey.startsWith("chat") || toolboxKey.startsWith("conversaciones"))) {
-                        chatMultiSelectActions.map { action ->
-                            action.copy(onClick = { onReactionActionClick(action.id) })
-                        }
-                    } else {
-                        currentActions
-                    }
-                }
+                val finalActions = currentActions
 
                 val derivedToolboxKey = "${toolboxKey}_${isMultiSelectionActive}"
 
@@ -701,31 +669,9 @@ fun BeAssistantSearchFab(
                         .offset(y = (floatY * floatMultiplier * hibernationMultiplier).dp)
                         .size(assistantSize)
                         .scale(if (isDormido) 0.8f else 1f)
-                        .alpha(alpha)
-                        .drawBehind {
-                            if (hibernationMultiplier > 0.1f) {
-                                drawCircle(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(LocalROG_Cyan.copy(alpha = 0.2f * hibernationMultiplier), Color.Transparent)
-                                    ),
-                                    radius = size.width * 0.9f
-                                )
-                            }
-                        },
+                        .alpha(alpha),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isDragging) { 
-                        Box(
-                            modifier = Modifier
-                                .offset(x = 5.dp, y = 5.dp)
-                                .size(54.dp)
-                                .scale(1.2f)
-                                .alpha(floatingAuraAlpha * hibernationMultiplier)
-                                .background(LocalROG_Cyan, CircleShape)
-                                .blur(8.dp)
-                        ) 
-                    }
-                    
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         this.scale(size.width / 100f, size.height / 100f, pivot = Offset.Zero) {
                             // MANGO DE LA LUPA
@@ -782,12 +728,21 @@ fun BeAssistantSearchFab(
                                     drawCircle(Color(0xFFFFB6C1).copy(alpha = 0.6f), 8f, Offset(65f, 65f))
                                 }
 
-                                if (currentEmotion == BeEmotion.ANGRY) {
-                                    drawLine(LocalROG_Cyan, Offset(28f, 36f), Offset(46f, 42f), strokeWidth = 5f, cap = StrokeCap.Round)
-                                    drawLine(LocalROG_Cyan, Offset(72f, 36f), Offset(54f, 42f), strokeWidth = 5f, cap = StrokeCap.Round)
-                                } else if (currentEmotion == BeEmotion.SURPRISED) {
-                                    drawArc(LocalROG_Cyan, 180f, 180f, false, Offset(32f, 32f), Size(16f, 10f), style = Stroke(3.5f, cap = StrokeCap.Round))
-                                    drawArc(LocalROG_Cyan, 180f, 180f, false, Offset(52f, 32f), Size(16f, 10f), style = Stroke(3.5f, cap = StrokeCap.Round))
+                                when (currentEmotion) {
+                                    BeEmotion.ANGRY -> {
+                                        drawLine(LocalROG_Cyan, Offset(28f, 36f), Offset(46f, 42f), strokeWidth = 5f, cap = StrokeCap.Round)
+                                        drawLine(LocalROG_Cyan, Offset(72f, 36f), Offset(54f, 42f), strokeWidth = 5f, cap = StrokeCap.Round)
+                                    }
+                                    BeEmotion.SURPRISED -> {
+                                        drawArc(LocalROG_Cyan, 180f, 180f, false, Offset(32f, 32f), Size(16f, 10f), style = Stroke(3.5f, cap = StrokeCap.Round))
+                                        drawArc(LocalROG_Cyan, 180f, 180f, false, Offset(52f, 32f), Size(16f, 10f), style = Stroke(3.5f, cap = StrokeCap.Round))
+                                    }
+                                    BeEmotion.SAD -> {
+                                        // Cejas tristes (caídas hacia afuera)
+                                        drawLine(LocalROG_Cyan.copy(alpha = 0.8f), Offset(30f, 42f), Offset(44f, 38f), strokeWidth = 4f, cap = StrokeCap.Round)
+                                        drawLine(LocalROG_Cyan.copy(alpha = 0.8f), Offset(70f, 42f), Offset(56f, 38f), strokeWidth = 4f, cap = StrokeCap.Round)
+                                    }
+                                    else -> {}
                                 }
                             }
                         }
@@ -882,7 +837,7 @@ fun SearchBarComponent(
         modifier = modifier
             .fillMaxWidth()
             .height(54.dp)
-            .shadow(12.dp, barShape, ambientColor = LocalROG_Cyan, spotColor = LocalROG_Red)
+            .shadow(12.dp, barShape, ambientColor = Color.Black.copy(alpha = 0.5f), spotColor = Color.Black.copy(alpha = 0.8f))
             .border(1.5.dp, borderBrush, barShape)
             .clip(barShape)
             .background(MaverickColors.ROG_Dark_Bg)
@@ -915,6 +870,7 @@ fun SearchBarComponent(
                         onDismissRequest = { expanded = false },
                         offset = IntOffset(x = 0, y = 140)
                     ) {
+/**
                         MenuCP(
                             isVisible = true,
                             title = "MÓDULOS DE ASISTENTE",
@@ -964,6 +920,7 @@ fun SearchBarComponent(
                                 }
                             }
                         }
+                        */
                     }
                 }
             }
@@ -1073,7 +1030,7 @@ fun BeAssistantSearchFabIdlePreview() {
         ) {
             BeAssistantSearchFab(
                 state = BeState.IDLE,
-                contextMessages = BeDictionary.HomeMessages
+                contextMessages = BeDictionaryConversation.HomeMessages
             )
         }
     }

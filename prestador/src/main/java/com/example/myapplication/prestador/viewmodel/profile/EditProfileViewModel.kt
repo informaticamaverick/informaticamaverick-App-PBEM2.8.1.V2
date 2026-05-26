@@ -3,6 +3,7 @@
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.prestador.data.local.entity.BusinessEntity
+import com.example.myapplication.core.utils.normalizeForTopic
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
 import com.example.myapplication.prestador.data.model.PrestadorProfileMode
 import com.example.myapplication.prestador.data.model.ServiceType
@@ -67,7 +68,7 @@ class EditProfileViewModel @Inject constructor(
         }
     }
     
-    // Estado del modo de visualización del perfil
+    // Estado del modo de visualizaci�n del perfil
     private val _profileMode = MutableStateFlow(PrestadorProfileMode.PERSONAL)
     val profileMode: StateFlow<PrestadorProfileMode> = _profileMode.asStateFlow()
     
@@ -84,7 +85,7 @@ class EditProfileViewModel @Inject constructor(
     private val _bussinesEntity = MutableStateFlow<BusinessEntity?>(null)
     val businessEntity: StateFlow<BusinessEntity?> = _bussinesEntity.asStateFlow()
     
-    // Configuración de tipo de servicio
+    // Configuraci�n de tipo de servicio
     private val _serviceTypeConfig = MutableStateFlow(getServiceTypeConfig(ServiceType.TECHNICAL))
     val serviceTypeConfig: StateFlow<ServiceTypeConfig> = _serviceTypeConfig.asStateFlow()
 
@@ -156,7 +157,7 @@ class EditProfileViewModel @Inject constructor(
                 // Guardar Base64 en Firestore usando el campo correcto
                 providerRepository.updateProfilePhotoOnFirestore(userId, base64)
 
-                // Actualizar Room directamente con el método dedicado
+                // Actualizar Room directamente con el m�todo dedicado
                 providerRepository.updateProviderImage(userId, base64)
 
                 // Refrescar UI con el estado actualizado
@@ -177,9 +178,9 @@ class EditProfileViewModel @Inject constructor(
                 val userId = auth.currentUser?.uid?: return@launch
 
                 //Mismo metodo que el chat
-                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(context, uri, maxWidth = 400, maxHeight = 400, quality = 75)
+                val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(context, uri, maxWidth = 400, maxHeight = 400, quality = 75)
                     ?: return@launch
-                val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+                val base64 = com.example.myapplication.core.utils.ImageUtils.bytesToBase64(bytes)
 
                 //GUARDAR EN ROOM
                 val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
@@ -204,9 +205,9 @@ class EditProfileViewModel @Inject constructor(
             try {
                 val userId = auth.currentUser?.uid ?: return@launch
 
-                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(context, uri, maxWidth = 800, maxHeight = 300, quality = 80)
+                val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(context, uri, maxWidth = 800, maxHeight = 300, quality = 80)
                     ?: return@launch
-                val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+                val base64 = com.example.myapplication.core.utils.ImageUtils.bytesToBase64(bytes)
 
                 // GUARDAR EN ROOM Y FIREBASE
                 val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
@@ -228,10 +229,10 @@ class EditProfileViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val userId = auth.currentUser?.uid ?: return@launch
-                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
+                val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(
                     context, uri, maxWidth = 800, maxHeight = 300, quality = 80
                 ) ?: return@launch
-                val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+                val base64 = com.example.myapplication.core.utils.ImageUtils.bytesToBase64(bytes)
                 // GUARDAR EN ROOM Y FIREBASE (typo "providerss" corregido en el repositorio)
                 providerRepository.updateBannerOnFirestore(userId, base64)
                 val current = (profileState.value as?
@@ -305,7 +306,7 @@ class EditProfileViewModel @Inject constructor(
                     PrestadorProfileMode.PERSONAL
                 }
                 
-                // Actualizar configuración de tipo de servicio
+                // Actualizar configuraci�n de tipo de servicio
                 _serviceTypeConfig.value = getServiceTypeConfig(
                     ServiceType.fromString(provider.serviceType ?: "TECHNICAL")
                 )
@@ -422,10 +423,10 @@ class EditProfileViewModel @Inject constructor(
                     serviceType = serviceType ?: currentProvider.serviceType
                 )
                 
-                // Asegurar que el registro padre exista antes de cualquier operación dependiente
+                // Asegurar que el registro padre exista antes de cualquier operaci�n dependiente
                 providerRepository.saveProvider(updatedProvider)
                 
-                // 🔥 [NUEVO] Sincronización de Topics de FCM (Costo Cero)
+                // ?? [NUEVO] Sincronizaci�n de Topics de FCM (Costo Cero)
                 syncTopics(
                     cp = (codigoPostal ?: updatedProvider.address?.codigoPostal)?.ifBlank { null },
                     categories = updatedProvider.categories,
@@ -472,9 +473,9 @@ class EditProfileViewModel @Inject constructor(
                     updateData["local.turnosEnLocal"] = turnosEnLocal
                     updateData["turnosEnLocal"] = turnosEnLocal
                 }
-                updateData["isSubscribed"] = true // Mock o lógica de suscripción si aplica
+                updateData["isSubscribed"] = true // Mock o l�gica de suscripci�n si aplica
 
-                // --- REPLICACIÓN DE CAMPOS DE APP CLIENTE EN RAÍZ ---
+                // --- REPLICACI�N DE CAMPOS DE APP CLIENTE EN RA�Z ---
                 if (name != null) updateData["nombre"] = name
                 if (apellido != null) updateData["apellido"] = apellido
                 if (email != null) updateData["email"] = email
@@ -514,12 +515,12 @@ class EditProfileViewModel @Inject constructor(
                     updateData["servicios"] = list
                 }
 
-                // --- SINCRONIZACIÓN SSOT ---
+                // --- SINCRONIZACI�N SSOT ---
                 // Sincronizar en Firebase y Room usando el Repositorio Central
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
                 
                 /*
-                // Gestionar BusinessEntity (Obsoleto: syncProviderWithFirebase maneja la jerarquía)
+                // Gestionar BusinessEntity (Obsoleto: syncProviderWithFirebase maneja la jerarqu�a)
                 if (updatedProvider.hasCompanyProfile && !nombreEmpresa.isNullOrBlank()) {
                     val businesses = businessRepository.getBusinessesByProvider(userId).first()
                     val existingBusiness = businesses.firstOrNull()
@@ -545,7 +546,7 @@ class EditProfileViewModel @Inject constructor(
                             razonSocial = nombreEmpresa,
                             cuitNegocio = cuitEmpresa ?: "",
                             direccion = direccionEmpresa ?: "",
-                            codigoPostal = "", // TODO: agregar código postal de empresa
+                            codigoPostal = "", // TODO: agregar c�digo postal de empresa
                             createdAt = System.currentTimeMillis(),
                             updatedAt = System.currentTimeMillis()
                         )
@@ -572,7 +573,7 @@ class EditProfileViewModel @Inject constructor(
         _updateState.value = UpdateState.Idle
     }
 
-    // ── CAMBIAR CONTRASEÑA ────────────────────────────────────────────────────
+    // -- CAMBIAR CONTRASE�A ----------------------------------------------------
     private val _passwordChangeState = MutableStateFlow<PasswordChangeState>(PasswordChangeState.Idle)
     val passwordChangeState: StateFlow<PasswordChangeState> = _passwordChangeState.asStateFlow()
 
@@ -593,11 +594,11 @@ class EditProfileViewModel @Inject constructor(
                 user.updatePassword(newPassword).await()
                 _passwordChangeState.value = PasswordChangeState.Success
             } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
-                _passwordChangeState.value = PasswordChangeState.Error("La contraseña actual es incorrecta")
+                _passwordChangeState.value = PasswordChangeState.Error("La contrase�a actual es incorrecta")
             } catch (e: com.google.firebase.auth.FirebaseAuthWeakPasswordException) {
-                _passwordChangeState.value = PasswordChangeState.Error("La contraseña nueva es muy débil")
+                _passwordChangeState.value = PasswordChangeState.Error("La contrase�a nueva es muy d�bil")
             } catch (e: Exception) {
-                _passwordChangeState.value = PasswordChangeState.Error(e.message ?: "Error al cambiar contraseña")
+                _passwordChangeState.value = PasswordChangeState.Error(e.message ?: "Error al cambiar contrase�a")
             }
         }
     }
@@ -619,7 +620,7 @@ class EditProfileViewModel @Inject constructor(
     fun updateImagenesProductos(json: String) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
         val updatedCompanies = current.companies.map { company ->
-            // Si tiene múltiples empresas, aquí se podría filtrar por ID.
+            // Si tiene m�ltiples empresas, aqu� se podr�a filtrar por ID.
             // Por simplicidad, actualizamos la primera si existe.
             company.copy(branches = company.branches.map { branch ->
                 branch.copy(galleryImages = try {
@@ -658,10 +659,10 @@ class EditProfileViewModel @Inject constructor(
     fun addGalleryImage(uri: Uri) {
         viewModelScope.launch {
             try {
-                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
+                val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(
                     context, uri, maxWidth = 800, maxHeight = 800, quality = 75
                 ) ?: return@launch
-                val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+                val base64 = com.example.myapplication.core.utils.ImageUtils.bytesToBase64(bytes)
                 val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
                 val updatedList = current.galleryImages + base64
                 updateGalleryImages(org.json.JSONArray(updatedList).toString())
@@ -705,7 +706,7 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    // --- MÉTODOS JERÁRQUICOS SSOT ---
+    // --- M�TODOS JER�RQUICOS SSOT ---
 
     fun addEmployee(employee: EmployeeProvider) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
@@ -762,7 +763,7 @@ class EditProfileViewModel @Inject constructor(
     fun saveAdditionalAddress(address: AddressProvider) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
         val updatedAddresses = current.addresses.filter { it.id != address.id } + address
-        // Actualizar también el campo `address` (singular) para que la UI lo muestre después de guardar
+        // Actualizar tambi�n el campo `address` (singular) para que la UI lo muestre despu�s de guardar
         val updatedProvider = current.copy(addresses = updatedAddresses, address = address)
         viewModelScope.launch {
             providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
@@ -787,10 +788,10 @@ class EditProfileViewModel @Inject constructor(
                 val current = (profileState.value as? ProfileState.Success)?.provider ?: return@launch
                 val company = (if (companyId != null) current.companies.find { it.id == companyId } else null)
                     ?: current.companies.firstOrNull() ?: return@launch
-                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
+                val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(
                     context, uri, maxWidth = 1200, maxHeight = 400, quality = 80
                 )
-                val base64 = bytes?.let { com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(it) } ?: return@launch
+                val base64 = bytes?.let { com.example.myapplication.core.utils.ImageUtils.bytesToBase64(it) } ?: return@launch
                 val updated = company.copy(bannerImageUrl = base64)
                 val updatedCompanies = current.companies.map { if (it.id == updated.id) updated else it }
                 val updatedProvider = current.copy(companies = updatedCompanies)
@@ -810,10 +811,10 @@ class EditProfileViewModel @Inject constructor(
 
                 // Procesar foto en el mismo coroutine para evitar race condition
                 val finalCompany = if (photoUri != null) {
-                    val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(
+                    val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(
                         context, photoUri, maxWidth = 400, maxHeight = 400, quality = 75
                     )
-                    if (bytes != null) company.copy(photoUrl = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes))
+                    if (bytes != null) company.copy(photoUrl = com.example.myapplication.core.utils.ImageUtils.bytesToBase64(bytes))
                     else company
                 } else company
 
@@ -821,16 +822,16 @@ class EditProfileViewModel @Inject constructor(
                 val isUpdate = current.companies.any { it.id == finalCompany.id }
 
                 if (!isUpdate) {
-                    //MÁXIMO 3 empresas
+                    //M�XIMO 3 empresas
                     if (current.companies.size >= 3) {
-                        _companyError.value = "Solo podés tener hasta 3 empresa de distintas categorias"
+                        _companyError.value = "Solo pod�s tener hasta 3 empresa de distintas categorias"
                         return@launch
                     }
-                    //Categorías únicas entre empresas
+                    //Categor�as �nicas entre empresas
                     val categoriasExistentes = current.companies.flatMap { it.categories }.toSet()
                     val categoriasDuplicadas = finalCompany.categories.filter { it in categoriasExistentes }
                     if ( categoriasDuplicadas.isNotEmpty()) {
-                        _companyError.value = "ya tenés una empresa con la categoría ${categoriasDuplicadas.first()}"
+                        _companyError.value = "ya ten�s una empresa con la categor�a ${categoriasDuplicadas.first()}"
                         return@launch
                     }
                 }
@@ -871,18 +872,18 @@ class EditProfileViewModel @Inject constructor(
     }
 
     /**
-     * ── SECCIÓN: NOTIFICACIONES POR TEMA (FCM Topics) ─────────────────────────────────────────
-     * Suscribe al prestador a los temas de licitaciones según su CP y Rubros.
+     * -- SECCI�N: NOTIFICACIONES POR TEMA (FCM Topics) -----------------------------------------
+     * Suscribe al prestador a los temas de licitaciones seg�n su CP y Rubros.
      * Solo si es usuario Premium (isSubscribed).
      */
     fun syncTopics(cp: String?, categories: List<String>, isSubscribed: Boolean) {
         if (cp.isNullOrBlank() || categories.isEmpty()) {
-            Log.w("FCM_TOPIC", "No se puede sincronizar topics: CP o Categorías vacíos. CP: $cp, Cats: $categories")
+            Log.w("FCM_TOPIC", "No se puede sincronizar topics: CP o Categor�as vac�os. CP: $cp, Cats: $categories")
             return
         }
 
         val fcm = FirebaseMessaging.getInstance()
-        // 🔥 [VALIDACIÓN DE FLUJO] Normalización idéntica a la App Cliente
+        // ?? [VALIDACI�N DE FLUJO] Normalizaci�n id�ntica a la App Cliente
         val cleanCp = cp.normalizeForTopic()
 
         Log.d("FCM_FLOW", "Sincronizando Topics para Prestador - CP: $cleanCp (Premium: $isSubscribed)")
@@ -891,26 +892,26 @@ class EditProfileViewModel @Inject constructor(
             val cleanCat = cat.normalizeForTopic()
             val topicName = "tender_${cleanCp}_$cleanCat"
             
-            Log.d("FCM_FLOW", "Procesando Tópico: $topicName")
+            Log.d("FCM_FLOW", "Procesando T�pico: $topicName")
 
-            // ─── SECCIÓN: LÓGICA DE SUSCRIPCIÓN (Premium Incentives) ─────────────────────
-            // Mantenemos la suscripción activa si es premium.
+            // --- SECCI�N: L�GICA DE SUSCRIPCI�N (Premium Incentives) ---------------------
+            // Mantenemos la suscripci�n activa si es premium.
             if (isSubscribed) {
                 fcm.subscribeToTopic(topicName)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
-                            Log.i("FCM_TOPIC", "✅ Suscrito con éxito a: $topicName")
+                            Log.i("FCM_TOPIC", "? Suscrito con �xito a: $topicName")
                         } else {
-                            Log.e("FCM_TOPIC", "❌ Error al suscribirse a $topicName: ${task.exception?.message}")
+                            Log.e("FCM_TOPIC", "? Error al suscribirse a $topicName: ${task.exception?.message}")
                         }
                     }
             } else {
                 // Si no es premium, nos desuscribimos para no recibir los mensajes 
-                // del topic, ya que el servicio maneja la lógica de upsell.
+                // del topic, ya que el servicio maneja la l�gica de upsell.
                 fcm.unsubscribeFromTopic(topicName)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
-                            Log.i("FCM_TOPIC", "📴 Desuscrito de: $topicName")
+                            Log.i("FCM_TOPIC", "?? Desuscrito de: $topicName")
                         }
                     }
             }
@@ -946,18 +947,12 @@ sealed class PasswordChangeState {
 }
 
 /**
- * --- EXTENSIONES DE NORMALIZACIÓN PARA TÓPICOS ---
+ * --- EXTENSIONES DE NORMALIZACI�N PARA T�PICOS ---
  */
 private fun String.removeAccents(): String {
     val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
     return "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalized, "")
 }
 
-fun String.normalizeForTopic(): String {
-    return this.removeAccents()
-        .replace(" ", "_")
-        .replace("(", "")
-        .replace(")", "")
-        .replace(Regex("[^a-zA-Z0-9-_.~%]"), "") // Solo caracteres permitidos por FCM
-        .lowercase()
-}
+
+

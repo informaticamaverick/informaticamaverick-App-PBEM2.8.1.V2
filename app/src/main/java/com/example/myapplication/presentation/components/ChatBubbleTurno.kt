@@ -1,5 +1,11 @@
 package com.example.myapplication.presentation.components
 
+import com.example.myapplication.presentation.features.home.*
+
+import com.example.myapplication.presentation.features.auth.*
+
+import com.example.myapplication.presentation.features.home.*
+
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -33,12 +39,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.myapplication.data.local.MessageEntity
-import com.example.myapplication.data.local.CategoryEntity
-import com.example.myapplication.data.model.MessageType
-import com.example.myapplication.ui.theme.MyApplicationTheme
-import com.example.myapplication.ui.theme.AppColors
-import com.example.myapplication.ui.theme.getThemeColors
+import com.example.myapplication.core.data.local.entity.MessageEntity
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.core.domain.model.MessageType
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.theme.AppColors
+import com.example.myapplication.presentation.designsystem.theme.getThemeColors
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -1749,3 +1755,12 @@ fun TurnoBubblesPreview() {
         }
     }
 }
+
+
+
+
+
+
+
+
+

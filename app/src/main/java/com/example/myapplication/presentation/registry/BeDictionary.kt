@@ -1,126 +1,117 @@
 package com.example.myapplication.presentation.registry
 
-
+import com.example.myapplication.presentation.registry.MaverickIcons
+import com.example.myapplication.presentation.designsystem.components.MaverickColors
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
-import com.example.myapplication.presentation.components.BeEmotion
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.myapplication.presentation.components.DropdownItemData
+import com.example.myapplication.presentation.components.ControlItem
 import com.example.myapplication.presentation.components.BeMessage
 
-
-
-
-
-/** * --- DICCIONARIO CENTRALIZADO DE BE para burbuja de Conversación (MODO BÚSQUEDA) --- */
-object BeConversacion {
-
-    /**
-     * Procesa la consulta del usuario y devuelve una respuesta coherente.
-     * Si no encuentra coincidencias, devuelve un mensaje de confusión.
-     */
-    fun getResponse(query: String): BeMessage {
-        val normQuery = query.lowercase().trim()
-
-        return when {
-            // 1. Saludos
-            normQuery.contains("hola") || normQuery.contains("buen") -> 
-                BeDictionary.SearchConversationalMessages.Welcome
-
-            // 2. ¿Quién eres?
-            normQuery.contains("quien eres") || normQuery.contains("que sos") || normQuery.contains("nombre") ->
-                BeDictionary.SearchConversationalMessages.WhoAmI
-
-            // 3. Ayuda / Tips
-            normQuery.contains("ayuda") || normQuery.contains("como") || normQuery.contains("que puedes hacer") ->
-                BeDictionary.SearchConversationalMessages.Help
-
-            // 4. Manejo de texto incoherente o sin coincidencias (REQUISITO DEL PLAN)
-            normQuery.length > 5 && !normQuery.contains(" ") && normQuery.any { it.isDigit() } ->
-                BeMessage("🤔", "Estoy un poco confundido, ¿podrías explicarme de otra forma? 😅", null, Color.Gray, emotion = BeEmotion.THINKING)
-
-            // 5. Fallback general
-            else -> BeDictionary.SearchConversationalMessages.NotFound
-        }
-    }
-
-}
-/** * --- DICCIONARIO CENTRALIZADO DE BE para buebuja inferior por pantalla  --- */
+/**
+ * --- BE DICTIONARY (DICCIONARIO DE ACTIVOS VISUALES) ---
+ * Única fuente de verdad para Iconos, Emojis y Colores de la aplicación.
+ * Permite que los Obreros (ViewModels) operen solo con IDs de comando.
+ */
 object BeDictionary {
-    val HomeMessages = listOf(
-        BeMessage("💡", "Usa el Menú Táctico inferior para filtrar prestadores verificados.", null, Color(0xFF22D3EE), emotion = BeEmotion.NORMAL),
-        BeMessage("💡", "Guía Rápida para el Usuario\n" +
-                "• Toque Simple: Activa o alterna el estado del filtro/ordenamiento.\n" +
-                "• Icono Gris: El filtro está desactivado.\n" +
-                "• Icono Resaltado: El filtro está aplicando cambios en la lista actual.\n" +
-                "• Botón Fecha: Mantén presionado para abrir el calendario personalizado.", null, Color(0xFF22D3EE), emotion = BeEmotion.NORMAL),
-        BeMessage("🚀", "¡Nuevas categorías disponibles! Explora los servicios destacados hoy.", null, Color(0xFF10B981), emotion = BeEmotion.HAPPY)
-    )
-    val BudgetMessages = listOf(
-        BeMessage("⚖️", "Selecciona múltiples ofertas para que yo pueda ayudarte a analizarlas y compararlas.", "ANALIZAR", Color(0xFF9B51E0), Color.White, BeEmotion.HAPPY),
-        BeMessage("📋", "Recuerda revisar los detalles de cada presupuesto antes de aceptar.", null, Color(0xFFFACC15), emotion = BeEmotion.NORMAL)
-    )
-    val ChatMessages = listOf(
-        BeMessage("💬", "Nunca compartas datos de tarjetas de crédito o contraseñas a través del chat.", null, Color(0xFFF43F5E), Color.White, BeEmotion.ANGRY),
-        BeMessage("👀", "Si el prestador no responde, puedo ayudarte a buscar alternativas rápidas.", "BUSCAR", Color(0xFF22D3EE), emotion = BeEmotion.NORMAL)
-    )
-    val CalendarMessages = listOf(
-        BeMessage("📅", "Recuerda que si cancelas un turno, el sistema le avisará automáticamente.", null, Color(0xFF10B981), emotion = BeEmotion.NORMAL),
-        BeMessage("⏰", "Tienes turnos pendientes de confirmación. ¡No los pierdas!", "VER TURNOS", Color(0xFFF59E0B), emotion = BeEmotion.SURPRISED)
+
+    // ======================================================================================
+    // --- SECCIÓN 1: ACCIONES DEL ASISTENTE (HUD) ---
+    // ======================================================================================
+    
+    data class ActionVisuals(
+        val label: String,
+        val icon: ImageVector,
+        val emoji: String? = null,
+        val tint: Color = Color.White,
+        val isDefault: Boolean = false
     )
 
-    // ==========================================================================================
-    // --- SECCIÓN: MENSAJES CONVERSACIONALES (Burbuja de búsqueda) ---
-    // ==========================================================================================
-    object SearchConversationalMessages {
-        val Welcome = BeMessage("👋", "¡Hola! Estoy listo para ayudarte a encontrar lo que buscas.", null, Color(0xFF00FFFF), emotion = BeEmotion.HAPPY)
-        val Help = BeMessage("💡", "Puedo filtrar por categorías, ordenar por precio o buscar lugares cercanos.", "VER TIPS", Color(0xFF00FFFF), emotion = BeEmotion.THINKING)
-        val WhoAmI = BeMessage("✨", "Soy Be, tu asistente inteligente. Mi misión es optimizar tu búsqueda.", null, Color(0xFFE11D48), emotion = BeEmotion.HAPPY)
-        val NotFound = BeMessage("❓", "No estoy muy seguro de qué buscas... ¿Podrías intentar con otra palabra?", null, Color.Gray, emotion = BeEmotion.THINKING)
-        fun Searching(query: String) = BeMessage("🔍", "Buscando coincidencias para \"$query\"...", null, Color(0xFF00FFFF), emotion = BeEmotion.THINKING)
-    }
+    val Actions = mapOf(
+        "cancel" to ActionVisuals("Cerrar", MaverickIcons.Close, tint = Color.Red),
+        "divider_v1" to ActionVisuals("", Icons.Default.VerticalAlignBottom),
+        "divider_v2" to ActionVisuals("", Icons.Default.VerticalAlignBottom),
+        "divider_v3" to ActionVisuals("", Icons.Default.VerticalAlignBottom),
+        "view_tender_details" to ActionVisuals("Detalles", Icons.AutoMirrored.Filled.Assignment, emoji = "📋"),
+        "delete_multi" to ActionVisuals("Eliminar", MaverickIcons.Delete, tint = Color.Red),
+        "compare_selected" to ActionVisuals("Comparar", Icons.AutoMirrored.Filled.CompareArrows, emoji = "⚖️"),
+        "compare_all" to ActionVisuals("Comparar Todo", Icons.AutoMirrored.Filled.CompareArrows, emoji = "⚖️", isDefault = true),
+        "select_all" to ActionVisuals("Todos", MaverickIcons.SelectAll, emoji = "✅"),
+        "mark_as_read" to ActionVisuals("Leídos", MaverickIcons.DoneAll, emoji = "📖"),
+        "goto_direct_budgets" to ActionVisuals("Presupuestos", MaverickIcons.Message, emoji = "📩", tint = Color(0xFF2197F5), isDefault = true),
+        "licit" to ActionVisuals("Nueva Lic", MaverickIcons.Add, emoji = "📄", tint = Color(0xFF2197F5), isDefault = true),
+        "goto_history" to ActionVisuals("Historial", MaverickIcons.History, emoji = "📜", tint = Color(0xFFFF9800), isDefault = true),
+        "edit_profile" to ActionVisuals("Editar", MaverickIcons.Edit, emoji = "✏️", isDefault = true),
+        "save_profile" to ActionVisuals("Guardar", Icons.Default.Save, emoji = "💾", tint = Color(0xFF00FFC2), isDefault = true),
+        "cancel_edit" to ActionVisuals("Cancelar", Icons.Default.Close, emoji = "✖️", tint = Color.Red, isDefault = true),
+        "add_company" to ActionVisuals("Empresa", Icons.Default.Business, emoji = "🏢", isDefault = true),
+        "settings_profile" to ActionVisuals("Ajustes", Icons.Default.Settings, emoji = "⚙️", isDefault = true),
+        "fast" to ActionVisuals("Fast", Icons.Default.FlashOn, emoji = "⚡", isDefault = true),
+        "fav" to ActionVisuals("Favoritos", MaverickIcons.Favorite, emoji = "❤️", isDefault = true),
+        "share" to ActionVisuals("Compartir", MaverickIcons.Share, emoji = "📤")
+    )
 
-    // ==========================================================================================
-    // --- SECCIÓN: HUEVO DE PASCUA (MAXI - BEM ORIGINS) ---
-    // ==========================================================================================
-    object EasterEggMessages {
-        val Step1 = BeMessage(
-            icon = "💡",
-            text = "Me llamo Be, por que Buscar se escribe con B 😂",
-            bubbleColor = Color(0xFF22D3EE),
-            emotion = BeEmotion.HAPPY
-        )
-        val Step2 = BeMessage(
-            icon = "❤️",
-            text = "🌟 ¡FELICIDADES! 🌟\n\n" +
-                    "Has descubierto el secreto mejor guardado...\n" +
-                    "El Huevo de Pascua de Maxi...\n" +
-                    "Te voy a contar la verda de mi Nombre...\n" +
-                    "Be, es un Acronimo !!!\n\n" +
-                    "Son las primeras letras de los logros mas importantes de mi Desarrollador\n\n" +
-                    "💖 B... por  Bautista 💖 \n" +
-                    "💖 E... por  Emma 💖\n\n" +
-                    "Ellos son su verdadera inspiración \n " +
-                    "y esa es la razon de mi nombre, o a caso no es COOL BE ??? 😁 \n " +
-                    "Pero te pido algo? ¡ Guarda el secreto Por Favor! 🙊\n\n" +
-                    "En Maverick Developers trabajamos con el corazón y siempre dando nuestro MAXIMO ESFUERZO !!! \n " +
-                    "para tratar de inspirar y ayudar a las personas \n " +
-                    "y de esta manera TODOS tengamos las mismas oportunidades.\n\n" +
-                    "¡GRACIAS POR SER PARTE DE ESTO Y USAR NUESTRA APP!\n" +
-                    "🚀 GRACIAS TOTALES 🚀\n\n" +
-                    "🎁 Ahora lo mejor , tu regalo !!! 🎁 \n" +
-                    "por que nada es gratis en la vida, esta es la recompensa a tu esfuerzo por completar este desafio 🐣",
-            bubbleColor = Color(0xFFFFB6C1),
-            actionText = "OBTENER REGALO",
-            emotion = BeEmotion.BLUSHING,
-            isCentered = true
-        )
-        val Failure = BeMessage(
-            icon = "😢",
-            text = "esta bien esperaba que me dijeras que era un buen chite 😔😢😭",
-            bubbleColor = Color.Gray,
-            emotion = BeEmotion.SAD
-        )
-    }
+    // ======================================================================================
+    // --- SECCIÓN 2: FILTROS Y ORDENAMIENTOS ---
+    // ======================================================================================
 
-    val DefaultMessages = listOf(
-        BeMessage("🤖", "Hola, soy Be. Estoy aquí para asistirte en todo lo que necesites.", null, Color(0xFF22D3EE), emotion = BeEmotion.NORMAL)
+    val Filters = mapOf(
+        "filter_tender_active" to DropdownItemData("filter_tender_active", "Abiertas", "ESTADO", "⚡", MaverickIcons.Bolt, color = Color(0xFF00FFC2)),
+        "filter_tender_closed" to DropdownItemData("filter_tender_closed", "Cerradas", "ESTADO", "🔒", MaverickIcons.Lock, color = Color.Gray),
+        "filter_tender_awarded" to DropdownItemData("filter_tender_awarded", "Adjudicadas", "ESTADO", "🏆", MaverickIcons.Check, color = Color(0xFFD4AF37)),
+        "filter_chat_unread" to DropdownItemData("filter_chat_unread", "No Leídos", "ESTADO", "🔔", MaverickIcons.Info, color = Color.Red),
+        "filter_chat_online" to DropdownItemData("filter_chat_online", "Online", "ESTADO", "🌐", MaverickIcons.Online, color = Color(0xFF00E5FF)),
+        "filter_verif" to DropdownItemData("filter_verif", "Confirmados", "ESTADO", "✅", MaverickIcons.Verified, color = Color(0xFF00FFC2)),
+        "filter_fast" to DropdownItemData("filter_fast", "Pendientes", "ESTADO", "⏳", MaverickIcons.Timer, color = Color.Yellow),
+        "filter_chat_business" to DropdownItemData("filter_chat_business", "Empresas", "TIPO", "🏢", MaverickIcons.Business, color = Color(0xFF2197F5)),
+        "filter_chat_pro" to DropdownItemData("filter_chat_pro", "Profesionales", "TIPO", "👤", MaverickIcons.Person, color = Color.White),
+        "filter_chat_sub" to DropdownItemData("filter_chat_sub", "Suscriptos", "TRAZAS", "💎", MaverickIcons.Verified, color = Color(0xFFD4AF37)),
+        "filter_chat_fav" to DropdownItemData("filter_chat_fav", "Favoritos", "TRAZAS", "❤️", MaverickIcons.Favorite, color = Color.Red),
+        "filter_chat_verified" to DropdownItemData("filter_chat_verified", "Verificados", "TRAZAS", "🛡️", MaverickIcons.Verified, color = Color(0xFF22D3EE)),
+        "filter_chat_24h" to DropdownItemData("filter_chat_24h", "Trabaja 24hs", "SERVICIOS", "⏳", MaverickIcons.Clock24h, color = Color(0xFFFF9800)),
+        "filter_chat_local" to DropdownItemData("filter_chat_local", "Local Físico", "SERVICIOS", "🏪", MaverickIcons.Local, color = Color(0xFF4CAF50)),
+        "filter_products" to DropdownItemData("filter_products", "Productos", "TIPO", "🛍️", MaverickIcons.Build, color = Color(0xFFFF4081)),
+        "filter_services" to DropdownItemData("filter_services", "Servicios", "TIPO", "🔧", MaverickIcons.Build, color = Color(0xFFFF9800)),
+        "filter_online" to DropdownItemData("filter_online", "Online", "ESTADO", "🌐", MaverickIcons.Online, color = Color(0xFF00E5FF)),
+        "filter_shipping" to DropdownItemData("filter_shipping", "Envíos", "SERVICIOS", "🚚", MaverickIcons.Location, color = Color(0xFF00BCD4)),
+        "filter_visits" to DropdownItemData("filter_visits", "Visitas", "SERVICIOS", "🏠", MaverickIcons.Location, color = Color(0xFF2197F5)),
+        "filter_appointments" to DropdownItemData("filter_appointments", "Turnos", "SERVICIOS", "📅", MaverickIcons.Calendar, color = Color(0xFF9C27B0)),
+    )
+
+    val Sorts = mapOf(
+        "sort_alpha" to DropdownItemData("sort_alpha", "A-Z", "ORDEN", "🔤", MaverickIcons.SortAlpha, color = Color.White),
+        "sort_date" to DropdownItemData("sort_date", "Fecha", "ORDEN", "📅", MaverickIcons.Calendar, color = Color(0xFF22D3EE)),
+        "sort_ranking" to DropdownItemData("sort_ranking", "Ranking", "ORDEN", "⭐", MaverickIcons.Favorite, color = Color.Yellow),
+        "sort_price" to DropdownItemData("sort_price", "Precio", "ORDEN", "💰", MaverickIcons.Budget, color = Color(0xFF4CAF50)),
+        "sort_distance" to DropdownItemData("sort_distance", "Cercanía", "ORDEN", "📍", MaverickIcons.Location, color = Color(0xFFFF5252)),
+        "sort_hot" to DropdownItemData("sort_hot", "Más Usados", "ORDEN", "🔥", MaverickIcons.Timer, color = Color(0xFFFF9800)),
+        "sort_nombre_asc" to DropdownItemData("sort_nombre_asc", "A-Z", "ORDEN", "🔤", MaverickIcons.Sort, color = Color.White),
+        "sort_random" to DropdownItemData("sort_random", "Aleatorio", "ORDEN", "🎲", MaverickIcons.Refresh, color = MaverickColors.MagentaNeon),
+        "view_compact" to DropdownItemData("view_compact", "Compacto", "VISTA", "📱", MaverickIcons.Person, color = Color.White),
+        "view_grid" to DropdownItemData("view_grid", "Grilla", "VISTA", "🔳", MaverickIcons.Map, color = Color.White),
+        "view_bento" to DropdownItemData("view_bento", "Bento", "VISTA", "🍱", MaverickIcons.Map, color = Color.White)
+    )
+
+    // ======================================================================================
+    // --- SECCIÓN 3: CONFIGURACIÓN DE PANTALLAS (CONTEXTOS) ---
+    // ======================================================================================
+
+
+    data class ScreenContextVisuals(
+        val title: String,
+        val subtitle: String,
+        val emoji: String,
+        val accentColor: Color
+    )
+
+    val Contexts = mapOf(
+        "home" to ScreenContextVisuals("Maverick", "Exploración Táctica", "🏠", Color(0xFF00F0FF)),
+        "presupuestos" to ScreenContextVisuals("Licitaciones", "Gestión de Concursos", "⚖️", Color(0xFF00F0FF)),
+        "chat" to ScreenContextVisuals("Mensajes", "Bandeja de Entrada", "💬", Color(0xFF00F0FF)),
+        "calendar" to ScreenContextVisuals("Agenda", "Compromisos Activos", "🗓️", Color(0xFF00F0FF)),
+        "perfil_cliente" to ScreenContextVisuals("Perfil", "Mi Cuenta Elite", "👤", Color(0xFF00F0FF))
     )
 }

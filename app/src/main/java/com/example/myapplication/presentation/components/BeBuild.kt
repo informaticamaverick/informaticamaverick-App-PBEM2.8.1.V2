@@ -1,5 +1,11 @@
 package com.example.myapplication.presentation.components
 
+import com.example.myapplication.presentation.features.home.*
+
+import com.example.myapplication.presentation.features.auth.*
+
+import com.example.myapplication.presentation.features.home.*
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -22,8 +28,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.example.myapplication.presentation.components.Utilidades.*
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.components.*
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 
 // ==================================================================================
 // --- MODELOS DE DATOS ---
@@ -45,6 +51,7 @@ data class BeSmallActionModel(
 // ==================================================================================
 data class AddressInfo(
     val id: String,
+    val ownerId: String? = null, // ID del propietario (User o Company)
     val companyOrUserName: String,
     val branchName: String,
     val streetAndNumber: String,
@@ -62,9 +69,9 @@ data class AddressInfo(
  * Convierte AddressInfo a LocationOption para coherencia visual y de búsqueda.
  * Esta es la ÚNICA FUENTE DE VERDAD para la conversión.
  */
-fun AddressInfo.toLocationOption(): com.example.myapplication.presentation.client.LocationOption {
+fun AddressInfo.toLocationOption(): com.example.myapplication.presentation.features.home.LocationOption {
     return if (this.isCompany) {
-        com.example.myapplication.presentation.client.LocationOption.Business(
+        com.example.myapplication.presentation.features.home.LocationOption.Business(
             companyName = this.companyOrUserName,
             branchName = this.branchName,
             address = this.streetAndNumber,
@@ -76,7 +83,7 @@ fun AddressInfo.toLocationOption(): com.example.myapplication.presentation.clien
             id = this.id // 🔥 IMPORTANTE: Mantenemos el ID real para comparación
         )
     } else if (this.id == "gps_current") {
-        com.example.myapplication.presentation.client.LocationOption.Gps(
+        com.example.myapplication.presentation.features.home.LocationOption.Gps(
             address = this.streetAndNumber,
             locality = this.locality,
             province = this.province,
@@ -87,7 +94,7 @@ fun AddressInfo.toLocationOption(): com.example.myapplication.presentation.clien
             id = "gps_current"
         )
     } else {
-        com.example.myapplication.presentation.client.LocationOption.Personal(
+        com.example.myapplication.presentation.features.home.LocationOption.Personal(
             address = this.streetAndNumber,
             number = "", // El número ya está en streetAndNumber
             locality = this.locality,
@@ -254,3 +261,12 @@ fun BeSmallActionsBuilderPreview() {
         }
     }
 }
+
+
+
+
+
+
+
+
+

@@ -45,8 +45,7 @@ internal fun ProfileBannerHeaderView(
     isVerified: Boolean,
     paddingValues: PaddingValues,
     onBack: () -> Unit,
-    toggleImageUrl: String? = null,
-    onToggle: (() -> Unit)? = null,
+    companyAvatars: List<Pair<String?, () -> Unit>> = emptyList(),
     colors: PrestadorColors,
     isEditMode: Boolean = false,
     onEditPhoto: () -> Unit = {},
@@ -206,18 +205,26 @@ internal fun ProfileBannerHeaderView(
             }
         }
 
-        // Botón toggle empresa (bottom-end) — solo si hay empresa
-        if (onToggle != null) {
-            Box(
+        // Botones toggle empresa (bottom-end) — lista de avatares
+        if (companyAvatars.isNotEmpty()) {
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 12.dp)
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
-                    .clickable { onToggle() }
+                    .padding(end = 16.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy((-12).dp)
             ) {
-                ProfilePhoto(imageUrl = toggleImageUrl, colors = colors)
+                companyAvatars.forEach { (avatarUrl, onClick) ->
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                            .background(colors.surfaceColor)
+                            .clickable { onClick() }
+                    ) {
+                        ProfilePhoto(imageUrl = avatarUrl, colors = colors, isCompany = true)
+                    }
+                }
             }
         }
     }

@@ -27,18 +27,165 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.example.myapplication.data.model.AddressClient
-import com.example.myapplication.data.model.BranchClient
-import com.example.myapplication.data.model.CompanyClient
-import com.example.myapplication.data.model.RepresentativeClient
-import com.example.myapplication.presentation.client.UbicacionClimaViewModel
-import com.example.myapplication.presentation.components.Utilidades.BentoBottomSheetContent
-import com.example.myapplication.presentation.components.Utilidades.BentoTextFieldM3
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoBorderBrush
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoDarkGlassBackground
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors.BentoGlassBrush
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors.GeminiAccent
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.presentation.features.home.UbicacionClimaViewModel
+import com.example.myapplication.core.domain.model.AddressClient
+import com.example.myapplication.core.domain.model.BranchClient
+import com.example.myapplication.core.domain.model.CompanyClient
+import com.example.myapplication.core.data.local.entity.UserEntity
+import com.example.myapplication.core.domain.model.RepresentativeClient
+import com.example.myapplication.presentation.features.profile.EditMode
+import com.example.myapplication.presentation.features.profile.ProfileUiState
+import com.example.myapplication.presentation.features.profile.ProfileViewModel
+//import com.example.myapplication.presentation.features.UbicacionClimaViewModel
+import com.example.myapplication.presentation.designsystem.components.BentoBottomSheetContent
+import com.example.myapplication.presentation.designsystem.components.BentoTextFieldM3
+import com.example.myapplication.presentation.designsystem.components.MaverickColors.BentoBorderBrush
+import com.example.myapplication.presentation.designsystem.components.MaverickColors.BentoDarkGlassBackground
+import com.example.myapplication.presentation.designsystem.components.MaverickColors.BentoGlassBrush
+import com.example.myapplication.presentation.designsystem.components.MaverickColors.GeminiAccent
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+
+/**
+ * --- MAVERICK PROFILE SHEETS (ORCHESTRATOR) ---
+ * Centraliza la lógica de los Bottom Sheets del perfil para reducir la complejidad de la pantalla principal.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileEditSheetOrchestrator(
+    editMode: EditMode,
+    uiState: ProfileUiState,
+    viewModel: ProfileViewModel,
+    onClose: () -> Unit,
+    onRequestDelete: (String, String, () -> Unit) -> Unit
+) {
+    if (editMode == EditMode.None) return
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = sheetState,
+        containerColor = Color.Transparent,
+        dragHandle = null,
+        tonalElevation = 0.dp,
+        contentWindowInsets = { WindowInsets(0) }
+    ) {
+        when (val mode = editMode) {
+            is EditMode.BranchAddress -> {
+                EditAddressSheetContent(
+                    address = mode.address,
+                    onSave = { updatedAddr ->
+                        val updatedBranch = mode.branch.copy(address = updatedAddr)
+                        val updatedBranches = mode.company.branches.map { if(it.id == updatedBranch.id) updatedBranch else it }
+                        val currentCompanies = uiState.companies.map { if(it.id == mode.company.id) mode.company.copy(branches = updatedBranches) else it }
+                        viewModel.updateCompanies(currentCompanies)
+                        onClose()
+                    },
+                    onClose = onClose
+                )
+            }
+            is EditMode.Representative -> {
+                EditRepresentativeSheetContent(
+                    representative = mode.representative,
+                    onSave = { updatedRep ->
+                        val currentReps = mode.branch.representatives.toMutableList()
+                        val idx = currentReps.indexOfFirst { it.id == updatedRep.id }
+                        if (idx != -1) currentReps[idx] = updatedRep else currentReps.add(updatedRep)
+                        val updatedBranch = mode.branch.copy(representatives = currentReps)
+                        val updatedBranches = mode.company.branches.map { if(it.id == updatedBranch.id) updatedBranch else it }
+                        val currentCompanies = uiState.companies.map { if(it.id == mode.company.id) mode.company.copy(branches = updatedBranches) else it }
+                        viewModel.updateCompanies(currentCompanies)
+                        onClose()
+                    },
+                    onClose = onClose,
+                    onDelete = if (mode.representative != null) {
+                        {
+                            onRequestDelete("Eliminar Miembro", "¿Estás seguro que deseas eliminar a ${mode.representative.nombre} del equipo?") {
+                                val currentReps = mode.branch.representatives.filter { it.id != mode.representative.id }
+                                val updatedBranch = mode.branch.copy(representatives = currentReps)
+                                val updatedBranches = mode.company.branches.map { if(it.id == updatedBranch.id) updatedBranch else it }
+                                val currentCompanies = uiState.companies.map { if(it.id == mode.company.id) mode.company.copy(branches = updatedBranches) else it }
+                                viewModel.updateCompanies(currentCompanies)
+                                onClose()
+                            }
+                        }
+                    } else null
+                )
+            }
+            is EditMode.PersonalAddress -> {
+                EditAddressSheetContent(
+                    address = mode.address ?: AddressClient(),
+                    onSave = { updated ->
+                        val current = uiState.personalAddresses.toMutableList()
+                        val idx = current.indexOfFirst { it.id == updated.id }
+                        if (idx != -1) current[idx] = updated else current.add(updated)
+                        viewModel.updatePersonalAddresses(current)
+                        onClose()
+                    },
+                    onClose = onClose
+                )
+            }
+            is EditMode.Company -> {
+                EditCompanySheetContent(
+                    company = mode.company,
+                    onSave = { updated ->
+                        val current = uiState.companies.toMutableList()
+                        val idx = current.indexOfFirst { it.id == updated.id }
+                        if (idx != -1) current[idx] = updated else current.add(updated)
+                        viewModel.updateCompanies(current)
+                        onClose()
+                    },
+                    onClose = onClose
+                )
+            }
+            is EditMode.Branch -> {
+                EditBranchSheetContent(
+                    branch = mode.branch ?: BranchClient(),
+                    onSave = { updated ->
+                        val current = mode.company.branches.toMutableList()
+                        val idx = current.indexOfFirst { it.id == updated.id }
+                        if (idx != -1) current[idx] = updated else current.add(updated)
+                        val currentCompanies = uiState.companies.map { if(it.id == mode.company.id) mode.company.copy(branches = current) else it }
+                        viewModel.updateCompanies(currentCompanies)
+                        onClose()
+                    },
+                    onClose = onClose
+                )
+            }
+            is EditMode.Email -> {
+                EditSingleContactSheetContent(
+                    initialValue = mode.initialValue,
+                    title = if (mode.index == null) "Nuevo Email" else "Editar Email",
+                    emoji = "📧",
+                    label = "Correo Electrónico",
+                    onSave = { updated ->
+                        val current = uiState.additionalEmails.toMutableList()
+                        if (mode.index != null) current[mode.index] = updated else current.add(updated)
+                        viewModel.updateAdditionalEmails(current)
+                        onClose()
+                    },
+                    onClose = onClose
+                )
+            }
+            is EditMode.Phone -> {
+                EditSingleContactSheetContent(
+                    initialValue = mode.initialValue,
+                    title = if (mode.index == null) "Nuevo Teléfono" else "Editar Teléfono",
+                    emoji = "📱",
+                    label = "Número de Teléfono",
+                    onSave = { updated ->
+                        val current = uiState.additionalPhones.toMutableList()
+                        if (mode.index != null) current[mode.index] = updated else current.add(updated)
+                        viewModel.updateAdditionalPhones(current)
+                        onClose()
+                    },
+                    onClose = onClose
+                )
+            }
+            else -> {}
+        }
+    }
+}
 
 /**
  * 6. HOJA PARA AGREGAR/EDITAR UN CONTACTO (EMAIL O TELÉFONO)
@@ -527,3 +674,12 @@ fun PreviewEditRepresentativeSheetContent() {
         }
     }
 }
+
+
+
+
+
+
+
+
+

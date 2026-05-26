@@ -1,8 +1,9 @@
 package com.example.myapplication.presentation.components
 
-import android.widget.Toast
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
@@ -10,15 +11,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -26,35 +27,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.myapplication.ui.theme.MyApplicationTheme
-
-
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.components.DepthDividerHorizontal
+import com.example.myapplication.core.data.local.entity.BudgetEntity
+import com.example.myapplication.core.data.local.entity.BudgetStatus
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
-
-import androidx.compose.ui.draw.clip
-
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-
-import androidx.compose.ui.unit.*
-
-
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -63,12 +53,10 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 
 // --- PALETA DE COLORES PREMIUM ---
-private val DarkBackground = Color(0xFF05070A)
 private val CardSurface = Color(0xFF161C24)
 private val MaverickBlue = Color(0xFF2197F5)
 private val MaverickPurple = Color(0xFF9B51E0)
 private val StatusActive = Color(0xFF38BDF8)
-private val StatusFinished = Color(0xFF34D399)
 private val StatusWarning = Color(0xFFF87171)
 private val NeonCyber = Color(0xFF00FFC2)
 // --- DEFINICIÓN DE COLORES ---
@@ -143,6 +131,7 @@ fun SelectionIndicator(isSelected: Boolean, modifier: Modifier = Modifier) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TarjetaPresupuestoPremium(
+    modifier: Modifier = Modifier,
     providerName: String,
     companyName: String?,
     amount: Double,
@@ -157,8 +146,8 @@ fun TarjetaPresupuestoPremium(
     onViewClick: () -> Unit,
     onChatClick: () -> Unit,
     onAvatarClick: () -> Unit = {},
-    onLongClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onLongClick: () -> Unit = {}
+
 ) {
     val borderColor = if (isSelected) MaverickBlue else Color.White.copy(alpha = 0.08f)
     val backgroundBrush = Brush.verticalGradient(
@@ -391,12 +380,31 @@ fun TarjetaPresupuestoPremium(
 }
 
 /**
- * Forma de Carpeta Profesional (Folder Shape)
- * - Pestaña superior izquierda distintiva.
- * - Cuerpo principal con esquinas redondeadas tácticas.
+ * --- COMPONENTE: LICITACION FOLDER PREMIUM ---
+ * Representa una licitación con estilo "Windows 11" (Ventana).
  */
-val FolderBodyShape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
-val FolderTabShape = RoundedCornerShape(topStart = 12.dp, topEnd = 16.dp)
+@Composable
+private fun HeaderActionButton(
+    emoji: String? = null,
+    icon: ImageVector? = null,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(28.dp),
+        color = Color.White.copy(0.1f),
+        shape = CircleShape,
+        border = BorderStroke(1.dp, Color.White.copy(0.2f))
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (icon != null) {
+                Icon(icon, null, tint = Color.White, modifier = Modifier.size(14.dp))
+            } else if (emoji != null) {
+                Text(emoji, fontSize = 14.sp)
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -404,7 +412,6 @@ fun LicitacionFolderPremium(
     title: String,
     category: String,
     categoryIcon: String = "📋",
-    categoryColor: Color = Color.Gray,
     supercategoryColor: Color = Color.Gray,
     tenderId: String,
     status: String,
@@ -417,6 +424,7 @@ fun LicitacionFolderPremium(
     awardedBudgetId: String? = null,
     awardedProviderPhotoUrl: String? = null,
     onLongClick: () -> Unit = {},
+    onViewDetails: () -> Unit = {},
     onClick: () -> Unit
 ) {
     val now = System.currentTimeMillis()
@@ -428,192 +436,296 @@ fun LicitacionFolderPremium(
     } else 0
     
     val df = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-    val borderColor = if (isSelected) MaverickBlue else supercategoryColor.copy(alpha = 0.2f)
+    
+    // --- ESTADOS DE INTERACCIÓN M3 ---
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
-    Box(modifier = Modifier
-        .fillMaxWidth()
-        .padding(top = 32.dp, start = 8.dp, end = 8.dp, bottom = 8.dp)
-    ) {
-        // --- 1. PESTAÑA DE LA CARPETA (Categoría) ---
-        Surface(
-            modifier = Modifier
-                .offset(y = (-32).dp)
-                .width(160.dp)
-                .height(34.dp)
-                .zIndex(1f),
-            color = CardSurface,
-            shape = FolderTabShape,
-            border = BorderStroke(1.dp, borderColor)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(supercategoryColor.copy(alpha = 0.2f), Color.Transparent)
-                        )
-                    )
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(categoryIcon, fontSize = 14.sp)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        category.uppercase(),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        letterSpacing = 1.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+    val tonalAlpha by animateFloatAsState(
+        targetValue = if (isPressed) 0.15f else if (isSelected) 0.08f else 0.02f,
+        label = "tonalAlpha"
+    )
+    val animatedBgColor = MaverickBlue.copy(alpha = tonalAlpha).compositeOver(CardSurface)
+    
+    val borderColor = if (isSelected || isPressed) MaverickBlue else Color.White.copy(alpha = 0.15f)
+
+    // --- FORMA DE VENTANA WINDOWS 11 (Esquinas más rectas - Premium V2) ---
+    val windowShape = RoundedCornerShape(4.dp)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp, horizontal = 4.dp) // Más espacio para la sombra
+            .drawBehind {
+                // --- SOMBRA 3D PERSONALIZADA (Bottom & Sides only) ---
+                val shadowColor = Color.Black.copy(alpha = if (isPressed) 1f else 1f)
+                val shadowRadius = if (isPressed) 12.dp.toPx() else 8.dp.toPx()
+                val offsetY = if (isPressed) 6.dp.toPx() else 4.dp.toPx()
+
+                drawIntoCanvas { canvas ->
+                    val paint = Paint().asFrameworkPaint().apply {
+                        color = shadowColor.toArgb()
+                        setShadowLayer(shadowRadius, 0f, offsetY, shadowColor.toArgb())
+                    }
+                    canvas.nativeCanvas.drawRoundRect(
+                        0f,
+                        offsetY, // Empezamos desde abajo para que no se vea arriba
+                        size.width,
+                        size.height,
+                        4.dp.toPx(),
+                        4.dp.toPx(),
+                        paint
                     )
                 }
-                
-                // Línea de acento inferior para la pestaña
-                Box(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().height(1.dp).background(supercategoryColor))
             }
-        }
-
-        // --- 2. CUERPO DE LA CARPETA ---
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick
-                ),
-            color = CardSurface,
-            shape = FolderBodyShape,
-            border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
-            shadowElevation = if (isSelected) 12.dp else 4.dp
-        ) {
-            Column(
+            .graphicsLayer {
+                val scale = if (isPressed) 0.98f else 1f
+                scaleX = scale
+                scaleY = scale
+            }
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        color = animatedBgColor,
+        shape = windowShape,
+        border = BorderStroke(if (isSelected || isPressed) 2.dp else 1.dp, borderColor),
+        shadowElevation = 0.dp // Desactivamos la elevación estándar para usar nuestra sombra 3D
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            
+            // --- 1. CABECERA ESTILO WINDOWS 11 (Refinamiento Glassmorphism 2.0) ---
+            Box(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .background(
-                        Brush.linearGradient(
-                            listOf(Color.White.copy(0.02f), Color.Transparent)
+                        Brush.verticalGradient(
+                            listOf(supercategoryColor.copy(alpha = 0.25f), supercategoryColor.copy(alpha = 0.05f))
                         )
                     )
-                    .padding(16.dp)
+                    .drawBehind {
+                        // RIM LIGHTING: Brillo sutil en el borde superior
+                        drawLine(
+                            color = Color.White.copy(alpha = 0.15f),
+                            start = Offset(0f, 0.5.dp.toPx()),
+                            end = Offset(size.width, 0.5.dp.toPx()),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
-                // --- FILA SUPERIOR: TITULO Y ACCIONES ---
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(categoryIcon, fontSize = 18.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.width(1.dp).height(14.dp).background(Color.White.copy(0.2f)))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = category.uppercase(),
+                        color = Color.White.copy(alpha = 0.95f),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
+                    
+                    Spacer(Modifier.weight(1f))
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HeaderActionButton(emoji = "❗", onClick = onViewDetails)
+                        HeaderActionButton(icon = Icons.Default.ArrowUpward, onClick = onClick)
+                    }
+                }
+               /**
+                // LÍNEA DE ACENTO INFERIOR (Sutil)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(0.4f)
+                        .height(1.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(supercategoryColor.copy(alpha = 0.8f), Color.Transparent)
+                            )
+                        )
+                )
+                */
+            }
+
+            // --- DIVIDER DE PROFUNDIDAD PARA LA CABECERA ---
+            DepthDividerHorizontal(
+                shadowColor = Color.Black.copy(alpha = 0.5f),
+                highlightColor = Color.White.copy(alpha = 0.05f)
+            )
+
+            Column(modifier = Modifier.padding(16.dp)) {
+                // --- SECCIÓN CENTRAL: DOS COLUMNAS (INFO VS ESTADO/PRESUPUESTO) ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(
-                            text = "🏷️ NOMBRE DEL PROYECTO",
-                            color = Color.Gray,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
-                        )
+                    // COLUMNA IZQUIERDA: TÍTULO
+                    Column(modifier = Modifier.weight(1f)) {
+                        // --- SECCIÓN SUPERIOR: ENCABEZADO TÉCNICO (ETIQUETA E ID) ---
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🏷️ NOMBRE DEL PROYECTO",
+                                color = Color.Gray,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Box(Modifier.width(1.dp).height(10.dp).background(Color.White.copy(0.2f)))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "#${tenderId.takeLast(8).uppercase()}",
+                                color = MaverickBlue.copy(alpha = 0.6f),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
+
                         Text(
                             text = title,
                             color = Color.White,
                             fontWeight = FontWeight.Black,
                             fontSize = 18.sp,
                             lineHeight = 22.sp,
-                            maxLines = 2,
+                            maxLines = 3,
                             overflow = TextOverflow.Ellipsis
-                        )
-                        
-                        Spacer(Modifier.height(8.dp))
-                        
-                        Text(
-                            text = "#${tenderId.takeLast(8).uppercase()}",
-                            color = MaverickBlue.copy(alpha = 0.6f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
                         )
                     }
 
-                    Column(horizontalAlignment = Alignment.End) {
-                        StatusPillPremium(effectiveStatus)
-                        Spacer(Modifier.height(8.dp))
-                        
-                        // Badge de Tiempo
+                    // COLUMNA DERECHA: ESTADO Y TARJETA PRESUPUESTOS
+                    Column(
+                        modifier = Modifier.width(115.dp),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 1. ESTADO
+                        StatusPillPremium(status = effectiveStatus, modifier = Modifier.wrapContentSize() .fillMaxWidth())
+
+                        // 2. TARJETA PRESUPUESTOS
                         Surface(
-                            color = if (remainingDays < 3 && remainingDays > 0) StatusWarning.copy(0.1f) else Color.White.copy(0.05f),
-                            shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(1.dp, if (remainingDays < 3 && remainingDays > 0) StatusWarning.copy(0.3f) else Color.White.copy(0.1f))
+                            color = Color.Black.copy(0.3f), // Fondo más oscuro premium
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(0.15f)) // Bordes más resaltados
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier.padding(4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(if (remainingDays > 0) "⏳" else "🏁", fontSize = 10.sp)
-                                Spacer(Modifier.width(4.dp))
                                 Text(
-                                    text = if (remainingDays > 0) "Faltan $remainingDays días" else "Finalizado",
+                                    "PRESUPUESTOS",
                                     fontSize = 10.sp,
-                                    color = if (remainingDays < 3 && remainingDays > 0) StatusWarning else Color.White,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center,
+                                    letterSpacing = 1.sp
                                 )
+                                HorizontalDivider( color = Color.White.copy(0.2f), thickness = 1.dp)
+                                Spacer(Modifier.height(10.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // NUEVOS
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = unreadCount.toString(),
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = if (unreadCount > 0) NeonCyber else Color.Gray.copy(alpha = 0.5f)
+                                        )
+                                        Text(
+                                            "NUEVOS",
+                                            fontSize = 6.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = if (unreadCount > 0) NeonCyber.copy(alpha = 0.8f) else Color.Gray.copy(alpha = 0.5f)
+                                        )
+                                    }
+                                    
+                                    // RECIBIDOS
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = budgetCount.toString(),
+                                            fontSize = 20.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = if (budgetCount > 0) MaverickBlue else Color.Gray.copy(alpha = 0.5f)
+                                        )
+                                        Text(
+                                            "RECIBIDOS",
+                                            fontSize = 6.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = if (budgetCount > 0) MaverickBlue.copy(alpha = 0.8f) else Color.Gray.copy(alpha = 0.5f)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
 
                 Spacer(Modifier.height(16.dp))
+                DepthDividerHorizontal(
+                    shadowColor = Color.Black.copy(alpha = 0.4f),
+                    highlightColor = Color.White.copy(alpha = 0.03f)
+                )
+                Spacer(Modifier.height(16.dp))
 
-                // --- FILA CENTRAL: CONTADORES Y MODULARIDAD ---
+                // --- SECCIÓN: FECHAS Y TIEMPO (REORGANIZADO) ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // SECCIÓN FECHAS (IZQUIERDA)
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                         DateInfoRowEmoji("📅", "INICIO", df.format(Date(startDate)))
                         DateInfoRowEmoji("🏁", "CIERRE", df.format(Date(endDate)))
                     }
 
-                    // SECCIÓN PRESUPUESTOS (DERECHA - CON BADGE "NUEVO" INTEGRADO)
+                    // BADGE DE TIEMPO (Temporizador prolijo)
                     Surface(
-                        color = Color.Black.copy(0.4f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(0.05f))
+                        color = if (remainingDays in 1..2) StatusWarning.copy(0.1f) else Color.White.copy(0.05f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, if (remainingDays in 1..2) StatusWarning.copy(0.3f) else Color.White.copy(0.1f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            // --- BADGE DE "NUEVO" (Centrado a la izquierda del total) ---
-                            if (unreadCount > 0) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .background(NeonCyber.copy(0.1f), RoundedCornerShape(6.dp))
-                                        .border(1.dp, NeonCyber.copy(0.3f), RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(unreadCount.toString(), color = NeonCyber, fontSize = 12.sp, fontWeight = FontWeight.Black)
-                                    Text("NUEVO", color = NeonCyber, fontSize = 6.sp, fontWeight = FontWeight.Black)
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Box(modifier = Modifier.width(1.dp).height(24.dp).background(Color.White.copy(0.1f)))
-                                Spacer(Modifier.width(12.dp))
-                            }
-
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("OFERTAS", fontSize = 7.sp, fontWeight = FontWeight.Black, color = Color.Gray)
-                                Text(budgetCount.toString(), fontSize = 22.sp, fontWeight = FontWeight.Black, color = MaverickBlue)
-                            }
+                            Text(if (remainingDays > 0) "⏳" else "🏁", fontSize = 12.sp)
+                            Text(
+                                text = if (remainingDays > 0) "FALTAN $remainingDays DÍAS" else "FINALIZADO",
+                                fontSize = 8.sp,
+                                color = if (remainingDays in 1..2) StatusWarning else Color.White,
+                                fontWeight = FontWeight.Black
+                            )
                         }
                     }
                 }
 
-                // --- SECCIÓN INFERIOR: ADJUDICACIÓN (ESTILO PREMIUM) ---
+                // --- SECCIÓN INFERIOR: ADJUDICACIÓN ---
                 if (effectiveStatus == "ADJUDICADA" && awardedProviderName != null) {
-                    Spacer(Modifier.height(12.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(0.1f), Color.Transparent))))
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
+                    DepthDividerHorizontal(
+                        shadowColor = Color.Black.copy(alpha = 0.6f),
+                        highlightColor = Color.White.copy(alpha = 0.08f)
+                    )
+                    Spacer(Modifier.height(16.dp))
                     
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -621,7 +733,11 @@ fun LicitacionFolderPremium(
                     ) {
                         Box(modifier = Modifier.size(40.dp)) {
                             AsyncImage(
-                                model = awardedProviderPhotoUrl,
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(awardedProviderPhotoUrl)
+                                    .crossfade(true)
+                                    .size(120, 120) // 🔥 [OPTIMIZACIÓN ELITE] Evita cargar imágenes gigantes en RAM
+                                    .build(),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -645,7 +761,7 @@ fun LicitacionFolderPremium(
                         }
                     }
                 } else if (effectiveStatus == "CERRADA" && awardedProviderName == null) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -661,6 +777,7 @@ fun LicitacionFolderPremium(
     }
 }
 
+
 @Composable
 fun DateInfoRowEmoji(emoji: String, label: String, date: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -674,18 +791,10 @@ fun DateInfoRowEmoji(emoji: String, label: String, date: String) {
 }
 
 @Composable
-fun DateInfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, date: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(10.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, fontSize = 8.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(4.dp))
-        Text(date.uppercase(), fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-fun StatusPillPremium(status: String) {
+fun StatusPillPremium(
+    status: String,
+    modifier: Modifier = Modifier
+) {
     val upperStatus = status.uppercase()
     val color = when(upperStatus) {
         "ACTIVO", "ABIERTA" -> Color(0xFF10B981) // Verde esmeralda
@@ -697,26 +806,28 @@ fun StatusPillPremium(status: String) {
     val finalColor = if (isCancelled) Color.Gray else color
 
     Surface(
-        color = finalColor.copy(0.1f),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, finalColor.copy(0.2f))
+        color = finalColor.copy(0.15f), // Más opaco para resaltar
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.2.dp, finalColor.copy(0.5f)), // Borde más sólido y marcado
+        modifier = modifier
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
             // Indicador de punto de color
             Box(
                 modifier = Modifier
                     .size(6.dp)
-                    .clip(RoundedCornerShape(50))
+                    .clip(CircleShape)
                     .background(finalColor)
             )
             Spacer(Modifier.width(8.dp))
             Text(
                 upperStatus,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Black,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.ExtraBold, // Texto más grueso
                 color = finalColor,
                 letterSpacing = 1.sp,
                 textDecoration = if (isCancelled) TextDecoration.LineThrough else null
@@ -726,10 +837,33 @@ fun StatusPillPremium(status: String) {
 }
 
 
+@Composable
+fun BudgetStatusBadge(status: BudgetStatus) {
+    val (color, emoji) = when (status) {
+        BudgetStatus.PENDIENTE -> Color(0xFFFACC15) to "⏳"
+        BudgetStatus.ACEPTADO -> Color(0xFF10B981) to "✅"
+        BudgetStatus.RECHAZADO -> Color(0xFFEF4444) to "❌"
+        else -> Color.Gray to "📄"
+    }
+
+    Surface(
+        color = color.copy(alpha = 0.2f),
+        shape = CircleShape,
+        border = BorderStroke(0.5.dp, color.copy(alpha = 0.5f))
+    ) {
+        Text(
+            text = emoji,
+            fontSize = 8.sp,
+            modifier = Modifier.padding(2.dp)
+        )
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BudgetCard(
-    budget: com.example.myapplication.data.local.BudgetEntity,
+    modifier: Modifier = Modifier,
+    budget: BudgetEntity,
     isSelected: Boolean = false,
     isMultiSelectionActive: Boolean = false,
     categoryEmoji: String? = null,
@@ -737,8 +871,8 @@ fun BudgetCard(
     onAvatarClick: () -> Unit = {},
     onViewClick: () -> Unit = {},
     onChatClick: () -> Unit = {},
-    onLongClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onLongClick: () -> Unit = {}
+
 ) {
     val borderColor = if (isSelected) MaverickBlue else Color.White.copy(alpha = 0.1f)
     val effectiveEmoji = categoryEmoji ?: "📋"
@@ -792,6 +926,16 @@ fun BudgetCard(
                 }
             }
 
+            // --- INDICADOR DE ESTADO (MANAGER) ---
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 4.dp, top = 4.dp),
+                contentAlignment = Alignment.TopStart
+            ) {
+                BudgetStatusBadge(status = budget.status)
+            }
+
             // Cuerpo: Info del Proveedor (Click -> Perfil)
             Column(
                 modifier = Modifier
@@ -812,7 +956,11 @@ fun BudgetCard(
                         contentAlignment = Alignment.Center
                     ) {
                         AsyncImage(
-                            model = budget.providerPhotoUrl,
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(budget.providerPhotoUrl)
+                                .crossfade(true)
+                                .size(100, 100) // 🔥 [OPTIMIZACIÓN ELITE] Imagen optimizada para el Grid
+                                .build(),
                             contentDescription = "Foto de perfil",
                             modifier = Modifier.fillMaxSize().clip(CircleShape),
                             contentScale = ContentScale.Crop
@@ -977,7 +1125,7 @@ fun BudgetCard(
 @Preview(showBackground = true, backgroundColor = 0xFF05070A)
 @Composable
 fun BudgetCardPreview() {
-    val sampleBudgetRead = com.example.myapplication.data.local.BudgetEntity(
+    val sampleBudgetRead = BudgetEntity(
         budgetId = "PRE-84920",
         clientId = "user123",
         providerId = "prov456",
@@ -1044,7 +1192,7 @@ fun TarjetaPresupuestoPremiumPreview() {
     }
 }
 
-@Preview(showBackground = true, backgroundColor = 0xFF05070A)
+@Preview(showBackground = true, backgroundColor = 0xFFE2E8F0)
 @Composable
 fun LicitacionFolderPremiumPreview() {
     MyApplicationTheme {
@@ -1054,8 +1202,7 @@ fun LicitacionFolderPremiumPreview() {
                 title = "Reparación de Aire Acondicionado",
                 category = "Climatización",
                 categoryIcon = "❄️",
-                categoryColor = Color(0xFF38BDF8),
-                supercategoryColor = Color(0xFF0EA5E9), // Ejemplo Supercategoría
+                supercategoryColor = Color(0xFF0EA5E9), 
                 tenderId = "T-AB-1-ABCD",
                 status = "ABIERTA",
                 startDate = System.currentTimeMillis(),
@@ -1063,6 +1210,7 @@ fun LicitacionFolderPremiumPreview() {
                 budgetCount = 5,
                 unreadCount = 2,
                 isSelected = false,
+                onViewDetails = {},
                 onClick = {}
             )
 
@@ -1071,8 +1219,7 @@ fun LicitacionFolderPremiumPreview() {
                 title = "Mantenimiento Preventivo IT",
                 category = "Informática",
                 categoryIcon = "💻",
-                categoryColor = MaverickBlue,
-                supercategoryColor = MaverickPurple, // Ejemplo Supercategoría
+                supercategoryColor = MaverickPurple, 
                 tenderId = "T-AD-2-EFGH",
                 status = "ADJUDICADA",
                 startDate = System.currentTimeMillis() - 86400000 * 10,
@@ -1082,9 +1229,11 @@ fun LicitacionFolderPremiumPreview() {
                 isSelected = false,
                 awardedProviderName = "Maverick Tech S.A.",
                 awardedBudgetId = "BUD-9999",
-                awardedProviderPhotoUrl = "https://picsum.photos/seed/provider/200/200", // Foto de prueba
+                awardedProviderPhotoUrl = "https://picsum.photos/seed/provider/200/200",
+                onViewDetails = {},
                 onClick = {}
             )
         }
     }
 }
+

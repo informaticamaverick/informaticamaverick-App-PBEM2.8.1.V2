@@ -40,14 +40,14 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.myapplication.data.local.MessageEntity
-import com.example.myapplication.data.local.BudgetEntity
-import com.example.myapplication.data.local.CategoryEntity
-import com.example.myapplication.data.model.MessageType
-import com.example.myapplication.presentation.client.ChatThread
-import com.example.myapplication.ui.theme.AppColors
-import com.example.myapplication.ui.theme.MyApplicationTheme
-import com.example.myapplication.ui.theme.getThemeColors
+import com.example.myapplication.core.data.local.entity.MessageEntity
+import com.example.myapplication.core.data.local.entity.BudgetEntity
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.core.domain.model.MessageType
+import com.example.myapplication.presentation.features.chat.ChatThread
+import com.example.myapplication.presentation.designsystem.theme.AppColors
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.theme.getThemeColors
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.*
@@ -957,7 +957,7 @@ fun AudioMessageBubble(
                                     mediaPlayer?.pause()
                                     isPlaying = false
                                 } else {
-                                    if (mediaPlayer == null && audioPath != null) {
+                                    if (mediaPlayer == null) {
                                         try {
                                             mediaPlayer = MediaPlayer().apply {
                                                 setDataSource(audioPath)

@@ -2,6 +2,12 @@
 /**
 package com.example.myapplication.presentation.components
 
+import com.example.myapplication.presentation.features.home.*
+
+import com.example.myapplication.presentation.features.auth.*
+
+import com.example.myapplication.presentation.features.home.*
+
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -29,13 +35,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.myapplication.data.local.CategoryEntity
-import com.example.myapplication.data.model.Provider
-import com.example.myapplication.presentation.client.BeBrainViewModel
-import com.example.myapplication.presentation.client.SearchProcessorViewModel
-import com.example.myapplication.presentation.client.SuperCategory
-import com.example.myapplication.presentation.components.Utilidades.*
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.core.domain.model.Provider
+import com.example.myapplication.presentation.features.BeBrainViewModel
+import com.example.myapplication.presentation.features.SearchProcessorViewModel
+import com.example.myapplication.presentation.features.SuperCategory
+import com.example.myapplication.presentation.designsystem.components.*
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 
 /*
  * REFACTORIZACIÓN COMPLETADA:
@@ -406,3 +412,12 @@ fun BeResultadoContentPreview() {
     }
 }
 **/
+
+
+
+
+
+
+
+
+

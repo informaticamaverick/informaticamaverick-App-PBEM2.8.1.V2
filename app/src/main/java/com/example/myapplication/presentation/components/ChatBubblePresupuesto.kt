@@ -26,15 +26,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.myapplication.data.local.MessageEntity
-import com.example.myapplication.data.local.BudgetEntity
-import com.example.myapplication.data.local.BudgetItem
-import com.example.myapplication.data.local.BudgetService
-import com.example.myapplication.data.model.Provider
-import com.example.myapplication.data.model.MessageType
-import com.example.myapplication.ui.theme.AppColors
-import com.example.myapplication.ui.theme.MyApplicationTheme
-import com.example.myapplication.ui.theme.getThemeColors
+import com.example.myapplication.core.data.local.entity.MessageEntity
+import com.example.myapplication.core.data.local.entity.BudgetEntity
+import com.example.myapplication.core.data.local.entity.BudgetStatus
+import com.example.myapplication.core.data.local.entity.BudgetItem
+import com.example.myapplication.core.data.local.entity.BudgetService
+import com.example.myapplication.core.domain.model.Provider
+import com.example.myapplication.core.domain.model.MessageType
+import com.example.myapplication.presentation.designsystem.theme.AppColors
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.theme.getThemeColors
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -618,7 +619,7 @@ fun BudgetRequestBubble(
     }
 }
 
-/**
+
 // ==========================================
 // SECCIÓN DE VISTAS PREVIAS (PREVIEWS)
 // ==========================================
@@ -677,7 +678,7 @@ fun BudgetRequestBubble(
             subtotal = 72000.0,
             grandTotal = 87120.0,
             validityDays = 5,
-            status = com.example.myapplication.data.local.BudgetStatus.PENDIENTE,
+            //status = com.example.myapplication.data.local.BudgetStatus.PENDIENTE,
             dateTimestamp = System.currentTimeMillis()
         )
         MyApplicationTheme {
@@ -694,4 +695,13 @@ fun BudgetRequestBubble(
             }
         }
     }
-**/
+
+
+
+
+
+
+
+
+
+

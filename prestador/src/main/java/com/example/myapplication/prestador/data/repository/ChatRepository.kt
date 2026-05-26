@@ -216,7 +216,7 @@ class ChatRepository @Inject constructor(
         val timestamp = System.currentTimeMillis()
 
         // 1. Guardar localmente primero
-        val localPath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, imageBase64, messageId)
+        val localPath = com.example.myapplication.core.utils.ImageUtils.saveBase64ToFile(context, imageBase64, messageId)
 
         val message = MessageEntity(
             messageId = messageId,
@@ -561,7 +561,7 @@ class ChatRepository @Inject constructor(
                     val base64 = snapshot.child("content").getValue(String::class.java)
                         ?: snapshot.child("imageUrl").getValue(String::class.java)
                     if (base64 != null && !base64.startsWith("http") && !base64.startsWith("/")) {
-                        localImagePath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, base64, msgId)
+                        localImagePath = com.example.myapplication.core.utils.ImageUtils.saveBase64ToFile(context, base64, msgId)
                         resolvedImageUrl = localImagePath // Correción: Ahora usa el path local en vez de "[imagen]"
                     } else {
                         resolvedImageUrl = base64
@@ -1200,9 +1200,9 @@ class ChatRepository @Inject constructor(
                                         var localAudioPath: String? = null
 
                                         if (msgType == "IMAGE" && rawContent.isNotEmpty() && !rawContent.startsWith("http")) {
-                                            localImagePath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "IMG_", ".webp")
+                                            localImagePath = com.example.myapplication.core.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "IMG_", ".webp")
                                         } else if (msgType == "AUDIO" && rawContent.isNotEmpty() && !rawContent.startsWith("http")) {
-                                            localAudioPath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "AUD_", ".3gp")
+                                            localAudioPath = com.example.myapplication.core.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "AUD_", ".3gp")
                                         }
 
                                         val msg = MessageEntity(
@@ -1353,9 +1353,9 @@ class ChatRepository @Inject constructor(
                                         var localAudioPath: String? = null
 
                                         if (msgType == "IMAGE" && rawContent.isNotEmpty() && !rawContent.startsWith("http")) {
-                                            localImagePath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "IMG_", ".webp")
+                                            localImagePath = com.example.myapplication.core.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "IMG_", ".webp")
                                         } else if (msgType == "AUDIO" && rawContent.isNotEmpty() && rawContent.startsWith("http")) {
-                                            localAudioPath = com.example.myapplication.prestador.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "AUD_", ".3gp")
+                                            localAudioPath = com.example.myapplication.core.utils.ImageUtils.saveBase64ToFile(context, rawContent, msgId, "AUD_", ".3gp")
                                         }
                                         val msg = MessageEntity(
                                             messageId = msgId,
@@ -1735,3 +1735,4 @@ class ChatRepository @Inject constructor(
 
 
 }
+

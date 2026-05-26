@@ -1,59 +1,33 @@
 package com.example.myapplication.presentation.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.BlurEffect
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -62,12 +36,23 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.data.local.CategoryEntity
-import com.example.myapplication.presentation.client.SuperCategory
-import com.example.myapplication.ui.theme.MyApplicationTheme
-import androidx.compose.ui.draw.drawBehind
-import com.example.myapplication.presentation.components.Utilidades.AutoSizeText
-import com.example.myapplication.presentation.client.CategoryVisuals
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.presentation.designsystem.components.AutoSizeText
+import com.example.myapplication.presentation.designsystem.components.DepthDividerHorizontal
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import com.example.myapplication.presentation.features.home.CategoryVisuals
+import com.example.myapplication.presentation.features.home.SuperCategory
+import com.example.myapplication.presentation.designsystem.components.MenuTacticoBe
+
+import com.example.myapplication.presentation.designsystem.components.BeMenuItem
+import com.example.myapplication.presentation.designsystem.components.MaverickColors
+import com.example.myapplication.presentation.registry.MaverickIcons
+import com.example.myapplication.presentation.components.BeEmotion
+
 // ==========================================================================================
 // ------------------- PIN DE FAVORITOS (REUTILIZABLE) -----------------------------------
 // ==========================================================================================
@@ -116,26 +101,32 @@ fun FavoritePinBadge(
 fun CompactCategoryCard(
     item: CategoryEntity, 
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit = {}
+    onToggleFavorite: () -> Unit = {},
+    isShortcut: Boolean = false,
+    onManageShortcut: (Boolean) -> Unit = {}
 ) {
     val baseColor = Color(CategoryVisuals.getColorFor(item.superCategory))
+    val haptic = LocalHapticFeedback.current
     // ==========================================================================================
     // SECCIÓN: ESTADOS PARA EL CONTROL DE MENÚS Y BADGES
     // ==========================================================================================
-    var expandedInfoBadge by remember { mutableStateOf(false) }
-    var showNotificationMenu by remember { mutableStateOf(false) } // Controla el menú de novedades (Top-Left)
     var showContextMenu by remember { mutableStateOf(false) }
+    var touchOffset by remember { mutableStateOf(Offset.Zero) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(195.dp) // Altura equilibrada
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-                onLongClick = { showContextMenu = true }
-            )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { offset ->
+                        touchOffset = offset
+                        showContextMenu = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onTap = { onClick() }
+                )
+            }
     ) {
         // --- 1. TARJETA BASE ---
         Card(
@@ -201,18 +192,13 @@ fun CompactCategoryCard(
                 // SECCIÓN: BADGES (NOTIFICACIÓN, FAVORITO E INFORMACIÓN) - SUPERPUESTOS AL EMOJI
                 // ==========================================================================================
                 // 1. BADGE DE NOTIFICACIÓN (Extremo Izquierdo Superior)
-                // Se muestra si la categoría es nueva, tiene nuevos prestadores o es publicidad
                 if (item.isNew || item.isNewPrestador || item.isAd) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(2.dp)
-                            .offset(x = 0.dp, y = 0.dp) // ==========================================
-                                                        // SECCIÓN: OFFSET PARA MOVER NOTIFICACIÓN
-                                                        // ==========================================
                     ) {
                         Surface(
-                            onClick = { showNotificationMenu = !showNotificationMenu },
                             modifier = Modifier.size(28.dp),
                             shape = CircleShape,
                             color = Color(0xFFFF9800).copy(alpha = 0.9f), // Naranja para notificaciones
@@ -223,53 +209,15 @@ fun CompactCategoryCard(
                                 Text(text = "🔔", fontSize = 14.sp)
                             }
                         }
-
-                        // Menú M3 para mostrar detalles de notificación
-                        DropdownMenu(
-                            expanded = showNotificationMenu,
-                            onDismissRequest = { showNotificationMenu = false },
-                            modifier = Modifier
-                                .background(Color(0xFF1A1C1E))
-                                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        ) {
-                            if (item.isNew) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text("✨ Este es un nuevo servicio", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    },
-                                    onClick = { showNotificationMenu = false }
-                                )
-                            }
-                            if (item.isNewPrestador) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text("👥 Hay nuevos prestadores o profesionales para este servicio", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    },
-                                    onClick = { showNotificationMenu = false }
-                                )
-                            }
-                            if (item.isAd) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text("📢 Servicio Patrocinado", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    },
-                                    onClick = { showNotificationMenu = false }
-                                )
-                            }
-                        }
                     }
                 }
 
                 // 2. BADGE DE FAVORITO (Extremo Derecho Superior)
-                // Se separó en su propio contenedor para permitir el uso de Offsets individuales
                 if (item.isFavorite) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(2.dp)
-                            .offset(x = 0.dp, y = 0.dp) // ==========================================
-                                                        // SECCIÓN: OFFSET PARA MOVER FAVORITOS
-                                                        // ==========================================
                     ) {
                         FavoritePinBadge(
                             isFavorite = true
@@ -282,10 +230,7 @@ fun CompactCategoryCard(
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .offset(x = 1.dp, y = (-40).dp) // ==========================================
-                                                     // SECCIÓN: OFFSET PARA MOVER INFORMACIÓN
-                                                     // (Posicionado relativo al centro del emoji)
-                                                     // ==========================================
+                        .offset(x = 1.dp, y = (-40).dp)
                 ) {
                     Surface(
                         onClick = { showInfoMenu = !showInfoMenu },
@@ -327,14 +272,13 @@ fun CompactCategoryCard(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(53.dp), // Incrementado para usar todo el alto posible hasta el divider superior
+                        .height(53.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // 1. DIVIDER HORIZONTAL (Delimita la zona de imagen de la zona de texto)
-                    HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.45f),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(horizontal = 1.dp)
+                    // 1. DIVIDER HORIZONTAL DE PROFUNDIDAD
+                    DepthDividerHorizontal(
+                        shadowColor = Color.Black.copy(alpha = 0.5f),
+                        highlightColor = Color.White.copy(alpha = 0.25f)
                     )
 
                     // 2. CONTENEDOR DE CONTENIDO (TEXTO + BADGE CON DIVIDER VERTICAL)
@@ -345,7 +289,6 @@ fun CompactCategoryCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // --- SUBSECCIÓN: NOMBRE DE LA CATEGORÍA ---
-                        // Se expande para usar todo el ancho disponible a la izquierda del divider vertical
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -363,86 +306,28 @@ fun CompactCategoryCard(
                                     letterSpacing = 1.1.sp
                                 ),
                                 textAlign = TextAlign.Center,
-                                maxLines = 3 // Permitimos hasta 3 líneas para evitar cortes de palabras en nombres largos
+                                maxLines = 3
                             )
                         }
-
-
-                        }
                     }
                 }
             }
         }
 
-        // --- MENU CONTEXTUAL PARA FAVORITOS ---
-        DropdownMenu(
-            expanded = showContextMenu,
+        // --- MENU CONTEXTUAL PARA FAVORITOS (MENU TACTICO BE) ---
+        MenuTacticoBe(
+            isVisible = showContextMenu,
             onDismissRequest = { showContextMenu = false },
-            modifier = Modifier.background(Color(0xFF1A1C1E)).border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (item.isFavorite) "Quitar de Favoritos" else "Agregar a Favoritos",
-                            color = Color.White,
-                            fontSize = 14.sp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "📌", fontSize = 16.sp, modifier = Modifier.alpha(if (item.isFavorite) 1f else 0.4f))
-                    }
-                },
-                onClick = {
-                    onToggleFavorite()
-                    showContextMenu = false
-                }
-            )
-        }
-    }
-//}
-
-/**
- * Componente interno: Icono Informativo Minimalista (Sin fondo)
- */
-@Composable
-fun CategoryBadgeItem(icon: String, tooltip: String, isExpanded: Boolean, onToggle: () -> Unit) {
-    Box {
-        // SECCIÓN: ICONO INTERACTIVO SIN FONDO
-        Box(
-            modifier = Modifier
-                .size(26.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null, // Limpieza visual sin ripple para estilo glass/minimal
-                    onClick = onToggle
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = icon,
-                fontSize = 14.sp,
-                modifier = Modifier.graphicsLayer { alpha = 0.85f }
-            )
-        }
-
-        DropdownMenu(
-            expanded = isExpanded,
-            onDismissRequest = onToggle,
-            modifier = Modifier
-                .width(220.dp) // Ancho ligeramente mayor para descripciones
-                .background(Color(0xFF0C0F14))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-        ) {
-            Box(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = tooltip,
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    lineHeight = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
+            onAction = {
+                onManageShortcut(!isShortcut)
+                onToggleFavorite()
+                showContextMenu = false
+            },
+            touchOffset = touchOffset,
+            emotion = if (isShortcut) BeEmotion.HAPPY else BeEmotion.NORMAL,
+            actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
+            actionIconEmoji = "📌"
+        )
     }
 }
 
@@ -570,26 +455,32 @@ fun MiniCompactCategoryCard(
 fun CompactCategoryCardHorizontal(
     item: CategoryEntity, 
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit = {}
+    onToggleFavorite: () -> Unit = {},
+    isShortcut: Boolean = false,
+    onManageShortcut: (Boolean) -> Unit = {}
 ) {
     val baseColor = Color(CategoryVisuals.getColorFor(item.superCategory))
+    val haptic = LocalHapticFeedback.current
     // ==========================================================================================
     // SECCIÓN: ESTADOS PARA EL CONTROL DE MENÚS Y BADGES
     // ==========================================================================================
-    var expandedInfoBadge by remember { mutableStateOf(false) }
-    var showNotificationMenu by remember { mutableStateOf(false) } // Controla el menú de novedades (Top-Left)
     var showContextMenu by remember { mutableStateOf(false) }
+    var touchOffset by remember { mutableStateOf(Offset.Zero) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(105.dp)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-                onLongClick = { showContextMenu = true }
-            )
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = { offset ->
+                        touchOffset = offset
+                        showContextMenu = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onTap = { onClick() }
+                )
+            }
     ) {
         Card(
             shape = RoundedCornerShape(12.dp),
@@ -607,7 +498,7 @@ fun CompactCategoryCardHorizontal(
                         colors = listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
                         start = Offset(0f, 0f),
                         end = Offset(size.width, size.height)
-                    );
+                    )
                     onDrawWithContent { drawContent(); drawRect(gradient, blendMode = BlendMode.Overlay) }
                 })
 
@@ -674,15 +565,7 @@ fun CompactCategoryCardHorizontal(
                         Box(
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
                         ) {
-                            val infoText = remember(item) {
-                                item.description.ifEmpty { "Explora los servicios disponibles en ${item.name}." }
-                            }
-                            CategoryBadgeItem(
-                                icon = "✨",
-                                tooltip = infoText,
-                                isExpanded = expandedInfoBadge,
-                                onToggle = { expandedInfoBadge = !expandedInfoBadge }
-                            )
+                            Text(text = "✨", fontSize = 14.sp, modifier = Modifier.graphicsLayer { alpha = 0.85f })
                         }
                     }
                     // SECCIÓN DERECHA (Icono)
@@ -719,11 +602,9 @@ fun CompactCategoryCardHorizontal(
         // SECCIÓN: BADGES SUPERIORES (NOTIFICACIÓN Y FAVORITO)
         // ==========================================================================================
         // 1. BADGE DE NOTIFICACIÓN (Extremo Izquierdo Superior)
-        // Se muestra si la categoría es nueva, tiene nuevos prestadores o es publicidad
         if (item.isNew || item.isNewPrestador || item.isAd) {
             Box(modifier = Modifier.align(Alignment.TopStart).padding(top = 4.dp, start = 8.dp)) {
                 Surface(
-                    onClick = { showNotificationMenu = !showNotificationMenu },
                     modifier = Modifier.size(28.dp),
                     shape = CircleShape,
                     color = Color(0xFFFF9800).copy(alpha = 0.9f),
@@ -732,39 +613,6 @@ fun CompactCategoryCardHorizontal(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(text = "🔔", fontSize = 14.sp)
-                    }
-                }
-
-                DropdownMenu(
-                    expanded = showNotificationMenu,
-                    onDismissRequest = { showNotificationMenu = false },
-                    modifier = Modifier
-                        .background(Color(0xFF1A1C1E))
-                        .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                ) {
-                    if (item.isNew) {
-                        DropdownMenuItem(
-                            text = {
-                                Text("✨ Este es un nuevo servicio", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            },
-                            onClick = { showNotificationMenu = false }
-                        )
-                    }
-                    if (item.isNewPrestador) {
-                        DropdownMenuItem(
-                            text = {
-                                Text("👥 Hay nuevos prestadores o profesionales para este servicio", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            },
-                            onClick = { showNotificationMenu = false }
-                        )
-                    }
-                    if (item.isAd) {
-                        DropdownMenuItem(
-                            text = {
-                                Text("📢 Servicio Patrocinado", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            },
-                            onClick = { showNotificationMenu = false }
-                        )
                     }
                 }
             }
@@ -778,32 +626,23 @@ fun CompactCategoryCardHorizontal(
             )
         }
 
-        // --- MENU CONTEXTUAL PARA FAVORITOS ---
-        DropdownMenu(
-            expanded = showContextMenu,
+        // --- MENU CONTEXTUAL PARA FAVORITOS (MENU TACTICO BE) ---
+        MenuTacticoBe(
+            isVisible = showContextMenu,
             onDismissRequest = { showContextMenu = false },
-            modifier = Modifier.background(Color(0xFF1A1C1E)).border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-        ) {
-            DropdownMenuItem(
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (item.isFavorite) "Quitar de Favoritos" else "Agregar a Favoritos",
-                            color = Color.White,
-                            fontSize = 14.sp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "📌", fontSize = 16.sp, modifier = Modifier.alpha(if (item.isFavorite) 1f else 0.4f))
-                    }
-                },
-                onClick = {
-                    onToggleFavorite()
-                    showContextMenu = false
-                }
-            )
-        }
+            onAction = {
+                onManageShortcut(!isShortcut)
+                onToggleFavorite()
+                showContextMenu = false
+            },
+            touchOffset = touchOffset,
+            emotion = if (isShortcut) BeEmotion.HAPPY else BeEmotion.NORMAL,
+            actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
+            actionIconEmoji = "📌"
+        )
     }
 }
+
 // ==========================================================================================
 // ------------------- TARJETA ESTILO BENTO PARA SUPERCATEGORÍAS (Extraída de HomeScreenCliente3)--------------------------------
 // ==========================================================================================
@@ -814,29 +653,68 @@ fun BentoSuperCategoryCard(
     emoji: String, 
     height: Dp, 
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit = {}
+    onToggleFavorite: () -> Unit = {},
+    isShortcut: Boolean = false,
+    onManageShortcut: (Boolean) -> Unit = {}
 ) {
+    val haptic = LocalHapticFeedback.current
     var showContextMenu by remember { mutableStateOf(false) }
+    var touchOffset by remember { mutableStateOf(Offset.Zero) }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
     // SECCIÓN: Contenedor para permitir que el pin sobresalga (efecto Badge)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(height)
-            .padding(top = 8.dp, end = 8.dp) // Espacio para que el pin no se corte
+            .padding(top = 8.dp, start = 2.dp, end = 2.dp) // Sincronización Maverick: Margen simétrico para centrado perfecto
     ) {
-        Card(
+        Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .shadow(12.dp, RoundedCornerShape(8.dp))
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = { showContextMenu = true }
-                ),
-            // SECCIÓN: Esquinas equilibradas y bordes reforzados
-            shape = RoundedCornerShape(10.dp),
-            border = BorderStroke(2.dp, Color.White.copy(alpha = 0.3f)), // Borde más visible
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C1E))
+                .drawBehind {
+                    // --- SOMBRA 3D PERSONALIZADA (Estilo LicitacionFolder - Bottom & Sides only) ---
+                    val shadowColor = Color.Black.copy(alpha = if (isPressed) 1f else 1f)
+                    val shadowRadius = if (isPressed) 12.dp.toPx() else 8.dp.toPx()
+                    val offsetY = if (isPressed) 6.dp.toPx() else 4.dp.toPx()
+
+                    drawIntoCanvas { canvas ->
+                        val paint = Paint().asFrameworkPaint().apply {
+                            color = shadowColor.toArgb()
+                            setShadowLayer(shadowRadius, 0f, offsetY, shadowColor.toArgb())
+                        }
+                        canvas.nativeCanvas.drawRoundRect(
+                            0f,
+                            offsetY, // Empezamos desde abajo para que no se vea arriba
+                            size.width,
+                            size.height,
+                            8.dp.toPx(), // Radio de esquina
+                            8.dp.toPx(),
+                            paint
+                        )
+                    }
+                }
+                .graphicsLayer {
+                    val scale = if (isPressed) 0.98f else 1f
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onLongPress = { offset ->
+                            touchOffset = offset
+                            showContextMenu = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onTap = { onClick() }
+                    )
+                },
+            // SECCIÓN: Esquinas equilibradas y bordes reforzados (Sincronizado con LicitacionFolder)
+            shape = RoundedCornerShape(8.dp),
+            border = BorderStroke(1.5.dp, Color.White.copy(alpha = 0.25f)), 
+            color = Color(0xFF1A1C1E)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // Fondo con degradado
@@ -850,20 +728,22 @@ fun BentoSuperCategoryCard(
                             )
                         )
                     ))
+
+
                 // Iconos internos difuminados (Optimizado: Reemplazado LazyVerticalGrid por Row/Column estático)
                 Box(modifier = Modifier
                     .fillMaxSize()
                     .blur(radius = 16.dp) // Reducido levemente para mejorar performance
                     .alpha(0.25f)) {
-                    val bgItems = superCategory.items.take(4) // Máximo 4 para el fondo
+                //    val bgItems = superCategory.items.take(4) // Máximo 4 para el fondo
                     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceAround) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                            bgItems.getOrNull(0)?.let { Text(it.icon, fontSize = 60.sp) }
-                            bgItems.getOrNull(1)?.let { Text(it.icon, fontSize = 60.sp) }
+                          //  bgItems.getOrNull(0)?.let { Text(it.icon, fontSize = 60.sp) }
+                          //  bgItems.getOrNull(1)?.let { Text(it.icon, fontSize = 60.sp) }
                         }
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                            bgItems.getOrNull(2)?.let { Text(it.icon, fontSize = 60.sp) }
-                            bgItems.getOrNull(3)?.let { Text(it.icon, fontSize = 60.sp) }
+                           // bgItems.getOrNull(2)?.let { Text(it.icon, fontSize = 60.sp) }
+                           // bgItems.getOrNull(3)?.let { Text(it.icon, fontSize = 60.sp) }
                         }
                     }
                 }
@@ -872,90 +752,138 @@ fun BentoSuperCategoryCard(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp) // Reduce el espacio entre el icono y el título
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp) // Reducido para mayor compacidad
                 ) {
                     // ==========================================================================================
                     // SECCIÓN: FILA SUPERIOR (EMOJI CON SOMBRA Y CONTADOR DE SERVICIOS)
                     // ==========================================================================================
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.Start // Colocamos los elementos seguidos para que el texto quede a la derecha
+                        verticalAlignment = Alignment.Bottom, // Pegados hacia abajo
+                        horizontalArrangement = Arrangement.Start
                     ) {
                         // CONTENEDOR DE EMOJI: Superpone la sombra detrás del emoji principal
                         Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(end = 12.dp) // Espaciado entre el emoji y el texto de servicios
+                            contentAlignment = Alignment.Center
                         ) {
                             // EMOJI (SOMBRA): Silueta negra con desenfoque, posicionada detrás
                             Text(
                                 text = emoji,
-                                fontSize = 55.sp,
+                                fontSize = 48.sp, // Tamaño ajustado para compacidad
                                 modifier = Modifier
-                                    .offset(x = 4.dp, y = 4.dp) // Desfase para el efecto de profundidad
+                                    .offset(x = 3.dp, y = 3.dp)
                                     .graphicsLayer {
                                         alpha = 0.9f
                                         colorFilter = ColorFilter.tint(Color.Black)
                                     }
-                                    .blur(4.dp)
+                                    .blur(3.dp)
                             )
 
                             // EMOJI (COLOR): El emoji principal al frente
                             Text(
                                 text = emoji,
-                                fontSize = 55.sp,
+                                fontSize = 48.sp,
                                 modifier = Modifier.alpha(1f)
                             )
                         }
 
-                        // CANTIDAD DE SERVICIOS: Ubicada a la derecha del emoji
-                        Text(
-                            text = "${superCategory.items.size} Servicios",
-                            color = Color.Cyan,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 1.dp) // Alineación visual con la base del emoji
+                        Spacer(modifier = Modifier.width(6.dp))
+
+                        // CANTIDAD DE SERVICIOS: Columna alineada al lado del emoji
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.Bottom // Pegados hacia abajo
+
+
+                        ) {
+                            Surface(
+                                color = Color.Gray.copy(alpha = 0.15f), // Color gris en la caja
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.35f))
+                            ) {
+                                // [OPTIMIZACIÓN]: Usamos totalItems (contador directo de SQLite) 
+                                // en lugar de contar la lista de items en memoria.
+                                val countToShow = if (superCategory.totalItems > 0) superCategory.totalItems else superCategory.items.size
+                                Text(
+                                    text = countToShow.toString(),
+                                    color = Color.White, // El numero debe ser blanco
+                                    fontSize = 18.sp, // Numero mas chico (era 22)
+                                    fontWeight = FontWeight.Black,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Column(
+                                horizontalAlignment = Alignment.Start,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "SERVICIOS",
+                                    color = Color.Gray.copy(alpha = 0.8f),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.5.sp,
+                                        lineHeight = 8.sp
+                                    )
+                                )
+                                Text(
+                                    text = "PROFESIONES",
+                                    color = Color.Gray.copy(alpha = 0.8f),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 0.5.sp,
+                                        lineHeight = 8.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    
+                    // DIVIDER DE PROFUNDIDAD (Separador de Secciones)
+                    DepthDividerHorizontal(
+                        shadowColor = Color.Black.copy(alpha = 0.5f),
+                        highlightColor = Color.White.copy(alpha = 0.05f)
+                    )
+                    
+                    // Título de la Supercategoría (Detalle) - AutoAjustable a 2 líneas
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AutoSizeText(
+                            text = superCategory.title,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                lineHeight = 16.sp // Interlineado mas compacto
+                            ),
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                   Spacer(modifier = Modifier.height(12.dp))
-                    // Título de la Supercategoría (Detalle) - AutoAjustable a 2 líneas
-                    AutoSizeText(
-                        text = superCategory.title,
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            lineHeight = 18.sp
-                        ),
-                        maxLines = 2,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
                 
-                // --- MENU CONTEXTUAL PARA SUPERCATEGORÍAS ---
-                DropdownMenu(
-                    expanded = showContextMenu,
+                // --- MENU CONTEXTUAL PARA SUPERCATEGORÍAS (MENU TACTICO BE) ---
+                MenuTacticoBe(
+                    isVisible = showContextMenu,
                     onDismissRequest = { showContextMenu = false },
-                    modifier = Modifier.background(Color(0xFF1A1C1E)).border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = if (superCategory.isFavorite) "Quitar Super-Favorito" else "Hacer Super-Favorito",
-                                    color = Color.White,
-                                    fontSize = 14.sp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "📌", fontSize = 16.sp, modifier = Modifier.alpha(if (superCategory.isFavorite) 1f else 0.4f))
-                            }
-                        },
-                        onClick = {
-                            onToggleFavorite()
-                            showContextMenu = false
-                        }
-                    )
-                }
+                    onAction = {
+                        onManageShortcut(!isShortcut)
+                        onToggleFavorite()
+                        showContextMenu = false
+                    },
+                    touchOffset = touchOffset,
+                    emotion = if (isShortcut) BeEmotion.HAPPY else BeEmotion.NORMAL,
+                    actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
+                    actionIconEmoji = "📌"
+                )
             }
         }
 
@@ -1165,7 +1093,7 @@ fun BentoSuperCategoryCardPreview() {
             BentoSuperCategoryCard(
                 superCategory = sampleSuperCat,
                 emoji = "🏠",
-                height = 200.dp,
+                height = 130.dp,
                 onClick = {}
             )
         }
@@ -1223,3 +1151,12 @@ fun ExpandedBentoSuperCategoryCardPreview() {
         }
     }
 }
+
+
+
+
+
+
+
+
+

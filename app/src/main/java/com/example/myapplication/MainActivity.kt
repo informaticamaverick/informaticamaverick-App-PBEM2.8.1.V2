@@ -11,39 +11,48 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.myapplication.presentation.auth.StartupScreen
-//import com.example.myapplication.presentation.admin.AdminInitScreen
-// Se importa la navegación del cliente y se le da un alias para evitar conflictos.
-import com.example.myapplication.presentation.client.AppNavigation as ClientAppNavigation
-import com.example.myapplication.presentation.auth.LoginScreen
-// import com.example.myapplication.presentation.profile.CompleteProfileScreen // DEPRECATED MAVERICK V5
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.example.myapplication.presentation.features.auth.LoginScreen
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.myapplication.presentation.global.BeBrainViewModel
+import com.example.myapplication.presentation.global.InitialNavTarget
+import com.example.myapplication.presentation.features.home.AppNavigation
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    // Se llama a la navegación raíz de la aplicación.
-                    RootNavigation()
+                // [OPTIMIZACIÓN MAVERICK]: Fondo base inmediato para evitar flash blanco
+                Box(modifier = Modifier.fillMaxSize().background(Color(0xFF050508))) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = Color.Transparent // Surface transparente para ver el fondo base
+                    ) {
+                        // Se llama a la navegación raíz de la aplicación.
+                        RootNavigation()
+                    }
                 }
             }
         }
@@ -56,10 +65,22 @@ class MainActivity : ComponentActivity() {
  */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun RootNavigation() {
+fun RootNavigation(beBrainViewModel: BeBrainViewModel = hiltViewModel()) {
     val navController = rememberNavController()
-    // SECCIÓN B: La ruta inicial ahora es "startup" para la Experiencia Premium
-    val startDestination = "startup"
+    val navTarget by beBrainViewModel.initialNavTarget.collectAsState()
+
+    // [OPTIMIZACIÓN MAVERICK V5]: Decisión de destino inicial proactiva.
+    // Si todavía estamos chequeando (CHECKING), mostramos un contenedor vacío con el color de splash.
+    // Esto evita que se renderice la LoginScreen aunque sea por milisegundos.
+    if (navTarget == InitialNavTarget.CHECKING) {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0221)))
+        return
+    }
+
+    val startDestination = when (navTarget) {
+        InitialNavTarget.LOGIN -> "login"
+        else -> "main_screen"
+    }
 
     NavHost(
         navController = navController,
@@ -90,28 +111,13 @@ fun RootNavigation() {
         }
     ) {
         // ======================================================================================
-        // 0. PANTALLA DE STARTUP (PRE-CARGA INTELIGENTE)
+        // 0. PANTALLA DE STARTUP (DESACTIVADA)
         // ======================================================================================
+        /*
         composable("startup") {
-            StartupScreen(
-                onNavigateToLogin = {
-                    navController.navigate("login") {
-                        popUpTo("startup") { inclusive = true }
-                    }
-                },
-                onNavigateToMain = {
-                    navController.navigate("main_screen") {
-                        popUpTo("startup") { inclusive = true }
-                    }
-                },
-                onNavigateToProfileEdit = {
-                    // Si el perfil está incompleto, vamos directamente al perfil en modo edición
-                    navController.navigate("main_screen?target=profile") {
-                        popUpTo("startup") { inclusive = true }
-                    }
-                }
-            )
+            StartupScreen( ... )
         }
+        */
 
         // ======================================================================================
         // 1. PANTALLA DE LOGIN
@@ -119,7 +125,7 @@ fun RootNavigation() {
         composable("login") {
             LoginScreen(
                 onLoginSuccess = { targetRoute ->
-                    // El LoginViewModel ahora decide si ir a Home o Perfil
+                    // MAVERICK V5: Navegación limpia y atómica.
                     val finalRoute = if (targetRoute == "perfil_cliente_edit") "main_screen?target=profile" else "main_screen"
                     navController.navigate(finalRoute) {
                         popUpTo("login") { inclusive = true }
@@ -142,7 +148,7 @@ fun RootNavigation() {
             )
         ) { backStackEntry ->
             val target = backStackEntry.arguments?.getString("target")
-            ClientAppNavigation(
+            AppNavigation(
                 initialTarget = target,
                 onLogoutRequest = {
                     navController.navigate("login") {

@@ -23,19 +23,26 @@ class NotificationHelper(private val context: Context) {
 
     private fun createChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_CHAT_ID, "Mensajes de chat",
-                    NotificationManager.IMPORTANCE_HIGH).apply {
-                    enableVibration(true); setShowBadge(true)
-                }
-            )
-            nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_CITAS_ID, "Solicitudes y citas",
-                    NotificationManager.IMPORTANCE_HIGH).apply {
-                    enableVibration(true); setShowBadge(true)
-                }
-            )
+            try {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+                nm.createNotificationChannel(
+                    NotificationChannel(CHANNEL_CHAT_ID, "Mensajes de chat",
+                        NotificationManager.IMPORTANCE_HIGH).apply {
+                        enableVibration(true); setShowBadge(true)
+                    }
+                )
+                nm.createNotificationChannel(
+                    NotificationChannel(CHANNEL_CITAS_ID, "Solicitudes y citas",
+                        NotificationManager.IMPORTANCE_HIGH).apply {
+                        enableVibration(true); setShowBadge(true)
+                    }
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } catch (e: AssertionError) {
+                // LayoutLib en Compose Preview arroja AssertionError si el servicio no está soportado
+                e.printStackTrace()
+            }
         }
     }
 

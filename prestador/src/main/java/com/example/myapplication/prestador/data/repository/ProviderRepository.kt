@@ -36,23 +36,29 @@ class ProviderRepository @Inject constructor(
 
     // ─── SECCIÓN: CONSULTAS LOCALES (ROOM) ──────────────────────────────────
 
+    // [MIGRACIÓN SSOT]: Este método debería delegar a core/data/repository/ProviderRepository
     fun getProviderById(id: String): Flow<ProviderEntity?> = providerDao.getProviderById(id)
     
+    // [MIGRACIÓN SSOT]: Este método debería delegar a core/data/repository/ProviderRepository
     suspend fun getProviderByIdOnce(id: String): ProviderEntity? = providerDao.getProviderByIdOnce(id)
     
+    // [MIGRACIÓN SSOT]: Delegar persistencia a com.example.myapplication.core.data.repository.ProviderRepository
     suspend fun saveProvider(provider: ProviderEntity) = providerDao.insertProvider(provider)
     
+    // [MIGRACIÓN SSOT]: Delegar persistencia a com.example.myapplication.core.data.repository.ProviderRepository
     suspend fun updateProvider(provider: ProviderEntity) = providerDao.updateProvider(provider)
     
     suspend fun updateProviderImage(id: String, imageUrl: String) = providerDao.updateProviderImage(id, imageUrl)
 
+    // [MIGRACIÓN SSOT]: Delegar eliminación a com.example.myapplication.core.data.repository.ProviderRepository
     suspend fun deleteProvider(id: String) = providerDao.deleteProviderById(id)
 
     // ─── SECCIÓN: SINCRONIZACIÓN FIRESTORE (REPLICADO DEL MOLDE CLIENTE) ────
 
     /**
      * Sincronización PROFUNDA con Estructura Jerárquica.
-     * Reclica el flujo de UserRepository.kt de la App Cliente para asegurar consistencia de datos.
+     * [MIGRACIÓN SSOT]: Esta lógica debe ser movida a core/data/remote/ProviderRemoteMapper
+     * y el repositorio debe delegar la creación del Batch a la capa central de :core.
      */
     suspend fun syncProviderWithFirebase(provider: Provider) {
         val uid = auth.currentUser?.uid ?: provider.uid
@@ -633,7 +639,9 @@ class ProviderRepository @Inject constructor(
         Log.d(TAG, "✅ Perfil completo cargado desde Firestore y guardado en Room")
             return provider
     }
-
+
+
+
     suspend fun actualizarModoEmpresa(uid: String, priorizarEmpresa: Boolean) {
         firestore.collection("providers").document(uid)
             .update(
