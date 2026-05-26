@@ -16,9 +16,9 @@ import java.util.UUID
 import javax.inject.Inject
 
 /**
- * VIEWMODEL para la gestión de Sucursales y Equipos del Prestador.
- * [REFACTORED] Ahora utiliza ProviderRepository como única fuente de verdad (SSOT).
- * Las sucursales y empleados se gestionan dentro de la jerarquía de ProviderEntity.
+ * VIEWMODEL para la gestiÃ³n de Sucursales y Equipos del Prestador.
+ * [REFACTORED] Ahora utiliza ProviderRepository como Ãºnica fuente de verdad (SSOT).
+ * Las sucursales y empleados se gestionan dentro de la jerarquÃ­a de ProviderEntity.
  */
 @HiltViewModel
 class SucursalesViewModel @Inject constructor(
@@ -29,7 +29,7 @@ class SucursalesViewModel @Inject constructor(
     private val providerId: String
         get() = auth.currentUser?.uid ?: ""
 
-    // Observamos el Provider para obtener la jerarquía completa
+    // Observamos el Provider para obtener la jerarquÃ­a completa
     private val _provider = MutableStateFlow<ProviderEntity?>(null)
 
     // businessId reactivo: ID de la primera empresa del prestador (o null)
@@ -115,7 +115,7 @@ class SucursalesViewModel @Inject constructor(
                     hasPhysicalLocation = true
                 )
 
-                // Actualizar jerarquía (agregamos a la primera empresa por defecto)
+                // Actualizar jerarquÃ­a (agregamos a la primera empresa por defecto)
                 val updatedCompanies = currentProvider.companies.toMutableList()
                 val firstComp = updatedCompanies[0]
                 updatedCompanies[0] = firstComp.copy(
@@ -265,13 +265,13 @@ class SucursalesViewModel @Inject constructor(
         _uiState.value = UiState.Idle
     }
     
-    /** No-op: businessId ahora es reactivo y se actualiza automáticamente. */
+    /** No-op: businessId ahora es reactivo y se actualiza automÃ¡ticamente. */
     fun refreshBusinessId() = Unit
 
     /**
-     * Actualiza el encargado de una sucursal (primer empleado de la lista por convención o lógica similar)
+     * Actualiza el encargado de una sucursal (primer empleado de la lista por convenciÃ³n o lÃ³gica similar)
      * O simplemente actualiza los datos si ya existe.
-     * En este modelo jerárquico, el "encargado" es solo un empleado.
+     * En este modelo jerÃ¡rquico, el "encargado" es solo un empleado.
      */
     fun updateManager(sucursalId: String, nombre: String, apellido: String?, cargo: String?, imageUrl: String?) {
         viewModelScope.launch {

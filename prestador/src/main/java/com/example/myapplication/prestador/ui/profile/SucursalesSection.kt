@@ -135,7 +135,7 @@ fun SucursalesSection(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Al guardar con éxito, cerrar el formulario inline
+    // Al guardar con Ã©xito, cerrar el formulario inline
     LaunchedEffect(uiState) {
         when (uiState) {
             is SucursalesViewModel.UiState.Success -> {
@@ -421,12 +421,12 @@ fun SucursalesSection(
                         Box(modifier = Modifier.weight(1f)) {
                             FloatingLabelTextField(value = nuevoNumero,
                                 onValueChange = { nuevoNumero = it }, label =
-                                    "Número", leadingIcon = Icons.Default.Tag,
+                                    "NÃºmero", leadingIcon = Icons.Default.Tag,
                                 keyboardType = KeyboardType.Number)
                         }
                         Box(modifier = Modifier.weight(1f)) {
                             FloatingLabelTextField(value = nuevoCp,
-                                onValueChange = { nuevoCp = it }, label = "Cód.Postal", leadingIcon = Icons.Default.PinDrop,
+                                onValueChange = { nuevoCp = it }, label = "CÃ³d.Postal", leadingIcon = Icons.Default.PinDrop,
                                         keyboardType = KeyboardType.Number)
                         }
                     }
@@ -624,7 +624,7 @@ fun SucursalesSection(
 
 
 
-    // -- Confirmar eliminación ------------------------------------------------
+    // -- Confirmar eliminaciÃ³n ------------------------------------------------
     showDeleteDialog?.let { sucursal ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
@@ -724,7 +724,7 @@ private fun SucursalExpandableCard(
                 Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.15f))
 
-                    // — Datos (nombre, dirección, horario) —
+                    // Ã¡ Datos (nombre, direcciÃ³n, horario) Ã¡
                     DatosSubseccion(
                         sucursal = sucursal,
                         colors = colors,
@@ -733,7 +733,7 @@ private fun SucursalExpandableCard(
 
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
 
-                    // — Características —
+                    // Ã¡ CaracterÃ­sticas Ã¡
                     BooleanosSucursalSubseccion(
                         sucursal = sucursal,
                         colors = colors,
@@ -742,7 +742,7 @@ private fun SucursalExpandableCard(
 
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
 
-                    // — Encargado —
+                    // Ã¡ Encargado Ã¡
                     EncargadoSubseccion(
                         encargado = encargado,
                         colors = colors,
@@ -752,7 +752,7 @@ private fun SucursalExpandableCard(
 
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
 
-                    // — Equipo —
+                    // Ã¡ Equipo Ã¡
                     EquipoSubseccion(
                         equipo = equipo,
                         colors = colors,
@@ -765,7 +765,7 @@ private fun SucursalExpandableCard(
     }
 }
 
-// --- Subsección Datos unificados (nombre + dirección + horario) ---------------
+// --- SubsecciÃ¡n Datos unificados (nombre + direcciÃ³n + horario) ---------------
 
 @Composable
 private fun DatosSubseccion(
@@ -828,10 +828,10 @@ private fun DatosSubseccion(
             FloatingLabelTextField(value = editCalle, onValueChange = { editCalle = it }, label = "Calle", leadingIcon = Icons.Default.Home)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(modifier = Modifier.weight(1f)) {
-                    FloatingLabelTextField(value = editNumero, onValueChange = { editNumero = it }, label = "Número", leadingIcon = Icons.Default.Tag, keyboardType = KeyboardType.Number)
+                    FloatingLabelTextField(value = editNumero, onValueChange = { editNumero = it }, label = "NÃºmero", leadingIcon = Icons.Default.Tag, keyboardType = KeyboardType.Number)
                 }
                 Box(modifier = Modifier.weight(1f)) {
-                    FloatingLabelTextField(value = editCp, onValueChange = { editCp = it }, label = "Cód. Postal", leadingIcon = Icons.Default.PinDrop, keyboardType = KeyboardType.Number)
+                    FloatingLabelTextField(value = editCp, onValueChange = { editCp = it }, label = "CÃ³d. Postal", leadingIcon = Icons.Default.PinDrop, keyboardType = KeyboardType.Number)
                 }
             }
             HorarioSelectorField(horario = editHorario, onHorarioChange = { editHorario = it })
@@ -953,7 +953,7 @@ private fun DatosSubseccion(
     }
 }
 
-// --- Subsección Encargado ------------------------------------------------------
+// --- SubsecciÃ¡n Encargado ------------------------------------------------------
 
 @Composable
 private fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, colors: com.example.myapplication.prestador.ui.theme.PrestadorColors) {
@@ -1067,7 +1067,7 @@ private fun EncargadoSubseccion(
     }
 }
 
-// --- Subsección Equipo ---------------------------------------------------------
+// --- SubsecciÃ¡n Equipo ---------------------------------------------------------
 
 @Composable
 private fun EquipoSubseccion(
@@ -1172,7 +1172,7 @@ private fun BooleanosSucursalSubseccion(
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Tune, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text("Características", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text("CaracterÃ­sticas", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
     Spacer(modifier = Modifier.height(6.dp))
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1182,16 +1182,16 @@ private fun BooleanosSucursalSubseccion(
         ServicioSwitch("Vende productos", Icons.Default.ShoppingBag, local.doesProduct) {
             local = local.copy(doesProduct = it); onUpdate(local)
         }
-        ServicioSwitch("Atención 24hs", Icons.Default.AccessTime, local.works24h) {
+        ServicioSwitch("AtenciÃ³n 24hs", Icons.Default.AccessTime, local.works24h) {
             local = local.copy(works24h = it); onUpdate(local)
         }
-        ServicioSwitch("Tiene local físico", Icons.Default.Store, local.hasPhysicalLocation) {
+        ServicioSwitch("Tiene local fÃ­sico", Icons.Default.Store, local.hasPhysicalLocation) {
             local = local.copy(hasPhysicalLocation = it); onUpdate(local)
         }
         ServicioSwitch("Va a domicilio", Icons.Default.Home, local.doesHomeVisits) {
             local = local.copy(doesHomeVisits = it); onUpdate(local)
         }
-        ServicioSwitch("Hace envíos", Icons.Default.LocalShipping, local.doesShipping) {
+        ServicioSwitch("Hace envÃ­os", Icons.Default.LocalShipping, local.doesShipping) {
             local = local.copy(doesShipping = it); onUpdate(local)
         }
         ServicioSwitch("Acepta turnos", Icons.Default.CalendarToday, local.acceptsAppointments) {

@@ -167,7 +167,7 @@ class ChatViewModel @Inject constructor(
             try {
                 _isLoading.value = true
 
-                // Cargar contexto de la conversación
+                // Cargar contexto de la conversaciÃ³n
                 val conv = repository.getConversationById(conversationId)
                 currentCompanyId = conv?.companyId
                 currentCategoryId = conv?.categoryId
@@ -248,7 +248,7 @@ class ChatViewModel @Inject constructor(
                     originalTime = originalTime
                 )
             } catch (e: Exception) {
-                _errorMessage.value = "Error al notificar reprogramación: ${e.message}"
+                _errorMessage.value = "Error al notificar reprogramaciÃ³n: ${e.message}"
             }
         }
     }
@@ -281,7 +281,7 @@ class ChatViewModel @Inject constructor(
                     reason = reason
                 )
             } catch (e: Exception) {
-                _errorMessage.value = "Error al enviar cancelación ${e.message}"
+                _errorMessage.value = "Error al enviar cancelaciÃ³n ${e.message}"
             }
         }
     }
@@ -453,7 +453,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun sendAudioMessage(audioPath: String, durationSeconds: Int) {
-        // Mantenido por compatibilidad si se llama externamente, pero lo ideal es usar los métodos de arriba
+        // Mantenido por compatibilidad si se llama externamente, pero lo ideal es usar los mÃ©todos de arriba
         if (currentConversationId.isEmpty()) return
         viewModelScope.launch {
             try {
@@ -493,14 +493,14 @@ class ChatViewModel @Inject constructor(
     }
 
     // -- Enviar calendario de disponibilidad
-    // El prestador elige el rango de fechas y envía su disponibilidad al cliente
+    // El prestador elige el rango de fechas y envÃ­a su disponibilidad al cliente
     fun sendCalendarInvite(
         startDate: String,        // "yyyy-MM-dd"
         endDate: String,          // "yyyy-MM-dd"
         availabilityJson: String, // JSON con las reglas de horario
         bookedSlotsJson: String,  // JSON con los slots ya ocupados
         appointmentType: String,  // "TECHNICAL_VISIT" o "LOCAL_APPOINTMENT"
-        providerAddress: String?, // Dirección del local (opcional)
+        providerAddress: String?, // DirecciÃ³n del local (opcional)
         serviceCategory: String = ""
     ) {
         if (currentConversationId.isEmpty()) return
@@ -526,7 +526,7 @@ class ChatViewModel @Inject constructor(
     }
 
     // -- Responder a una solicitud de turno del cliente
-    // El prestador acepta o rechaza; se envía mensaje automático de texto
+    // El prestador acepta o rechaza; se envÃ­a mensaje automÃ¡tico de texto
     fun respondToAppointmentRequest(
         messageId: String,
         clientName: String,
@@ -561,7 +561,7 @@ class ChatViewModel @Inject constructor(
                     val clientId = conversation?.userId ?: ""
                     val isTechnician = appointmentType != "LOCAL_APPOINTMENT" && (serviceType == "TECHNICAL" || doesHomeVisits)
 
-                    // 2. Guardar en Room — independiente del comprobante para no perder el turno
+                    // 2. Guardar en Room Ã¡ independiente del comprobante para no perder el turno
                     try {
                         repository.saveBookedAppointmet(
                             messageId = messageId,
@@ -578,7 +578,7 @@ class ChatViewModel @Inject constructor(
                         _errorMessage.value = "Error al guardar turno: ${e.message}"
                     }
 
-                    // 3. Enviar comprobante visual (secundario — no afecta el guardado)
+                    // 3. Enviar comprobante visual (secundario Ã¡ no afecta el guardado)
                     try {
                         val clientAddress = if (isTechnician && clientId.isNotBlank()) {
                             repository.getClientMainAddress(clientId)
@@ -614,9 +614,9 @@ class ChatViewModel @Inject constructor(
                         android.util.Log.e("ChatVM", "? Error enviando comprobante: ${e.message}", e)
                     }
                 } else {
-                    // Si rechazó, enviar mensaje de rechazo
+                    // Si rechazÃ³, enviar mensaje de rechazo
                     val motivo = if (!rejectionReason.isNullOrBlank()) "Motivo: $rejectionReason" else ""
-                    val rejectText = "? No puedo atenderte el $date a las $time. $motivo Por favor elegí otro horario."
+                    val rejectText = "? No puedo atenderte el $date a las $time. $motivo Por favor elegÃ­ otro horario."
                     repository.sendMessage(
                         currentConversationId,
                         rejectText,
@@ -626,7 +626,7 @@ class ChatViewModel @Inject constructor(
                     )
                 }
 
-                //3. Si aceptó, guardar en Room local del prestador
+                //3. Si aceptÃ³, guardar en Room local del prestador
                 if (accepted) {
                     val conversation = repository.getConversationById(currentConversationId)
                     val clientId = conversation?.userId ?: ""
@@ -724,10 +724,10 @@ class ChatViewModel @Inject constructor(
                 1 -> "Dom"
                 2 -> "Lun"
                 3 -> "Mar"
-                4 -> "Mié"
+                4 -> "MiÃ©"
                 5 -> "Jue"
                 6 -> "Vie"
-                7 -> "Sáb"
+                7 -> "SÃ¡b"
                 else -> ""
             }
         } catch (e: Exception) {
@@ -743,13 +743,13 @@ class ChatViewModel @Inject constructor(
     }
 
     // Inicia la escucha en Firestore para descubrir conversaciones nuevas del prestador
-    // y actualiza _conversations desde Room automáticamente
+    // y actualiza _conversations desde Room automÃ¡ticamente
     fun syncConversations() {
         if (myUserId.isEmpty()) return
         repository.syncConversationsFromFirestore(myUserId)
         repository.startGlobalListening(myUserId)
 
-        // Sync empresa si el prestador tiene compañia
+        // Sync empresa si el prestador tiene compaÃ±Ã­a
         viewModelScope.launch {
             _providerProfile.collect { profile ->
                 val companyId = profile?.companies?.firstOrNull()?.id

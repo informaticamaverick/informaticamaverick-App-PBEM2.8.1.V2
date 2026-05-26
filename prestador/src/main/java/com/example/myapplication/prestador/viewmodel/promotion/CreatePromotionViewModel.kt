@@ -17,7 +17,7 @@ import javax.inject.Inject
 /**
  * ViewModel para la pantalla de crear promociones
  * 
- * Maneja la l�gica de creación y guardado de promociones en la BD
+ * Maneja la lógica de creación y guardado de promociones en la BD
  */
 @HiltViewModel
 class CreatePromotionViewModel @Inject constructor(
@@ -74,12 +74,12 @@ class CreatePromotionViewModel @Inject constructor(
                 }
                 
                 if (categories.isEmpty()) {
-                    _errorMessage.value = "Selecciona al menos una categor�a"
+                    _errorMessage.value = "Selecciona al menos una categoría"
                     _isLoading.value = false
                     return@launch
                 }
                 
-                // Crear el modelo de promoci�n
+                // Crear el modelo de promoción
                 val promotion = ProviderPromotion.create(
                     providerId = providerId,
                     providerName = providerName,
@@ -97,9 +97,9 @@ class CreatePromotionViewModel @Inject constructor(
                 val promotionId = promotionRepository.createPromotionFromModel(promotion)
                 
                 _isLoading.value = false
-                _successMessage.value = "�Promoción publicada exitosamente!"
+                _successMessage.value = "áPromoción publicada exitosamente!"
                 
-                // Callback de �xito
+                // Callback de éxito
                 onSuccess()
                 
             } catch (e: Exception) {
@@ -203,7 +203,7 @@ class CreatePromotionViewModel @Inject constructor(
                 promotionRepository.updatePromotionFromModel(updated)
 
                 _isLoading.value = false
-                _successMessage.value = "�Promoción actualizada!"
+                _successMessage.value = "áPromoción actualizada!"
                 onSuccess()
             } catch (e: Exception) {
                 _isLoading.value = false

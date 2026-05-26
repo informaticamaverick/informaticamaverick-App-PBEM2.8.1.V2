@@ -133,7 +133,7 @@ fun ProfileScreen(
     val servicios by viewModel.servicios.collectAsState()
     val loadingServicios by viewModel.loadingServicios.collectAsState()
 
-    //Form fields para modo edición
+    //Form fields para modo ediciÃ³n
     var editName by remember { mutableStateOf("") }
     var editApellido by remember { mutableStateOf("") }
     var editPhone by remember { mutableStateOf("") }
@@ -146,21 +146,21 @@ fun ProfileScreen(
     var editDescription by remember { mutableStateOf("") }
     var editCategorias by remember { mutableStateOf("[]") }
 
-    // Detectar si la cuenta está vinculada con Google
+    // Detectar si la cuenta estÃ¡ vinculada con Google
     val isGoogleUser = remember {
         com.google.firebase.auth.FirebaseAuth.getInstance()
             .currentUser?.providerData
             ?.any { it.providerId == "google.com" } == true
     }
 
-    //Errores de validación
+    //Errores de validaciÃ³n
     var errorName by remember { mutableStateOf<String?>(null) }
     var errorApellido by remember { mutableStateOf<String?>(null)}
     var errorPhone by remember { mutableStateOf<String?>(null) }
     var errorCategorias by remember { mutableStateOf<String?>(null) }
     var errorPhoto by remember { mutableStateOf(false) }
 
-    //Diálogo de cambios sin guardar
+    //DiÃ¡logo de cambios sin guardar
     var showDiscardDialog by remember { mutableStateOf(false) }
     var discardNavigatesBack by remember { mutableStateOf(false) }
 
@@ -190,15 +190,15 @@ fun ProfileScreen(
 
 
     fun validateProfile(): Boolean {
-        errorPhone = if (editPhone.length < 7) "Teléfono inválido" else null
+        errorPhone = if (editPhone.length < 7) "TelÃ©fono invÃ¡lido" else null
         errorDniCuit = errorCuitMensaje(editDniCuit.text)
         val cats = try { org.json.JSONArray(editCategorias)} catch (e: Exception) { org.json.JSONArray()}
-        errorCategorias = if (cats.length() == 0 ) "Seleccioná al menos una categoriá" else null
+        errorCategorias = if (cats.length() == 0 ) "SeleccionÃ¡ al menos una categorÃ­a" else null
         errorPhoto = provider?.imageUrl.isNullOrEmpty()
         return errorName == null && errorApellido == null && errorPhone == null && errorDniCuit== null && errorCategorias == null && !errorPhoto
     }
 
-    //Inicializar campos al entrar en modo edición
+    //Inicializar campos al entrar en modo ediciÃ³n
     LaunchedEffect(isEditMode) {
         if (isEditMode && provider != null) {
             editName = provider.name
@@ -567,7 +567,7 @@ fun ProfileScreen(
                                         color = Color(0xFFF57C00)
                                     )
                                     Text(
-                                        "Tu perfil personal está desactivado. Desactivá esta opción en Ajustes para habilitarlo.",
+                                        "Tu perfil personal estÃ¡ desactivado. DesactivÃ¡ esta opciÃ³n en Ajustes para habilitarlo.",
                                         fontSize = 11.sp,
                                         color = Color(0xFF795548),
                                         lineHeight = 15.sp
@@ -604,10 +604,10 @@ fun ProfileScreen(
                     )
                     val porcentaje = (progreso * 100).toInt()
                     val mensajeMotivacional = when {
-                        porcentaje < 40 -> "¡Empezá a completar tu perfil y conseguí más clientes!"
-                        porcentaje < 70 -> "¡vas bien! Completá más datos para aparecer en más búsquedas."
-                        porcentaje < 100 -> "¡Casi listo! Un perfil completo genera más confianza."
-                        else -> "¡Perfil completo! Tenés las mejores chances de aparecer en búsquedas. ??"
+                        porcentaje < 40 -> "Â¡EmpezÃ¡ a completar tu perfil y conseguÃ­ mÃ¡s clientes!"
+                        porcentaje < 70 -> "Â¡Vas bien! CompletÃ¡ mÃ¡s datos para aparecer en mÃ¡s bÃºsquedas."
+                        porcentaje < 100 -> "Â¡Casi listo! Un perfil completo genera mÃ¡s confianza."
+                        else -> "Â¡Perfil completo! TenÃ©s las mejores chances de aparecer en bÃºsquedas. ??"
                     }
 
                     androidx.compose.material3.Card(
@@ -687,7 +687,7 @@ fun ProfileScreen(
                         ) {
                             Icon(
                                 Icons.Default.CalendarMonth,
-                                contentDescription = "Horarios de Atención",
+                                contentDescription = "Horarios de AtenciÃ³n",
                                 tint = Color(0xFF7C3AED),
                                 modifier = Modifier.size(16.dp)
                             )
@@ -744,7 +744,7 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Icon(Icons.Default.Warning, null, tint = Color(0xFFFF5252), modifier = Modifier.size(14.dp))
-                                Text("Agregá una foto de perfil", fontSize = 11.sp, color = Color(0xFFFF5252))
+                                Text("AgregÃ¡ una foto de perfil", fontSize = 11.sp, color = Color(0xFFFF5252))
                             }
                         }
 
@@ -777,7 +777,7 @@ fun ProfileScreen(
                             )
                         }
                         Spacer(Modifier.height(8.dp))
-                        // Fila 2: DNI/CUIT + Teléfono
+                        // Fila 2: DNI/CUIT + TelÃ©fono
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -811,7 +811,7 @@ fun ProfileScreen(
                             OutlinedTextField(
                                 value = editPhone,
                                 onValueChange = { editPhone = it.filter { c -> c.isDigit() || c == '+' || c == '-' || c == ' ' }; errorPhone = null },
-                                label = { labelStyle("Teléfono") },
+                                label = { labelStyle("TelÃ©fono") },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = fieldShape,
@@ -823,13 +823,13 @@ fun ProfileScreen(
                             )
                         }
                         Spacer(Modifier.height(8.dp))
-                        // Fila 3: Email (solo lectura + Cambiar) + Profesión
+                        // Fila 3: Email (solo lectura + Cambiar) + ProfesiÃ³n
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Email — solo lectura con botón Cambiar
+                            // Email Ã¡ solo lectura con botÃ³n Cambiar
                             var showEmailDialog by remember { mutableStateOf(false) }
                             var showGoogleEmailInfo by remember { mutableStateOf(false) }
                             if (showGoogleEmailInfo) {
@@ -837,7 +837,7 @@ fun ProfileScreen(
                                     onDismissRequest = { showGoogleEmailInfo = false },
                                     icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = colors.textSecondary) },
                                     title = { Text("Email de Google", fontWeight = FontWeight.Bold) },
-                                    text = { Text("Tu cuenta está vinculada con Google. El email es administrado por Google y no puede cambiarse desde aquí.") },
+                                    text = { Text("Tu cuenta estÃ¡ vinculada con Google. El email es administrado por Google y no puede cambiarse desde aquÃ­.") },
                                     confirmButton = {
                                         TextButton(onClick = { showGoogleEmailInfo = false }) {
                                             Text("Entendido", color = colors.primaryOrange)
@@ -865,7 +865,7 @@ fun ProfileScreen(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Email", fontSize = 10.sp, color = colors.textSecondary)
                                         Text(
-                                            text = editEmail.ifBlank { "—" },
+                                            text = editEmail.ifBlank { "Ã¡" },
                                             fontSize = 13.sp,
                                             color = colors.textPrimary,
                                             maxLines = 1,
@@ -902,7 +902,7 @@ fun ProfileScreen(
                             OutlinedTextField(
                                 value = editProfesion,
                                 onValueChange = { editProfesion = it.uppercase().filter { c -> c.isLetterOrDigit() || c == ' ' } },
-                                label = { labelStyle("Profesión") },
+                                label = { labelStyle("ProfesiÃ³n") },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 shape = fieldShape,
@@ -915,7 +915,7 @@ fun ProfileScreen(
                             )
                         }
                         Spacer(Modifier.height(8.dp))
-                        // Botón cambiar contraseña (solo cuentas email)
+                        // BotÃ³n cambiar contraseÃ±a (solo cuentas email)
                         if (!isGoogleUser) {
                             var showPasswordDialog by remember { mutableStateOf(false) }
                             if (showPasswordDialog) {
@@ -944,17 +944,17 @@ fun ProfileScreen(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text("Cambiar contraseña", fontSize = 13.sp)
+                                Text("Cambiar contraseÃ±a", fontSize = 13.sp)
                             }
                             Spacer(Modifier.height(8.dp))
                         }
-                        // Toggle + campo matrícula en la misma fila
+                        // Toggle + campo matrÃ­cula en la misma fila
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Toggle "Tengo matrícula"
+                            // Toggle "Tengo matrÃ­cula"
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(10.dp))
@@ -964,7 +964,7 @@ fun ProfileScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Text(
-                                    "Matrícula",
+                                    "MatrÃ­cula",
                                     fontSize = 12.sp,
                                     color = colors.textSecondary
                                 )
@@ -980,7 +980,7 @@ fun ProfileScreen(
                                     )
                                 )
                             }
-                            // Campo matrícula aparece si toggle activo
+                            // Campo matrÃ­cula aparece si toggle activo
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = editTieneMatricula,
                                 modifier = Modifier.weight(1f),
@@ -990,7 +990,7 @@ fun ProfileScreen(
                                 OutlinedTextField(
                                     value = editMatricula,
                                     onValueChange = { editMatricula = it.uppercase() },
-                                    label = { labelStyle("Nº Matrícula") },
+                                    label = { labelStyle("NÂº MatrÃ­cula") },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     shape = fieldShape,
@@ -1005,7 +1005,7 @@ fun ProfileScreen(
                         }
                     } else {
                         if (!provider.profesion.isNullOrBlank()) {
-                            ProfileInfoRow("??", "Profesión", provider.profesion!!, colors)
+                            ProfileInfoRow("??", "ProfesiÃ³n", provider.profesion!!, colors)
                             Spacer(Modifier.height(8.dp))
                         }
                         if (!provider.dniCuit.isNullOrBlank()) {
@@ -1013,7 +1013,7 @@ fun ProfileScreen(
                             Spacer(Modifier.height(8.dp))
                         }
                         if (provider.tieneMatricula && !provider.matricula.isNullOrBlank()) {
-                            ProfileInfoRow("??", "Matrícula", provider.matricula!!, colors)
+                            ProfileInfoRow("??", "MatrÃ­cula", provider.matricula!!, colors)
                             Spacer(Modifier.height(8.dp))
                         }
                         if (provider.email.isNotBlank()) {
@@ -1021,24 +1021,24 @@ fun ProfileScreen(
                             Spacer(Modifier.height(8.dp))
                         }
                         if (provider.phone.isNotBlank()) {
-                            ProfileInfoRow("??", "Teléfono", provider.phone, colors)
+                            ProfileInfoRow("??", "TelÃ©fono", provider.phone, colors)
                             Spacer(Modifier.height(8.dp))
                         }
                     }
                 }
             }
 
-            // -- 3. SOBRE MÍ ----------------------------------------------
+            // -- 3. SOBRE MÃ¡ ----------------------------------------------
             if (!provider.description.isNullOrBlank() || isEditMode) {
                 item {
                     Spacer(Modifier.height(12.dp))
-                    ProfileSectionCard(Icons.Default.Info, "Sobre mí", Color(0xFF3B82F6), colors) {
+                    ProfileSectionCard(Icons.Default.Info, "Sobre mÃ­", Color(0xFF3B82F6), colors) {
                         if (isEditMode) {
                             val maxDescription = 300
                             OutlinedTextField(
                                 value = editDescription,
                                 onValueChange = { if (it.length <= maxDescription) editDescription = it },
-                                label = { Text("Descripción", fontSize = 11.sp) },
+                                label = { Text("DescripciÃ³n", fontSize = 11.sp) },
                                 modifier = Modifier.fillMaxWidth(),
                                 minLines = 3,
                                 maxLines = 6,
@@ -1160,11 +1160,11 @@ fun ProfileScreen(
             }
 
 
-            // -- 4. CATEGORÍAS --------------------------------------------
+            // -- 4. CATEGORÃAS --------------------------------------------
             item {
                 Spacer(Modifier.height(12.dp))
                 if (isEditMode) {
-                    ProfileSectionCard(Icons.Default.Category, "Categorías", if (errorCategorias != null) Color(0xFFFF5252) else Color(0xFF00897B), colors) {
+                    ProfileSectionCard(Icons.Default.Category, "CategorÃ­as", if (errorCategorias != null) Color(0xFFFF5252) else Color(0xFF00897B), colors) {
                         CategoriasSelector(
                             categoriasJson = editCategorias,
                             onCategoriasActualizadas = { json ->
@@ -1184,7 +1184,7 @@ fun ProfileScreen(
                         }
                     }
                 } else if (provider.categories.isNotEmpty()) {
-                    ProfileSectionCard(Icons.Default.Category, "Categorías", Color(0xFF00897B), colors) {
+                    ProfileSectionCard(Icons.Default.Category, "CategorÃ­as", Color(0xFF00897B), colors) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1217,13 +1217,13 @@ fun ProfileScreen(
                     editProviderDoesProduct),
                 Triple(Icons.Default.CalendarMonth, "Acepta turnos",
                     editProviderAcceptsTurnos),
-                Triple(Icons.Default.DirectionsCar, "Atención a domicilio",
+                Triple(Icons.Default.DirectionsCar, "AtenciÃ³n a domicilio",
                     editProviderVaDomicilio),
-                Triple(Icons.Default.LocalShipping, "Realiza envíos",
+                Triple(Icons.Default.LocalShipping, "Realiza envÃ­os",
                     editProviderEnvios),
                 Triple(Icons.Default.Warning,       "Urgencias 24hs",
                     editProviderWorks24h),
-                Triple(Icons.Default.Store,         "Atención en local",
+                Triple(Icons.Default.Store,         "AtenciÃ³n en local",
                     editProviderTurnosLocal),
                 Triple(Icons.Default.Group,         "Trabaja con equipo",
                     provider.trabajaConOtros)
@@ -1268,20 +1268,20 @@ fun ProfileScreen(
                                 BranchServicioSwitch("Visitas a domicilio",
                                     Icons.Default.DirectionsCar, editProviderVaDomicilio)    {
                                     editProviderVaDomicilio = it }
-                                BranchServicioSwitch("Realiza envíos",
+                                BranchServicioSwitch("Realiza envÃ­os",
                                     Icons.Default.LocalShipping, editProviderEnvios)         {
                                     editProviderEnvios = it }
                                 BranchServicioSwitch("Urgencias 24hs",
                                     Icons.Default.Warning,       editProviderWorks24h)       {
                                     editProviderWorks24h = it }
-                                BranchServicioSwitch("Atención en local",
+                                BranchServicioSwitch("AtenciÃ³n en local",
                                     Icons.Default.Store,         editProviderTurnosLocal)    {
                                     editProviderTurnosLocal = it }
                             }
                         }
                     )
                 }
-                // -- POPUP HORARIOS DE ATENCIÓN ---------------------------
+                // -- POPUP HORARIOS DE ATENCIÃ“N ---------------------------
                 if (showHorariosDialog) {
                     AlertDialog(
                         onDismissRequest = { showHorariosDialog = false },
@@ -1294,7 +1294,7 @@ fun ProfileScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text("Horarios de Atención", fontWeight = FontWeight.Bold)
+                                Text("Horarios de AtenciÃ³n", fontWeight = FontWeight.Bold)
                             }
                         },
                         text = {
@@ -1312,7 +1312,7 @@ fun ProfileScreen(
                                     agrupados.forEach { (_, grupo) ->
                                         val dias = grupo.sortedBy { it.dayOfWeek }
                                             .distinctBy { it.dayOfWeek }
-                                            .joinToString(" · ") { it.dayOfWeek.toDayAbbr() }
+                                            .joinToString(" Ã¡ ") { it.dayOfWeek.toDayAbbr() }
                                         val primero = grupo.first()
                                         Surface(
                                             shape = RoundedCornerShape(10.dp),
@@ -1338,7 +1338,7 @@ fun ProfileScreen(
                                                         color = Color(0xFF7C3AED)
                                                     )
                                                     Text(
-                                                        "${primero.startTime} - ${primero.endTime}  ·  ${primero.appointmentDuration} min",
+                                                        "${primero.startTime} - ${primero.endTime}  Ã¡  ${primero.appointmentDuration} min",
                                                         fontSize = 12.sp,
                                                         color = colors.textSecondary
                                                     )
@@ -1505,7 +1505,7 @@ fun ProfileScreen(
                             ) {
                                 Icon(
                                     Icons.Default.CalendarMonth,
-                                    contentDescription = "Horarios de Atención",
+                                    contentDescription = "Horarios de AtenciÃ³n",
                                     tint = Color(0xFF7C3AED),
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -1532,7 +1532,7 @@ fun ProfileScreen(
                                     localCp.takeIf { it.isNotBlank() }?.let { "CP $it" }
                                 ).joinToString(", ")
                                 if (dir.isNotBlank()) {
-                                    ProfileInfoRow("??", "Dirección", dir, colors)
+                                    ProfileInfoRow("??", "DirecciÃ³n", dir, colors)
                                     Spacer(Modifier.height(4.dp))
                                 }
                                 if (localHorario.isNotBlank()) {
@@ -1557,7 +1557,7 @@ fun ProfileScreen(
                                 }
                             }
                         } else {
-                            // Modo edición
+                            // Modo ediciÃ³n
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
                                 // Provincia con autocomplete
@@ -1635,12 +1635,12 @@ fun ProfileScreen(
                                 com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField(
                                     value = localCp,
                                     onValueChange = { localCp = it },
-                                    label = "Código Postal",
+                                    label = "CÃ³digo Postal",
                                     leadingIcon = Icons.Default.PinDrop,
                                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Text
                                 )
 
-                                // Calle con botón GPS
+                                // Calle con botÃ³n GPS
                                 OutlinedTextField(
                                     value = localCalle,
                                     onValueChange = { localCalle = it },
@@ -1653,7 +1653,7 @@ fun ProfileScreen(
                                             IconButton(onClick = {
                                                 locationPermLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
                                             }) {
-                                                Icon(Icons.Default.MyLocation, "Detectar ubicación", tint = colors.primaryOrange)
+                                                Icon(Icons.Default.MyLocation, "Detectar ubicaciÃ³n", tint = colors.primaryOrange)
                                             }
                                         }
                                     },
@@ -1667,16 +1667,16 @@ fun ProfileScreen(
                                     )
                                 )
 
-                                // Número
+                                // NÃºmero
                                 com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField(
                                     value = localNumero,
                                     onValueChange = { localNumero = it },
-                                    label = "Número",
+                                    label = "NÃºmero",
                                     leadingIcon = Icons.Default.Numbers,
                                     keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                                 )
 
-                                // Botón geocodificar
+                                // BotÃ³n geocodificar
                                 OutlinedButton(
                                     onClick = {
                                         localScope.launch {
@@ -1715,7 +1715,7 @@ fun ProfileScreen(
                                     Icon(Icons.Default.MyLocation, null, Modifier.size(16.dp), tint = colors.primaryOrange)
                                     Spacer(Modifier.width(6.dp))
                                     Text(
-                                        if (geocodedLat != null) "? Ubicación confirmada" else "Confirmar ubicación en mapa",
+                                        if (geocodedLat != null) "? UbicaciÃ³n confirmada" else "Confirmar ubicaciÃ³n en mapa",
                                         fontSize = 13.sp,
                                         color = if (geocodedLat != null) Color(0xFF4CAF50) else colors.primaryOrange
                                     )
@@ -1773,11 +1773,11 @@ fun ProfileScreen(
                 }
             }
 
-            // -- 6. GALERÍA -----------------------------------------------
+            // -- 6. GALERÃA -----------------------------------------------
             if (provider.galleryImages.isNotEmpty() || isEditMode) {
                 item {
                     Spacer(Modifier.height(12.dp))
-                    ProfileSectionCard(Icons.Default.PhotoLibrary, "Galería de trabajos", Color(0xFFF59E0B), colors) {
+                    ProfileSectionCard(Icons.Default.PhotoLibrary, "GalerÃ­a de trabajos", Color(0xFFF59E0B), colors) {
                         if (isEditMode) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1798,7 +1798,7 @@ fun ProfileScreen(
                         }
                         if (provider.galleryImages.isEmpty()) {
                             Text(
-                                "Sin fotos de trabajos aún",
+                                "Sin fotos de trabajos aÃºn",
                                 fontSize = 13.sp,
                                 color = colors.textSecondary,
                                 modifier = Modifier.padding(vertical = 8.dp)
@@ -1893,7 +1893,7 @@ fun ProfileScreen(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "Estás usando el perfil de empresa como principal. Para editar tu perfil personal, desactivá el modo empresa desde Ajustes.",
+                                "EstÃ¡s usando el perfil de empresa como principal. Para editar tu perfil personal, desactivÃ¡ el modo empresa desde Ajustes.",
                                 fontSize = 13.sp,
                                 color = colors.textSecondary,
                                 textAlign = TextAlign.Center,
@@ -1997,7 +1997,7 @@ fun ProfileScreen(
                         }
                         Column {
                             Text(
-                                "¡Perfil guardado!",
+                                "Â¡Perfil guardado!",
                                 color = colors.textPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
@@ -2034,7 +2034,7 @@ fun ProfileScreen(
                         showPriorizarDialog = false
                     },
                     title = {Text("Perfil de empresa", fontWeight = FontWeight.Bold) },
-                    text = { Text("¿Querés mostrar la empresa como tu perfil principal?")},
+                    text = { Text("Â¿QuerÃ©s mostrar la empresa como tu perfil principal?")},
                     confirmButton = {
                         Button(
                             onClick = {
@@ -2043,7 +2043,7 @@ fun ProfileScreen(
                                 showPriorizarDialog = false
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
-                        ) { Text("Sí")}
+                        ) { Text("SÃ¡")}
                     },
                     dismissButton = {
                             TextButton(
@@ -2064,8 +2064,8 @@ fun ProfileScreen(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text("¿Descartar cambios?", fontWeight = FontWeight.Bold) },
-            text = { Text("Tenés cambios sin guardar. ¿Querés descartarlos?") },
+            title = { Text("Â¿Descartar cambios?", fontWeight = FontWeight.Bold) },
+            text = { Text("TenÃ©s cambios sin guardar. Â¿QuerÃ©s descartarlos?") },
             confirmButton = {
                 TextButton(onClick = {
                     showDiscardDialog = false
@@ -2123,7 +2123,7 @@ private fun CambiarEmailDialog(onDismiss: () -> Unit) {
                         OutlinedTextField(
                             value = password,
                             onValueChange = { password = it },
-                            label = { Text("Contraseña actual") },
+                            label = { Text("ContraseÃ±a actual") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
@@ -2141,7 +2141,7 @@ private fun CambiarEmailDialog(onDismiss: () -> Unit) {
                     Button(
                         onClick = {
                             if (newEmail.isBlank() || password.isBlank()) {
-                                error = "Completá todos los campos"
+                                error = "CompletÃ¡ todos los campos"
                                 return@Button
                             }
                             isLoading = true
@@ -2158,7 +2158,7 @@ private fun CambiarEmailDialog(onDismiss: () -> Unit) {
                                     }
                                 } else {
                                     isLoading = false
-                                    error = "Contraseña incorrecta"
+                                    error = "ContraseÃ±a incorrecta"
                                 }
                             }
                         },
@@ -2191,7 +2191,7 @@ private fun CambiarPasswordDialog(
     var showNew by remember { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
 
-    // Cerrar automáticamente al éxito
+    // Cerrar automÃ¡ticamente al Ã©xito
     LaunchedEffect(passwordChangeState) {
         if (passwordChangeState is PasswordChangeState.Success) {
             kotlinx.coroutines.delay(1500)
@@ -2204,7 +2204,7 @@ private fun CambiarPasswordDialog(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.Lock, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(20.dp))
-                Text("Cambiar contraseña", fontWeight = FontWeight.Bold)
+                Text("Cambiar contraseÃ±a", fontWeight = FontWeight.Bold)
             }
         },
         text = {
@@ -2215,16 +2215,16 @@ private fun CambiarPasswordDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF10B981))
-                        Text("¡Contraseña actualizada!", color = Color(0xFF10B981), fontWeight = FontWeight.Medium)
+                        Text("Â¡ContraseÃ±a actualizada!", color = Color(0xFF10B981), fontWeight = FontWeight.Medium)
                     }
                 }
                 else -> {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // Contraseña actual
+                        // ContraseÃ±a actual
                         OutlinedTextField(
                             value = currentPass,
                             onValueChange = { currentPass = it; localError = null },
-                            label = { Text("Contraseña actual", fontSize = 12.sp) },
+                            label = { Text("ContraseÃ±a actual", fontSize = 12.sp) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             visualTransformation = if (showCurrent) VisualTransformation.None else PasswordVisualTransformation(),
@@ -2239,11 +2239,11 @@ private fun CambiarPasswordDialog(
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                         )
-                        // Nueva contraseña
+                        // Nueva contraseÃ±a
                         OutlinedTextField(
                             value = newPass,
                             onValueChange = { newPass = it; localError = null },
-                            label = { Text("Nueva contraseña", fontSize = 12.sp) },
+                            label = { Text("Nueva contraseÃ±a", fontSize = 12.sp) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             visualTransformation = if (showNew) VisualTransformation.None else PasswordVisualTransformation(),
@@ -2257,13 +2257,13 @@ private fun CambiarPasswordDialog(
                                 }
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            supportingText = { Text("Mínimo 6 caracteres", fontSize = 10.sp, color = colors.textSecondary) }
+                            supportingText = { Text("MÃ­nimo 6 caracteres", fontSize = 10.sp, color = colors.textSecondary) }
                         )
-                        // Confirmar nueva contraseña
+                        // Confirmar nueva contraseÃ±a
                         OutlinedTextField(
                             value = confirmPass,
                             onValueChange = { confirmPass = it; localError = null },
-                            label = { Text("Confirmar contraseña", fontSize = 12.sp) },
+                            label = { Text("Confirmar contraseÃ±a", fontSize = 12.sp) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             visualTransformation = PasswordVisualTransformation(),
@@ -2286,11 +2286,11 @@ private fun CambiarPasswordDialog(
                     onClick = {
                         when {
                             currentPass.isBlank() || newPass.isBlank() || confirmPass.isBlank() ->
-                                localError = "Completá todos los campos"
+                                localError = "CompletÃ¡ todos los campos"
                             newPass.length < 6 ->
-                                localError = "La nueva contraseña debe tener al menos 6 caracteres"
+                                localError = "La nueva contraseÃ±a debe tener al menos 6 caracteres"
                             newPass != confirmPass ->
-                                localError = "Las contraseñas no coinciden"
+                                localError = "Las contraseÃ±as no coinciden"
                             else -> onConfirm(currentPass, newPass)
                         }
                     },
@@ -2346,7 +2346,7 @@ private fun ProfileSkeletonScreen(
             item { SkeletonSectionCard(shimmerColor = shimmerColor, colors = colors, lines = 3) }
         }
 
-        // Header overlay — imita el banner real
+        // Header overlay Ã¡ imita el banner real
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2468,14 +2468,14 @@ fun LogoutConfirmDialog(
         },
         title = {
             Text(
-                text = "Cerrar sesión",
+                text = "Cerrar sesiÃ³n",
                 fontWeight = FontWeight.Bold,
                 color = colors.textPrimary
             )
         },
         text = {
             Text(
-                text = "¿Estás seguro que querés cerrar sesión?",
+                text = "Â¿EstÃ¡s seguro que querÃ©s cerrar sesiÃ³n?",
                 color = colors.textSecondary
             )
         },
@@ -2484,7 +2484,7 @@ fun LogoutConfirmDialog(
                 onClick = onConfirm,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
             ) {
-                Text("Cerrar sesión", color = Color.White)
+                Text("Cerrar sesiÃ³n", color = Color.White)
             }
         },
         dismissButton = {
