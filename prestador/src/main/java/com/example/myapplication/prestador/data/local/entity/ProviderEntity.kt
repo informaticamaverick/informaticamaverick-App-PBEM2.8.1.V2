@@ -8,6 +8,9 @@ import com.example.myapplication.prestador.data.model.Provider
 
 /**
  * --- ENTIDAD DE BASE DE DATOS PARA PROVEEDORES (REPLICADO) ---
+ * [MIGRACIÓN SSOT]: Esta entidad será reemplazada por com.example.myapplication.core.data.local.entity.ProviderEntity
+ * del módulo `:core`. Favor no editar este archivo, usar la entidad unificada.
+ *
  * Refleja el modelo de dominio con soporte para múltiples
  * correos, direcciones y la jerarquía de empresas/sucursales.
  */

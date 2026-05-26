@@ -206,23 +206,24 @@ internal fun ProfileBannerHeaderView(
             }
         }
 
-        // Avatares de empresas (bottom-end) — uno por cada empresa
+        // Botones toggle empresa (bottom-end) — lista de avatares
         if (companyAvatars.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 16.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy((-12).dp)
             ) {
-                companyAvatars.forEach { (photoUrl, onClick) ->
+                companyAvatars.forEach { (avatarUrl, onClick) ->
                     Box(
                         modifier = Modifier
                             .size(52.dp)
                             .clip(CircleShape)
                             .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                            .background(colors.surfaceColor)
                             .clickable { onClick() }
                     ) {
-                        ProfilePhoto(imageUrl = photoUrl, colors = colors)
+                        ProfilePhoto(imageUrl = avatarUrl, colors = colors, isCompany = true)
                     }
                 }
             }

@@ -40,9 +40,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.example.myapplication.presentation.components.Utilidades.MaverickTacticalButton
-import com.example.myapplication.presentation.components.Utilidades.shakeClick
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.components.MaverickTacticalButton
+import com.example.myapplication.presentation.designsystem.components.shakeClick
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 
 // ==========================================================================================
 // --- MODELOS DE DATOS Y COMPONENTES BASE ---
@@ -54,7 +54,7 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 data class ControlItem(
     val label: String,
     val icon: ImageVector?,
-    val emoji: String,
+    val emoji: String?,
     val color: Color,
     val id: String = label.lowercase()
 )
@@ -94,13 +94,13 @@ fun CompactItemButton(
         ) {
             if (isSelected) {
                 Text(
-                    text = item.emoji, 
+                    text = item.emoji ?: "", 
                     fontSize = 24.sp, 
                     style = TextStyle(shadow = Shadow(color = item.color, offset = androidx.compose.ui.geometry.Offset(0f, 0f), blurRadius = 25f))
                 )
             } else {
                 item.icon?.let { Icon(it, null, tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(24.dp)) }
-                    ?: run { Text(item.emoji, fontSize = 20.sp, modifier = Modifier.alpha(0.6f)) }
+                    ?: run { Text(item.emoji ?: "", fontSize = 20.sp, modifier = Modifier.alpha(0.6f)) }
             }
 
             overlayEmoji?.let { emoji ->
@@ -435,3 +435,12 @@ fun CompactItemButtonPreview() {
         }
     }
 }
+
+
+
+
+
+
+
+
+

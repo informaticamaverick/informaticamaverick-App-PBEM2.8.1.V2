@@ -29,7 +29,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import kotlinx.coroutines.delay
 
 // ==========================================================================================
@@ -378,3 +378,12 @@ fun GoogleVerticalInterstitialAdPreview() {
         }
     }
 }
+
+
+
+
+
+
+
+
+

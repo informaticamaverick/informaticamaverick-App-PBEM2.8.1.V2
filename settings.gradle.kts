@@ -25,3 +25,5 @@ dependencyResolutionManagement {
 rootProject.name = "PBEM"
 include(":app")
 include(":prestador")
+include(":core")
+include(":ui-shared")

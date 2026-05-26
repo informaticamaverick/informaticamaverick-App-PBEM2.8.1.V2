@@ -28,37 +28,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.window.Dialog
-import com.example.myapplication.presentation.components.Utilidades.MaverickTacticalButton
-import com.example.myapplication.presentation.components.Utilidades.shakeClick
+import com.example.myapplication.presentation.designsystem.components.MaverickTacticalButton
+import com.example.myapplication.presentation.designsystem.components.shakeClick
+import com.example.myapplication.presentation.designsystem.components.BotonVista
+import com.example.myapplication.presentation.designsystem.components.BotonFiltroSuscritosPremium
 
 // ====================================================================================
 // ================= SECCIÓN: BOTONES INDIVIDUALES IMPLEMENTADOS ======================
 // ====================================================================================
-
-// ---------------------------------------------------------
-// 1. BOTÓN DE VISTAS (Grupos / Grilla)
-// ---------------------------------------------------------
-@Composable
-fun BotonVista(
-    isBentoView: Boolean,
-    isActive: Boolean,
-    onToggleView: () -> Unit
-) {
-    MaverickTacticalButton(
-        isActive = isActive,
-        onClick = onToggleView,
-        accentColor = Color(0xFF2197F5)
-    ) {
-        Text(text = if (isBentoView) "🍱" else "📱", fontSize = 20.sp)
-    }
-}
 
 // ---------------------------------------------------------
 // 2. BOTÓN ALFABÉTICO (Ascendente, Descendente, Apagado)
@@ -293,26 +277,6 @@ fun BotonSuscrito(
 
 
 /**
- * 8. BOTÓN FILTRO SUSCRITOS PREMIUM (👑 / 👥)
- * [NUEVA FUNCIÓN]: Controla el filtrado de prestadores suscriptos con emojis dinámicos y animaciones tácticas.
- * Se integra con el ViewModel para filtrar u ordenar la lista.
- */
-@Composable
-fun BotonFiltroSuscritosPremium(
-    isActive: Boolean,
-    onClick: () -> Unit
-) {
-    MaverickTacticalButton(
-        isActive = isActive,
-        accentColor = Color(0xFF2197F5),
-        onClick = onClick
-    ) {
-        // [PLAN DE ACCIÓN]: Por defecto isActive=true (Subscribed Only) -> Muestra 👑
-        Text(text = if (isActive) "👑" else "👥", fontSize = 20.sp)
-    }
-}
-
-/**
  * MenuOrdenamiento: Componente táctico para la gestión de ordenamientos.
  */
 @Composable
@@ -480,3 +444,12 @@ fun MenuOrdenamientoPreview() {
         }
     }
 }
+
+
+
+
+
+
+
+
+

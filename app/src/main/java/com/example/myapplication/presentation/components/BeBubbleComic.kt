@@ -23,8 +23,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.style.TextAlign
-import com.example.myapplication.presentation.components.Utilidades.shakeClick
-import com.example.myapplication.presentation.components.Utilidades.CyberMaverickNeonBox
+import com.example.myapplication.presentation.designsystem.components.shakeClick
+import com.example.myapplication.presentation.designsystem.components.CyberMaverickNeonBox
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -400,3 +400,12 @@ fun BeBottomBubblePreview() {
         }
     }
 }
+
+
+
+
+
+
+
+
+

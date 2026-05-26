@@ -1,150 +1,96 @@
 package com.example.myapplication.core.di
 
 import android.content.Context
-import com.example.myapplication.data.local.AppDatabase
-import com.example.myapplication.data.local.BudgetDao
-import com.example.myapplication.data.local.CalendarDao
-import com.example.myapplication.data.local.CategoryDao
-import com.example.myapplication.data.local.ChatDao
-import com.example.myapplication.data.local.FastCategoryDao
-import com.example.myapplication.data.local.ProviderDao
-import com.example.myapplication.data.local.UserDao
-import com.example.myapplication.data.repository.CategoryRepository
-import com.example.myapplication.data.repository.ChatRepository
+import androidx.room.Room
+import com.example.myapplication.core.data.local.dao.ProviderDao
+import com.example.myapplication.core.data.repository.*
+import com.example.myapplication.core.data.remote.weather.WeatherApiService
+import com.example.myapplication.core.database.LocalDatabase
+import com.example.myapplication.core.database.TokenManager
+import com.example.myapplication.data.local.dao.FastCategoryDao
+import com.example.myapplication.data.local.dao.ShortcutDao
 import com.example.myapplication.data.repository.FastRepository
-import com.example.myapplication.data.repository.ProviderRepository
-import com.example.myapplication.presentation.util.NotificationHelper
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
+import com.example.myapplication.data.repository.ShortcutRepository
+import com.example.myapplication.data.repository.WeatherRepository
 import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
 
 /**
- * ==========================================================
- * SECCIÓN 1: MÓDULO DE INYECCIÓN DE DEPENDENCIAS (AppModule)
- * ==========================================================
- * Este archivo gestiona la creación y provisión de dependencias
- * de la base de datos local (Room) y los repositorios de la app.
- * 
- * Estrategia: Zero Cost (Sin Firebase Storage, uso de RTDB para Base64).
+ * --- MÓDULO DE INYECCIÓN DE DEPENDENCIAS (APP CLIENTE) ---
+ * Provee únicamente las dependencias exclusivas de la App del Cliente.
+ * Las dependencias compartidas se proveen desde :core.
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    // ----------------------------------------------------------
-    // SECCIÓN 2: PROVEEDORES DE BASE DE DATOS Y DAOs
-    // ----------------------------------------------------------
+    // --- 0. SERVICIOS EXTERNOS (RETROFIT) ---
 
     @Provides
     @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
-        val dbScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        return AppDatabase.getDatabase(context, dbScope)
+    fun provideWeatherApiService(): WeatherApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://api.open-meteo.com/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(WeatherApiService::class.java)
+    }
+
+    // --- 1. PERSISTENCIA LOCAL (NO COMPARTIDA) ---
+
+    @Provides
+    @Singleton
+    fun provideLocalDatabase(@ApplicationContext context: Context): LocalDatabase {
+        return Room.databaseBuilder(
+            context,
+            LocalDatabase::class.java,
+            "maverick_client_local.db"
+        ).fallbackToDestructiveMigration().build()
     }
 
     @Provides
     @Singleton
-    fun provideUserDao(db: AppDatabase): UserDao = db.userDao()
+    fun provideShortcutDao(db: LocalDatabase): ShortcutDao = db.shortcutDao()
 
     @Provides
     @Singleton
-    fun provideProviderDao(db: AppDatabase): ProviderDao = db.providerDao()
+    fun provideFastCategoryDao(db: LocalDatabase): FastCategoryDao = db.fastCategoryDao()
+
+
+    // --- 2. REPOSITORIOS ESPECÍFICOS ---
 
     @Provides
     @Singleton
-    fun provideCategoryDao(db: AppDatabase): CategoryDao = db.categoryDao()
-
-    @Provides
-    @Singleton
-    fun provideChatDao(db: AppDatabase): ChatDao = db.chatDao()
-
-    @Provides
-    @Singleton
-    fun provideBudgetDao(database: AppDatabase): BudgetDao {
-        return database.budgetDao()
-    }
-
-    @Provides
-    @Singleton
-    fun provideCalendarDao(database: AppDatabase): CalendarDao {
-        return database.calendarDao()
-    }
-
-    @Provides
-    @Singleton
-    fun provideFastCategoryDao(db: AppDatabase): FastCategoryDao = db.fastCategoryDao()
-
-    // ----------------------------------------------------------
-    // SECCIÓN 3: PROVEEDORES DE REPOSITORIOS Y UTILIDADES
-    // ----------------------------------------------------------
+    fun provideShortcutRepository(
+        shortcutDao: ShortcutDao
+    ): ShortcutRepository = ShortcutRepository(shortcutDao)
 
     @Provides
     @Singleton
     fun provideFastRepository(
-        dao: ProviderDao,
-        fastCategoryDao: FastCategoryDao,
-        firestore: FirebaseFirestore
-    ): FastRepository {
-        return FastRepository(dao, fastCategoryDao, firestore)
-    }
+        providerDao: ProviderDao,
+        fastCategoryDao: FastCategoryDao
+    ): FastRepository = FastRepository(providerDao, fastCategoryDao)
 
     @Provides
     @Singleton
-    fun provideProviderRepository(dao: ProviderDao, firestore: FirebaseFirestore): ProviderRepository {
-        return ProviderRepository(dao, firestore)
-    }
+    fun provideWeatherRepository(
+        weatherApi: WeatherApiService
+    ): WeatherRepository = WeatherRepository(weatherApi)
+
+
+    // --- 3. UTILIDADES ---
 
     @Provides
     @Singleton
-    fun provideCategoryRepository(
-        dao: CategoryDao,
-        firestore: FirebaseFirestore,
-        @ApplicationContext context: Context
-    ): CategoryRepository {
-        return CategoryRepository(dao, firestore, context)
-    }
-
-    @Provides
-    @Singleton
-    fun provideNotificationHelper(@ApplicationContext context: Context): NotificationHelper {
-        return NotificationHelper(context)
-    }
-
-    /**
-     * Provee la instancia de ChatRepository.
-     * [ACTUALIZADO] Se eliminó FirebaseStorage para cumplir con la estrategia "Zero Cost".
-     * Se sincronizó con los parámetros requeridos por el constructor del repositorio.
-     */
-    @Provides
-    @Singleton
-    fun provideChatRepository(
-        chatDao: ChatDao,
-        budgetDao: BudgetDao,
-        calendarDao: CalendarDao,
-        firestore: FirebaseFirestore,
-        database: FirebaseDatabase,
-        auth: FirebaseAuth,
-        @ApplicationContext context: Context,
-        notificationHelper: NotificationHelper
-    ): ChatRepository {
-        return ChatRepository(
-            chatDao = chatDao,
-            budgetDao = budgetDao,
-            calendarDao = calendarDao,
-            firestore = firestore,
-            database = database,
-            auth = auth,
-            context = context,
-            notificationHelper = notificationHelper
-        )
+    fun provideTokenManager(@ApplicationContext context: Context): TokenManager {
+        return TokenManager(context)
     }
 }

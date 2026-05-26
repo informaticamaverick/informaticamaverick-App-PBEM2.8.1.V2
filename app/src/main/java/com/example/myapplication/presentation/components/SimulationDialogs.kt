@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.myapplication.data.local.CategoryEntity
+import com.example.myapplication.core.data.local.entity.CategoryEntity
 
 /**
  * --- DIÁLOGO DE CONFIGURACIÓN PARA SIMULACIÓN MASIVA DE PRESTADORES ---
@@ -221,3 +221,12 @@ fun ProviderSimulationDialog(
         }
     }
 }
+
+
+
+
+
+
+
+
+

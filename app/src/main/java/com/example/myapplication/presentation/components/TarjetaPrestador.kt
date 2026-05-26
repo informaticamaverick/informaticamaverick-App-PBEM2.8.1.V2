@@ -48,6 +48,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,10 +68,11 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.myapplication.data.model.BadgeDisplayData
 import com.example.myapplication.data.model.ProviderType
-import com.example.myapplication.data.model.ServiceDisplayModel
-import com.example.myapplication.presentation.components.Utilidades.BentoActionButton
-import com.example.myapplication.presentation.components.Utilidades.PremiumDividerV3
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.data.model.ProviderDisplayModel
+
+import com.example.myapplication.presentation.designsystem.components.BentoActionButton
+import com.example.myapplication.presentation.designsystem.components.PremiumDividerV3
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 
 /**
  * Clase de utilidad para representar los datos de un Badge con estado activo/inactivo.
@@ -161,12 +170,11 @@ fun BadgeIconV3(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PrestadorCardV3(
-    provider: ServiceDisplayModel,
+    provider: ProviderDisplayModel,
     onClick: () -> Unit,
     onChatClick: () -> Unit,
     modifier: Modifier = Modifier,
     isCompact: Boolean = false,
-    
     // --- VARIABLES DE TAMAÑO DE LETRA ---
     titleFontSize: TextUnit = 12.sp,
     addressFontSize: TextUnit = 9.sp,
@@ -199,6 +207,8 @@ fun PrestadorCardV3(
 
     // --- SECCIÓN: PALETA DE COLORES Y CONFIGURACIÓN ---
     val maverickBlue = Color(0xFF22D3EE)
+    val haptic = LocalHapticFeedback.current
+
     val maverickPurple = Color(0xFF9B51E0)
     val darkCardBg = Color(0xFF1A1F26)
     val darkBottomBg = Color(0xFF0A0E14)
@@ -208,7 +218,14 @@ fun PrestadorCardV3(
         modifier = modifier
             .width(cardWidth) 
             .height(animatedHeight)
-            .combinedClickable(onClick = onClick, onLongClick = onClick),
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onTap = { onClick() }
+                )
+            },
         shape = RoundedCornerShape(4.dp),
         color = Color.Transparent,
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
@@ -369,7 +386,7 @@ fun PrestadorCardV3Preview() {
     MyApplicationTheme {
         Box(modifier = Modifier.padding(16.dp)) {
             PrestadorCardV3(
-                provider = ServiceDisplayModel(
+                provider = ProviderDisplayModel(
                     id = "1",
                     title = "Maverick Tech S.A.",
                     subtitle = "Software & Hardware",
@@ -396,3 +413,13 @@ fun PrestadorCardV3Preview() {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+

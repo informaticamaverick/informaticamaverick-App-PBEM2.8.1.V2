@@ -346,9 +346,9 @@ internal fun BranchSection(
         val branchGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
             uri: Uri? ->
             uri?.let {
-                val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(context, it, maxWidth = 800, maxHeight = 800, quality = 75)
+                val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(context, it, maxWidth = 800, maxHeight = 800, quality = 75)
                 if (bytes != null) {
-                    val base64 = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+                    val base64 = com.example.myapplication.core.utils.ImageUtils.bytesToBase64(bytes)
                     onUpdateBranch(branch.copy(galleryImages = branch.galleryImages + base64))
                 }
             }
@@ -1590,8 +1590,8 @@ private fun NuevoMiembroBottomSheet(
     val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) {
         uri: Uri? ->
         uri?.let {
-            val bytes = com.example.myapplication.prestador.utils.ImageUtils.compressImageToWebP(context, it, maxWidth = 200, maxHeight = 200, quality = 75)
-            if (bytes != null) photoUrl = com.example.myapplication.prestador.utils.ImageUtils.bytesToBase64(bytes)
+            val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(context, it, maxWidth = 200, maxHeight = 200, quality = 75)
+            if (bytes != null) photoUrl = com.example.myapplication.core.utils.ImageUtils.bytesToBase64(bytes)
         }
     }
 
@@ -1741,3 +1741,4 @@ internal fun BranchServicioSwitch(
 
 
 }
+

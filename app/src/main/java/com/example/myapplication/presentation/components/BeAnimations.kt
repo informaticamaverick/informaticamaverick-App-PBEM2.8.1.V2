@@ -25,7 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -423,3 +423,12 @@ fun BeSearchingScreenPreview() {
         BeSearchingScreen()
     }
 }
+
+
+
+
+
+
+
+
+

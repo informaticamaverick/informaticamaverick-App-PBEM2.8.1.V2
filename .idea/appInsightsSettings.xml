@@ -8,8 +8,8 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="com.example.myapplication.prestador" />
-                  <option name="mobileSdkAppId" value="1:30234733492:android:e532e51f56c2c1a01c20e1" />
+                  <option name="appId" value="com.example.myapplication" />
+                  <option name="mobileSdkAppId" value="1:30234733492:android:364157a56edb3bf61c20e1" />
                   <option name="projectId" value="app-pbem" />
                   <option name="projectNumber" value="30234733492" />
                 </ConnectionSetting>
