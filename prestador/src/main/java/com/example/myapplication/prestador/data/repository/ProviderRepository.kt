@@ -6,7 +6,7 @@ import android.util.Log
 import android.widget.FilterQueryProvider
 import com.example.myapplication.prestador.data.local.dao.ProviderDao
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.prestador.data.model.Provider
+import com.example.myapplication.core.domain.model.Provider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -437,12 +437,12 @@ class ProviderRepository @Inject constructor(
             map?.get(key) as? Boolean ?: doc.getBoolean(key) ?: default
 
         // 1. Direcciones
-        val addressesList = mutableListOf<com.example.myapplication.prestador.data.model.AddressProvider>()
+        val addressesList = mutableListOf<com.example.myapplication.core.domain.model.AddressProvider>()
         val addressesSnapshot =
             doc.reference.collection("addresses").get().await()
         if (!addressesSnapshot.isEmpty) {
             addressesSnapshot.documents.forEach { addrDoc ->
-                addressesList.add(com.example.myapplication.prestador.data.model.AddressProvider(id = addrDoc.id,
+                addressesList.add(com.example.myapplication.core.domain.model.AddressProvider(id = addrDoc.id,
                     calle = addrDoc.getString("calle") ?: "",
                     numero = addrDoc.getString("numero") ?: "",
                     localidad = addrDoc.getString("localidad") ?: "",
@@ -471,7 +471,7 @@ class ProviderRepository @Inject constructor(
             val localCp = str(localMap, "codigoPostalLocal") ?: ""
             if (localCalle.isNotBlank() || localProvincia.isNotBlank()) {
                 addressesList.removeIf { it.id == "local" }
-                addressesList.add(com.example.myapplication.prestador.data.model.AddressProvider(id = "local", calle = localCalle, numero = "",
+                addressesList.add(com.example.myapplication.core.domain.model.AddressProvider(id = "local", calle = localCalle, numero = "",
                     localidad = "", provincia = localProvincia,
                     pais = "Argentina", codigoPostal = localCp
                 ))
@@ -479,20 +479,19 @@ class ProviderRepository @Inject constructor(
         }
 
         // 2. Empresas / Sucursales / Empleados
-        val companiesList = mutableListOf<com.example.myapplication.prestador.data.model.CompanyProvider>()
+        val companiesList = mutableListOf<com.example.myapplication.core.domain.model.CompanyProvider>()
         val companiesSnapshot =
             doc.reference.collection("companies").get().await()
         for (compDoc in companiesSnapshot.documents) {
-            val branchesList = mutableListOf<com.example.myapplication.prestador.data.model.BranchProvider>()
+            val branchesList = mutableListOf<com.example.myapplication.core.domain.model.BranchProvider>()
             val branchesSnapshot =
                 compDoc.reference.collection("branches").get().await()
             for (branchDoc in branchesSnapshot.documents) {
-                val employeesList = mutableListOf<com.example.myapplication.
-                prestador.data.model.EmployeeProvider>()
+                val employeesList = mutableListOf<com.example.myapplication.core.domain.model.EmployeeProvider>()
 
                 branchDoc.reference.collection("employees").get().await().documents.forEach {
                         empDoc ->
-                    employeesList.add(com.example.myapplication.prestador.data.model.EmployeeProvider(id = empDoc.id,
+                    employeesList.add(com.example.myapplication.core.domain.model.EmployeeProvider(id = empDoc.id,
                         name = empDoc.getString("name") ?: "",
                         lastName = empDoc.getString("lastName") ?: "",
                         position = empDoc.getString("position") ?: "",
@@ -504,7 +503,7 @@ class ProviderRepository @Inject constructor(
                         Any>
                 val branchAddr = if (branchAddrMap != null) {
 
-                    com.example.myapplication.prestador.data.model.AddressProvider(
+                    com.example.myapplication.core.domain.model.AddressProvider(
                         id = branchAddrMap["id"] as? String ?:
                         UUID.randomUUID().toString(),
                         calle = branchAddrMap["calle"] as? String ?: "",
@@ -522,7 +521,7 @@ class ProviderRepository @Inject constructor(
                     )
                 } else {
 
-                    com.example.myapplication.prestador.data.model.AddressProvider(
+                    com.example.myapplication.core.domain.model.AddressProvider(
                         id = branchDoc.getString("direccionId") ?:
                         UUID.randomUUID().toString(),
                         calle = branchDoc.getString("direccionId") ?: "",
@@ -531,7 +530,7 @@ class ProviderRepository @Inject constructor(
                             ?: ""
                     )
                 }
-                branchesList.add(com.example.myapplication.prestador.data.model.BranchProvider(id = branchDoc.id,
+                branchesList.add(com.example.myapplication.core.domain.model.BranchProvider(id = branchDoc.id,
                     name = branchDoc.getString("nombre") ?:
                     branchDoc.getString("name") ?: "",
                     address = branchAddr,

@@ -14,6 +14,7 @@ data class AddressProvider(
     var provincia: String = "",
     var pais: String = "",
     var codigoPostal: String = "",
+    var label: String = "",
     // Coordenadas para geolocalización
     var latitude: Double? = null,
     var longitude: Double? = null

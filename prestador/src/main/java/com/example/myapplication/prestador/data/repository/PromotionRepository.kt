@@ -3,7 +3,7 @@ package com.example.myapplication.prestador.data.repository
 import com.example.myapplication.prestador.data.local.dao.PromotionDao
 import com.example.myapplication.prestador.data.local.entity.PromotionEntity
 import com.example.myapplication.prestador.data.model.PromotionType
-import com.example.myapplication.prestador.data.model.ProviderPromotion
+import com.example.myapplication.core.domain.model.ProviderPromotion
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map

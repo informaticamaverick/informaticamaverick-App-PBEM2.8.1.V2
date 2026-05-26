@@ -2,9 +2,9 @@ package com.example.myapplication.prestador.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.example.myapplication.prestador.data.model.AddressProvider
-import com.example.myapplication.prestador.data.model.CompanyProvider
-import com.example.myapplication.prestador.data.model.Provider
+import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.CompanyProvider
+import com.example.myapplication.core.domain.model.Provider
 
 /**
  * --- ENTIDAD DE BASE DE DATOS PARA PROVEEDORES (REPLICADO) ---

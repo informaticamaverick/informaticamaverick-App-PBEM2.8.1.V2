@@ -1,4 +1,4 @@
-﻿package com.example.myapplication.prestador.ui.profile
+package com.example.myapplication.prestador.ui.profile
 
 import android.R
 import android.net.Uri
@@ -29,9 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.example.myapplication.prestador.data.model.AddressProvider
-import com.example.myapplication.prestador.data.model.BranchProvider
-import com.example.myapplication.prestador.data.model.EmployeeProvider
+import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.BranchProvider
+import com.example.myapplication.core.domain.model.EmployeeProvider
 import com.example.myapplication.prestador.ui.register.components.FloatingLabelTextField
 import com.example.myapplication.prestador.viewmodel.empresa.SucursalesViewModel
 import kotlinx.coroutines.launch
@@ -116,7 +116,7 @@ fun SucursalesSection(
                         }
                         geocodedLat = location.latitude
                         geocodedLng = location.longitude
-                        geocodingAddressResult = "✓ ${String.format("%.5f", location.latitude)}, ${String.format("%.5f", location.longitude)}"
+                        geocodingAddressResult = "? ${String.format("%.5f", location.latitude)}, ${String.format("%.5f", location.longitude)}"
 
                     }
                 } catch (e: Exception) {
@@ -135,7 +135,7 @@ fun SucursalesSection(
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Al guardar con éxito, cerrar el formulario inline
+    // Al guardar con �xito, cerrar el formulario inline
     LaunchedEffect(uiState) {
         when (uiState) {
             is SucursalesViewModel.UiState.Success -> {
@@ -421,12 +421,12 @@ fun SucursalesSection(
                         Box(modifier = Modifier.weight(1f)) {
                             FloatingLabelTextField(value = nuevoNumero,
                                 onValueChange = { nuevoNumero = it }, label =
-                                    "Número", leadingIcon = Icons.Default.Tag,
+                                    "N�mero", leadingIcon = Icons.Default.Tag,
                                 keyboardType = KeyboardType.Number)
                         }
                         Box(modifier = Modifier.weight(1f)) {
                             FloatingLabelTextField(value = nuevoCp,
-                                onValueChange = { nuevoCp = it }, label = "Cód.Postal", leadingIcon = Icons.Default.PinDrop,
+                                onValueChange = { nuevoCp = it }, label = "C�d.Postal", leadingIcon = Icons.Default.PinDrop,
                                         keyboardType = KeyboardType.Number)
                         }
                     }
@@ -455,7 +455,7 @@ fun SucursalesSection(
                                     if (!results.isNullOrEmpty()) {
                                         geocodedLat = results[0].latitude
                                         geocodedLng = results[0].longitude
-                                        geocodingAddressResult = "✓ ${String.format("%.5f", geocodedLat)}, ${String.format("%.5f", geocodedLng)}"
+                                        geocodingAddressResult = "? ${String.format("%.5f", geocodedLat)}, ${String.format("%.5f", geocodedLng)}"
                                     } else {
                                         geocodingAddressResult = "No se encontraron coordenadas"
                                         geocodedLat = null
@@ -486,7 +486,7 @@ fun SucursalesSection(
 
                     if (geocodingAddressResult != null) {
                         Spacer(modifier = Modifier.height(4.dp))
-                        val esExito = geocodingAddressResult!!.startsWith("✓")
+                        val esExito = geocodingAddressResult!!.startsWith("?")
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
@@ -624,7 +624,7 @@ fun SucursalesSection(
 
 
 
-    // ── Confirmar eliminación ────────────────────────────────────────────────
+    // -- Confirmar eliminaci�n ------------------------------------------------
     showDeleteDialog?.let { sucursal ->
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
@@ -643,7 +643,7 @@ fun SucursalesSection(
     }
 }
 
-// ─── Tarjeta expandible ────────────────────────────────────────────────────────
+// --- Tarjeta expandible --------------------------------------------------------
 
 @Composable
 private fun SucursalExpandableCard(
@@ -667,7 +667,7 @@ private fun SucursalExpandableCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            // ── Cabecera ──────────────────────────────────────────────────────
+            // -- Cabecera ------------------------------------------------------
             Row(
                 modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -719,12 +719,12 @@ private fun SucursalExpandableCard(
                 )
             }
 
-            // ── Contenido expandible ──────────────────────────────────────────
+            // -- Contenido expandible ------------------------------------------
             AnimatedVisibility(visible = expanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.15f))
 
-                    // — Datos (nombre, dirección, horario) —
+                    // � Datos (nombre, direcci�n, horario) �
                     DatosSubseccion(
                         sucursal = sucursal,
                         colors = colors,
@@ -733,7 +733,7 @@ private fun SucursalExpandableCard(
 
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
 
-                    // — Características —
+                    // � Caracter�sticas �
                     BooleanosSucursalSubseccion(
                         sucursal = sucursal,
                         colors = colors,
@@ -742,7 +742,7 @@ private fun SucursalExpandableCard(
 
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
 
-                    // — Encargado —
+                    // � Encargado �
                     EncargadoSubseccion(
                         encargado = encargado,
                         colors = colors,
@@ -752,7 +752,7 @@ private fun SucursalExpandableCard(
 
                     HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
 
-                    // — Equipo —
+                    // � Equipo �
                     EquipoSubseccion(
                         equipo = equipo,
                         colors = colors,
@@ -765,7 +765,7 @@ private fun SucursalExpandableCard(
     }
 }
 
-// ─── Subsección Datos unificados (nombre + dirección + horario) ───────────────
+// --- Subsecci�n Datos unificados (nombre + direcci�n + horario) ---------------
 
 @Composable
 private fun DatosSubseccion(
@@ -828,10 +828,10 @@ private fun DatosSubseccion(
             FloatingLabelTextField(value = editCalle, onValueChange = { editCalle = it }, label = "Calle", leadingIcon = Icons.Default.Home)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(modifier = Modifier.weight(1f)) {
-                    FloatingLabelTextField(value = editNumero, onValueChange = { editNumero = it }, label = "Número", leadingIcon = Icons.Default.Tag, keyboardType = KeyboardType.Number)
+                    FloatingLabelTextField(value = editNumero, onValueChange = { editNumero = it }, label = "N�mero", leadingIcon = Icons.Default.Tag, keyboardType = KeyboardType.Number)
                 }
                 Box(modifier = Modifier.weight(1f)) {
-                    FloatingLabelTextField(value = editCp, onValueChange = { editCp = it }, label = "Cód. Postal", leadingIcon = Icons.Default.PinDrop, keyboardType = KeyboardType.Number)
+                    FloatingLabelTextField(value = editCp, onValueChange = { editCp = it }, label = "C�d. Postal", leadingIcon = Icons.Default.PinDrop, keyboardType = KeyboardType.Number)
                 }
             }
             HorarioSelectorField(horario = editHorario, onHorarioChange = { editHorario = it })
@@ -858,7 +858,7 @@ private fun DatosSubseccion(
                             if (!results.isNullOrEmpty()) {
                                 editGeoLat = results[0].latitude
                                 editGeoLng = results[0].longitude
-                                editGeoResult = "✓ ${String.format("%.5f", editGeoLat)}, ${String.format("%.5f", editGeoLng)}"
+                                editGeoResult = "? ${String.format("%.5f", editGeoLat)}, ${String.format("%.5f", editGeoLng)}"
                             } else {
                                 editGeoResult = "No se encontraron coordenadas"
                                 editGeoLat = null
@@ -888,7 +888,7 @@ private fun DatosSubseccion(
             }
 
             if (editGeoResult != null) {
-                val esExito = editGeoResult!!.startsWith("✓")
+                val esExito = editGeoResult!!.startsWith("?")
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -953,7 +953,7 @@ private fun DatosSubseccion(
     }
 }
 
-// ─── Subsección Encargado ──────────────────────────────────────────────────────
+// --- Subsecci�n Encargado ------------------------------------------------------
 
 @Composable
 private fun InfoRow(icon: androidx.compose.ui.graphics.vector.ImageVector, value: String, colors: com.example.myapplication.prestador.ui.theme.PrestadorColors) {
@@ -1067,7 +1067,7 @@ private fun EncargadoSubseccion(
     }
 }
 
-// ─── Subsección Equipo ─────────────────────────────────────────────────────────
+// --- Subsecci�n Equipo ---------------------------------------------------------
 
 @Composable
 private fun EquipoSubseccion(
@@ -1172,7 +1172,7 @@ private fun BooleanosSucursalSubseccion(
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Tune, contentDescription = null, tint = colors.primaryOrange, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(6.dp))
-        Text("Características", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text("Caracter�sticas", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
     Spacer(modifier = Modifier.height(6.dp))
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1182,16 +1182,16 @@ private fun BooleanosSucursalSubseccion(
         ServicioSwitch("Vende productos", Icons.Default.ShoppingBag, local.doesProduct) {
             local = local.copy(doesProduct = it); onUpdate(local)
         }
-        ServicioSwitch("Atención 24hs", Icons.Default.AccessTime, local.works24h) {
+        ServicioSwitch("Atenci�n 24hs", Icons.Default.AccessTime, local.works24h) {
             local = local.copy(works24h = it); onUpdate(local)
         }
-        ServicioSwitch("Tiene local físico", Icons.Default.Store, local.hasPhysicalLocation) {
+        ServicioSwitch("Tiene local f�sico", Icons.Default.Store, local.hasPhysicalLocation) {
             local = local.copy(hasPhysicalLocation = it); onUpdate(local)
         }
         ServicioSwitch("Va a domicilio", Icons.Default.Home, local.doesHomeVisits) {
             local = local.copy(doesHomeVisits = it); onUpdate(local)
         }
-        ServicioSwitch("Hace envíos", Icons.Default.LocalShipping, local.doesShipping) {
+        ServicioSwitch("Hace env�os", Icons.Default.LocalShipping, local.doesShipping) {
             local = local.copy(doesShipping = it); onUpdate(local)
         }
         ServicioSwitch("Acepta turnos", Icons.Default.CalendarToday, local.acceptsAppointments) {

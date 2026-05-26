@@ -45,9 +45,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
-import com.example.myapplication.prestador.data.model.BranchProvider
-import com.example.myapplication.prestador.data.model.CompanyProvider
-import com.example.myapplication.prestador.data.model.EmployeeProvider
+import com.example.myapplication.core.domain.model.BranchProvider
+import com.example.myapplication.core.domain.model.CompanyProvider
+import com.example.myapplication.core.domain.model.EmployeeProvider
 import com.example.myapplication.prestador.ui.components.AddressBottomSheet
 import com.example.myapplication.prestador.ui.components.AddressProviderCard
 import com.example.myapplication.prestador.ui.components.BeActionsBar
@@ -70,7 +70,7 @@ internal fun BranchSection(
     val branchName = branch.name.ifBlank { if (index == 0) "Casa Central" else "Sucursal ${index + 1}" }
     var showAddressSheet by remember { mutableStateOf(false) }
     var showNuevoMiembroSheet by remember { mutableStateOf(false) }
-    var miembroAEditar by remember { mutableStateOf<com.example.myapplication.prestador.data.model.EmployeeProvider?>(null) }
+    var miembroAEditar by remember { mutableStateOf<com.example.myapplication.core.domain.model.EmployeeProvider?>(null) }
 
     // Badge Casa Central
     if (index == 0) {
@@ -135,7 +135,7 @@ internal fun BranchSection(
             onEdit = { showAddressSheet = true },
             onDelete = {
                 onUpdateBranch(
-                    branch.copy(address = com.example.myapplication.prestador.data.model.AddressProvider())
+                    branch.copy(address = com.example.myapplication.core.domain.model.AddressProvider())
                 )
             },
             onOpenMaps = {
@@ -1224,7 +1224,7 @@ private fun SucursalBottomSheet(
 ) {
     var nombre by remember { mutableStateOf("") }
     var esCasaCentral by remember { mutableStateOf(false) }
-    var direccion by remember { mutableStateOf<com.example.myapplication.prestador.data.model.AddressProvider?>(null) }
+    var direccion by remember { mutableStateOf<com.example.myapplication.core.domain.model.AddressProvider?>(null) }
     var showAddressSheet by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
@@ -1339,7 +1339,7 @@ private fun SucursalBottomSheet(
                     onAceptar(
                         BranchProvider(
                             name = nombre.trim(),
-                            address = addr ?: com.example.myapplication.prestador.data.model.AddressProvider()
+                            address = addr ?: com.example.myapplication.core.domain.model.AddressProvider()
                         ),
                         esCasaCentral
                     )
@@ -1363,7 +1363,7 @@ private fun SucursalBottomSheet(
 
     if (showAddressSheet) {
         AddressBottomSheet(
-            initial = direccion ?: com.example.myapplication.prestador.data.model.AddressProvider(),
+            initial = direccion ?: com.example.myapplication.core.domain.model.AddressProvider(),
             onDismiss = { showAddressSheet = false },
             onSave = { addr ->
                 direccion = addr
@@ -1576,10 +1576,10 @@ private fun BannerGradientCompany(colors: PrestadorColors) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun NuevoMiembroBottomSheet(
-    initial: com.example.myapplication.prestador.data.model.EmployeeProvider?,
+    initial: com.example.myapplication.core.domain.model.EmployeeProvider?,
     colors: PrestadorColors,
     onDismiss: () -> Unit,
-    onAceptar: (com.example.myapplication.prestador.data.model.EmployeeProvider) -> Unit
+    onAceptar: (com.example.myapplication.core.domain.model.EmployeeProvider) -> Unit
 ) {
     var nombre by remember { mutableStateOf(initial?.name ?: "") }
     var apellido by remember { mutableStateOf(initial?.lastName ?: "") }
@@ -1694,7 +1694,7 @@ private fun NuevoMiembroBottomSheet(
             Button(
                 onClick = {
                     onAceptar(
-                        com.example.myapplication.prestador.data.model.EmployeeProvider(
+                        com.example.myapplication.core.domain.model.EmployeeProvider(
                             id = initial?.id ?: java.util.UUID.randomUUID().toString(),
                             name = nombre.trim(),
                             lastName = apellido.trim(),

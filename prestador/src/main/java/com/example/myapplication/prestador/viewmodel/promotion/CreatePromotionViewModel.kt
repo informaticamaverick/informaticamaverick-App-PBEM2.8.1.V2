@@ -1,11 +1,11 @@
-锘縫ackage com.example.myapplication.prestador.viewmodel.promotion
+package com.example.myapplication.prestador.viewmodel.promotion
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.prestador.data.model.PromotionStatus
 import com.example.myapplication.prestador.data.model.PromotionType
-import com.example.myapplication.prestador.data.model.ProviderPromotion
+import com.example.myapplication.core.domain.model.ProviderPromotion
 import com.example.myapplication.prestador.data.repository.PromotionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,14 +17,14 @@ import javax.inject.Inject
 /**
  * ViewModel para la pantalla de crear promociones
  * 
- * Maneja la l贸gica de creaci贸n y guardado de promociones en la BD
+ * Maneja la l骻ica de creaci髇 y guardado de promociones en la BD
  */
 @HiltViewModel
 class CreatePromotionViewModel @Inject constructor(
     private val promotionRepository: PromotionRepository
 ) : ViewModel() {
     
-    // Estado de la promoci贸n en proceso
+    // Estado de la promoci髇 en proceso
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
     
@@ -35,7 +35,7 @@ class CreatePromotionViewModel @Inject constructor(
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
     
     /**
-     * CREAR y GUARDAR promoci贸n en la base de datos
+     * CREAR y GUARDAR promoci髇 en la base de datos
      */
     fun createPromotion(
         providerId: String,
@@ -56,13 +56,13 @@ class CreatePromotionViewModel @Inject constructor(
                 
                 // Validaciones
                 if (title.isBlank()) {
-                    _errorMessage.value = "El t铆tulo es obligatorio"
+                    _errorMessage.value = "El t韙ulo es obligatorio"
                     _isLoading.value = false
                     return@launch
                 }
                 
                 if (description.isBlank()) {
-                    _errorMessage.value = "La descripci贸n es obligatoria"
+                    _errorMessage.value = "La descripci髇 es obligatoria"
                     _isLoading.value = false
                     return@launch
                 }
@@ -74,12 +74,12 @@ class CreatePromotionViewModel @Inject constructor(
                 }
                 
                 if (categories.isEmpty()) {
-                    _errorMessage.value = "Selecciona al menos una categor铆a"
+                    _errorMessage.value = "Selecciona al menos una categor韆"
                     _isLoading.value = false
                     return@launch
                 }
                 
-                // Crear el modelo de promoci贸n
+                // Crear el modelo de promoci髇
                 val promotion = ProviderPromotion.create(
                     providerId = providerId,
                     providerName = providerName,
@@ -97,9 +97,9 @@ class CreatePromotionViewModel @Inject constructor(
                 val promotionId = promotionRepository.createPromotionFromModel(promotion)
                 
                 _isLoading.value = false
-                _successMessage.value = "隆Promoci贸n publicada exitosamente!"
+                _successMessage.value = "romoci髇 publicada exitosamente!"
                 
-                // Callback de 茅xito
+                // Callback de 閤ito
                 onSuccess()
                 
             } catch (e: Exception) {
@@ -121,7 +121,7 @@ class CreatePromotionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 promotionRepository.deletePromotion(promotionId)
-                _successMessage.value = "Promoci贸n eliminada"
+                _successMessage.value = "Promoci髇 eliminada"
             } catch (e: Exception) {
                 _errorMessage.value = "Error al eliminar: ${e.message}"
             }
@@ -134,19 +134,19 @@ class CreatePromotionViewModel @Inject constructor(
     fun getPromotions(providerId: String) = promotionRepository.getPromotionsAsModel(providerId)
 
     /**
-     * OBTENER promoci贸n por ID como modelo de UI
+     * OBTENER promoci髇 por ID como modelo de UI
      */
     fun getPromotionByIdAsModel(promotionId: String) =
         promotionRepository.getPromotionByIdAsModel(promotionId)
 
     /**
-     * ARCHIVAR promoci贸n (cambia estado a ARCHIVED)
+     * ARCHIVAR promoci髇 (cambia estado a ARCHIVED)
      */
     fun archivePromotion(promotionId: String) {
         viewModelScope.launch {
             try {
                 promotionRepository.updatePromotionStatus(promotionId, "ARCHIVED")
-                _successMessage.value = "Promoci贸n archivada"
+                _successMessage.value = "Promoci髇 archivada"
             } catch (e: Exception) {
                 _errorMessage.value = "Error al archivar: ${e.message}"
             }
@@ -154,10 +154,10 @@ class CreatePromotionViewModel @Inject constructor(
     }
 
     /**
-     * ACTUALIZAR promoci贸n existente
+     * ACTUALIZAR promoci髇 existente
      */
     fun updatePromotion(
-        existing: com.example.myapplication.prestador.data.model.ProviderPromotion,
+        existing: com.example.myapplication.core.domain.model.ProviderPromotion,
         type: com.example.myapplication.prestador.data.model.PromotionType,
         title: String,
         description: String,
@@ -172,12 +172,12 @@ class CreatePromotionViewModel @Inject constructor(
                 _errorMessage.value = null
 
                 if (title.isBlank()) {
-                    _errorMessage.value = "El t铆tulo es obligatorio"
+                    _errorMessage.value = "El t韙ulo es obligatorio"
                     _isLoading.value = false
                     return@launch
                 }
                 if (description.isBlank()) {
-                    _errorMessage.value = "La descripci贸n es obligatoria"
+                    _errorMessage.value = "La descripci髇 es obligatoria"
                     _isLoading.value = false
                     return@launch
                 }
@@ -187,7 +187,7 @@ class CreatePromotionViewModel @Inject constructor(
                     return@launch
                 }
                 if (categories.isEmpty()) {
-                    _errorMessage.value = "Selecciona al menos una categor铆a"
+                    _errorMessage.value = "Selecciona al menos una categor韆"
                     _isLoading.value = false
                     return@launch
                 }
@@ -203,7 +203,7 @@ class CreatePromotionViewModel @Inject constructor(
                 promotionRepository.updatePromotionFromModel(updated)
 
                 _isLoading.value = false
-                _successMessage.value = "隆Promoci贸n actualizada!"
+                _successMessage.value = "romoci髇 actualizada!"
                 onSuccess()
             } catch (e: Exception) {
                 _isLoading.value = false

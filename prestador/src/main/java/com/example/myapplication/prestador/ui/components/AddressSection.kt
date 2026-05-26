@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.data.model.AddressProvider
+import com.example.myapplication.core.domain.model.AddressProvider
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

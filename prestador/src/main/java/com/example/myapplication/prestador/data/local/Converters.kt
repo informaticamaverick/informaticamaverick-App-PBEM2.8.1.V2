@@ -1,10 +1,10 @@
 package com.example.myapplication.prestador.data.local
 
 import androidx.room.TypeConverter
-import com.example.myapplication.prestador.data.model.AddressProvider
-import com.example.myapplication.prestador.data.model.CompanyProvider
-import com.example.myapplication.prestador.data.model.BranchProvider
-import com.example.myapplication.prestador.data.model.EmployeeProvider
+import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.CompanyProvider
+import com.example.myapplication.core.domain.model.BranchProvider
+import com.example.myapplication.core.domain.model.EmployeeProvider
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 

@@ -1,4 +1,4 @@
-﻿package com.example.myapplication.prestador.viewmodel.profile
+package com.example.myapplication.prestador.viewmodel.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -23,10 +23,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
-import com.example.myapplication.prestador.data.model.AddressProvider
-import com.example.myapplication.prestador.data.model.BranchProvider
-import com.example.myapplication.prestador.data.model.CompanyProvider
-import com.example.myapplication.prestador.data.model.EmployeeProvider
+import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.BranchProvider
+import com.example.myapplication.core.domain.model.CompanyProvider
+import com.example.myapplication.core.domain.model.EmployeeProvider
 import com.example.myapplication.prestador.data.model.ServicioFirebase
 import com.example.myapplication.prestador.data.repository.ServiciosRepository
 
@@ -68,7 +68,7 @@ class EditProfileViewModel @Inject constructor(
         }
     }
     
-    // Estado del modo de visualizaci�n del perfil
+    // Estado del modo de visualizaci?n del perfil
     private val _profileMode = MutableStateFlow(PrestadorProfileMode.PERSONAL)
     val profileMode: StateFlow<PrestadorProfileMode> = _profileMode.asStateFlow()
     
@@ -85,7 +85,7 @@ class EditProfileViewModel @Inject constructor(
     private val _bussinesEntity = MutableStateFlow<BusinessEntity?>(null)
     val businessEntity: StateFlow<BusinessEntity?> = _bussinesEntity.asStateFlow()
     
-    // Configuraci�n de tipo de servicio
+    // Configuraci?n de tipo de servicio
     private val _serviceTypeConfig = MutableStateFlow(getServiceTypeConfig(ServiceType.TECHNICAL))
     val serviceTypeConfig: StateFlow<ServiceTypeConfig> = _serviceTypeConfig.asStateFlow()
 
@@ -157,7 +157,7 @@ class EditProfileViewModel @Inject constructor(
                 // Guardar Base64 en Firestore usando el campo correcto
                 providerRepository.updateProfilePhotoOnFirestore(userId, base64)
 
-                // Actualizar Room directamente con el m�todo dedicado
+                // Actualizar Room directamente con el m?todo dedicado
                 providerRepository.updateProviderImage(userId, base64)
 
                 // Refrescar UI con el estado actualizado
@@ -306,7 +306,7 @@ class EditProfileViewModel @Inject constructor(
                     PrestadorProfileMode.PERSONAL
                 }
                 
-                // Actualizar configuraci�n de tipo de servicio
+                // Actualizar configuraci?n de tipo de servicio
                 _serviceTypeConfig.value = getServiceTypeConfig(
                     ServiceType.fromString(provider.serviceType ?: "TECHNICAL")
                 )
@@ -423,10 +423,10 @@ class EditProfileViewModel @Inject constructor(
                     serviceType = serviceType ?: currentProvider.serviceType
                 )
                 
-                // Asegurar que el registro padre exista antes de cualquier operaci�n dependiente
+                // Asegurar que el registro padre exista antes de cualquier operaci?n dependiente
                 providerRepository.saveProvider(updatedProvider)
                 
-                // ?? [NUEVO] Sincronizaci�n de Topics de FCM (Costo Cero)
+                // ?? [NUEVO] Sincronizaci?n de Topics de FCM (Costo Cero)
                 syncTopics(
                     cp = (codigoPostal ?: updatedProvider.address?.codigoPostal)?.ifBlank { null },
                     categories = updatedProvider.categories,
@@ -473,9 +473,9 @@ class EditProfileViewModel @Inject constructor(
                     updateData["local.turnosEnLocal"] = turnosEnLocal
                     updateData["turnosEnLocal"] = turnosEnLocal
                 }
-                updateData["isSubscribed"] = true // Mock o l�gica de suscripci�n si aplica
+                updateData["isSubscribed"] = true // Mock o l?gica de suscripci?n si aplica
 
-                // --- REPLICACI�N DE CAMPOS DE APP CLIENTE EN RA�Z ---
+                // --- REPLICACI?N DE CAMPOS DE APP CLIENTE EN RA?Z ---
                 if (name != null) updateData["nombre"] = name
                 if (apellido != null) updateData["apellido"] = apellido
                 if (email != null) updateData["email"] = email
@@ -515,12 +515,12 @@ class EditProfileViewModel @Inject constructor(
                     updateData["servicios"] = list
                 }
 
-                // --- SINCRONIZACI�N SSOT ---
+                // --- SINCRONIZACI?N SSOT ---
                 // Sincronizar en Firebase y Room usando el Repositorio Central
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
                 
                 /*
-                // Gestionar BusinessEntity (Obsoleto: syncProviderWithFirebase maneja la jerarqu�a)
+                // Gestionar BusinessEntity (Obsoleto: syncProviderWithFirebase maneja la jerarqu?a)
                 if (updatedProvider.hasCompanyProfile && !nombreEmpresa.isNullOrBlank()) {
                     val businesses = businessRepository.getBusinessesByProvider(userId).first()
                     val existingBusiness = businesses.firstOrNull()
@@ -546,7 +546,7 @@ class EditProfileViewModel @Inject constructor(
                             razonSocial = nombreEmpresa,
                             cuitNegocio = cuitEmpresa ?: "",
                             direccion = direccionEmpresa ?: "",
-                            codigoPostal = "", // TODO: agregar c�digo postal de empresa
+                            codigoPostal = "", // TODO: agregar c?digo postal de empresa
                             createdAt = System.currentTimeMillis(),
                             updatedAt = System.currentTimeMillis()
                         )
@@ -573,7 +573,7 @@ class EditProfileViewModel @Inject constructor(
         _updateState.value = UpdateState.Idle
     }
 
-    // -- CAMBIAR CONTRASE�A ----------------------------------------------------
+    // -- CAMBIAR CONTRASE?A ----------------------------------------------------
     private val _passwordChangeState = MutableStateFlow<PasswordChangeState>(PasswordChangeState.Idle)
     val passwordChangeState: StateFlow<PasswordChangeState> = _passwordChangeState.asStateFlow()
 
@@ -594,11 +594,11 @@ class EditProfileViewModel @Inject constructor(
                 user.updatePassword(newPassword).await()
                 _passwordChangeState.value = PasswordChangeState.Success
             } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
-                _passwordChangeState.value = PasswordChangeState.Error("La contrase�a actual es incorrecta")
+                _passwordChangeState.value = PasswordChangeState.Error("La contrase?a actual es incorrecta")
             } catch (e: com.google.firebase.auth.FirebaseAuthWeakPasswordException) {
-                _passwordChangeState.value = PasswordChangeState.Error("La contrase�a nueva es muy d�bil")
+                _passwordChangeState.value = PasswordChangeState.Error("La contrase?a nueva es muy d?bil")
             } catch (e: Exception) {
-                _passwordChangeState.value = PasswordChangeState.Error(e.message ?: "Error al cambiar contrase�a")
+                _passwordChangeState.value = PasswordChangeState.Error(e.message ?: "Error al cambiar contrase?a")
             }
         }
     }
@@ -620,7 +620,7 @@ class EditProfileViewModel @Inject constructor(
     fun updateImagenesProductos(json: String) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
         val updatedCompanies = current.companies.map { company ->
-            // Si tiene m�ltiples empresas, aqu� se podr�a filtrar por ID.
+            // Si tiene m?ltiples empresas, aqu? se podr?a filtrar por ID.
             // Por simplicidad, actualizamos la primera si existe.
             company.copy(branches = company.branches.map { branch ->
                 branch.copy(galleryImages = try {
@@ -706,7 +706,7 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    // --- M�TODOS JER�RQUICOS SSOT ---
+    // --- M?TODOS JER?RQUICOS SSOT ---
 
     fun addEmployee(employee: EmployeeProvider) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
@@ -763,7 +763,7 @@ class EditProfileViewModel @Inject constructor(
     fun saveAdditionalAddress(address: AddressProvider) {
         val current = (profileState.value as? ProfileState.Success)?.provider ?: return
         val updatedAddresses = current.addresses.filter { it.id != address.id } + address
-        // Actualizar tambi�n el campo `address` (singular) para que la UI lo muestre despu�s de guardar
+        // Actualizar tambi?n el campo `address` (singular) para que la UI lo muestre despu?s de guardar
         val updatedProvider = current.copy(addresses = updatedAddresses, address = address)
         viewModelScope.launch {
             providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
@@ -822,16 +822,16 @@ class EditProfileViewModel @Inject constructor(
                 val isUpdate = current.companies.any { it.id == finalCompany.id }
 
                 if (!isUpdate) {
-                    //M�XIMO 3 empresas
+                    //M?XIMO 3 empresas
                     if (current.companies.size >= 3) {
-                        _companyError.value = "Solo pod�s tener hasta 3 empresa de distintas categorias"
+                        _companyError.value = "Solo pod?s tener hasta 3 empresa de distintas categorias"
                         return@launch
                     }
-                    //Categor�as �nicas entre empresas
+                    //Categor?as ?nicas entre empresas
                     val categoriasExistentes = current.companies.flatMap { it.categories }.toSet()
                     val categoriasDuplicadas = finalCompany.categories.filter { it in categoriasExistentes }
                     if ( categoriasDuplicadas.isNotEmpty()) {
-                        _companyError.value = "ya ten�s una empresa con la categor�a ${categoriasDuplicadas.first()}"
+                        _companyError.value = "ya ten?s una empresa con la categor?a ${categoriasDuplicadas.first()}"
                         return@launch
                     }
                 }
@@ -872,18 +872,18 @@ class EditProfileViewModel @Inject constructor(
     }
 
     /**
-     * -- SECCI�N: NOTIFICACIONES POR TEMA (FCM Topics) -----------------------------------------
-     * Suscribe al prestador a los temas de licitaciones seg�n su CP y Rubros.
+     * -- SECCI?N: NOTIFICACIONES POR TEMA (FCM Topics) -----------------------------------------
+     * Suscribe al prestador a los temas de licitaciones seg?n su CP y Rubros.
      * Solo si es usuario Premium (isSubscribed).
      */
     fun syncTopics(cp: String?, categories: List<String>, isSubscribed: Boolean) {
         if (cp.isNullOrBlank() || categories.isEmpty()) {
-            Log.w("FCM_TOPIC", "No se puede sincronizar topics: CP o Categor�as vac�os. CP: $cp, Cats: $categories")
+            Log.w("FCM_TOPIC", "No se puede sincronizar topics: CP o Categor?as vac?os. CP: $cp, Cats: $categories")
             return
         }
 
         val fcm = FirebaseMessaging.getInstance()
-        // ?? [VALIDACI�N DE FLUJO] Normalizaci�n id�ntica a la App Cliente
+        // ?? [VALIDACI?N DE FLUJO] Normalizaci?n id?ntica a la App Cliente
         val cleanCp = cp.normalizeForTopic()
 
         Log.d("FCM_FLOW", "Sincronizando Topics para Prestador - CP: $cleanCp (Premium: $isSubscribed)")
@@ -892,22 +892,22 @@ class EditProfileViewModel @Inject constructor(
             val cleanCat = cat.normalizeForTopic()
             val topicName = "tender_${cleanCp}_$cleanCat"
             
-            Log.d("FCM_FLOW", "Procesando T�pico: $topicName")
+            Log.d("FCM_FLOW", "Procesando T?pico: $topicName")
 
-            // --- SECCI�N: L�GICA DE SUSCRIPCI�N (Premium Incentives) ---------------------
-            // Mantenemos la suscripci�n activa si es premium.
+            // --- SECCI?N: L?GICA DE SUSCRIPCI?N (Premium Incentives) ---------------------
+            // Mantenemos la suscripci?n activa si es premium.
             if (isSubscribed) {
                 fcm.subscribeToTopic(topicName)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
-                            Log.i("FCM_TOPIC", "? Suscrito con �xito a: $topicName")
+                            Log.i("FCM_TOPIC", "? Suscrito con ?xito a: $topicName")
                         } else {
                             Log.e("FCM_TOPIC", "? Error al suscribirse a $topicName: ${task.exception?.message}")
                         }
                     }
             } else {
                 // Si no es premium, nos desuscribimos para no recibir los mensajes 
-                // del topic, ya que el servicio maneja la l�gica de upsell.
+                // del topic, ya que el servicio maneja la l?gica de upsell.
                 fcm.unsubscribeFromTopic(topicName)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
@@ -947,7 +947,7 @@ sealed class PasswordChangeState {
 }
 
 /**
- * --- EXTENSIONES DE NORMALIZACI�N PARA T�PICOS ---
+ * --- EXTENSIONES DE NORMALIZACI?N PARA T?PICOS ---
  */
 private fun String.removeAccents(): String {
     val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)

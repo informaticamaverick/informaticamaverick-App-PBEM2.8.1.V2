@@ -6,9 +6,9 @@ import com.example.myapplication.prestador.data.local.dao.ProviderDao
 import com.example.myapplication.prestador.data.local.entity.BusinessEntity
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
 import com.example.myapplication.prestador.data.local.entity.SucursalEntity
-import com.example.myapplication.prestador.data.model.AddressProvider
-import com.example.myapplication.prestador.data.model.BranchProvider
-import com.example.myapplication.prestador.data.model.CompanyProvider
+import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.BranchProvider
+import com.example.myapplication.core.domain.model.CompanyProvider
 import com.example.myapplication.prestador.data.model.ServicioFirebase
 import com.example.myapplication.prestador.data.repository.BusinessRepository
 import com.example.myapplication.prestador.data.repository.CompaniesFirestoreSync
@@ -172,7 +172,7 @@ class PrestadorRegisterViewModel @Inject constructor(
                 } else emptyList()
 
                 // D. Objeto Provider de Dominio
-                val providerToSync = com.example.myapplication.prestador.data.model.Provider(
+                val providerToSync = com.example.myapplication.core.domain.model.Provider(
                     uid = userId,
                     email = if (isGoogleUser) (auth.currentUser?.email ?: email) else email,
                     displayName = "$nombre $apellido".trim(),

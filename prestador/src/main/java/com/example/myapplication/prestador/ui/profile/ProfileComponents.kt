@@ -27,7 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
-import com.example.myapplication.prestador.data.model.CompanyProvider
+import com.example.myapplication.core.domain.model.CompanyProvider
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 
 

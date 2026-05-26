@@ -1,10 +1,10 @@
-ï»¿package com.example.myapplication.prestador.viewmodel.empresa
+package com.example.myapplication.prestador.viewmodel.empresa
 
 import android.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.prestador.data.model.CompanyProvider
+import com.example.myapplication.core.domain.model.CompanyProvider
 import com.example.myapplication.prestador.data.repository.ProviderRepository
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,9 +15,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * VIEWMODEL para la gestiÃ³n de Empresas del Prestador.
- * [REFACTORED] Ahora utiliza ProviderRepository como Ãºnica fuente de verdad (SSOT).
- * Toda la informaciÃ³n de empresas se extrae y guarda dentro del ProviderEntity jerÃ¡rquico.
+ * VIEWMODEL para la gestión de Empresas del Prestador.
+ * [REFACTORED] Ahora utiliza ProviderRepository como única fuente de verdad (SSOT).
+ * Toda la información de empresas se extrae y guarda dentro del ProviderEntity jerárquico.
  */
 @HiltViewModel
 class BusinessViewModel @Inject constructor(
@@ -33,11 +33,11 @@ class BusinessViewModel @Inject constructor(
     // Observamos el ProviderEntity completo para extraer las empresas
     private val _provider = MutableStateFlow<ProviderEntity?>(null)
     
-    // Lista de empresas extraÃ­da del Provider
+    // Lista de empresas extraída del Provider
     private val _businesses = MutableStateFlow<List<CompanyProvider>>(emptyList())
     val businesses: StateFlow<List<CompanyProvider>> = _businesses.asStateFlow()
 
-    // Empresa seleccionada (para ediciÃ³n)
+    // Empresa seleccionada (para edición)
     private val _selectedBusiness = MutableStateFlow<CompanyProvider?>(null)
     val business: StateFlow<CompanyProvider?> = _selectedBusiness.asStateFlow()
 
@@ -73,7 +73,7 @@ class BusinessViewModel @Inject constructor(
     }
 
     /**
-     * Carga una empresa especÃ­fica por ID desde el estado local.
+     * Carga una empresa específica por ID desde el estado local.
      */
     fun loadBusiness(businessId: String) {
         val found = _businesses.value.find { it.id == businessId }
@@ -81,14 +81,14 @@ class BusinessViewModel @Inject constructor(
     }
 
     /**
-     * Guarda o actualiza una empresa en el perfil jerÃ¡rquico del prestador.
+     * Guarda o actualiza una empresa en el perfil jerárquico del prestador.
      */
     fun saveBusiness(company: CompanyProvider) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
                 val currentProvider = providerRepository.getProviderByIdOnce(providerId)
-                    ?: throw Exception("No se encontrÃ³ el perfil del prestador")
+                    ?: throw Exception("No se encontró el perfil del prestador")
 
                 // Actualizar la lista de empresas
                 val updatedCompanies = currentProvider.companies.toMutableList()
@@ -114,7 +114,7 @@ class BusinessViewModel @Inject constructor(
                 //Sincronizacion SSOT: Room + Firebase
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
 
-                // SincronizaciÃ³n SSOT: Room + Firebase
+                // Sincronización SSOT: Room + Firebase
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
                 
                 _successMessage.value = "Empresa guardada exitosamente"
@@ -127,14 +127,14 @@ class BusinessViewModel @Inject constructor(
     }
 
     /**
-     * Elimina una empresa del perfil jerÃ¡rquico.
+     * Elimina una empresa del perfil jerárquico.
      */
     fun deleteBusiness(businessId: String) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
                 val currentProvider = providerRepository.getProviderByIdOnce(providerId)
-                    ?: throw Exception("No se encontrÃ³ el perfil del prestador")
+                    ?: throw Exception("No se encontró el perfil del prestador")
 
                 val updatedCompanies = currentProvider.companies.filter { it.id != businessId }
                 val updatedProvider = currentProvider.copy(
@@ -142,7 +142,7 @@ class BusinessViewModel @Inject constructor(
                     hasCompanyProfile = updatedCompanies.isNotEmpty()
                 )
 
-                // SincronizaciÃ³n SSOT
+                // Sincronización SSOT
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
                 
                 _successMessage.value = "Empresa eliminada exitosamente"
@@ -154,7 +154,7 @@ class BusinessViewModel @Inject constructor(
         }
     }
 
-    // --- MÃ‰TODOS OBSOLETOS O REDIRIGIDOS ---
+    // --- MÉTODOS OBSOLETOS O REDIRIGIDOS ---
     @Deprecated("Utilizar loadBusinesses", ReplaceWith("loadBusinesses()"))
     fun loadBusinessesByProvider(providerId: String) = loadBusinesses()
 

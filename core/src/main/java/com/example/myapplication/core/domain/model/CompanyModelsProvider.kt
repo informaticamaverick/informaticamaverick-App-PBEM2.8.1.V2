@@ -15,6 +15,7 @@ data class CompanyProvider(
     val name: String = "", // Nombre de fantasía
     val razonSocial: String = "",
     val cuit: String = "",
+    val email: String = "",
     val description: String = "",
     val rating: Float = 0f,
     val photoUrl: String? = null,

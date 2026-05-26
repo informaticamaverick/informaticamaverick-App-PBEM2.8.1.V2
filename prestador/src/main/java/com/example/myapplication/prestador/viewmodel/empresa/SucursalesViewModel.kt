@@ -1,12 +1,12 @@
-ï»¿package com.example.myapplication.prestador.viewmodel.empresa
+package com.example.myapplication.prestador.viewmodel.empresa
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.prestador.data.model.AddressProvider
-import com.example.myapplication.prestador.data.model.BranchProvider
-import com.example.myapplication.prestador.data.model.CompanyProvider
-import com.example.myapplication.prestador.data.model.EmployeeProvider
+import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.BranchProvider
+import com.example.myapplication.core.domain.model.CompanyProvider
+import com.example.myapplication.core.domain.model.EmployeeProvider
 import com.example.myapplication.prestador.data.repository.ProviderRepository
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,9 +16,9 @@ import java.util.UUID
 import javax.inject.Inject
 
 /**
- * VIEWMODEL para la gestiÃ³n de Sucursales y Equipos del Prestador.
- * [REFACTORED] Ahora utiliza ProviderRepository como Ãºnica fuente de verdad (SSOT).
- * Las sucursales y empleados se gestionan dentro de la jerarquÃ­a de ProviderEntity.
+ * VIEWMODEL para la gestión de Sucursales y Equipos del Prestador.
+ * [REFACTORED] Ahora utiliza ProviderRepository como única fuente de verdad (SSOT).
+ * Las sucursales y empleados se gestionan dentro de la jerarquía de ProviderEntity.
  */
 @HiltViewModel
 class SucursalesViewModel @Inject constructor(
@@ -29,7 +29,7 @@ class SucursalesViewModel @Inject constructor(
     private val providerId: String
         get() = auth.currentUser?.uid ?: ""
 
-    // Observamos el Provider para obtener la jerarquÃ­a completa
+    // Observamos el Provider para obtener la jerarquía completa
     private val _provider = MutableStateFlow<ProviderEntity?>(null)
 
     // businessId reactivo: ID de la primera empresa del prestador (o null)
@@ -115,7 +115,7 @@ class SucursalesViewModel @Inject constructor(
                     hasPhysicalLocation = true
                 )
 
-                // Actualizar jerarquÃ­a (agregamos a la primera empresa por defecto)
+                // Actualizar jerarquía (agregamos a la primera empresa por defecto)
                 val updatedCompanies = currentProvider.companies.toMutableList()
                 val firstComp = updatedCompanies[0]
                 updatedCompanies[0] = firstComp.copy(
@@ -265,13 +265,13 @@ class SucursalesViewModel @Inject constructor(
         _uiState.value = UiState.Idle
     }
     
-    /** No-op: businessId ahora es reactivo y se actualiza automÃ¡ticamente. */
+    /** No-op: businessId ahora es reactivo y se actualiza automáticamente. */
     fun refreshBusinessId() = Unit
 
     /**
-     * Actualiza el encargado de una sucursal (primer empleado de la lista por convenciÃ³n o lÃ³gica similar)
+     * Actualiza el encargado de una sucursal (primer empleado de la lista por convención o lógica similar)
      * O simplemente actualiza los datos si ya existe.
-     * En este modelo jerÃ¡rquico, el "encargado" es solo un empleado.
+     * En este modelo jerárquico, el "encargado" es solo un empleado.
      */
     fun updateManager(sucursalId: String, nombre: String, apellido: String?, cargo: String?, imageUrl: String?) {
         viewModelScope.launch {

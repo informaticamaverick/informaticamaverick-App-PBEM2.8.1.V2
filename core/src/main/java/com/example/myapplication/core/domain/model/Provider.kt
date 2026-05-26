@@ -21,6 +21,7 @@ data class Provider(
     val name: String,
     val lastName: String,
     val matricula: String? = null,
+    val profesion: String? = null,
     val titulo: String? = null,
     val cuilCuit: String? = null,
     val addresses: List<AddressProvider> = emptyList(),
@@ -34,6 +35,7 @@ data class Provider(
     val doesHomeVisits: Boolean = false,
     val doesShipping: Boolean = false,
     val acceptsAppointments: Boolean = false,
+    val trabajaConOtros: Boolean = false,
 
     // --- ESTADOS ---
     val isSubscribed: Boolean = false,
@@ -57,17 +59,37 @@ data class Provider(
     val bannerImageUrl: String? = null,
     val galleryImages: List<String> = emptyList(),
     val favoriteProviderIds: List<String> = emptyList(),
+    val serviceType: String = "TECHNICAL",
     val createdAt: Long
 ) {
-    /**
-     * Propiedad de conveniencia para acceder al ID único.
-     */
     val id: String get() = uid
-
-    /**
-     * URL de la imagen de perfil principal.
-     */
     val profileImage: String? get() = photoUrl
+
+    // --- ALIASES DE COMPATIBILIDAD UI ---
+    val apellido: String get() = lastName
+    val imageUrl: String? get() = photoUrl
+    val verificado: Boolean get() = isVerified
+    val vaDomicilio: Boolean get() = doesHomeVisits
+    val suscripto: Boolean get() = isSubscribed
+    val favorito: Boolean get() = isFavorite
+    val tieneEmpresa: Boolean get() = hasCompanyProfile || companies.isNotEmpty()
+    val nombreEmpresa: String? get() = companies.firstOrNull()?.name
+    val direccionEmpresa: String? get() = companies.firstOrNull()?.branches?.firstOrNull()?.address?.fullString()
+    val cuitEmpresa: String? get() = companies.firstOrNull()?.cuit
+    val turnosEnLocal: Boolean get() = hasPhysicalLocation
+    val localAddress: AddressProvider? get() = addresses.find { it.id == "local" } ?: address
+    val direccionLocal: String? get() = localAddress?.fullString()
+    val phone: String get() = phoneNumber
+    val dniCuit: String? get() = cuilCuit
+    val tieneMatricula: Boolean get() = !matricula.isNullOrBlank()
+    val envios: Boolean get() = doesShipping
+    val atencionUrgencias: Boolean get() = works24h
+    val horarioLocal: String get() = workingHours
+    val provincia: String? get() = address?.provincia
+    val codigoPostal: String? get() = address?.codigoPostal
+    val pais: String? get() = address?.pais
+    val provinciaLocal: String? get() = localAddress?.provincia
+    val codigoPostalLocal: String? get() = localAddress?.codigoPostal
 }
 
 /**
