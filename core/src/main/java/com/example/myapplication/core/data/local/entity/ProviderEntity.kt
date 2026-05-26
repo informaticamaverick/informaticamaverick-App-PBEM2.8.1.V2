@@ -82,6 +82,7 @@ data class ProviderEntity(
         name = name,
         lastName = lastName,
         matricula = matricula,
+        profesion = profesion,
         titulo = titulo,
         cuilCuit = cuilCuit,
         addresses = addresses,
@@ -93,6 +94,7 @@ data class ProviderEntity(
         doesHomeVisits = doesHomeVisits,
         doesShipping = doesShipping,
         acceptsAppointments = acceptsAppointments,
+        trabajaConOtros = trabajaConOtros,
         isSubscribed = isSubscribed,
         isVerified = isVerified,
         isFavorite = isFavorite,
@@ -108,6 +110,7 @@ data class ProviderEntity(
         bannerImageUrl = bannerImageUrl,
         galleryImages = galleryImages,
         favoriteProviderIds = favoriteProviderIds,
+        serviceType = serviceType,
         createdAt = createdAt
     )
 
@@ -126,6 +129,7 @@ data class ProviderEntity(
             name = p.name,
             lastName = p.lastName,
             matricula = p.matricula,
+            profesion = p.profesion,
             titulo = p.titulo,
             cuilCuit = p.cuilCuit,
             addresses = p.addresses,
@@ -137,6 +141,7 @@ data class ProviderEntity(
             doesHomeVisits = p.doesHomeVisits,
             doesShipping = p.doesShipping,
             acceptsAppointments = p.acceptsAppointments,
+            trabajaConOtros = p.trabajaConOtros,
             isSubscribed = p.isSubscribed,
             isVerified = p.isVerified,
             isFavorite = p.isFavorite,
@@ -152,6 +157,7 @@ data class ProviderEntity(
             bannerImageUrl = p.bannerImageUrl,
             galleryImages = p.galleryImages,
             favoriteProviderIds = p.favoriteProviderIds,
+            serviceType = p.serviceType,
             createdAt = p.createdAt
         )
     }
