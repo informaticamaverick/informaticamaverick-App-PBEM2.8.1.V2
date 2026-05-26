@@ -594,11 +594,11 @@ class EditProfileViewModel @Inject constructor(
                 user.updatePassword(newPassword).await()
                 _passwordChangeState.value = PasswordChangeState.Success
             } catch (e: com.google.firebase.auth.FirebaseAuthInvalidCredentialsException) {
-                _passwordChangeState.value = PasswordChangeState.Error("La contrase?a actual es incorrecta")
+                _passwordChangeState.value = PasswordChangeState.Error("La contraseña actual es incorrecta")
             } catch (e: com.google.firebase.auth.FirebaseAuthWeakPasswordException) {
-                _passwordChangeState.value = PasswordChangeState.Error("La contrase?a nueva es muy d?bil")
+                _passwordChangeState.value = PasswordChangeState.Error("La contraseña nueva es muy débil")
             } catch (e: Exception) {
-                _passwordChangeState.value = PasswordChangeState.Error(e.message ?: "Error al cambiar contrase?a")
+                _passwordChangeState.value = PasswordChangeState.Error(e.message ?: "Error al cambiar contraseña")
             }
         }
     }
@@ -822,16 +822,16 @@ class EditProfileViewModel @Inject constructor(
                 val isUpdate = current.companies.any { it.id == finalCompany.id }
 
                 if (!isUpdate) {
-                    //M?XIMO 3 empresas
+                    //MÁXIMO 3 empresas
                     if (current.companies.size >= 3) {
-                        _companyError.value = "Solo pod?s tener hasta 3 empresa de distintas categorias"
+                        _companyError.value = "Solo podés tener hasta 3 empresa de distintas categorias"
                         return@launch
                     }
-                    //Categor?as ?nicas entre empresas
+                    //Categorías únicas entre empresas
                     val categoriasExistentes = current.companies.flatMap { it.categories }.toSet()
                     val categoriasDuplicadas = finalCompany.categories.filter { it in categoriasExistentes }
                     if ( categoriasDuplicadas.isNotEmpty()) {
-                        _companyError.value = "ya ten?s una empresa con la categor?a ${categoriasDuplicadas.first()}"
+                        _companyError.value = "ya tenés una empresa con la categoría ${categoriasDuplicadas.first()}"
                         return@launch
                     }
                 }
@@ -872,18 +872,18 @@ class EditProfileViewModel @Inject constructor(
     }
 
     /**
-     * -- SECCI?N: NOTIFICACIONES POR TEMA (FCM Topics) -----------------------------------------
-     * Suscribe al prestador a los temas de licitaciones seg?n su CP y Rubros.
+     * -- SECCIÓN: NOTIFICACIONES POR TEMA (FCM Topics) -----------------------------------------
+     * Suscribe al prestador a los temas de licitaciones según su CP y Rubros.
      * Solo si es usuario Premium (isSubscribed).
      */
     fun syncTopics(cp: String?, categories: List<String>, isSubscribed: Boolean) {
         if (cp.isNullOrBlank() || categories.isEmpty()) {
-            Log.w("FCM_TOPIC", "No se puede sincronizar topics: CP o Categor?as vac?os. CP: $cp, Cats: $categories")
+            Log.w("FCM_TOPIC", "No se puede sincronizar topics: CP o Categorías vacíos. CP: $cp, Cats: $categories")
             return
         }
 
         val fcm = FirebaseMessaging.getInstance()
-        // ?? [VALIDACI?N DE FLUJO] Normalizaci?n id?ntica a la App Cliente
+        // [VALIDACIÓN DE FLUJO] Normalización idéntica a la App Cliente
         val cleanCp = cp.normalizeForTopic()
 
         Log.d("FCM_FLOW", "Sincronizando Topics para Prestador - CP: $cleanCp (Premium: $isSubscribed)")
@@ -892,9 +892,9 @@ class EditProfileViewModel @Inject constructor(
             val cleanCat = cat.normalizeForTopic()
             val topicName = "tender_${cleanCp}_$cleanCat"
             
-            Log.d("FCM_FLOW", "Procesando T?pico: $topicName")
+            Log.d("FCM_FLOW", "Procesando Tópico: $topicName")
 
-            // --- SECCI?N: L?GICA DE SUSCRIPCI?N (Premium Incentives) ---------------------
+            // --- SECCIÓN: LÓGICA DE SUSCRIPCIÓN (Premium Incentives) ---------------------
             // Mantenemos la suscripci?n activa si es premium.
             if (isSubscribed) {
                 fcm.subscribeToTopic(topicName)
