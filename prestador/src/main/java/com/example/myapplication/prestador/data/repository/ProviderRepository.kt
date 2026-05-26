@@ -454,8 +454,8 @@ class ProviderRepository @Inject constructor(
                 ))
             }
         } else if (ubicacion != null) {
-            addressesList.add(com.example.myapplication.prestador.data.model
-                .AddressProvider(
+            addressesList.add(com.example.myapplication.core.domain.model
+                    .AddressProvider(
                     id = "default",
                     calle = str(ubicacion, "direccion") ?: "",
                     numero = "",
@@ -556,7 +556,7 @@ class ProviderRepository @Inject constructor(
                     0.0).toFloat()
                 ))
             }
-            companiesList.add(com.example.myapplication.prestador.data.model
+            companiesList.add(com.example.myapplication.core.domain.model
                 .CompanyProvider(
                     id = compDoc.id,
                     name = compDoc.getString("nombreNegocio") ?:

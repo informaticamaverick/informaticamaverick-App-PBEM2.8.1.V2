@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.myapplication.prestador.data.model.PromotionType
-import com.example.myapplication.core.domain.model.ProviderPromotion
+import com.example.myapplication.prestador.data.model.ProviderPromotion
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.promotion.CreatePromotionViewModel
@@ -80,7 +80,7 @@ fun CreatePromotionScreen(
     var errorMessage       by remember { mutableStateOf<String?>(null) }
     var showPreview        by remember { mutableStateOf(false) }
 
-    // Cargar datos existentes cuando se abre en modo edición
+    // Cargar datos existentes cuando se abre en modo ediciï¿½n
     val existingPromotionFlow = if (isEditMode) viewModel.getPromotionByIdAsModel(promotionId!!) else null
     val loadedPromotion by (existingPromotionFlow ?: kotlinx.coroutines.flow.flowOf(null)).collectAsState(initial = null)
     LaunchedEffect(loadedPromotion) {
@@ -116,7 +116,7 @@ fun CreatePromotionScreen(
     ) { uris ->
         val totalAfterAdd = existingImageUrls.size + selectedImages.size + uris.size
         if (totalAfterAdd <= 3) { selectedImages = selectedImages + uris; errorMessage = null }
-        else errorMessage = "Máximo 3 imágenes en total"
+        else errorMessage = "Mï¿½ximo 3 imï¿½genes en total"
     }
 
     Column(
@@ -150,18 +150,18 @@ fun CreatePromotionScreen(
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        if (isEditMode) "Editar publicación" else "Nueva publicación",
+                        if (isEditMode) "Editar publicaciï¿½n" else "Nueva publicaciï¿½n",
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White
                     )
                     Text(
-                        if (isEditMode) "Actualizá tu oferta" else "Llegá a más clientes con tu oferta",
+                        if (isEditMode) "Actualizï¿½ tu oferta" else "Llegï¿½ a mï¿½s clientes con tu oferta",
                         fontSize = 13.sp,
                         color = Color.White.copy(alpha = 0.8f)
                     )
                 }
-                // Botón preview
+                // Botï¿½n preview
                 Surface(
                     onClick = { showPreview = !showPreview },
                     shape = RoundedCornerShape(50),
@@ -199,8 +199,8 @@ fun CreatePromotionScreen(
                 exit = shrinkVertically(tween(300)) + fadeOut()
             ) {
                 PromoPreviewCard(
-                    title = title.ifBlank { "Título de tu publicación" },
-                    description = description.ifBlank { "Descripción de tu oferta..." },
+                    title = title.ifBlank { "Tï¿½tulo de tu publicaciï¿½n" },
+                    description = description.ifBlank { "Descripciï¿½n de tu oferta..." },
                     imageUri = selectedImages.firstOrNull(),
                     discount = discount.toIntOrNull(),
                     type = selectedType,
@@ -211,7 +211,7 @@ fun CreatePromotionScreen(
 
             // -- SELECTOR DE TIPO --------------------------------------
             SectionCard(colors = colors) {
-                SectionTitle("Tipo de publicación", Icons.Default.Campaign, colors)
+                SectionTitle("Tipo de publicaciï¿½n", Icons.Default.Campaign, colors)
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     PromotionType.values().forEach { type ->
@@ -226,14 +226,14 @@ fun CreatePromotionScreen(
                 }
             }
 
-            // -- TÍTULO ------------------------------------------------
+            // -- Tï¿½TULO ------------------------------------------------
             SectionCard(colors = colors) {
-                SectionTitle("Título", Icons.Default.Title, colors)
+                SectionTitle("Tï¿½tulo", Icons.Default.Title, colors)
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = title,
                     onValueChange = { if (it.length <= TITLE_MAX) title = it },
-                    placeholder = { Text("Ej: Instalación eléctrica con 20% OFF", color = colors.textSecondary.copy(alpha = 0.6f)) },
+                    placeholder = { Text("Ej: Instalaciï¿½n elï¿½ctrica con 20% OFF", color = colors.textSecondary.copy(alpha = 0.6f)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
@@ -257,14 +257,14 @@ fun CreatePromotionScreen(
                 }
             }
 
-            // -- DESCRIPCIÓN -------------------------------------------
+            // -- DESCRIPCIï¿½N -------------------------------------------
             SectionCard(colors = colors) {
-                SectionTitle("Descripción", Icons.Default.Description, colors)
+                SectionTitle("Descripciï¿½n", Icons.Default.Description, colors)
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
                     value = description,
                     onValueChange = { if (it.length <= DESC_MAX) description = it },
-                    placeholder = { Text("Contá qué ofrecés, por qué elegirte...", color = colors.textSecondary.copy(alpha = 0.6f)) },
+                    placeholder = { Text("Contï¿½ quï¿½ ofrecï¿½s, por quï¿½ elegirte...", color = colors.textSecondary.copy(alpha = 0.6f)) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp),
@@ -289,14 +289,14 @@ fun CreatePromotionScreen(
                 }
             }
 
-            // -- IMÁGENES ----------------------------------------------
+            // -- IMï¿½GENES ----------------------------------------------
             SectionCard(colors = colors) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    SectionTitle("Imágenes", Icons.Default.PhotoLibrary, colors)
+                    SectionTitle("Imï¿½genes", Icons.Default.PhotoLibrary, colors)
                     Text(
                         "${existingImageUrls.size + selectedImages.size}/3",
                         fontSize = 12.sp,
@@ -305,7 +305,7 @@ fun CreatePromotionScreen(
                     )
                 }
                 Spacer(Modifier.height(10.dp))
-                // Imágenes ya guardadas (modo edición)
+                // Imï¿½genes ya guardadas (modo ediciï¿½n)
                 if (existingImageUrls.isNotEmpty()) {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -348,9 +348,9 @@ fun CreatePromotionScreen(
                 )
             }
 
-            // -- CATEGORÍAS --------------------------------------------
+            // -- CATEGORï¿½AS --------------------------------------------
             SectionCard(colors = colors) {
-                SectionTitle("Categorías", Icons.Default.Category, colors)
+                SectionTitle("Categorï¿½as", Icons.Default.Category, colors)
                 Spacer(Modifier.height(10.dp))
                 CategorySelector(
                     selectedCategories = selectedCategories,
@@ -423,7 +423,7 @@ fun CreatePromotionScreen(
 
             // -- BOTONES -----------------------------------------------
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Botón izquierdo: "Borrador" (crear) / "Cancelar" (editar)
+                // Botï¿½n izquierdo: "Borrador" (crear) / "Cancelar" (editar)
                 OutlinedButton(
                     onClick = {
                         if (isEditMode) {
@@ -456,7 +456,7 @@ fun CreatePromotionScreen(
                     )
                 }
 
-                // Botón principal: "Publicar" (crear) / "Guardar cambios" (editar)
+                // Botï¿½n principal: "Publicar" (crear) / "Guardar cambios" (editar)
                 Button(
                     onClick = {
                         errorMessage = null
@@ -524,7 +524,7 @@ fun CreatePromotionScreen(
     }
 }
 
-// -- SECCIÓN CARD --------------------------------------------------
+// -- SECCIï¿½N CARD --------------------------------------------------
 @Composable
 private fun SectionCard(
     colors: PrestadorColors,
@@ -541,7 +541,7 @@ private fun SectionCard(
     }
 }
 
-// -- TÍTULO DE SECCIÓN ---------------------------------------------
+// -- Tï¿½TULO DE SECCIï¿½N ---------------------------------------------
 @Composable
 private fun SectionTitle(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, colors: PrestadorColors) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -588,7 +588,7 @@ private fun PromoPreviewCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(Icons.Default.Visibility, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                    Text("Así se verá tu publicación", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text("Asï¿½ se verï¿½ tu publicaciï¿½n", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
             }
             Row(modifier = Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -626,7 +626,7 @@ private fun PromoPreviewCard(
                                 else colors.primaryOrange.copy(alpha = 0.12f)
                     ) {
                         Text(
-                            if (type == PromotionType.STORY) "?? Historia · 24h" else "?? Promo · 7 días",
+                            if (type == PromotionType.STORY) "?? Historia ï¿½ 24h" else "?? Promo ï¿½ 7 dï¿½as",
                             fontSize = 10.sp,
                             color = if (type == PromotionType.STORY) Color(0xFF7B1FA2) else colors.primaryOrange,
                             fontWeight = FontWeight.SemiBold,
@@ -675,7 +675,7 @@ fun TypeCard(
 ) {
     val (icon, label, sublabel, tipeColor) = when (type) {
         PromotionType.STORY     -> arrayOf(Icons.Default.FlashOn, "Historia", "Dura 24 horas", Color(0xFF7B1FA2))
-        PromotionType.PROMOTION -> arrayOf(Icons.Default.Campaign, "Promoción", "Dura 7 días",  colors.primaryOrange)
+        PromotionType.PROMOTION -> arrayOf(Icons.Default.Campaign, "Promociï¿½n", "Dura 7 dï¿½as",  colors.primaryOrange)
     }
     val cardColor = (tipeColor as Color)
 
@@ -727,7 +727,7 @@ fun TypeCard(
     }
 }
 
-// -- SELECTOR DE IMÁGENES ------------------------------------------
+// -- SELECTOR DE IMï¿½GENES ------------------------------------------
 @Composable
 fun ImageSelector(
     selectedImages: List<Uri>,
@@ -765,7 +765,7 @@ fun ImageSelector(
                     modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
                     contentScale = ContentScale.Crop
                 )
-                // Indicador posición
+                // Indicador posiciï¿½n
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -775,7 +775,7 @@ fun ImageSelector(
                 ) {
                     Text("${index + 1}/3", fontSize = 9.sp, color = Color.White, fontWeight = FontWeight.Bold)
                 }
-                // Botón eliminar
+                // Botï¿½n eliminar
                 IconButton(
                     onClick = { onRemoveImage(uri) },
                     modifier = Modifier
@@ -791,7 +791,7 @@ fun ImageSelector(
     }
 }
 
-// -- SELECTOR DE CATEGORÍAS ----------------------------------------
+// -- SELECTOR DE CATEGORï¿½AS ----------------------------------------
 @Composable
 fun CategorySelector(
     selectedCategories: Set<String>,
@@ -811,7 +811,7 @@ fun CategorySelector(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (selectedCategories.isEmpty()) "Seleccionar categorías"
+                text = if (selectedCategories.isEmpty()) "Seleccionar categorï¿½as"
                        else "${selectedCategories.size} seleccionada(s)",
                 color = if (selectedCategories.isEmpty()) colors.textSecondary else colors.textPrimary,
                 fontSize = 14.sp
@@ -841,7 +841,7 @@ fun CategorySelector(
     }
 }
 
-// -- DIÁLOGO DE CATEGORÍAS -----------------------------------------
+// -- DIï¿½LOGO DE CATEGORï¿½AS -----------------------------------------
 @Composable
 fun CategoryDialog(
     selectedCategories: Set<String>,
@@ -850,13 +850,13 @@ fun CategoryDialog(
     colors: PrestadorColors
 ) {
     val categories = listOf(
-        "Plomería", "Electricidad", "Carpintería", "Pintura",
-        "Albañilería", "Jardinería", "Limpieza", "Cerrajería",
+        "Plomerï¿½a", "Electricidad", "Carpinterï¿½a", "Pintura",
+        "Albaï¿½ilerï¿½a", "Jardinerï¿½a", "Limpieza", "Cerrajerï¿½a",
         "Aire Acondicionado", "Reparaciones Generales"
     )
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Seleccioná categorías", fontWeight = FontWeight.Bold, color = colors.textPrimary) },
+        title = { Text("Seleccionï¿½ categorï¿½as", fontWeight = FontWeight.Bold, color = colors.textPrimary) },
         text = {
             Column(
                 modifier = Modifier

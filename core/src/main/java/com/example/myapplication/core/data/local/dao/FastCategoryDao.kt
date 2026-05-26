@@ -1,6 +1,8 @@
-package com.example.myapplication.data.local
+package com.example.myapplication.core.data.local.dao
 
 import androidx.room.*
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.core.data.local.dao.FastCategoryEntity
 import kotlinx.coroutines.flow.Flow
 
 /**

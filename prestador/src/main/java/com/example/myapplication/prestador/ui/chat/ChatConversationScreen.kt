@@ -85,7 +85,7 @@ fun ChatConversationScreen(
 
     val chatViewModel: com.example.myapplication.prestador.viewmodel.chat.ChatViewModel = hiltViewModel()
     val chatId = remember(userId, providerId, conversationId) {
-        conversationId ?: com.example.myapplication.prestador.utils.ChatIdHelper.generateChatId(userId, providerId)
+        conversationId ?: com.example.myapplication.core.ChatIdHelper.generateChatId(userId, providerId)
     }
 
     // Estado para saber si este chat está visible
