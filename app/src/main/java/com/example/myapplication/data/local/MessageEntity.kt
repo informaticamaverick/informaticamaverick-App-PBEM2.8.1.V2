@@ -38,6 +38,25 @@ data class MessageEntity(
     val appointmentDate: String? = null,
     val appointmentTime: String? = null,
     val appointmentStatus: String? = null, // PENDING, ACCEPTED, REJECTED
+    val appointmentType: String? = null,   // 🔥 [NUEVO] TECHNICAL_VISIT o LOCAL_APPOINTMENT
+    val providerAddress: String? = null,   // 🔥 [NUEVO] Dirección del local del prestador
+    val companyId: String? = null,         // 🔥 [NUEVO] Contexto Multi-Perfil
+    val categoryId: String? = null,        // 🔥 [NUEVO] Rubro del servicio
+
+    // 🔥 [NUEVO] Campos para invitaciones de calendario (CALENDAR_INVITE)
+    val calendarStartDate: String? = null,
+    val calendarEndDate: String? = null,
+    val availabilityJson: String? = null,
+    val bookedSlotsJson: String? = null,
+    val calendarInviteMessageId: String? = null,
+
+    // 🔥 [NUEVO] Campos para comprobantes de turno (APPOINTMENT_RECEIPT)
+    val receiptService: String? = null,
+    val receiptProviderName: String? = null,
+    val receiptIsTechnician: Boolean? = null,
+    val receiptProfession: String? = null,
+    val receiptAddress: String? = null,
+    val receiptCode: String? = null,
 
     // --- METADATOS ---
     val timestamp: Long = System.currentTimeMillis(),
@@ -49,6 +68,10 @@ data class MessageEntity(
     // Por defecto, un mensaje nuevo llega como "no leído".
     val isRead: Boolean = false,
 
-    val isSynced: Boolean = false
+    val isSynced: Boolean = false,
+
+    // 🔥 [NUEVO] Campos para solicitud de presupuesto (BUDGET_REQUEST)
+    val budgetRequestDescription: String? = null,
+    val budgetRequestClientAddress: String? = null
 )
 

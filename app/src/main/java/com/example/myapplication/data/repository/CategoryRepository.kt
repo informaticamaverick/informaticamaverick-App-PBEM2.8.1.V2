@@ -46,6 +46,10 @@ class CategoryRepository @Inject constructor(
         categoryDao.insertOrUpdate(category)
     }
 
+    suspend fun getCategoryByName(name: String): CategoryEntity? {
+        return categoryDao.getCategoryByName(name)
+    }
+
     // ==================================================================================
     // --- 🔄 SECCIÓN: SINCRONIZACIÓN HÍBRIDA (FIRESTORE -> ROOM) ---
     // ==================================================================================

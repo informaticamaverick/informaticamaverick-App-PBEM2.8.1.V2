@@ -11,10 +11,14 @@ import com.example.myapplication.data.local.BudgetProfessionalFee
 import com.example.myapplication.data.local.BudgetService
 import com.example.myapplication.data.local.BudgetStatus
 import com.example.myapplication.data.local.BudgetTax
+import com.example.myapplication.data.local.CalendarDao
+import com.example.myapplication.data.local.CalendarEventEntity
 import com.example.myapplication.data.local.ChatDao
 import com.example.myapplication.data.local.ChatUnreadCount
+import com.example.myapplication.data.local.EventType
 import com.example.myapplication.data.local.MessageEntity
 import com.example.myapplication.data.local.TenderEntity
+import com.example.myapplication.data.local.VisitStatus
 import com.example.myapplication.data.model.MessageType
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.ChildEventListener
@@ -41,6 +45,7 @@ import javax.inject.Singleton
 class ChatRepository @Inject constructor(
     private val chatDao: ChatDao,
     private val budgetDao: BudgetDao,
+    private val calendarDao: CalendarDao, // 🔥 RE-AGREGADO: Necesario para sincronizar con el calendario
     private val firestore: FirebaseFirestore,
     private val database: FirebaseDatabase,
     private val auth: FirebaseAuth,
@@ -148,113 +153,11 @@ class ChatRepository @Inject constructor(
                         }
 
                         var budgetSavedId: String? = null
-                        if (type == MessageType.BUDGET) {
-                            val rawJson =
-                                snapshot.child("budgetDataJson").getValue(String::class.java)
-                            if (rawJson != null) {
-                                try {
-                                    val obj = org.json.JSONObject(rawJson)
-                                    fun parseItems(s: String) = if (s.isBlank())
-                                        emptyList() else
-                                        s.split("|").mapNotNull { row ->
-                                            val p = row.split(";")
-                                            if (p.size >= 4) BudgetItem(
-                                                code = p.getOrElse(0) { "" },
-                                                description = p.getOrElse(1) { "" },
-                                                quantity = p.getOrElse(2) {
-                                                    "1"
-                                                }.toIntOrNull() ?: 1,
-
-                                                unitPrice = p.getOrElse(3) {
-                                                    "0"
-                                                }.toDoubleOrNull() ?: 0.0,
-
-                                                taxPercentage = p.getOrElse(4) {
-                                                    "0"
-                                                }.toDoubleOrNull() ?: 0.0,
-
-                                                discountPercentage = p.getOrElse(5) {
-                                                    "0"
-                                                }.toDoubleOrNull() ?: 0.0
-                                            )
-                                            else null
-                                        }
-
-                                    fun parseService(s: String) = if (s.isBlank()) emptyList() else
-                                        s.split("|").mapNotNull { row ->
-                                            val p = row.split(";")
-                                            if (p.size >= 2) BudgetService(
-                                                code = p.getOrElse(0) { "" },
-                                                description = p.getOrElse(1) { "" },
-                                                total = p.getOrElse(2) { "0" }.toDoubleOrNull()
-                                                    ?: 0.0
-                                            )
-                                            else null
-                                        }
-
-                                    fun parseFees(s: String) = if (s.isBlank()) emptyList() else
-                                        s.split("|").mapNotNull { row ->
-                                            val p = row.split(";")
-                                            if (p.size >= 2) BudgetProfessionalFee(
-                                                code = p.getOrElse(0) { "" },
-                                                description = p.getOrElse(1) { "" },
-                                                total = p.getOrElse(2) { "0" }.toDoubleOrNull()
-                                                    ?: 0.0
-                                            )
-                                            else null
-                                        }
-
-                                    fun parseExpenses(s: String) = if (s.isBlank()) emptyList() else
-                                        s.split("|").mapNotNull { row ->
-                                            val p = row.split(";")
-                                            if (p.size >= 2) BudgetMiscExpense(
-                                                description = p.getOrElse(0) { "" },
-                                                amount = p.getOrElse(1) { "0" }.toDoubleOrNull()
-                                                    ?: 0.0
-                                            )
-                                            else null
-                                        }
-
-                                    fun parseTaxes(s: String) = if (s.isBlank())
-                                        emptyList() else
-                                        s.split("|").mapNotNull { row ->
-                                            val p = row.split(";")
-                                            if (p.size >= 2) BudgetTax(
-                                                description = p.getOrElse(0) { "" },
-                                                amount = p.getOrElse(1) { "0" }.toDoubleOrNull()
-                                                    ?: 0.0
-                                            )
-                                            else null
-                                        }
-
-                                    val budgetEntity = BudgetEntity(
-                                        budgetId = msgId,
-                                        clientId = myUid,
-                                        providerId = senderId,
-                                        providerName = senderId,
-                                        items = parseItems(obj.optString("items")),
-                                        services = parseService(obj.optString("servicios")),
-                                        professionalFees = parseFees(obj.optString("honorarios")),
-                                        miscExpenses = parseExpenses(obj.optString("gastos")),
-                                        taxes = parseTaxes(obj.optString("impuestosJ")),
-                                        subtotal = obj.optDouble("subtotal", 0.0),
-                                        taxAmount = obj.optDouble("impuestos", 0.0),
-                                        grandTotal = obj.optDouble("total", 0.0),
-                                        validityDays = obj.optInt("validezDias", 7),
-                                        notes = obj.optString("notas").ifBlank { null },
-                                        status = BudgetStatus.PENDIENTE,
-                                        dateTimestamp = snapshot.child("timestamp")
-                                            .getValue(Long::class.java)
-                                            ?: System.currentTimeMillis()
-
-                                    )
-                                    budgetDao.insertBudget(budgetEntity)
-                                    budgetSavedId = msgId
-
-                                } catch (e: Exception) {
-                                    Log.e("ChatRepository", "Error parsing budget: ${e.message}")
-                                }
-                            }
+                        val budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java)
+                        val categorias = snapshot.child("categorias").getValue(String::class.java)
+                        
+                        if (type == MessageType.BUDGET && budgetDataJson != null) {
+                            budgetSavedId = parseAndSaveBudget(budgetDataJson, msgId, myUid, senderId, snapshot.child("timestamp").getValue(Long::class.java) ?: System.currentTimeMillis(), categorias)
                         }
 
                         val entity = MessageEntity(
@@ -265,7 +168,7 @@ class ChatRepository @Inject constructor(
                                 ?: myUid,
                             type = type,
                             content = content,
-                            imageUrl = localImagePath ?: localAudioPath, // Almacenamos la ruta local (imagen o audio)
+                            imageUrl = localImagePath ?: localAudioPath,
                             latitude = snapshot.child("latitude").getValue(Double::class.java),
                             longitude = snapshot.child("longitude").getValue(Double::class.java),
                             locationAddress = snapshot.child("locationAddress")
@@ -274,12 +177,21 @@ class ChatRepository @Inject constructor(
                                 .getValue(Long::class.java)?.toInt(),
                             relatedId = budgetSavedId ?: snapshot.child("relatedId")
                                 .getValue(String::class.java) ?: snapshot.child("appointmentId")
-                                .getValue(
-                                    String::class.java
-                                ),
+                                .getValue(String::class.java),
                             appointmentDate = appointmentDate,
                             appointmentTime = appointmentTime,
                             appointmentStatus = appointmentStatus,
+                            appointmentType = snapshot.child("appointmentType").getValue(String::class.java),
+                            providerAddress = snapshot.child("providerAddress").getValue(String::class.java),
+                            calendarStartDate = snapshot.child("calendarStartDate").getValue(String::class.java),
+                            calendarEndDate = snapshot.child("calendarEndDate").getValue(String::class.java),
+                            availabilityJson = snapshot.child("availabilityJson").getValue(String::class.java),
+                            bookedSlotsJson = snapshot.child("bookedSlotsJson").getValue(String::class.java),
+                            receiptService = snapshot.child("receiptService").getValue(String::class.java),
+                            receiptProviderName = snapshot.child("receiptProviderName").getValue(String::class.java),
+                            receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java),
+                            receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
+                            receiptCode = snapshot.child("receiptCode").getValue(String::class.java),
                             timestamp = snapshot.child("timestamp").getValue(Long::class.java)
                                 ?: System.currentTimeMillis(),
                             isRead = isReadInServer,
@@ -287,6 +199,11 @@ class ChatRepository @Inject constructor(
                         )
                         chatDao.insertMessage(entity)
                         Log.d("ChatRepository", "Mensaje recibido (RTBD): ${entity.content}")
+
+                        if (type == MessageType.APPOINTMENT_RECEIPT || appointmentStatus == "ACCEPTED") {
+                            saveToCalendar(entity, myUid)
+                        }
+
                         scope.launch {
                             try {
                                 messagesRef.child(msgId).child("isDelivered").setValue(true)
@@ -403,6 +320,14 @@ class ChatRepository @Inject constructor(
                                 }
 
                                 val appointmentStatus = snapshot.child("appointmentStatus").getValue(String::class.java)
+                                val categorias = snapshot.child("categorias").getValue(String::class.java)
+                                
+                                var budgetSavedId: String? = null
+                                val budgetDataJson = snapshot.child("budgetDataJson").getValue(String::class.java)
+                                if (type == MessageType.BUDGET && budgetDataJson != null) {
+                                    budgetSavedId = parseAndSaveBudget(budgetDataJson, msgId, myUserId, senderId, msgTimestamp, categorias)
+                                }
+
                                 val entity = MessageEntity(
                                     id = msgId,
                                     chatId = chatId,
@@ -415,15 +340,31 @@ class ChatRepository @Inject constructor(
                                     longitude = snapshot.child("longitude").getValue(Double::class.java),
                                     locationAddress = snapshot.child("locationAddress").getValue(String::class.java),
                                     durationSeconds = snapshot.child("durationSeconds").getValue(Long::class.java)?.toInt(),
-                                    relatedId = snapshot.child("relatedId").getValue(String::class.java),
+                                    relatedId = budgetSavedId ?: snapshot.child("relatedId").getValue(String::class.java),
                                     appointmentStatus = appointmentStatus,
+                                    appointmentType = snapshot.child("appointmentType").getValue(String::class.java),
+                                    providerAddress = snapshot.child("providerAddress").getValue(String::class.java),
                                     appointmentDate = snapshot.child("appointmentDate").getValue(String::class.java),
                                     appointmentTime = snapshot.child("appointmentTime").getValue(String::class.java),
+                                    calendarStartDate = snapshot.child("calendarStartDate").getValue(String::class.java),
+                                    calendarEndDate = snapshot.child("calendarEndDate").getValue(String::class.java),
+                                    availabilityJson = snapshot.child("availabilityJson").getValue(String::class.java),
+                                    bookedSlotsJson = snapshot.child("bookedSlotsJson").getValue(String::class.java),
+                                    receiptService = snapshot.child("receiptService").getValue(String::class.java),
+                                    receiptProviderName = snapshot.child("receiptProviderName").getValue(String::class.java),
+                                    receiptIsTechnician = snapshot.child("receiptIsTechnician").getValue(Boolean::class.java),
+                                    receiptAddress = snapshot.child("receiptAddress").getValue(String::class.java),
+                                    receiptCode = snapshot.child("receiptCode").getValue(String::class.java),
                                     timestamp = msgTimestamp,
                                     isRead = isReadInServer,
                                     isSynced = true
                                 )
                                 chatDao.insertMessage(entity)
+
+                                // 🔥 SI EL MENSAJE YA LLEGA ACEPTADO O ES RECIBO, GUARDAR EN CALENDARIO LOCAL 🔥
+                                if (type == MessageType.APPOINTMENT_RECEIPT || appointmentStatus == "ACCEPTED") {
+                                    saveToCalendar(entity, myUserId)
+                                }
                                 
                                 // Solo notificar si es un mensaje REALMENTE nuevo (posterior al inicio de la app)
                                 if (msgTimestamp > syncStartTime && !isReadInServer) {
@@ -512,8 +453,20 @@ class ChatRepository @Inject constructor(
     fun getActiveChatIds(myUserId: String): Flow<List<String>> =
         chatDao.getActiveConversationIds(myUserId)
 
+    fun getActiveChatSummaries(myUserId: String): Flow<List<com.example.myapplication.data.local.ChatSummary>> =
+        chatDao.getActiveChatSummaries(myUserId)
+
     fun getOpenTendersByCategory(category: String): Flow<List<TenderEntity>> =
         budgetDao.getOpenTendersByCategory(category)
+
+    /**
+     * Elimina múltiples chats de la base de datos local y opcionalmente del servidor.
+     */
+    suspend fun deleteChats(chatIds: List<String>) {
+        chatDao.deleteMessagesByChatIds(chatIds)
+        // Opcional: Podrías marcar el chat como eliminado en Firestore o RTDB si es necesario
+        Log.d("ChatRepository", "Chats eliminados localmente: ${chatIds.size}")
+    }
 
     // --- HELPER: escribir mensaje en Firestore ---
     private suspend fun sendToFirestore(message: MessageEntity) {
@@ -556,10 +509,19 @@ class ChatRepository @Inject constructor(
                 "longitude" to message.longitude,
                 "locationAddress" to message.locationAddress,
                 "durationSeconds" to message.durationSeconds,
-                "relatedId" to message.relatedId
+                "relatedId" to message.relatedId,
+                "companyId" to message.companyId,
+                "categoryId" to message.categoryId,
+                "appointmentType" to message.appointmentType,
+                "providerAddress" to message.providerAddress,
+                "appointmentDate" to message.appointmentDate,
+                "appointmentTime" to message.appointmentTime,
+                "budgetRequestDescription" to message.budgetRequestDescription,
+                "budgetRequestClientAddress" to message.budgetRequestClientAddress
             )
+            // [SINCRONIZACIÓN] Asegurar que el estado del turno se envíe correctamente
             if (message.type == MessageType.VISIT) {
-                msgData["appointmentStatus"] = "PENDING"
+                msgData["appointmentStatus"] = message.appointmentStatus ?: "PENDING"
             }
             database.reference
                 .child("chats").child(message.chatId)
@@ -665,6 +627,161 @@ class ChatRepository @Inject constructor(
         }
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
+    }
+
+    /**
+     * ── Helper centralizado para parsear y guardar presupuestos ──────────────────
+     */
+    private suspend fun parseAndSaveBudget(rawJson: String, msgId: String, myUid: String, senderId: String, timestamp: Long, categoriasSibling: String?): String? {
+        return try {
+            val obj = org.json.JSONObject(rawJson)
+            
+            fun parseItems(s: String) = if (s.isBlank()) emptyList() else
+                s.split("|").mapNotNull { row ->
+                    val p = row.split(";")
+                    if (p.size >= 4) BudgetItem(
+                        code = p.getOrElse(0) { "" },
+                        description = p.getOrElse(1) { "" },
+                        quantity = p.getOrElse(2) { "1" }.toIntOrNull() ?: 1,
+                        unitPrice = p.getOrElse(3) { "0" }.toDoubleOrNull() ?: 0.0,
+                        taxPercentage = p.getOrElse(4) { "0" }.toDoubleOrNull() ?: 0.0,
+                        discountPercentage = p.getOrElse(5) { "0" }.toDoubleOrNull() ?: 0.0
+                    ) else null
+                }
+
+            fun parseService(s: String) = if (s.isBlank()) emptyList() else
+                s.split("|").mapNotNull { row ->
+                    val p = row.split(";")
+                    if (p.size >= 2) BudgetService(
+                        code = p.getOrElse(0) { "" },
+                        description = p.getOrElse(1) { "" },
+                        total = p.getOrElse(2) { "0" }.toDoubleOrNull() ?: 0.0
+                    ) else null
+                }
+
+            val budgetEntity = BudgetEntity(
+                budgetId = msgId,
+                clientId = myUid,
+                providerId = senderId,
+                providerName = senderId, // Fallback
+                providerCompanyName = obj.optString("companyName").ifBlank { null },
+                category = (obj.optString("categorias").ifBlank { null } ?: categoriasSibling)?.split(",")?.firstOrNull(),
+                items = parseItems(obj.optString("items")),
+                services = parseService(obj.optString("servicios")),
+                subtotal = obj.optDouble("subtotal", 0.0),
+                taxAmount = obj.optDouble("impuestos", 0.0),
+                grandTotal = obj.optDouble("total", 0.0),
+                validityDays = obj.optInt("validezDias", 7),
+                notes = obj.optString("notas").ifBlank { null },
+                status = BudgetStatus.PENDIENTE,
+                dateTimestamp = timestamp
+            )
+            budgetDao.insertBudget(budgetEntity)
+            msgId
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error parsing budget: ${e.message}")
+            null
+        }
+    }
+
+    private suspend fun saveToCalendar(message: MessageEntity, myUserId: String, providerPhotoUrl: String? = null) {
+        try {
+            val date = message.appointmentDate ?: return
+            val time = message.appointmentTime ?: ""
+
+            // Determinar tipo de evento prioritariamente por appointmentType
+            val eventType = when {
+                message.appointmentType == "TECHNICAL_VISIT" -> EventType.VISIT
+                message.appointmentType == "LOCAL_APPOINTMENT" -> EventType.APPOINTMENT
+                message.type == MessageType.APPOINTMENT_RECEIPT && (message.receiptIsTechnician == true) -> EventType.VISIT
+                message.type == MessageType.APPOINTMENT_RECEIPT -> EventType.APPOINTMENT
+                else -> EventType.VISIT
+            }
+
+            // Identificar quién es el prestador
+            val providerId = if (message.senderId == myUserId) message.receiverId else message.senderId
+
+            // Extraer datos del remitente
+            var providerName = message.receiptProviderName
+            var title = message.receiptService
+            var address = message.providerAddress ?: message.receiptAddress
+
+            if (providerName == null) {
+                // Si no es un recibo formal, buscamos el nombre del remitente en Firestore
+                try {
+                    val provDoc = firestore.collection("providers").document(providerId).get().await()
+                    val perfil = provDoc.get("perfil") as? Map<*, *>
+                    providerName = (perfil?.get("nombre") as? String)
+                        ?: provDoc.getString("nombre")
+                        ?: providerId
+                } catch (e: Exception) {
+                    providerName = "Prestador"
+                }
+            }
+
+            if (title == null || title.length > 30 && title.contains("-")) {
+                // Si el título es nulo o parece un ID, usamos el contenido del mensaje (que trae la nota del turno)
+                title = if (message.type == MessageType.VISIT && !message.content.contains("|")) {
+                    message.content 
+                } else if (message.receiptService != null) {
+                    message.receiptService
+                } else {
+                    eventType.label
+                }
+            }
+
+            if (address == null || address == "A convenir") {
+                address = message.providerAddress ?: message.receiptAddress ?: message.locationAddress ?: "A convenir"
+            }
+
+            // 🔥 [REGLA DE ORO] Intentar obtener la foto del proveedor si no está en el mensaje
+            var finalPhotoUrl: String? = message.imageUrl ?: providerPhotoUrl
+            if (finalPhotoUrl == null) {
+                try {
+                    val provDoc = firestore.collection("providers").document(providerId).get().await()
+                    finalPhotoUrl = provDoc.getString("photoUrl")
+                } catch (e: Exception) {
+                    Log.w("ChatRepository", "No se pudo recuperar la foto del proveedor para el calendario")
+                }
+            }
+
+            val event = CalendarEventEntity(
+                id = "evt_${message.id}",
+                date = date,
+                time = time,
+                type = eventType,
+                title = title ?: "Cita confirmada",
+                provider = providerName ?: "Prestador",
+                providerId = providerId,
+                address = address ?: "A convenir",
+                status = VisitStatus.CONFIRMED,
+                providerPhotoUrl = finalPhotoUrl,
+                avatarColorLong = 0xFF2197F5 // Azul Maverick por defecto
+            )
+
+            calendarDao.insertEvent(event)
+            Log.d("ChatRepository", "Cita guardada en calendario local: ${event.title} para el $date")
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error guardando en calendario: ${e.message}")
+        }
+    }
+
+    suspend fun addBookedSlot(chatId: String, messageId: String, date: String, time: String) {
+        try {
+            val msgRef = database.reference
+                .child("chats").child(chatId).child("messages").child(messageId)
+            val snapshot = msgRef.child("bookedSlotsJson").get().await()
+            val currentJson = snapshot.getValue(String::class.java) ?: "[]"
+            val newSlot = org.json.JSONObject().apply {
+                put("date", date)
+                put("time", time)
+            }
+            val array = org.json.JSONArray(currentJson)
+            array.put(newSlot)
+            msgRef.child("bookedSlotsJson").setValue(array.toString()).await()
+        } catch (e: Exception) {
+            Log.e("ChatRepository", "Error al bloquear slot: ${e.message}")
+        }
     }
 
     private fun syncReadStatusToRTDB(chatId: String, msgIds: List<String>) {

@@ -227,6 +227,7 @@ class ProviderRepository @Inject constructor(
             // Si falla (índice inexistente) o no hay resultados, hacemos fallback solo por categoría
             var snapshot = try {
                 firestore.collection("providers")
+                    .whereEqualTo("visible", true)
                     .whereArrayContains("servicios", trimmedCategory)
                     .whereEqualTo("ubicacion.codigoPostal", trimmedZip)
                     .get().await()
@@ -240,6 +241,7 @@ class ProviderRepository @Inject constructor(
             if (snapshot == null || snapshot.isEmpty) {
                 Log.d("ProviderRepo", "🔄 Fallback: buscando solo por categoría '$trimmedCategory'")
                 snapshot = firestore.collection("providers")
+                    .whereEqualTo("visible", true)
                     .whereArrayContains("servicios", trimmedCategory)
                     .get().await()
                 Log.d("ProviderRepo", "📥 Fallback devolvió ${snapshot.size()} docs")
@@ -324,7 +326,46 @@ class ProviderRepository @Inject constructor(
         }
     }
 
-    // --- SECCIÓN: OPERACIONES DE ACTUALIZACIÓN ---
+    // --- SECCIÓN: HORARIOS DESDE FIRESTORE ---
+    /**
+     * Lee los horarios de disponibilidad de una sucursal desde Firestore
+     * y los formatea como texto legible para el cliente.
+     */
+    suspend fun fetchSchedulesForBranch(branchId: String): String {
+        if (branchId.isBlank()) return ""
+        return try {
+            val snapshot = firestore.collection("availability_schedules")
+                .whereEqualTo("providerId", branchId)
+                .whereEqualTo("isActive", true)
+                .get().await()
+
+            if (snapshot.isEmpty) return ""
+
+            val dayNames = mapOf(
+                1 to "Lunes", 2 to "Martes", 3 to "Miércoles",
+                4 to "Jueves", 5 to "Viernes", 6 to "Sábado", 7 to "Domingo"
+            )
+
+            // Agrupar por día y formatear
+            snapshot.documents
+                .mapNotNull { doc ->
+                    val day = (doc.getLong("dayOfWeek") ?: return@mapNotNull null).toInt()
+                    val start = doc.getString("startTime") ?: return@mapNotNull null
+                    val end = doc.getString("endTime") ?: return@mapNotNull null
+                    day to "$start - $end"
+                }
+                .groupBy({ it.first }, { it.second })
+                .entries
+                .sortedBy { it.key }
+                .joinToString("\n") { (day, slots) ->
+                    "${dayNames[day] ?: "Día $day"}: ${slots.joinToString(", ")}"
+                }
+        } catch (e: Exception) {
+            Log.e("ProviderRepo", "Error cargando horarios de sucursal: ${e.message}")
+            ""
+        }
+    }
+
 
     /**
      * Guarda o actualiza el perfil completo de un prestador.

@@ -1,225 +1,256 @@
 package com.example.myapplication.presentation.client
 
 import android.content.Context
-import android.media.MediaRecorder
 import android.net.Uri
-import android.os.Build
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.BudgetEntity
 import com.example.myapplication.data.local.MessageEntity
 import com.example.myapplication.data.local.TenderEntity
 import com.example.myapplication.data.model.MessageType
 import com.example.myapplication.data.repository.ChatRepository
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
+import com.example.myapplication.data.repository.BudgetRepository
+import com.example.myapplication.util.ImageUtils
+import com.google.firebase.auth.FirebaseAuth
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import java.io.File
 import java.util.UUID
+import javax.inject.Inject
 
-class ChatViewModel(
-    private val repository: ChatRepository,
-    val chatId: String,
-    val currentUserId: String,
-    private val receiverId: String,
-    private val context: Context
+data class ChatMessageUiModel(
+    val message: MessageEntity,
+    val budget: BudgetEntity? = null
+)
+
+data class ChatUiState(
+    val messages: List<ChatMessageUiModel> = emptyList(),
+    val isRecording: Boolean = false,
+    val isProviderTyping: Boolean = false,
+    val selectedBudget: BudgetEntity? = null,
+    val providerPhotoUrl: String? = null,
+)
+
+sealed class ChatUiEvent {
+    data class ShowError(val message: String) : ChatUiEvent()
+    object MessageSent : ChatUiEvent()
+}
+
+@HiltViewModel
+class ChatViewModel @Inject constructor(
+    private val chatRepository: ChatRepository,
+    private val budgetRepository: BudgetRepository,
+    auth: FirebaseAuth
 ) : ViewModel() {
 
-    private val legacyChatId = "chat_${currentUserId}_${receiverId}"
-    private val activeChatIds = listOf(chatId, legacyChatId).distinct()
+    private val _uiState = MutableStateFlow(ChatUiState())
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    val messages:
-            StateFlow<List<MessageEntity>> =
-        repository.getMessages(activeChatIds)
-            .stateIn(viewModelScope,
-                SharingStarted.WhileSubscribed(5000),
-                emptyList())
+    private val _events = MutableSharedFlow<ChatUiEvent>()
+    val events: SharedFlow<ChatUiEvent> = _events.asSharedFlow()
 
-    private val _isRecording =
-        MutableStateFlow(false)
-    val isRecording: StateFlow<Boolean> =
-        _isRecording
+    // --- SECCIÓN: AUDIO RECORDING (SSOT) ---
+    private var mediaRecorder: android.media.MediaRecorder? = null
+    private var audioFilePath: String? = null
+    private val _recordingTime = MutableStateFlow(0)
+    val recordingTime: StateFlow<Int> = _recordingTime.asStateFlow()
+    private var recordingTimerJob: kotlinx.coroutines.Job? = null
 
-    private val _selectedBudget =
-        MutableStateFlow<BudgetEntity?>(null)
-    val selectedBudget:
-            StateFlow<BudgetEntity?> =
-        _selectedBudget.asStateFlow()
+    private var currentChatId: String = ""
+    private var currentCompanyId: String? = null
+    private var currentCategoryId: String? = null
+    private val currentUserId = auth.currentUser?.uid ?: ""
 
-    private var mediaRecorder: MediaRecorder?
-            = null
-    private var currentAudioPath: String? =
-        null
+    /**
+     * Inicialización manual para asegurar que tenemos el chatId.
+     */
+    fun initialize(chatId: String, companyId: String? = null, categoryId: String? = null) {
+        if (currentChatId == chatId) return
+        currentChatId = chatId
+        currentCompanyId = companyId
+        currentCategoryId = categoryId
 
-    private val _providerPhotoUrl = MutableStateFlow<String?>(null)
-    val providerPhotoUrl: StateFlow<String?> = _providerPhotoUrl.asStateFlow()
+        // 1. Activar escucha activa desde el servidor (Firebase RTDB -> Room)
+        chatRepository.startListening(chatId)
 
-    init {
-        // Escuchar mensajes entrantes del prestador en tiempo real
-        repository.startListening(activeChatIds, chatId)
-        // Obtener foto del prestador directo de Firestore
+        // 2. Escuchar mensajes desde Room (SSOT)
         viewModelScope.launch {
-            try {
-                val doc = FirebaseFirestore.getInstance()
-                    .collection("providers").document(receiverId).get().await()
-                _providerPhotoUrl.value = doc.getString("imageUrl")
-                    ?: doc.getString("imageBase64")
-                            ?: doc.getString("photoUrl")
-            } catch (_: Exception) {}
+            chatRepository.getMessages(chatId).collect { messages ->
+                val uiMessages = messages.map { msg ->
+                    val budgetId = if (msg.type == MessageType.BUDGET) {
+                        msg.relatedId ?: msg.id
+                    } else null
+                    val budget = budgetId?.let { chatRepository.getBudgetById(it) }
+                    ChatMessageUiModel(msg, budget)
+                }
+                _uiState.update { it.copy(messages = uiMessages) }
+            }
+        }
+
+        // 3. Observar estado de "escribiendo" del proveedor
+        val providerId = extractProviderId(chatId)
+        viewModelScope.launch {
+            chatRepository.observeProviderTyping(chatId, providerId).collect { isTyping ->
+                _uiState.update { it.copy(isProviderTyping = isTyping) }
+            }
         }
     }
 
-    // --- ENVIAR MENSAJES ---
+    override fun onCleared() {
+        super.onCleared()
+        // [PASO CRÍTICO] Detener escucha activa para ahorrar batería y datos
+        chatRepository.stopListening()
+        // Limpiar estado de escribiendo al salir
+        if (currentChatId.isNotEmpty()) {
+            setTypingStatus(false)
+        }
+    }
+
+    private fun extractProviderId(chatId: String): String {
+        return chatId.replace(currentUserId, "").replace("_", "")
+    }
 
     fun sendText(text: String) {
         if (text.isBlank()) return
-        sendMessageToRepo(createMessage(MessageType.TEXT, text))
+        viewModelScope.launch {
+            val message = createMessage(MessageType.TEXT, text)
+            chatRepository.sendMessage(message)
+            _events.emit(ChatUiEvent.MessageSent)
+        }
     }
 
-    fun sendImage(uri: Uri) {
+    /**
+     * [POLÍTICA ZERO COST] Comprime a WebP y guarda localmente ANTES de enviar.
+     * Esto asegura que el emisor vea la imagen al instante sin depender de la nube.
+     */
+    fun sendImage(uri: Uri, context: Context) {
+        viewModelScope.launch {
+            val bytes = ImageUtils.compressImageToWebP(context, uri)
+            if (bytes != null) {
+                val msgId = UUID.randomUUID().toString()
+                // Guardamos copia local para visibilidad inmediata en la UI (SSOT local)
+                val localPath = ImageUtils.saveBytesToFile(context, bytes, msgId)
+                
+                val base64 = ImageUtils.bytesToBase64(bytes)
+                val message = createMessage(MessageType.IMAGE, "[Imagen]").copy(
+                    id = msgId,
+                    imageUrl = localPath // Ruta local para que la UI la pinte
+                )
+                chatRepository.sendImageMessageWithBase64(message, base64)
+                _events.emit(ChatUiEvent.MessageSent)
+            }
+        }
+    }
+
+    fun sendLocation(lat: Double, lng: Double) {
+        viewModelScope.launch {
+            val message = createMessage(MessageType.LOCATION, "Ubicación compartida").copy(
+                latitude = lat,
+                longitude = lng
+            )
+            chatRepository.sendMessage(message)
+            _events.emit(ChatUiEvent.MessageSent)
+        }
+    }
+
+    fun sendBudgetRequest(description: String, clientAddress: String) {
+        viewModelScope.launch {
+            val message = createMessage(MessageType.BUDGET_REQUEST, "Solicitud de presupuesto").copy(
+                budgetRequestDescription = description,
+                budgetRequestClientAddress = clientAddress
+            )
+            chatRepository.sendMessage(message)
+            _events.emit(ChatUiEvent.MessageSent)
+        }
+    }
+
+    fun sendAppointment(date: String, time: String, notes: String, type: String? = null, address: String? = null, originalMessageId: String = "") {
+        viewModelScope.launch {
+            val message = createMessage(MessageType.VISIT, notes).copy(
+                appointmentDate = date,
+                appointmentTime = time,
+                appointmentStatus = "PENDING",
+                appointmentType = type,
+                providerAddress = address
+            )
+            chatRepository.sendMessage(message)
+            if (originalMessageId.isNotBlank()) {
+                chatRepository.addBookedSlot(currentChatId, originalMessageId, date, time)
+            }
+            _events.emit(ChatUiEvent.MessageSent)
+        }
+    }
+
+    fun startRecording(context: Context) {
         viewModelScope.launch {
             try {
-                val (base64, localPath) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val bytes = com.example.myapplication.util.ImageUtils.compressImageToWebP(context, uri)
-                    if (bytes != null) {
-                        val b64 = com.example.myapplication.util.ImageUtils.bytesToBase64(bytes)
-                        val path = com.example.myapplication.util.ImageUtils.saveBytesToFile(
-                            context,
-                            bytes,
-                            System.currentTimeMillis().toString()
-                        )
-                        Pair(b64, path)
-                    } else null
-                } ?: return@launch
+                val audioFile = java.io.File(context.cacheDir, "record_${System.currentTimeMillis()}.3gp")
+                audioFilePath = audioFile.absolutePath
 
-                val message = createMessage(MessageType.IMAGE, base64).copy(
-                    imageUrl = localPath
-                )
-                sendMessageToRepo(message)
+                mediaRecorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    android.media.MediaRecorder(context)
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.media.MediaRecorder()
+                }.apply {
+                    setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+                    setOutputFormat(android.media.MediaRecorder.OutputFormat.THREE_GPP)
+                    setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AMR_NB)
+                    setAudioEncodingBitRate(12200) // [POLÍTICA ZERO COST] Bitrate ultra bajo
+                    setOutputFile(audioFilePath)
+                    prepare()
+                    start()
+                }
+                _uiState.update { it.copy(isRecording = true) }
+                startRecordingTimer()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
 
-    fun sendLocation(lat: Double, lng: Double,
-                     address: String? = null) {
-        val msg =
-            createMessage(MessageType.LOCATION, address ?:
-            "Ubicación compartida")
-                .copy(latitude = lat, longitude =
-                    lng, locationAddress = address)
-        sendMessageToRepo(msg)
-    }
-
-    fun sendAppointment(date: String, time: String, notes: String) {
-        val content = "Solicitud de cita|$date|$time|$notes"
-        val msg = createMessage(MessageType.VISIT, content).copy(
-            appointmentStatus = "PENDING",
-            appointmentDate = date,
-            appointmentTime = time
-        )
-        sendMessageToRepo(msg)
-    }
-
-    fun sendBudget(budgetId: String, summary:
-    String = "Nuevo presupuesto recibido") {
-        val msg =
-            createMessage(MessageType.BUDGET,
-                summary).copy(relatedId = budgetId)
-        sendMessageToRepo(msg)
-    }
-
-    fun sendTenderInvitation(tender:
-                             TenderEntity) {
-        val content =
-            "${tender.title}|${tender.description}"
-        val msg =
-            createMessage(MessageType.TENDER,
-                content).copy(relatedId = tender.tenderId)
-        sendMessageToRepo(msg)
-    }
-
-    // --- PRESUPUESTOS ---
-
-    fun onBudgetClicked(budgetId: String) {
-        viewModelScope.launch {
-            _selectedBudget.value =
-                repository.getBudgetById(budgetId)
+    private fun startRecordingTimer() {
+        recordingTimerJob?.cancel()
+        _recordingTime.value = 0
+        recordingTimerJob = viewModelScope.launch {
+            while (_uiState.value.isRecording) {
+                delay(1000)
+                _recordingTime.value += 1
+            }
         }
     }
 
-    fun clearSelectedBudget() {
-        _selectedBudget.value = null
-    }
-
-    fun getMatchingTenders(providerCategory:
-                           String): Flow<List<TenderEntity>> =
-        repository.getOpenTendersByCategory(providerCategory)
-
-    // --- AUDIO ---
-
-    fun startRecording(context: Context) {
-        try {
-            val audioFile =
-                File(context.cacheDir,
-                    "audio_${System.currentTimeMillis()}.m4a")
-            currentAudioPath =
-                audioFile.absolutePath
-            mediaRecorder = if
-                                    (Build.VERSION.SDK_INT >=
-                Build.VERSION_CODES.S)
-                MediaRecorder(context) else
-                MediaRecorder()
-            mediaRecorder?.apply {
-
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioEncodingBitRate(32_000)
-                setAudioSamplingRate(16_000)
-                setOutputFile(currentAudioPath)
-                prepare()
-                start()
-            }
-            _isRecording.value = true
-        } catch (e: Exception) {
-            e.printStackTrace() }
-    }
-
     fun stopRecordingAndSend() {
-        if (!_isRecording.value) return
+        if (!_uiState.value.isRecording) return
+        val path = audioFilePath
+        val duration = _recordingTime.value
+
         try {
             mediaRecorder?.stop()
             mediaRecorder?.release()
-            mediaRecorder = null
-            _isRecording.value = false
-            currentAudioPath?.let { path ->
-                viewModelScope.launch {
-                    try {
-                        val file = File(path)
-                        if (!file.exists() || file.length() == 0L) {
-                            android.util.Log.e("ChatViewModel", "Archivo de audio no existe o vacío: $path")
-                            return@launch
-                        }
-                        val base64 = android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
-                        val localMessage = createMessage(MessageType.AUDIO, path)
-                        repository.sendAudioMessageWithBase64(localMessage, base64)
-                    } catch (e: Exception) {
-                        android.util.Log.e("ChatViewModel", "Error enviando audio: ${e.message}")
-                        e.printStackTrace()
-                    }
+        } catch (e: Exception) { e.printStackTrace() }
+        
+        mediaRecorder = null
+        _uiState.update { it.copy(isRecording = false) }
+        recordingTimerJob?.cancel()
+        _recordingTime.value = 0
+        audioFilePath = null
+
+        if (path != null) {
+            viewModelScope.launch {
+                val file = java.io.File(path)
+                if (file.exists()) {
+                    val bytes = file.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    val message = createMessage(MessageType.AUDIO, "[Audio]").copy(
+                        durationSeconds = duration,
+                        imageUrl = path // Usamos imageUrl para guardar la ruta local temporal
+                    )
+                    chatRepository.sendAudioMessageWithBase64(message, base64)
+                    _events.emit(ChatUiEvent.MessageSent)
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 
@@ -227,85 +258,64 @@ class ChatViewModel(
         try {
             mediaRecorder?.stop()
             mediaRecorder?.release()
-            mediaRecorder = null
-            _isRecording.value = false
-            currentAudioPath?.let {
-                File(it).delete() }
-        } catch (e: Exception) {
-            e.printStackTrace() }
+        } catch (e: Exception) { }
+        mediaRecorder = null
+        _uiState.update { it.copy(isRecording = false) }
+        recordingTimerJob?.cancel()
+        _recordingTime.value = 0
+        audioFilePath?.let { java.io.File(it).delete() }
+        audioFilePath = null
     }
 
-    // --- HELPERS ---
-
-    private fun createMessage(type:
-                              MessageType, content: String) = MessageEntity(
-        id = UUID.randomUUID().toString(),
-        chatId = chatId,
-        senderId = currentUserId,
-        receiverId = receiverId,
-        type = type,
-        content = content,
-        timestamp = System.currentTimeMillis()
-    )
-
-    private fun sendMessageToRepo(message:
-                                  MessageEntity) {
+    fun onBudgetClicked(budgetId: String) {
         viewModelScope.launch {
-            repository.sendMessage(message)
+            val budget = chatRepository.getBudgetById(budgetId)
+            _uiState.update { it.copy(selectedBudget = budget) }
         }
     }
 
-    private var typingJob: kotlinx.coroutines.Job? = null
-
-    private var _isproviderTyping = MutableStateFlow(false)
-    val isProviderTyping: StateFlow<Boolean> = _isproviderTyping.asStateFlow()
-
-    fun observeProviderTyping() {
-        viewModelScope.launch {
-            repository.observeProviderTyping(chatId, receiverId).collect {
-                _isproviderTyping.value = it
-            }
-        }
+    fun clearSelectedBudget() {
+        _uiState.update { it.copy(selectedBudget = null) }
     }
 
     fun setTypingStatus(isTyping: Boolean) {
-        if (isTyping) {
-            repository.setTypingStatus(chatId, currentUserId, true)
-            typingJob?.cancel()
-            typingJob = viewModelScope.launch {
-                kotlinx.coroutines.delay(3000)
-                repository.setTypingStatus(chatId, currentUserId, false)
-            }
-        } else {
-            typingJob?.cancel()
-            repository.setTypingStatus(chatId, currentUserId, false)
+        chatRepository.setTypingStatus(currentChatId, currentUserId, isTyping)
+    }
+
+    fun markAsRead() {
+        viewModelScope.launch {
+            chatRepository.markChatAsRead(currentChatId, currentUserId)
         }
     }
 
-    override fun onCleared() {
-        super.onCleared()
-        repository.stopListening()
-        repository.setTypingStatus(chatId, currentUserId, false)
-        mediaRecorder?.release()
-    }
-}
-
-class ChatViewModelFactory(
-    private val repository: ChatRepository,
-    private val chatId: String,
-    private val currentUserId: String,
-    private val receiverId: String,
-    private val context: Context
-) : ViewModelProvider.Factory {
-    override fun <T : ViewModel>
-            create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
-            @Suppress("UNCHECKED_CAST")
-            return ChatViewModel(repository,
-                chatId, currentUserId, receiverId, context) as
-                    T
+    fun sendTenderInvitation(tender: TenderEntity) {
+        viewModelScope.launch {
+            val message = createMessage(MessageType.TEXT, "Te invito a participar en mi licitación: ${tender.title}").copy(
+                relatedId = tender.tenderId
+            )
+            chatRepository.sendMessage(message)
         }
-        throw
-        IllegalArgumentException("Unknown ViewModel class")
+    }
+
+    fun getMatchingTenders(category: String): Flow<List<TenderEntity>> {
+        return budgetRepository.allTenders.map { tenders ->
+            tenders.filter { (it.category == category) && (it.status == "OPEN") }
+        }
+    }
+
+    private fun createMessage(type: MessageType, content: String): MessageEntity {
+        return MessageEntity(
+            id = UUID.randomUUID().toString(),
+            chatId = currentChatId,
+            senderId = currentUserId,
+            receiverId = extractProviderId(currentChatId),
+            type = type,
+            content = content,
+            companyId = currentCompanyId,
+            categoryId = currentCategoryId,
+            // [REGLA DE ORO] TECHNICAL_VISIT como fallback para solicitudes de cliente
+            appointmentType = if (type == MessageType.VISIT) "TECHNICAL_VISIT" else null,
+            timestamp = System.currentTimeMillis()
+        )
     }
 }

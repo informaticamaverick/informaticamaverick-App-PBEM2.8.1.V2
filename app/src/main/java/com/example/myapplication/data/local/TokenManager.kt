@@ -45,6 +45,15 @@ class TokenManager @Inject constructor(
         sharedPreferences.edit().clear().apply()
     }
 
+    // --- LÓGICA DE POPUP DE DIRECCIÓN (POR ÚNICA VEZ) ---
+    fun shouldShowAddressPopup(): Boolean {
+        return sharedPreferences.getBoolean("show_address_popup", true)
+    }
+
+    fun setAddressPopupShown() {
+        sharedPreferences.edit().putBoolean("show_address_popup", false).apply()
+    }
+
     // --- LÓGICA DE PRIMERA VEZ ---
     fun isFirstTime(): Boolean {
         return sharedPreferences.getBoolean("is_first_time", true)

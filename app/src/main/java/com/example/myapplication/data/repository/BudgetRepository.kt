@@ -141,8 +141,8 @@ class BudgetRepository @Inject constructor(
             val requestBody = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             
             // NOTA: Para producción, esto debería ir en una Cloud Function.
-            // Se usa la Server Key de Firebase (Legacy API) por simplicidad en esta etapa.
-            val serverKey = "TU_SERVER_KEY_AQUI" 
+            // Se usa la Server Key de Firebase (Legacy API).
+            val serverKey = "AIzaSyDuF0BYqftrRWV8dy0RTrHluqwzws1EprU"
             
             val request = Request.Builder()
                 .url("https://fcm.googleapis.com/fcm/send")

@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
+import android.net.Uri
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
@@ -14,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,34 +22,26 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
+import android.widget.Toast
 import com.example.myapplication.data.local.CategoryEntity
 import com.example.myapplication.data.local.UserEntity
 import com.example.myapplication.data.model.ServiceDisplayModel
 import com.example.myapplication.presentation.components.*
-import com.example.myapplication.presentation.components.Utilidades.CyberMaverickSleekTitle
 import com.example.myapplication.presentation.components.Utilidades.MaverickColors
 import com.example.myapplication.presentation.profile.ProfileViewModel
-import com.example.myapplication.ui.theme.MyApplicationTheme
 import kotlin.collections.isNotEmpty
 
 // ==================================================================================
@@ -65,7 +57,7 @@ fun HomeScreenComplete(
     beViewModel: BeBrainViewModel = hiltViewModel(),
     promoViewModel: PromoViewModel = hiltViewModel(),
     ubicacionObrero: UbicacionClimaViewModel = hiltViewModel(),
-    interactionViewModel: BeInteractionViewModel = hiltViewModel()
+   // interactionViewModel: BeInteractionViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
 
@@ -74,41 +66,20 @@ fun HomeScreenComplete(
     // ==================================================================================
     
     // Obrero 1: Ubicación y Clima
-    val obreroTemp by ubicacionObrero.temperature.collectAsStateWithLifecycle()
-    val obreroEmoji by ubicacionObrero.weatherEmoji.collectAsStateWithLifecycle()
-    val obreroDesc by ubicacionObrero.weatherDescription.collectAsStateWithLifecycle()
-    val obreroCity by ubicacionObrero.locationName.collectAsStateWithLifecycle()
     val latitude by ubicacionObrero.latitude.collectAsStateWithLifecycle()
     val longitude by ubicacionObrero.longitude.collectAsStateWithLifecycle()
 
     // Obrero 2: Categorías
-    val obreroSortedCats by categoryViewModel.sortedCategories.collectAsStateWithLifecycle()
-    val obreroSuperCats by categoryViewModel.superCategories.collectAsStateWithLifecycle()
-    val obreroCatFilters by categoryViewModel.activeSortFilters.collectAsStateWithLifecycle()
     val allRawCategories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
 
     // ==================================================================================
     // --- 🧠 SUBSECCIÓN: SINCRONIZACIÓN OBREROS -> CEREBRO (INTERMEDIARIO) ---
     // ==================================================================================
-    
-    // Sincronización Clima/Ubicación
-    LaunchedEffect(obreroTemp, obreroEmoji, obreroDesc, obreroCity) {
-        beViewModel.syncWeather(obreroTemp, obreroEmoji, obreroDesc, obreroCity)
-    }
-
-    // Sincronización Categorías
-    LaunchedEffect(obreroSortedCats, obreroSuperCats) {
-        beViewModel.syncCategories(obreroSortedCats, obreroSuperCats)
-    }
-    LaunchedEffect(obreroCatFilters) {
-        beViewModel.syncFilters(obreroCatFilters)
-    }
-    LaunchedEffect(allRawCategories) {
-        beViewModel.syncAllCategories(allRawCategories)
-    }
-
     // 🔥 NUEVO: ESCUCHA DE ACCIONES DEL CEREBRO PARA EL OBRERO (ORQUESTACIÓN) 🔥
     LaunchedEffect(Unit) {
+        // Notificamos al cerebro que estamos en la Home para actualizar consejos/emociones
+        beViewModel.onRouteChanged("home")
+
         beViewModel.actionEvent.collect { actionId ->
             when {
                 actionId.startsWith("sort_") || actionId.startsWith("view_") -> {
@@ -122,15 +93,10 @@ fun HomeScreenComplete(
                     navController.navigate("chat?providerId=$providerId")
                 }
                 actionId.startsWith("talk_") -> {
-                    val index = actionId.removePrefix("talk_").toIntOrNull()
-                    if (index != null) {
-                        interactionViewModel.restoreFromHistory(index)
-                    }
                 }
             }
         }
     }
-
     // ==================================================================================
     // --- 📊 SUBSECCIÓN: ESTADOS MAESTROS PARA LA UI (DESDE EL CEREBRO) ---
     // ==================================================================================
@@ -144,8 +110,17 @@ fun HomeScreenComplete(
     val favorites by providerViewModel.favoriteServices.collectAsStateWithLifecycle()
     val userState by profileViewModel.userState.collectAsStateWithLifecycle()
     
-    // --- BANNERS DINÁMICOS ---
-    val bannerItems by promoViewModel.getHomeBanners(allRawCategories, unifiedServices).collectAsStateWithLifecycle(initialValue = emptyList())
+    // --- NUEVO: ESTADO DEL POPUP DE DIRECCIÓN ---
+    val showAddressPopup by beViewModel.showAddressPopup.collectAsStateWithLifecycle()
+    val hasAddresses = userState?.personalAddresses?.isNotEmpty() == true
+    
+    // Mostramos el popup si el usuario NO tiene direcciones y el flag de "una sola vez" es true
+    val shouldDisplayPopup = !hasAddresses && showAddressPopup && userState != null
+
+    // --- BANNERS DINÁMICOS (Optimizado: remember para evitar fugas de Flow en recomposición) ---
+    val bannerItems by remember(allRawCategories, unifiedServices) {
+        promoViewModel.getHomeBanners(allRawCategories, unifiedServices)
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -155,8 +130,6 @@ fun HomeScreenComplete(
             ubicacionObrero.ejecutarCalculoUbicacionGps(context)
         }
     }
-
-    LaunchedEffect(userState) { if (userState != null) beViewModel.updateProfile(userState) }
 
     LaunchedEffect(Unit) {
         val hasPermission = context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -199,30 +172,124 @@ fun HomeScreenComplete(
         weatherDescription = weatherDescription,
         cityName = cityName,
         onRefreshLocation = {
-            ubicacionObrero.ejecutarCalculoUbicacionGps(context) { pais, provincia, localidad, calle, numero, cp, lat, lng ->
-                val gpsLoc = AddressInfo(
-                    id = "gps_current",
-                    companyOrUserName = "Mi Ubicación",
-                    branchName = "GPS Tracker",
-                    streetAndNumber = if (calle.isNotBlank()) "$calle $numero".trim() else localidad,
-                    locality = localidad,
-                    province = provincia,
-                    country = pais,
-                    postalCode = cp,
-                    lat = lat,
-                    lng = lng,
-                    isCompany = false
-                )
-                beViewModel.updateAddressFromGps(gpsLoc)
+            if (ubicacionObrero.isGpsHabilitado(context)) {
+                ubicacionObrero.ejecutarCalculoUbicacionGps(context) { pais, provincia, localidad, calle, numero, cp, lat, lng ->
+                    val gpsLoc = AddressInfo(
+                        id = "gps_current",
+                        companyOrUserName = "Mi Ubicación",
+                        branchName = "GPS Tracker",
+                        streetAndNumber = if (calle.isNotBlank()) "$calle $numero".trim() else localidad,
+                        locality = localidad,
+                        province = provincia,
+                        country = pais,
+                        postalCode = cp,
+                        lat = lat,
+                        lng = lng,
+                        isCompany = false
+                    )
+                    beViewModel.updateAddressFromGps(gpsLoc)
+                }
+            } else {
+                Toast.makeText(context, "⚠️ El GPS está desactivado. Actívalo para actualizar tu ubicación.", Toast.LENGTH_SHORT).show()
             }
         },
         bannerItems = bannerItems,
         favoriteProviders = favorites,
         onLogout = { profileViewModel.logout(); navController.navigate(Screen.Login.route) { popUpTo(0) } },
         beViewModel = beViewModel,
-        interactionViewModel = interactionViewModel,
         categoryViewModel = categoryViewModel // El contenido pide al obrero directamente vía eventos
     )
+
+    // ==================================================================================
+    // --- 🚨 SECCIÓN: POPUP DE DIRECCIÓN MAVERICK (GLASS V5) ---
+    // ==================================================================================
+    if (shouldDisplayPopup) {
+        ModernAddressPopup(
+            onDismiss = { beViewModel.dismissAddressPopup() },
+            onGoToProfile = {
+                beViewModel.dismissAddressPopup()
+                // Usamos la ruta definida en Screen.PerfilCliente
+                navController.navigate(Screen.PerfilCliente.route) {
+                    launchSingleTop = true
+                }
+            }
+        )
+    }
+}
+
+/**
+ * --- COMPONENTE: MODERN ADDRESS POPUP ---
+ * Estilo: Cyberpunk / Glassmorphism Maverick
+ */
+@Composable
+fun ModernAddressPopup(
+    onDismiss: () -> Unit,
+    onGoToProfile: () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .clip(RoundedCornerShape(24.dp))
+                .background(MaverickColors.AbsoluteBlack.copy(alpha = 0.85f))
+                .border(1.dp, MaverickColors.GeminiBrush, RoundedCornerShape(24.dp))
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Icono Animado / Emoji Maverick
+                Text("📍", fontSize = 48.sp)
+                
+                Text(
+                    text = "¡Personaliza tu Experiencia!",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+
+                Text(
+                    text = "Detectamos que aún no tienes una dirección guardada. Configúrala para que Maverick encuentre los mejores prestadores cerca de ti.",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Botón Acción: Ir al Perfil
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaverickColors.GeminiBrush)
+                        .clickable { onGoToProfile() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Configurar Dirección",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Botón Secundario: Quizás más tarde
+                Text(
+                    text = "Quizás más tarde",
+                    color = MaverickColors.ElectricCyan,
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .clickable { onDismiss() }
+                )
+            }
+        }
+    }
 }
 
 // ==================================================================================
@@ -243,32 +310,13 @@ fun HomeScreenContent(
     favoriteProviders: List<ServiceDisplayModel>,
     onLogout: () -> Unit,
     beViewModel: BeBrainViewModel,
-    interactionViewModel: BeInteractionViewModel,
     categoryViewModel: CategoryViewModel
 ) {
-    // 🔥 CONSUMO EXCLUSIVO DEL CEREBRO (Sincronizado) 🔥
-    val superCategories by beViewModel.superCategories.collectAsStateWithLifecycle()
-    val sortedIndividualCategories by beViewModel.sortedCategories.collectAsStateWithLifecycle()
-    val activeSortFilters by beViewModel.activeSortFilters.collectAsStateWithLifecycle()
-    val isSuperCategoryView by beViewModel.isSuperCategoryView.collectAsStateWithLifecycle()
-    val searchResults by beViewModel.searchResults.collectAsStateWithLifecycle()
-
-    val availableSorts by beViewModel.availableSortOptions.collectAsStateWithLifecycle()
-    val availableFilters by beViewModel.availableFilters.collectAsStateWithLifecycle()
-    val dynamicCategories by beViewModel.dynamicCategories.collectAsStateWithLifecycle()
-
-    val unifiedServices by beViewModel.allProvidersRaw.collectAsStateWithLifecycle()
-    // Sincronizar InteractionViewModel con los datos del Cerebro
-    LaunchedEffect(availableSorts, availableFilters, dynamicCategories, searchResults, unifiedServices) {
-        interactionViewModel.syncResources(
-            filters = availableFilters,
-            sorts = availableSorts,
-            categories = dynamicCategories,
-            results = searchResults,
-            chats = unifiedServices
-        )
-    }
-
+    // 🔥 CONSUMO EXCLUSIVO DEL OBRERO DE CATEGORÍAS (SSOT) 🔥
+    val superCategories by categoryViewModel.superCategories.collectAsStateWithLifecycle()
+    val sortedIndividualCategories by categoryViewModel.sortedCategories.collectAsStateWithLifecycle()
+    val activeSortFilters by categoryViewModel.activeSortFilters.collectAsStateWithLifecycle()
+    val isSuperCategoryView = remember(activeSortFilters) { activeSortFilters.contains("view_bento") }
     val showWeatherDetails by beViewModel.showWeatherDetails.collectAsStateWithLifecycle()
     val showFavoritesPanel by beViewModel.showFavoritesPanel.collectAsStateWithLifecycle()
     val isSearchActive by beViewModel.isSearchActive.collectAsStateWithLifecycle()
@@ -279,21 +327,17 @@ fun HomeScreenContent(
     val listState = rememberLazyListState() // Para la lista de resultados expandidos
     val isScrolling by remember { derivedStateOf { gridState.isScrollInProgress || individualGridState.isScrollInProgress || listState.isScrollInProgress } }
 
-    LaunchedEffect(activeSortFilters, isSuperCategoryView, isSearchActive, searchQuery) {
-        // --- REPOSICIONAMIENTO AUTOMÁTICO ---
-        // Siempre posicionamos arriba al cambiar la búsqueda o resultados
-        listState.animateScrollToItem(0)
-        gridState.animateScrollToItem(0)
-        individualGridState.animateScrollToItem(0)
+    LaunchedEffect(activeSortFilters, isSearchActive) {
+        // --- REPOSICIONAMIENTO AUTOMÁTICO (Optimizado: Solo en cambios estructurales, no en cada tecla) ---
+        if (!isSearchActive) {
+            listState.scrollToItem(0)
+            gridState.scrollToItem(0)
+            individualGridState.scrollToItem(0)
+        }
     }
 
-    // Sincronización de la búsqueda de Be hacia el Obrero de Categorías e InteractionViewModel
-    val hasMatches by categoryViewModel.hasMatches.collectAsStateWithLifecycle()
-    LaunchedEffect(searchQuery, searchResults, hasMatches) {
-        categoryViewModel.updateSearchQuery(searchQuery)
-        interactionViewModel.processSearchQuery(searchQuery, hasMatches)
-        interactionViewModel.updateResults(searchResults, HUDContext.HOME)
-    }
+    // Sincronización de la búsqueda: Eliminamos el LaunchedEffect que llamaba a categoryViewModel.updateSearchQuery(searchQuery)
+    // porque CategoryViewModel ya observa al Coordinator directamente (SSOT).
 
     Scaffold(containerColor = MaverickColors.StealthGray) { paddingValues ->
         // [SECCIÓN: FONDO DE PANTALLA] - Se utiliza Stealth Gray como base sólida
@@ -317,7 +361,7 @@ fun HomeScreenContent(
                             isPaused = isScrolling || showWeatherDetails || isSearchActive,
                             onItemClick = { banner ->
                                 if (banner.service != null) navController.navigate("perfil_prestador/${banner.service.id}")
-                                else if (banner.originalCategory != null) navController.navigate("result_busqueda/${banner.originalCategory.name}")
+                                                                else if (banner.originalCategory != null) navController.navigate("result_busqueda/${Uri.encode(banner.originalCategory.name)}")
                             }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -338,27 +382,13 @@ fun HomeScreenContent(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             // --- 🔘 SECCIÓN: BOTONES CON LABELS ---
-
                             // 1. Favoritos (Con emoji de fuego pegado al texto)
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 BotonMasUsados(
                                     isActive = activeSortFilters.contains("sort_hot"), 
                                     onClick = { beViewModel.triggerAction("sort_hot") }
                                 )
-                                /**
-                                Spacer(modifier = Modifier.height(0.2.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                   // Text("🔥", fontSize = 10.sp)
-                                    Text(
-                                        text = "Fav",
-                                        color = Color.White.copy(alpha = 0.9f), 
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                **/
                             }
-
                             // 2. Ordenar AZ
                             val alphaState = when {
                                 activeSortFilters.contains("sort_nombre_asc") -> "asc"
@@ -377,16 +407,7 @@ fun HomeScreenContent(
                                         beViewModel.triggerAction(filterId)
                                     }
                                 )
-                                                                      /**
-                                )
-                                Spacer(modifier = Modifier.height(0.2.dp))
-                                Text(
-                                    text = "AZ",
-                                    color = Color.White.copy(alpha = 0.9f), 
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                **/
+
                             }
 
                             // 3. Compacto
@@ -396,15 +417,7 @@ fun HomeScreenContent(
                                     isActive = !isSuperCategoryView, 
                                     onToggleView = { beViewModel.triggerAction(if (isSuperCategoryView) "view_grid" else "view_bento") }
                                 )
-                                /**
-                                Spacer(modifier = Modifier.height(0.2.dp))
-                                Text(
-                                    text = "Comp",
-                                    color = Color.White.copy(alpha = 0.9f),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                **/
+
                             }
                         }
                     }
@@ -423,7 +436,7 @@ fun HomeScreenContent(
                                 items(items = superCategories, key = { it.title }) { superCat ->
                                     ExpandedBentoSuperCategoryCard(
                                         superCategory = superCat,
-                                        onCategoryClick = { category -> navController.navigate("result_busqueda/${category.name}") },
+                                        onCategoryClick = { category -> navController.navigate("result_busqueda/${Uri.encode(category.name)}") },
                                         onToggleCategoryFavorite = { category -> categoryViewModel.toggleCategoryFavorite(category) }
                                     )
                                 }
@@ -462,7 +475,7 @@ fun HomeScreenContent(
                             items(items = sortedIndividualCategories, key = { it.name }) { category ->
                                 CompactCategoryCard(
                                     item = category, 
-                                    onClick = { navController.navigate("result_busqueda/${category.name}") },
+                                    onClick = { navController.navigate("result_busqueda/${Uri.encode(category.name)}") },
                                     onToggleFavorite = { categoryViewModel.toggleCategoryFavorite(category) }
                                 )
                             }
@@ -501,11 +514,9 @@ fun HomeScreenContent(
                     },
                     onLogout = onLogout,
                     beViewModel = beViewModel,
-                    interactionViewModel = interactionViewModel,
                     onResultClick = { result ->
                         when (result) {
-                            is CategoryEntity -> navController.navigate("result_busqueda/${result.name}")
-                            // is SuperCategory -> beViewModel.selectSuperCategory(result)
+                            is CategoryEntity -> navController.navigate("result_busqueda/${Uri.encode(result.name)}")
                         }
                     }
                 )
@@ -523,13 +534,13 @@ fun HomeScreenContent(
                 Box(modifier = Modifier.fillMaxSize().zIndex(11f).background(Color.Black.copy(alpha = 0.65f)).clickable(null, null) { beViewModel.setFavoritesPanelVisible(false) })
             }
             AnimatedVisibility(visible = showFavoritesPanel, enter = slideInHorizontally { it }, exit = slideOutHorizontally { it }, modifier = Modifier.align(Alignment.CenterEnd).zIndex(12f)) {
-                FavoritesPanel(navController, favoriteProviders, { beViewModel.setFavoritesPanelVisible(false) })
+                FavoritesPanel(navController, favoriteProviders) { beViewModel.setFavoritesPanelVisible(false) }
             }
 
             SuperCategoryDetailsPanel(
                 beViewModel = beViewModel, 
                 categoryViewModel = categoryViewModel,
-                onCategoryClick = { categoryName -> navController.navigate("result_busqueda/$categoryName") }
+                onCategoryClick = { categoryName -> navController.navigate("result_busqueda/${Uri.encode(categoryName)}") }
             )
         }
     }

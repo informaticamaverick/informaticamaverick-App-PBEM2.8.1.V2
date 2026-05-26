@@ -7,7 +7,9 @@ object ChatIdHelper {
      * Ejempl: generateChayId
      */
 
-    fun generateChat(uid1: String, uid2: String): String {
-        return listOf(uid1, uid2).sorted().joinToString ("_")
+    fun generateChat(uid1: String, uid2: String, contextId: String? = null): String {
+        val base = listOf(uid1, uid2).sorted().joinToString ("_")
+        // IMPORTANTE: El contextId (companyId o categoryId) asegura hilos separados para servicios distintos
+        return if (contextId.isNullOrBlank()) base else "${base}_$contextId"
     }
 }

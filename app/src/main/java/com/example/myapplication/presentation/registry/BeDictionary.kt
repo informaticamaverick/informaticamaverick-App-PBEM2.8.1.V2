@@ -5,7 +5,44 @@ import androidx.compose.ui.graphics.Color
 import com.example.myapplication.presentation.components.BeEmotion
 import com.example.myapplication.presentation.components.BeMessage
 
-/** * --- DICCIONARIO CENTRALIZADO DE BE --- */
+
+
+
+
+/** * --- DICCIONARIO CENTRALIZADO DE BE para burbuja de Conversación (MODO BÚSQUEDA) --- */
+object BeConversacion {
+
+    /**
+     * Procesa la consulta del usuario y devuelve una respuesta coherente.
+     * Si no encuentra coincidencias, devuelve un mensaje de confusión.
+     */
+    fun getResponse(query: String): BeMessage {
+        val normQuery = query.lowercase().trim()
+
+        return when {
+            // 1. Saludos
+            normQuery.contains("hola") || normQuery.contains("buen") -> 
+                BeDictionary.SearchConversationalMessages.Welcome
+
+            // 2. ¿Quién eres?
+            normQuery.contains("quien eres") || normQuery.contains("que sos") || normQuery.contains("nombre") ->
+                BeDictionary.SearchConversationalMessages.WhoAmI
+
+            // 3. Ayuda / Tips
+            normQuery.contains("ayuda") || normQuery.contains("como") || normQuery.contains("que puedes hacer") ->
+                BeDictionary.SearchConversationalMessages.Help
+
+            // 4. Manejo de texto incoherente o sin coincidencias (REQUISITO DEL PLAN)
+            normQuery.length > 5 && !normQuery.contains(" ") && normQuery.any { it.isDigit() } ->
+                BeMessage("🤔", "Estoy un poco confundido, ¿podrías explicarme de otra forma? 😅", null, Color.Gray, emotion = BeEmotion.THINKING)
+
+            // 5. Fallback general
+            else -> BeDictionary.SearchConversationalMessages.NotFound
+        }
+    }
+
+}
+/** * --- DICCIONARIO CENTRALIZADO DE BE para buebuja inferior por pantalla  --- */
 object BeDictionary {
     val HomeMessages = listOf(
         BeMessage("💡", "Usa el Menú Táctico inferior para filtrar prestadores verificados.", null, Color(0xFF22D3EE), emotion = BeEmotion.NORMAL),
@@ -69,7 +106,7 @@ object BeDictionary {
                     "¡GRACIAS POR SER PARTE DE ESTO Y USAR NUESTRA APP!\n" +
                     "🚀 GRACIAS TOTALES 🚀\n\n" +
                     "🎁 Ahora lo mejor , tu regalo !!! 🎁 \n" +
-                    "por que nada es gratis en la vida, esta es la recompensa a tu esfuerzo por buscar este Huevo de Pascua 🐣",
+                    "por que nada es gratis en la vida, esta es la recompensa a tu esfuerzo por completar este desafio 🐣",
             bubbleColor = Color(0xFFFFB6C1),
             actionText = "OBTENER REGALO",
             emotion = BeEmotion.BLUSHING,

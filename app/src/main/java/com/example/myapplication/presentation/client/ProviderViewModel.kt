@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.model.*
 import com.example.myapplication.data.repository.ProviderRepository
+import com.example.myapplication.data.repository.AppActionCoordinator
+import com.example.myapplication.data.utils.SearchUtils.prepareForSearch
+import com.example.myapplication.data.utils.SearchUtils.wordStartsWithSmart
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
@@ -57,12 +60,12 @@ sealed class ProviderUiItem {
  */
 @HiltViewModel
 class ProviderViewModel @Inject constructor(
-    private val repository: ProviderRepository
+    private val repository: ProviderRepository,
+    private val coordinator: AppActionCoordinator
 ) : ViewModel() {
 
     // --- SECCIÓN: ESTADOS DE CONTROL (Triggers) ---
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    val searchQuery: StateFlow<String> = coordinator.globalSearchQuery
 
     private val _selectedCategory = MutableStateFlow<String?>(null)
     val selectedCategory: StateFlow<String?> = _selectedCategory.asStateFlow()
@@ -73,8 +76,12 @@ class ProviderViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    private val _userLocation = MutableStateFlow<UserLocation?>(null)
-    val userLocation: StateFlow<UserLocation?> = _userLocation.asStateFlow()
+    /**
+     * FUENTE DE VERDAD: Derivamos la ubicación directamente del Coordinador global.
+     */
+    val userLocation: StateFlow<UserLocation?> = coordinator.activeAddress.map { info ->
+        info?.let { UserLocation(it.lat ?: 0.0, it.lng ?: 0.0, it.locality, it.postalCode) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // --- SECCIÓN: FLUJO DE DATOS CRUDO ---
     /**
@@ -84,7 +91,7 @@ class ProviderViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val providers: StateFlow<List<Provider>> = combine(
         _selectedCategory,
-        _userLocation
+        userLocation
     ) { category: String?, location: UserLocation? ->
         category to location?.zipCode
     }.flatMapLatest { (category, zipCode) ->
@@ -155,9 +162,9 @@ class ProviderViewModel @Inject constructor(
         // 3. Lógica de Banner Dinámico
         val banner = if (page == 0) provider.bannerImageUrl else companies.getOrNull(page - 1)?.bannerImageUrl
 
-        // 4. Lógica de Horarios (Contextual a la página)
-        val hours = if (page == 0) provider.workingHours 
-                    else companies.getOrNull(page - 1)?.branches?.firstOrNull()?.workingHours ?: ""
+        // 4. Lógica de Horarios: texto estático del branch como valor inicial
+        val staticHours = if (page == 0) provider.workingHours 
+                          else companies.getOrNull(page - 1)?.branches?.firstOrNull()?.workingHours ?: ""
 
         // 5. Lógica de Listas Procesadas (Emails y Direcciones)
         val emails = if (page == 0) (listOfNotNull(provider.email) + provider.emails).distinct() 
@@ -171,11 +178,25 @@ class ProviderViewModel @Inject constructor(
                 activeInfo = activeInfo,
                 displayBubbles = resultBubbles,
                 currentBanner = banner,
-                hoursContent = hours,
+                hoursContent = staticHours,
                 totalPages = 1 + companies.size,
                 currentEmails = emails,
                 currentAddresses = addresses
             )
+        }
+
+        // 6. Si es página de empresa, cargar horarios reales desde Firestore
+        if (page > 0) {
+            // Los horarios se guardan en Firestore con providerId = company.id (no branch.id)
+            val companyId = companies.getOrNull(page - 1)?.id ?: ""
+            if (companyId.isNotBlank()) {
+                viewModelScope.launch {
+                    val firestoreHours = repository.fetchSchedulesForBranch(companyId)
+                    if (firestoreHours.isNotBlank()) {
+                        _perfilUiState.update { it.copy(hoursContent = firestoreHours) }
+                    }
+                }
+            }
         }
     }
 
@@ -183,14 +204,6 @@ class ProviderViewModel @Inject constructor(
     fun toggleHoursModal(show: Boolean) {
         _perfilUiState.update {
             it.copy(showHoursModal = show)
-        }
-    }
-    /** Sincronización proactiva con el Cerebro (BeBrain) */
-    fun syncWithBrain(brain: BeBrainViewModel) {
-        viewModelScope.launch {
-            unifiedServices.collect {
-                brain.syncProviders(it)
-            }
         }
     }
 
@@ -224,19 +237,8 @@ class ProviderViewModel @Inject constructor(
         _activeRefinements.value = emptySet()
     }
 
-    // ----------------------------------------------------------------------------------
-    // SECCIÓN: ORDENAMIENTO POR PROXIMIDAD (GEOLOCALIZACIÓN)
-    // ----------------------------------------------------------------------------------
-   // private val _userLocation = MutableStateFlow<UserLocation?>(null)
-   // val userLocation: StateFlow<UserLocation?> = _userLocation.asStateFlow()
-
-    private val _sortByProximity = MutableStateFlow(false)
+    private val _sortByProximity = MutableStateFlow(true)
     val sortByProximity: StateFlow<Boolean> = _sortByProximity.asStateFlow()
-
-    /** Establece la ubicación actual del usuario para los cálculos de distancia y filtrado regional MANDATORIO. */
-    fun setUserLocation(lat: Double, lon: Double, locality: String, zipCode: String?) {
-        _userLocation.value = UserLocation(lat, lon, locality, zipCode)
-    }
 
     /** Alterna el estado del ordenamiento por proximidad. */
     fun toggleProximitySort() {
@@ -263,12 +265,12 @@ class ProviderViewModel @Inject constructor(
      */
     val unifiedServices: StateFlow<List<ServiceDisplayModel>> = combine(
         providers,
-        _searchQuery,
+        searchQuery,
         _selectedCategory,
         _showSubscribedOnly,
         _activeRefinements,
         _sortByProximity,
-        _userLocation
+        userLocation
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val providers = args[0] as List<Provider>
@@ -359,7 +361,7 @@ class ProviderViewModel @Inject constructor(
     val uiItems: StateFlow<List<ProviderUiItem>> = combine(
         unifiedServices,
         _sortByProximity,
-        _userLocation
+        userLocation
     ) { services, sortByProx, uLoc ->
         // Si no hay ordenamiento por proximidad, devolvemos la lista plana de proveedores
         if (!sortByProx || uLoc == null) {
@@ -397,7 +399,7 @@ class ProviderViewModel @Inject constructor(
 
     /** Flujo de favoritos unificado. */
     val favoriteServices: StateFlow<List<ServiceDisplayModel>> = repository.favoriteProviders
-        .map { list -> list.map { transformToUnified(it, _userLocation.value) } }
+        .map { list -> list.map { transformToUnified(it, userLocation.value) } }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -466,14 +468,15 @@ class ProviderViewModel @Inject constructor(
             distanceKm = distance,
             typeEmoji = typeEmoji,
             typeLabel = typeLabel,
-            badgeList = badges
+            badgeList = badges,
+            companyId = mainCompany?.id
         )
     }
 
     // --- SECCIÓN: ACCIONES DE LA UI (CONSERVADAS) ---
 
     fun onSearchQueryChanged(query: String) {
-        _searchQuery.value = query
+        coordinator.updateSearchQuery(query)
     }
 
     fun onCategorySelected(category: String?) {
@@ -543,18 +546,5 @@ class ProviderViewModel @Inject constructor(
         return provider.companies.flatMap { it.branches }
     }
 
-    // 🔥 EXTENSIONES DE BÚSQUEDA UNIFICADAS (OBRERO PROVIDER) 🔥
-    private fun String.removeAccents(): String {
-        val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
-        return "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalized, "")
-    }
-
-    private fun String.prepareForSearch(): String = this.removeAccents().lowercase().trim()
-
-    private fun String.wordStartsWithSmart(query: String): Boolean {
-        if (query.isEmpty()) return false
-        val normQuery = query.prepareForSearch()
-        // Split por espacios y paréntesis
-        return this.prepareForSearch().split(" ", "(", ")").any { it.startsWith(normQuery) }
-    }
+    // 🔥 EXTENSIONES DE BÚSQUEDA UNIFICADAS (OBRERO PROVIDER) SE MOVIERON A SearchUtils.kt 🔥
 }

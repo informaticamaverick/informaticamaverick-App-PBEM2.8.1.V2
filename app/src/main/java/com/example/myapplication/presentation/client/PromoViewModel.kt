@@ -46,6 +46,7 @@ class PromoViewModel @Inject constructor() : ViewModel() {
     /**
      * Genera la lista de banners orquestada.
      * [ESTABILIDAD]: Utiliza seeds para Random para evitar el efecto "loco" en el carrusel.
+     * [NUEVO]: Integra lógica de PromoScreen para mostrar ofertas reales.
      */
     fun getHomeBanners(
         categories: List<CategoryEntity>,
@@ -53,12 +54,12 @@ class PromoViewModel @Inject constructor() : ViewModel() {
     ): Flow<List<AccordionBanner>> = _activeFilters.map { filters ->
         val bannerList = mutableListOf<AccordionBanner>()
 
-        // A. MAPEADO DE NOVEDADES
-        categories.filter { it.isNew }.take(5).forEach { cat ->
+        // A. MAPEADO DE NOVEDADES (Categorías nuevas)
+        categories.filter { it.isNew }.take(4).forEach { cat ->
             bannerList.add(AccordionBanner(
                 id = "cat_${cat.name}",
                 title = cat.name,
-                subtitle = "🚀 EXPLORA LO NUEVO",
+                subtitle = "🚀 NUEVA CATEGORÍA",
                 icon = cat.icon,
                 color = Color(CategoryVisuals.getColorFor(cat.superCategory)),
                 type = BannerType.NEW_CATEGORY,
@@ -67,34 +68,39 @@ class PromoViewModel @Inject constructor() : ViewModel() {
             ))
         }
 
-        // B. MAPEADO DE PROMOCIONES
-        services.filter { it.isSubscribed }.take(5).forEach { service ->
+        // B. MAPEADO DE PROMOCIONES (Prestadores suscritos con ofertas)
+        // Solo tomamos prestadores suscritos para el carrusel de alta visibilidad
+        services.filter { it.isSubscribed }.take(6).forEach { service ->
+            val stableSeed = Random(service.id.hashCode().toLong())
+            val discount = if (stableSeed.nextBoolean()) (10..50).random(stableSeed) else null
+            
             bannerList.add(AccordionBanner(
                 id = "promo_${service.id}", 
-                title = if (service.doesProduct) "Oferta Producto" else "Oferta Especial", 
-                subtitle = "Servicio destacado de ${service.title}", 
-                icon = if (service.doesProduct) "🛍️" else "🔥", 
-                color = Color(0xFFE91E63), 
+                title = service.title, 
+                subtitle = if (discount != null) "¡OFERTA IMPERDIBLE!" else "SERVICIO DESTACADO", 
+                icon = if (service.doesProduct) "🛍️" else "🛠️", 
+                color = if (discount != null) Color(0xFFE91E63) else Color(0xFF2197F5), 
                 type = if (service.doesProduct) BannerType.PRODUCT_SALE else BannerType.PROMO, 
-                discount = (15..45).random(Random(service.id.hashCode().toLong())), // Seed estable
+                discount = discount,
                 service = service 
             ))
         }
 
-        // C. MAPEADO DE ADS
+        // C. MAPEADO DE ADS (Publicidad externa o patrocinada)
         bannerList.add(AccordionBanner(
-            id = "ad_google_phantom", 
-            title = "Anuncio Patrocinado", 
-            subtitle = "Descubre más en Google Ads", 
-            icon = "🌐", 
-            color = Color.DarkGray, 
+            id = "ad_maverick_premium", 
+            title = "Maverick Premium", 
+            subtitle = "Sube de nivel tu negocio hoy", 
+            icon = "💎", 
+            color = Color(0xFFFFD700), // Dorado
             type = BannerType.GOOGLE_AD,
-            imageUrl = "https://picsum.photos/seed/google/600/300"
+            imageUrl = "https://picsum.photos/seed/maverick/600/300"
         ))
 
         // D. FILTRADO TÁCTICO
         val filteredList = if (filters.isEmpty()) bannerList 
         else bannerList.filter { banner ->
+            // El anuncio institucional siempre se muestra si no hay filtros específicos de tipo
             if (banner.type == BannerType.GOOGLE_AD) true 
             else {
                 val isNovedad = banner.type == BannerType.NEW_CATEGORY || banner.type == BannerType.NEW_PROVIDER
@@ -115,6 +121,7 @@ class PromoViewModel @Inject constructor() : ViewModel() {
 
     /**
      * Lógica de inyección de publicidad (1 Ad cada 2 contenidos).
+     * [CORRECCIÓN]: Genera IDs únicos para cada instancia inyectada para evitar crashes por "Duplicate Key".
      */
     private fun inyectarPublicidad(items: List<AccordionBanner>): List<AccordionBanner> {
         val ads = items.filter { it.type == BannerType.GOOGLE_AD }
@@ -126,7 +133,9 @@ class PromoViewModel @Inject constructor() : ViewModel() {
         content.forEachIndexed { index, item ->
             result.add(item)
             if ((index + 1) % 2 == 0) {
-                result.add(ads[adIdx % ads.size])
+                val adBase = ads[adIdx % ads.size]
+                // Aseguramos ID único añadiendo el índice de inserción
+                result.add(adBase.copy(id = "${adBase.id}_$index"))
                 adIdx++
             }
         }

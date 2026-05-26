@@ -20,6 +20,9 @@ class NotificationHelper(private val context: Context) {
 
     private val CHANNEL_ID = "chat_channel_id"
     private val CHANNEL_NAME = "Mensajes de Chat"
+    
+    private val AGENDA_CHANNEL_ID = "agenda_channel_id"
+    private val AGENDA_CHANNEL_NAME = "Recordatorios de Agenda"
 
     init {
         createNotificationChannel()
@@ -27,7 +30,10 @@ class NotificationHelper(private val context: Context) {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            
+            // Canal de Chat
+            val chatChannel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH
@@ -35,32 +41,38 @@ class NotificationHelper(private val context: Context) {
                 description = "Notificaciones de nuevos mensajes recibidos"
                 enableVibration(true)
             }
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(chatChannel)
+
+            // Canal de Agenda
+            val agendaChannel = NotificationChannel(
+                AGENDA_CHANNEL_ID,
+                AGENDA_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Recordatorios de citas y visitas técnicas"
+                enableVibration(true)
+                setSound(android.provider.Settings.System.DEFAULT_NOTIFICATION_URI, null)
+            }
+            manager.createNotificationChannel(agendaChannel)
         }
     }
 
     /**
      * Muestra la notificación.
-     * Usamos @SuppressLint("MissingPermission") para decirle a Android Studio que
-     * nosotros manejamos la verificación manualmente con el 'if'.
      */
     @SuppressLint("MissingPermission")
-    fun showNotification(title: String, message: String) {
-        // 1. Verificación de Seguridad para Android 13+
+    fun showNotification(title: String, message: String, channelId: String = CHANNEL_ID) {
+        // ... (rest of verification logic remains same)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(
                     context,
                     Manifest.permission.POST_NOTIFICATIONS
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
-                // Si NO tenemos permiso, simplemente no mostramos nada y salimos.
-                // (En una app real, aquí pedirías el permiso a la UI, pero el ViewModel no puede hacer eso).
                 return
             }
         }
 
-        // 2. Preparar el Intent para abrir la App al tocar
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -72,8 +84,8 @@ class NotificationHelper(private val context: Context) {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Asegúrate de tener este icono
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_launcher_foreground) 
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -82,11 +94,15 @@ class NotificationHelper(private val context: Context) {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
         try {
-            // 3. Lanzar la notificación
             NotificationManagerCompat.from(context).notify(Random.nextInt(), builder.build())
         } catch (e: SecurityException) {
             e.printStackTrace()
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun showAgendaNotification(title: String, message: String) {
+        showNotification(title, message, AGENDA_CHANNEL_ID)
     }
 
     @SuppressLint("MissingPermission")

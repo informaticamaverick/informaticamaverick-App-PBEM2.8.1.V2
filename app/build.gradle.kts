@@ -40,6 +40,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -71,7 +72,10 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.foundation)
     implementation(libs.androidx.compose.foundation.layout)
+    implementation(libs.androidx.datastore.core)
     implementation(libs.generativeai)
+    implementation(libs.androidx.benchmark.traceprocessor)
+    implementation(libs.androidx.compose.ui.geometry)
 
 
     testImplementation(libs.junit)
@@ -90,6 +94,9 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+
+
+
     val room_version = "2.6.1"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
@@ -110,8 +117,8 @@ dependencies {
     // Navigation
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.hilt.navigation.compose)
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.navigation:navigation-compose:2.8.5")
+    implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.navigation.compose)
     implementation("com.google.accompanist:accompanist-pager:0.36.0")
     implementation("com.google.accompanist:accompanist-pager-indicators:0.36.0")
 
@@ -129,6 +136,7 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.storage)
     implementation("com.google.firebase:firebase-appcheck-playintegrity:19.0.2")
+    implementation("com.google.firebase:firebase-appcheck-debug:19.0.2")
     
     // Retrofit para clima (Gson)
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")

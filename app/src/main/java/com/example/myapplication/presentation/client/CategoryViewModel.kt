@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.local.CategoryEntity
 import com.example.myapplication.data.repository.CategoryRepository
+import com.example.myapplication.data.repository.AppActionCoordinator
+import com.example.myapplication.data.utils.SearchUtils.prepareForSearch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
 // ==========================================================================================
@@ -81,13 +84,9 @@ object CategoryVisuals {
 
 @HiltViewModel
 class CategoryViewModel @Inject constructor(
-    private val repository: CategoryRepository
+    private val repository: CategoryRepository,
+    private val coordinator: AppActionCoordinator
 ) : ViewModel() {
-
-    init {
-        // --- AUTO-SINCRONIZACIÓN AL INICIAR EL OBRERO ---
-        syncCategoriesWithFirebase()
-    }
 
     // ======================================================================================
     // --- 1. FUENTE DE DATOS: ENRIQUECIMIENTO DINÁMICO DE COLORES ---
@@ -106,8 +105,7 @@ class CategoryViewModel @Inject constructor(
     private val _activeSortFilters = MutableStateFlow<Set<String>>(setOf("view_bento", "sort_hot"))
     val activeSortFilters = _activeSortFilters.asStateFlow()
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery = _searchQuery.asStateFlow()
+    val searchQuery = coordinator.globalSearchQuery
 
     private val _hasMatches = MutableStateFlow(true)
     val hasMatches = _hasMatches.asStateFlow()
@@ -120,7 +118,7 @@ class CategoryViewModel @Inject constructor(
      * CATEGORÍAS PROCESADAS: Aplica búsqueda (por inicio de palabra, ignorando acentos y mayúsculas) y ordenamiento.
      */
     val sortedCategories: StateFlow<List<CategoryEntity>> = combine(
-        allCategories, _activeSortFilters, _searchQuery
+        allCategories, _activeSortFilters, coordinator.globalSearchQuery
     ) { cats, _, query ->
         // --- FILTRADO POR BÚSQUEDA (INICIO DE PALABRA, IGNORANDO ACENTOS) ---
         if (query.isEmpty()) {
@@ -160,13 +158,7 @@ class CategoryViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // --- EXTENSIONES DE BÚSQUEDA (OBRERO) ---
-    private fun String.removeAccents(): String {
-        val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
-        return "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalized, "")
-    }
-
-    private fun String.prepareForSearch(): String = this.removeAccents().lowercase().trim()
+    // --- EXTENSIONES DE BÚSQUEDA (OBRERO) SE MOVIERON A SearchUtils.kt ---
 
     private val _superCategoryFavorites = MutableStateFlow<Set<String>>(setOf("Hogar y Mantenimiento"))
     val superCategoryFavorites = _superCategoryFavorites.asStateFlow()
@@ -192,7 +184,7 @@ class CategoryViewModel @Inject constructor(
         }
 
         // --- SECCIÓN: ORDENAMIENTO DE SUPERCATEGORÍAS ---
-        when {
+        val sortedResult = when {
             filters.contains("sort_nombre_asc") -> grouped.sortedBy { it.title.lowercase() }
             filters.contains("sort_nombre_desc") -> grouped.sortedByDescending { it.title.lowercase() }
             filters.contains("sort_random") -> grouped.shuffled()
@@ -208,7 +200,10 @@ class CategoryViewModel @Inject constructor(
 
             else -> grouped.sortedBy { it.title.lowercase() }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        sortedResult
+    }
+    .flowOn(Dispatchers.Default) // 🔥 Optimización: Procesamiento fuera del hilo de UI
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // ======================================================================================
     // --- 4. ACCIONES Y COMANDOS DEL OBRERO ---
@@ -251,13 +246,13 @@ class CategoryViewModel @Inject constructor(
 
     /** Actualiza la consulta de búsqueda */
     fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
+        coordinator.updateSearchQuery(query)
     }
 
     /** Resetea todos los filtros a su estado inicial */
     fun clearFilters() {
         _activeSortFilters.value = setOf("view_bento", "sort_hot")
-        _searchQuery.value = ""
+        coordinator.updateSearchQuery("")
     }
 
     /** 
@@ -273,5 +268,10 @@ class CategoryViewModel @Inject constructor(
         viewModelScope.launch {
             repository.syncWithFirebase()
         }
+    }
+
+    init {
+        // --- AUTO-SINCRONIZACIÓN AL INICIAR EL OBRERO ---
+        syncCategoriesWithFirebase()
     }
 }

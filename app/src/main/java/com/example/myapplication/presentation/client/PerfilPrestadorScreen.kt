@@ -66,6 +66,7 @@ private val ProviderPremiumGold = Color(0xFFFFD700)
 fun PerfilPrestadorCliente(
     providerId: String,
     onBack: () -> Unit,
+    onNavigateToChat: (providerId: String, companyId: String) -> Unit = { _, _ -> },
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel()
 ) {
@@ -87,7 +88,8 @@ fun PerfilPrestadorCliente(
         perfilUiState = perfilUiState,
         onUpdatePage = { page, provider -> providerViewModel.updateProfilePage(page, provider) },
         onToggleHoursModal = { show -> providerViewModel.toggleHoursModal(show) },
-        onBack = onBack
+        onBack = onBack,
+        onNavigateToChat = onNavigateToChat
     )
 }
 
@@ -98,7 +100,8 @@ fun PerfilPrestadorClienteContent(
     perfilUiState: PerfilUIState,
     onUpdatePage: (Int, Provider) -> Unit,
     onToggleHoursModal: (Boolean) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToChat: (providerId: String, companyId: String) -> Unit = { _, _ -> }
 ) {
     if (providerState == null) {
         Box(modifier = Modifier.fillMaxSize().background(ProviderDarkBg), contentAlignment = Alignment.Center) {
@@ -113,7 +116,8 @@ fun PerfilPrestadorClienteContent(
         perfilUiState = perfilUiState,
         onUpdatePage = onUpdatePage,
         onToggleHoursModal = onToggleHoursModal,
-        onNavigateBack = onBack
+        onNavigateBack = onBack,
+        onNavigateToChat = onNavigateToChat
     )
 }
 
@@ -126,7 +130,8 @@ fun PerfilPrestadorContent(
     perfilUiState: PerfilUIState,
     onUpdatePage: (Int, Provider) -> Unit,
     onToggleHoursModal: (Boolean) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToChat: (providerId: String, companyId: String) -> Unit = { _, _ -> }
 ) {
     val scrollState = rememberScrollState()
     val configuration = LocalConfiguration.current
@@ -195,7 +200,8 @@ fun PerfilPrestadorContent(
                             allCategories = allCategories,
                             addresses = perfilUiState.currentAddresses,
                             onOpenHours = { onToggleHoursModal(true) },
-                            onImageClick = { fullscreenImageUrl = it }
+                            onImageClick = { url -> fullscreenImageUrl = url },
+                            onContactar = { onNavigateToChat(provider.uid, it.id) }
                         )
                     }
                 }
@@ -485,7 +491,8 @@ fun CompanyBentoSection(
     allCategories: List<CategoryEntity>,
     addresses: List<AddressProvider>,
     onOpenHours: () -> Unit,
-    onImageClick: (String) -> Unit
+    onImageClick: (String) -> Unit,
+    onContactar: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var selectedEmployee by remember { mutableStateOf<EmployeeProvider?>(null) }
@@ -528,6 +535,19 @@ fun CompanyBentoSection(
                 Spacer(Modifier.height(16.dp))
                 Text("SOBRE NOSOTROS", style = MaterialTheme.typography.labelSmall, color = ProviderGeminiAccent, fontWeight = FontWeight.Bold)
                 Text(company.description, color = Color.White.copy(0.8f), fontSize = 14.sp, modifier = Modifier.padding(top = 8.dp))
+
+                if (onContactar != null) {
+                    Spacer(Modifier.height(20.dp))
+                    Button(
+                        onClick = onContactar,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = ProviderGeminiAccent)
+                    ) {
+                        Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Contactar empresa", fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 

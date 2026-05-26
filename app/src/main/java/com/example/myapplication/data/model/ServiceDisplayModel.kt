@@ -44,7 +44,8 @@ data class ServiceDisplayModel(
     // ==========================================================================================
     val typeEmoji: String = "",                 // "🏢" o "👨‍🔧" pre-calculado
     val typeLabel: String = "",                 // "Empresa Certificada" o "Profesional" pre-calculado
-    val badgeList: List<BadgeDisplayData> = emptyList() // Lista de badges lista para iterar
+    val badgeList: List<BadgeDisplayData> = emptyList(), // Lista de badges lista para iterar
+    val companyId: String? = null                        // ID de empresa si el prestador tiene una
 )
 
 /**

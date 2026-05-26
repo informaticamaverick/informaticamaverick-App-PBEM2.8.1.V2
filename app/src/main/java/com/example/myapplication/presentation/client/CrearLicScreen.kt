@@ -2,12 +2,15 @@ package com.example.myapplication.presentation.client
 
 import android.app.DatePickerDialog
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -33,6 +36,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -65,28 +69,30 @@ fun CrearLicScreen(
     //val allCategories by categoryViewModel.categories.collectAsState()
     val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
 
-    CrearLicContent(
-        onBack = onBack,
-        onSuccess = onSuccess,
-        userState = userState,
-        allCategories = categories,
-        beViewModel = beViewModel, // 🔥 Pasamos el cerebro al contenido
-        onCreateTender = { title, description, category, startDate, endDate, requiresVisit, requiresPayment, requiresGuarantee, requiresDoc, location, images ->
-            budgetViewModel.createTender(
-                title = title,
-                description = description,
-                category = category,
-                startDate = startDate,
-                endDate = endDate,
-                requiresVisit = requiresVisit,
-                requiresPaymentMethod = requiresPayment,
-                requiresWorkGuarantee = requiresGuarantee,
-                requiresProviderDoc = requiresDoc,
-                location = location,
-                imageUrls = images.map { it.toString() }
-            )
-        }
-    )
+    Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } }) {
+        CrearLicContent(
+            onBack = onBack,
+            onSuccess = onSuccess,
+            userState = userState,
+            allCategories = categories,
+            beViewModel = beViewModel, // 🔥 Pasamos el cerebro al contenido
+            onCreateTender = { title, description, category, startDate, endDate, requiresVisit, requiresPayment, requiresGuarantee, requiresDoc, location, images ->
+                budgetViewModel.createTender(
+                    title = title,
+                    description = description,
+                    category = category,
+                    startDate = startDate,
+                    endDate = endDate,
+                    requiresVisit = requiresVisit,
+                    requiresPaymentMethod = requiresPayment,
+                    requiresWorkGuarantee = requiresGuarantee,
+                    requiresProviderDoc = requiresDoc,
+                    location = location,
+                    imageUrls = images.map { it.toString() }
+                )
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -200,9 +206,38 @@ fun CrearLicUIContent(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris -> selectedImages = selectedImages + uris }
 
+    // --- CÁMARA LAUNCHER Y PERMISOS (REGLA DE ORO: Captura a resolución completa) ---
+    val tempPhotoUri = remember {
+        val photoFile = java.io.File(context.cacheDir, "tender_photo_${System.currentTimeMillis()}.jpg")
+        androidx.core.content.FileProvider.getUriForFile(context, "com.example.myapplication.provider", photoFile)
+    }
+
     val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap -> /* Proceso de bitmap */ }
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            selectedImages = selectedImages + tempPhotoUri
+        }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            cameraLauncher.launch(tempPhotoUri)
+        } else {
+            Toast.makeText(context, "Se requiere permiso de cámara para tomar fotos", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun handleCameraClick() {
+        val hasPermission = ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            cameraLauncher.launch(tempPhotoUri)
+        } else {
+            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+        }
+    }
 
     // 🔥 SINCRONIZACIÓN: Si Be tiene una ubicación guardada, la cargamos automáticamente
     LaunchedEffect(locationFromBrain) {
@@ -553,7 +588,7 @@ fun CrearLicUIContent(
                         }
 
                         OutlinedButton(
-                            onClick = { cameraLauncher.launch(null) },
+                            onClick = { handleCameraClick() },
                             modifier = Modifier.weight(1f).height(48.dp),
                             shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(1.dp, Color(0xFFE91E63).copy(alpha = 0.5f)),
@@ -650,6 +685,8 @@ fun CrearLicUIContent(
             show = showAd,
             onDismiss = {
                 showAd = false
+                
+                // 🔥 [VALIDACIÓN DE FLUJO] Ejecutamos la creación real en el ViewModel
                 onCreateTender(
                     titleInput,
                     description,
@@ -664,7 +701,7 @@ fun CrearLicUIContent(
                     selectedImages
                 )
                 
-                // 🔥 NOTIFICACIÓN REAL 🔥
+                // 🔥 NOTIFICACIÓN LOCAL (UI Feedback) 🔥
                 val locLabel = when (val loc = selectedLocation) {
                     is LocationOption.Personal -> loc.locality
                     is LocationOption.Business -> loc.locality

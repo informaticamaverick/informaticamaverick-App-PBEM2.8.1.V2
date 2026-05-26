@@ -48,13 +48,17 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
 import com.example.myapplication.presentation.client.BeBrainViewModel
-import com.example.myapplication.presentation.client.BeInteractionViewModel
+//import com.example.myapplication.presentation.client.BeInteractionViewModel
 import com.example.myapplication.data.local.UserEntity
 import com.example.myapplication.data.repository.ForecastDay
 import com.example.myapplication.presentation.client.LocationOption
 import com.example.myapplication.presentation.client.Screen
 import com.example.myapplication.ui.theme.MyApplicationTheme
 import com.example.myapplication.data.model.CompanyClient
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import android.content.Context
+import com.example.myapplication.presentation.client.UbicacionClimaViewModel
 import com.example.myapplication.presentation.components.Utilidades.CPCyberColors
 import com.example.myapplication.presentation.components.Utilidades.GeminiCyberWrapper
 
@@ -76,7 +80,7 @@ fun TopHeaderSection(
     onLocationSelected: (LocationOption) -> Unit,
     onLogout: () -> Unit,
     beViewModel: BeBrainViewModel,
-    interactionViewModel: BeInteractionViewModel,
+    // interactionViewModel: BeInteractionViewModel, // SE DEJA FUERA SEGUN PLAN DE ACCION
     onResultClick: (Any) -> Unit = {}
 ) {
     val userFromBrain by beViewModel.userState.collectAsStateWithLifecycle()
@@ -234,6 +238,17 @@ fun LocationSelector(
 ) {
     var showPopup by remember { mutableStateOf(false) }
 
+    // --- ANIMACIÓN DE ROTACIÓN (ESTILO M3 / ANDROID 16) ---
+    var rotationAngle by remember { mutableFloatStateOf(0f) }
+    val rotation by animateFloatAsState(
+        targetValue = rotationAngle,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "GpsRotation"
+    )
+
     // --- SECCIÓN: DESGLOSE DINÁMICO DE UBICACIÓN ---
     val (linea1, linea2, linea3) = when (currentLocation) {
         is LocationOption.Gps -> {
@@ -250,7 +265,7 @@ fun LocationSelector(
     Box(modifier = modifier) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
                 .background(brush)
                 .clickable { showPopup = true }
@@ -274,10 +289,20 @@ fun LocationSelector(
                 .clip(CircleShape)
                 .background(Color(0xFF0D1117).copy(alpha = 0.8f))
                 .border(1.dp, Color(0xFF22D3EE).copy(alpha = 0.5f), CircleShape)
-                .clickable { onRefresh() },
+                .clickable { 
+                    rotationAngle += 360f // Gira hacia la derecha
+                    onRefresh() 
+                },
             contentAlignment = Alignment.Center
         ) {
-            Icon(imageVector = Icons.Default.MyLocation, contentDescription = "Refresh GPS", tint = Color(0xFF22D3EE), modifier = Modifier.size(18.dp))
+            Icon(
+                imageVector = Icons.Default.MyLocation, 
+                contentDescription = "Refresh GPS", 
+                tint = Color(0xFF22D3EE), 
+                modifier = Modifier
+                    .size(18.dp)
+                    .rotate(rotation)
+            )
         }
     }
 
@@ -340,7 +365,7 @@ fun ProfileSection(
     onLogout: () -> Unit,
     brush: Brush,
     beViewModel: BeBrainViewModel,
-    interactionViewModel: BeInteractionViewModel,
+    //interactionViewModel: BeInteractionViewModel,
     onResultClick: (Any) -> Unit = {}
 ) {
     val userFromBrain by beViewModel.userState.collectAsStateWithLifecycle()

@@ -322,28 +322,30 @@ class UserRepository @Inject constructor(
         }
     }
 
-    private suspend fun initializeNewUserFromGoogle(currentUser: com.google.firebase.auth.FirebaseUser) {
-        val uid = currentUser.uid
-        val nameFull = currentUser.displayName ?: "Usuario"
+    /**
+     * Inicializa un nuevo usuario con datos extraídos de Google.
+     * Ahora acepta un mapa con el perfil de Google para extraer nombre y apellido.
+     */
+    suspend fun initializeNewUserFromGoogle(userBase: User, googleProfile: Map<String, Any?>?) {
+        // Extraer nombre y apellido de forma inteligente desde el perfil de Google
+        val givenName = googleProfile?.get("given_name") as? String
+        val familyName = googleProfile?.get("family_name") as? String
         
-        val newUser = User(
-            uid = uid,
-            email = currentUser.email ?: "",
-            displayName = nameFull,
-            name = nameFull.split(" ").firstOrNull() ?: "",
-            lastName = nameFull.split(" ").drop(1).joinToString(" "),
-            photoUrl = currentUser.photoUrl?.toString(),
+        val newUser = userBase.copy(
+            name = givenName ?: userBase.displayName.split(" ").firstOrNull() ?: "",
+            lastName = familyName ?: userBase.displayName.split(" ").drop(1).joinToString(" "),
             isOnline = true,
             createdAt = System.currentTimeMillis(),
             isProfileComplete = false
         )
+        
         userDao.insertOrUpdateUser(newUser.toEntity())
-        Log.d("UserRepository", "🏠 Perfil inicial guardado en Room")
+        Log.d("UserRepository", "🏠 Perfil inicial enriquecido guardado en Room")
         
         try {
             syncUserWithFirebase(newUser)
         } catch (e: Exception) {
-            Log.e("UserRepository", "⚠️ Error al sincronizar perfil inicial")
+            Log.e("UserRepository", "⚠️ Error al sincronizar perfil inicial: ${e.message}")
         }
     }
 

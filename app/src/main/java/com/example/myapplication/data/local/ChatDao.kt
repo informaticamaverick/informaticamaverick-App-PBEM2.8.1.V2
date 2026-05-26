@@ -16,7 +16,6 @@ interface ChatDao {
     @Query("SELECT * FROM messages WHERE chatId IN (:chatIds) ORDER BY timestamp ASC")
     fun getMessagesForChats(chatIds: List<String>): Flow<List<MessageEntity>>
 
-    // Inserta o actualiza un mensaje
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity)
 
@@ -46,11 +45,27 @@ interface ChatDao {
     """)
     fun getActiveConversationIds(myUserId: String): Flow<List<String>>
 
+    // Obtener un resumen de las conversaciones activas (ordenadas por el mensaje más reciente)
+    @Query("""
+        SELECT chatId, 
+               CASE WHEN senderId = :myUserId THEN receiverId ELSE senderId END as userId,
+               companyId, categoryId, content as lastMessage, timestamp as lastTimestamp
+        FROM messages m1
+        WHERE (senderId = :myUserId OR receiverId = :myUserId)
+        AND timestamp = (SELECT MAX(timestamp) FROM messages m2 WHERE m2.chatId = m1.chatId)
+        GROUP BY chatId
+        ORDER BY lastTimestamp DESC
+    """)
+    fun getActiveChatSummaries(myUserId: String): Flow<List<ChatSummary>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllMessages(messages: List<MessageEntity>)
 
     @Query("SELECT COUNT(*) > 0 FROM messages WHERE id = :id")
     suspend fun messageExists(id: String): Boolean
+
+    @Query("SELECT * FROM messages WHERE id = :id LIMIT 1")
+    suspend fun getMessageById(id: String): MessageEntity?
 
     @Query("""SELECT m1.chatId, m1.content as lastMessage, m1.timestamp as lastTimestamp, m1.senderId as lastSenderId
         FROM messages m1 WHERE (m1.senderId = :myUserId OR m1.receiverId = :myUserId)
@@ -72,6 +87,13 @@ interface ChatDao {
 
     @Query("UPDATE messages SET isSynced = 1 WHERE id = :messageId")
     suspend fun updateMessageSynced(messageId: String)
+
+    // --- ELIMINACIÓN DE CONVERSACIONES (POLÍTICA ZERO COST) ---
+    @Query("DELETE FROM messages WHERE chatId = :chatId")
+    suspend fun deleteMessagesByChatId(chatId: String)
+
+    @Query("DELETE FROM messages WHERE chatId IN (:chatIds)")
+    suspend fun deleteMessagesByChatIds(chatIds: List<String>)
 }
 
 // Clase de apoyo para el resultado del GROUP BY
@@ -85,5 +107,14 @@ data class ChatLastMessage(
     val lastMessage: String,
     val lastTimestamp: Long,
     val lastSenderId: String
+)
+
+data class ChatSummary(
+    val chatId: String,
+    val userId: String,
+    val companyId: String?,
+    val categoryId: String?,
+    val lastMessage: String,
+    val lastTimestamp: Long
 )
 

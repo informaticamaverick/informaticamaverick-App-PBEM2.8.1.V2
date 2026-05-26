@@ -1,3 +1,4 @@
+/**
 package com.example.myapplication.presentation.client
 
 import androidx.compose.material.icons.Icons
@@ -15,7 +16,7 @@ import com.example.myapplication.data.model.ServiceDisplayModel
 import com.example.myapplication.presentation.components.BeEmotion
 import com.example.myapplication.presentation.components.BeMessage
 import com.example.myapplication.presentation.components.ControlItem
-import com.example.myapplication.presentation.client.BeBrainViewModel.SearchResult
+import com.example.myapplication.presentation.client.SearchProcessorViewModel.SearchResult
 import com.example.myapplication.presentation.registry.BeMenuRegistry
 import com.example.myapplication.presentation.registry.BeDictionary
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -437,11 +438,11 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
             }
 
             _isThinking.value = true
-            
+
             // Si el query es corto, Be "piensa" menos
             val thinkingTime = if (query.length < 5) 600L else 1200L
             delay(thinkingTime)
-            
+
             val finalReaction = if (resultsFound) {
                 BeSearchReaction(
                     message = BeMessage("✨", "¡Encontré estos para ti!", null, Color(0xFF22D3EE), emotion = BeEmotion.HAPPY),
@@ -504,13 +505,13 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
             // ==========================================================================================
             // --- SECCIÓN 0: LÓGICA DE HUEVO DE PASCUA (PREVISUALIZACIÓN) ---
             // ==========================================================================================
-            // En tiempo real no mostramos el mensaje del huevo de pascua, 
+            // En tiempo real no mostramos el mensaje del huevo de pascua,
             // solo dejamos que BeInteraction sepa que estamos en el flujo.
             val isEasterEggStart = norm == "por que te llamas be?" || norm == "porque te llamas be?"
             val isEasterEggStep2 = _easterEggStep == 1 && norm.contains("ja ja ja buen chiste")
 
             if (isEasterEggStart || isEasterEggStep2) {
-                // Durante el tipeo, si detectamos la palabra clave, podemos poner a Be a "pensar" 
+                // Durante el tipeo, si detectamos la palabra clave, podemos poner a Be a "pensar"
                 // o simplemente no mostrar nada hasta el Enter.
                 // Para cumplir el requerimiento: "no debe mostrar de inmediato la respuesta"
                 _currentReaction.value = null
@@ -546,7 +547,7 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
             // --- SECCIÓN 2: DETECCIÓN MULTI-TAG (CATEGORÍAS + FILTROS + SORTS) ---
             val detectedTags = mutableListOf<ControlItem>()
             val selectedIds = _selectedOptionIds.value
-            
+
             // --- LÓGICA DE INTELIGENCIA CONTEXTUAL (PREGUNTA VS BÚSQUEDA) ---
             val isQuestion = norm.contains("?") || norm.startsWith("que") || norm.startsWith("como") || norm.startsWith("cuales") || norm.startsWith("donde") || norm.contains("filtros") || norm.contains("orden")
 
@@ -592,8 +593,8 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
             // --- REACCIÓN ESPECÍFICA POR CONTEXTO (Ej: "abierta" en Presupuestos) ---
             if (_currentContext.value == HUDContext.BUDGETS || _currentContext.value == HUDContext.BUDGETS_TENDERS) {
                 if (norm == "abierta" || norm == "activas" || norm == "activa") {
-                    val filterAbierta = _availableFilters.value.find { 
-                        it.label.lowercase().contains("abierta") || it.label.lowercase().contains("activas") 
+                    val filterAbierta = _availableFilters.value.find {
+                        it.label.lowercase().contains("abierta") || it.label.lowercase().contains("activas")
                     }
                     if (filterAbierta != null) {
                         _currentReaction.value = BeSearchReaction(
@@ -615,7 +616,7 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
                         BeMenuRegistry.VIEW_COMPACT,
                         BeMenuRegistry.SORT_HOT
                     )
-                    
+
                     _currentReaction.value = BeSearchReaction(
                         message = BeMessage(
                             icon = "✨",
@@ -633,7 +634,7 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
                     beBrain?.setHasNewMessage(true)
                 } else if (!hasMatches) {
                     _currentReaction.value = BeSearchReaction(
-                        message = null, 
+                        message = null,
                         type = ReactionType.NOT_FOUND
                     )
                     beBrain?.setHasNewMessage(true)
@@ -644,9 +645,9 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
             }
 
             // --- REACCIÓN EN PRESUPUESTOS (NUEVO) ---
-            val isBudgetContext = _currentContext.value == HUDContext.BUDGETS || 
-                                 _currentContext.value == HUDContext.BUDGETS_TENDERS || 
-                                 _currentContext.value == HUDContext.BUDGETS_DIRECT || 
+            val isBudgetContext = _currentContext.value == HUDContext.BUDGETS ||
+                                 _currentContext.value == HUDContext.BUDGETS_TENDERS ||
+                                 _currentContext.value == HUDContext.BUDGETS_DIRECT ||
                                  _currentContext.value == HUDContext.TENDER_DETAILS
             
             if (isBudgetContext && !isQuestion) {
@@ -708,8 +709,8 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
                 _currentReaction.value = BeSearchReaction(
                     message = BeMessage(
                         icon = primary.emoji ?: "🔍",
-                        text = if (detectedTags.size > 1) 
-                            "He encontrado varias opciones que coinciden con tu búsqueda:" 
+                        text = if (detectedTags.size > 1)
+                            "He encontrado varias opciones que coinciden con tu búsqueda:"
                             else "¿Te gustaría aplicar este filtro para mejorar los resultados?",
                         actionText = if (detectedTags.size == 1) "APLICAR" else null,
                         bubbleColor = primary.color,
@@ -786,3 +787,4 @@ class BeInteractionViewModel @Inject constructor() : ViewModel() {
         _currentReaction.value = null
     }
 }
+**/

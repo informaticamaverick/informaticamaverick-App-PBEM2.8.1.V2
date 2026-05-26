@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -141,11 +142,14 @@ fun BarraCabezera(
 
                 // --- TÍTULOS (ESTILOS Y ANIMACIONES DIRECTAS) ---
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).padding(end = 85.dp * (1f - collapseFraction)), // Espacio aumentado para evitar que el texto tape el emoji
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(
                         text = title.uppercase(),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 22.sp * (1f - (collapseFraction * 0.15f)),
                         style = CyberTypography.TitleTech.copy(
                             color = Color.White,
                             fontSize = 18.sp * (1f - (collapseFraction * 0.15f)), // Tamaño inlined

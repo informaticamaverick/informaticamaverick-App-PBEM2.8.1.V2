@@ -209,7 +209,7 @@ fun PrestadorCardV3(
             .width(cardWidth) 
             .height(animatedHeight)
             .combinedClickable(onClick = onClick, onLongClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(4.dp),
         color = Color.Transparent,
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
         shadowElevation = 6.dp
@@ -236,7 +236,7 @@ fun PrestadorCardV3(
                             contentDescription = null,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(8.dp))
                                 .border(1.dp, Color.White.copy(0.1f), RoundedCornerShape(10.dp)),
                             contentScale = ContentScale.Crop
                         )
@@ -273,14 +273,14 @@ fun PrestadorCardV3(
                             fontWeight = FontWeight.ExtraBold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            lineHeight = 13.sp
+                            lineHeight = 10.sp
                         )
 
                         // --- Fila de Estado: [LEER DEL MODELO] Pre-calculado ---
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                             Text(text = provider.typeEmoji, fontSize = statusEmojiSize)
 
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(16.dp))
 
                             Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(10.dp))
                             Text(
@@ -297,14 +297,14 @@ fun PrestadorCardV3(
                     PremiumDividerV3(maverickPurple, verticalPadding = verticalPaddingBetweenSections)
 
                     // --- SECCIÓN: INFO (Sucursal/Ubicación + Dirección) ---
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(top = 1.dp)) {
                         Text(
                             text = provider.branchName ?: "Dirección", 
                             color = maverickBlue,
                             fontSize = branchFontSize,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
-                           // modifier = Modifier.padding(top = 1.dp),
+                           modifier = Modifier.padding(top = 0.dp),
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
@@ -314,7 +314,7 @@ fun PrestadorCardV3(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             lineHeight = 10.sp,
-                            modifier = Modifier.padding(top = 2.dp)
+                            modifier = Modifier.padding(top = 1.dp)
                         )
                     }
 
@@ -390,7 +390,8 @@ fun PrestadorCardV3Preview() {
                     displayAddress = "Av. Aconquija 2000, Yerba Buena"
                 ),
                 onClick = {},
-                onChatClick = {}
+                onChatClick = {},
+
             )
         }
     }

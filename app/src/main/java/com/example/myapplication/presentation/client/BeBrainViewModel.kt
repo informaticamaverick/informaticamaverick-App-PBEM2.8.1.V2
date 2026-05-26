@@ -21,6 +21,7 @@ import com.example.myapplication.presentation.components.AddressInfo
 import com.example.myapplication.presentation.registry.BeMenuRegistry
 import com.example.myapplication.presentation.registry.BeDictionary
 import com.example.myapplication.data.repository.UserRepository
+import com.example.myapplication.data.repository.AppActionCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,20 +45,16 @@ import com.example.myapplication.data.repository.ChatRepository
 import com.example.myapplication.data.repository.BudgetRepository
 import com.example.myapplication.data.repository.CalendarRepository
 import com.example.myapplication.data.local.ChatUnreadCount
+import com.example.myapplication.data.utils.SearchUtils.matchesSmart
+import com.example.myapplication.data.utils.SearchUtils.prepareForSearch
+import com.example.myapplication.data.utils.SearchUtils.wordStartsWithSmart
+import kotlinx.coroutines.Job
 
 // ==========================================================================================
 // --- SECCIÓN: ENUMS Y MODELOS DE APOYO (DOMINIO DEL CEREBRO) ---
 // ==========================================================================================
 
-/** * --- ENUM DE CONTEXTO DEL HUD --- */
-enum class HUDContext {
-    HOME, BUDGETS, BUDGETS_TENDERS, BUDGETS_DIRECT, CHAT, CALENDAR, PROMO, TENDER_DETAILS, PROFILE, SEARCH_RESULTS, FAST, UNKNOWN
-}
-
-/** * --- ENUM PARA EL ESTADO DE NAVEGACIÓN INICIAL --- */
-enum class InitialNavTarget {
-    CHECKING, LOGIN, MAIN_SCREEN, PROFILE_EDIT
-}
+// 🔥 HUDContext e InitialNavTarget se movieron a HUDModels.kt 🔥
 
 // 🔥 EL MODELO SuperCategory se define en CategoryViewModel.kt para evitar duplicidad 🔥
 
@@ -76,7 +73,8 @@ class BeBrainViewModel @Inject constructor(
     private val tokenManager: TokenManager,
     private val chatRepository: ChatRepository,
     private val budgetRepository: BudgetRepository,
-    private val calendarRepository: CalendarRepository
+    private val calendarRepository: CalendarRepository,
+    val coordinator: AppActionCoordinator
 ) : ViewModel() {
 
     // ======================================================================================
@@ -137,7 +135,6 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     // --- 1. ESTADO DE NAVEGACIÓN Y AUTH (DECISIONES ESTRATÉGICAS) ---
     // ======================================================================================
-    private val _favoriteProvidersRaw = MutableStateFlow<List<Provider>>(emptyList())
     private val _allBudgetsRaw = MutableStateFlow<List<BudgetEntity>>(emptyList())
     private val _allTendersRaw = MutableStateFlow<List<TenderEntity>>(emptyList())
     private val _allProvidersRaw = MutableStateFlow<List<ServiceDisplayModel>>(emptyList())
@@ -164,13 +161,9 @@ class BeBrainViewModel @Inject constructor(
             if (currentUser == null) {
                 _initialNavTarget.value = InitialNavTarget.LOGIN
             } else {
-                // Verificamos si tiene perfil en Firestore para decidir si va a Main o ProfileEdit
-                val profile = authRepository.getFullUserProfile(currentUser.uid)
-                if (profile == null) {
-                    _initialNavTarget.value = InitialNavTarget.PROFILE_EDIT
-                } else {
-                    _initialNavTarget.value = InitialNavTarget.MAIN_SCREEN
-                }
+                // [MODIFICADO] Siempre vamos a MainScreen. 
+                // La verificación de dirección se maneja con el Popup dentro de la Home.
+                _initialNavTarget.value = InitialNavTarget.MAIN_SCREEN
             }
         }
     }
@@ -186,38 +179,42 @@ class BeBrainViewModel @Inject constructor(
     private val _allCategoriesRaw = MutableStateFlow<List<CategoryEntity>>(emptyList())
     val allCategories: StateFlow<List<CategoryEntity>> = _allCategoriesRaw.asStateFlow()
 
-    private val _sortedCategories = MutableStateFlow<List<CategoryEntity>>(emptyList())
-    val sortedCategories: StateFlow<List<CategoryEntity>> = _sortedCategories.asStateFlow()
-
-    private val _superCategories = MutableStateFlow<List<SuperCategory>>(emptyList())
-    val superCategories: StateFlow<List<SuperCategory>> = _superCategories.asStateFlow()
-
-    private val _activeSortFilters = MutableStateFlow<Set<String>>(setOf("view_bento", "sort_hot"))
-    val activeSortFilters: StateFlow<Set<String>> = _activeSortFilters.asStateFlow()
-
     private val _selectedSuperCategory = MutableStateFlow<SuperCategory?>(null)
     val selectedSuperCategory: StateFlow<SuperCategory?> = _selectedSuperCategory.asStateFlow()
 
-    // --- ESTADO DE UBICACIÓN Y CLIMA (SINCRONIZADO DESDE UBICACIONCLIMAVIEWMODEL) ---
-    private val _temperature = MutableStateFlow("--°C")
-    val temperature: StateFlow<String> = _temperature.asStateFlow()
-
-    private val _weatherEmoji = MutableStateFlow("🌤️")
-    val weatherEmoji: StateFlow<String> = _weatherEmoji.asStateFlow()
-
-    private val _weatherDescription = MutableStateFlow("Cargando...")
-    val weatherDescription: StateFlow<String> = _weatherDescription.asStateFlow()
-
-    private val _locationName = MutableStateFlow("Actualizando...")
-    val locationName: StateFlow<String> = _locationName.asStateFlow()
+    // --- ESTADO DE UBICACIÓN Y CLIMA (SINCRONIZADO VIA COORDINATOR) ---
+    val temperature: StateFlow<String> = coordinator.temperature
+    val weatherEmoji: StateFlow<String> = coordinator.weatherEmoji
+    val weatherDescription: StateFlow<String> = coordinator.weatherDescription
+    
+    val locationName: StateFlow<String> = coordinator.activeAddress.map { 
+        it?.locality ?: "Actualizando..." 
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Actualizando...")
 
     // ======================================================================================
     // --- 3. MÉTODOS DE SINCRONIZACIÓN (PUENTE CEREBRO-OBRERO) ---
     // ======================================================================================
 
-    /** 🔥 Sincroniza la lista completa de categorías desde el Obrero */
-    fun syncAllCategories(list: List<CategoryEntity>) {
-        _allCategoriesRaw.value = list
+    /** 🔥 Sincroniza los mensajes contextuales desde el Obrero de Conversación */
+    fun syncConversationalMessages(messages: List<BeMessage>) {
+        _beMessages.value = messages
+    }
+
+    /** 🔥 Sincroniza el mensaje de respuesta activa desde el Obrero de Conversación */
+    fun syncActiveResponse(message: BeMessage?) {
+        _activeConversationalMessage.value = message
+        // Si hay una respuesta, nos aseguramos de que Be esté en modo TALKING para mostrar la burbuja
+        if (message != null) {
+            _beState.value = BeState.TALKING
+        }
+    }
+
+    /** 🔥 Limpia el mensaje de respuesta activa */
+    fun clearActiveResponse() {
+        _activeConversationalMessage.value = null
+        if (_beState.value == BeState.TALKING) {
+            _beState.value = BeState.IDLE
+        }
     }
 
     fun hydrateCategories(list: List<CategoryEntity>) {
@@ -232,36 +229,9 @@ class BeBrainViewModel @Inject constructor(
         _allBudgetsRaw.value = budgets
     }
 
-    /** Sincroniza los proveedores unificados desde el Obrero Provider */
-    fun syncProviders(providers: List<ServiceDisplayModel>) {
-        _allProvidersRaw.value = providers
-        // También sincronizamos los favoritos crudos para la búsqueda global si es necesario
-        _favoriteProvidersRaw.value = emptyList() // Opcional: Podríamos extraer Providers reales si se requiere
-    }
-
-    /** El Cerebro recibe y guarda las categorías ya procesadas por el Obrero */
-    fun syncCategories(sorted: List<CategoryEntity>, superCats: List<SuperCategory>) {
-        _sortedCategories.value = sorted
-        _superCategories.value = superCats
-    }
-
-    /** Sincroniza los filtros que el Obrero está aplicando */
-    fun syncFilters(filters: Set<String>) {
-        _activeSortFilters.value = filters
-        _isSuperCategoryView.value = filters.contains("view_bento")
-    }
-
-    /** Sincroniza el clima calculado por el Obrero */
-    fun syncWeather(temp: String, emoji: String, desc: String, city: String) {
-        _temperature.value = temp
-        _weatherEmoji.value = emoji
-        _weatherDescription.value = desc
-        _locationName.value = city
-    }
-
-    fun updateProfile(user: UserEntity?) { 
+   // fun updateProfile(user: UserEntity?) {
         // Ya no es necesario actualizar manualmente ya que observamos el Repositorio directamente
-    }
+   // }
     
     /** SELECCIÓN DE SUPER CATEGORÍA (ORQUESTADO) */
     fun selectSuperCategory(superCategory: SuperCategory?) { _selectedSuperCategory.value = superCategory }
@@ -269,8 +239,6 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     // --- 4. ESTADOS DEL HUD Y VISIBILIDAD ---
     // ======================================================================================
-    private val _isSuperCategoryView = MutableStateFlow(true)
-    val isSuperCategoryView: StateFlow<Boolean> = _isSuperCategoryView.asStateFlow()
 
     private val _showWeatherDetails = MutableStateFlow(false)
     val showWeatherDetails: StateFlow<Boolean> = _showWeatherDetails.asStateFlow()
@@ -288,11 +256,20 @@ class BeBrainViewModel @Inject constructor(
     private val _isResultadoVisible = MutableStateFlow(false)
     val isResultadoVisible: StateFlow<Boolean> = _isResultadoVisible.asStateFlow()
 
+    // --- ESTADO DE POPUP DE DIRECCIÓN ---
+    // El popup ahora es persistente mientras no haya direcciones.
+    private val _showAddressPopup = MutableStateFlow(true)
+    val showAddressPopup: StateFlow<Boolean> = _showAddressPopup.asStateFlow()
+
+    fun dismissAddressPopup() {
+        _showAddressPopup.value = false
+    }
+
     private val _isUIBlocked = MutableStateFlow(false)
     val isUIBlocked: StateFlow<Boolean> = _isUIBlocked.asStateFlow()
 
-    private val _currentContext = MutableStateFlow(HUDContext.HOME)
-    val currentContext: StateFlow<HUDContext> = _currentContext.asStateFlow()
+    // REGLA DE ORO: El contexto ahora es propiedad del Maestro de Intenciones (Coordinator)
+    val currentContext: StateFlow<HUDContext> = coordinator.currentHUDContext
 
     fun toggleWeatherDetails() { _showWeatherDetails.value = !_showWeatherDetails.value }
     fun setWeatherDetailsVisible(visible: Boolean) { _showWeatherDetails.value = visible }
@@ -313,18 +290,27 @@ class BeBrainViewModel @Inject constructor(
             // Las acciones se emiten para que los "Obreros" (otros ViewModels) las procesen.
             if (actionId.startsWith("chat_")) {
                 val providerId = actionId.removePrefix("chat_")
-                _actionEvent.emit(actionId)
+                coordinator.triggerAction(actionId)
             } else if (actionId.startsWith("talk_")) {
-                _actionEvent.emit(actionId)
+                coordinator.triggerAction(actionId)
+            } else if (actionId.startsWith("cat_")) {
+                val catName = actionId.removePrefix("cat_")
+                _allCategoriesRaw.value.find { 
+                    it.name.lowercase().trim() == catName.lowercase().trim() 
+                }?.let { _categorySelectionEvent.emit(it) }
+
+                // Cerramos búsqueda si venimos de la burbuja
+                cerrarBeAssistantCompleto()
+                coordinator.triggerAction(actionId)
             } else {
                 // Emisión directa (ej: sort_hot, clear_filters, etc.)
-                _actionEvent.emit(actionId) 
+                coordinator.triggerAction(actionId) 
             }
         } 
     }
     fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-        val context = _currentContext.value
+        coordinator.updateSearchQuery(query)
+        val context = currentContext.value
         if (query.isNotEmpty() && !_isUIBlocked.value && (context == HUDContext.HOME || context == HUDContext.BUDGETS || context == HUDContext.BUDGETS_TENDERS || context == HUDContext.BUDGETS_DIRECT || context == HUDContext.TENDER_DETAILS)) {
             _isResultadoVisible.value = true
             if (context == HUDContext.HOME) _isBottomBarVisible.value = false
@@ -336,8 +322,7 @@ class BeBrainViewModel @Inject constructor(
     private val _isSearchActive = MutableStateFlow(false)
     val isSearchActive: StateFlow<Boolean> = _isSearchActive.asStateFlow()
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+    val searchQuery: StateFlow<String> = coordinator.globalSearchQuery
 
     private val _showBe = MutableStateFlow(true)
     val showBe: StateFlow<Boolean> = _showBe.asStateFlow()
@@ -354,6 +339,10 @@ class BeBrainViewModel @Inject constructor(
     private val _beMessages = MutableStateFlow<List<BeMessage>>(emptyList())
     val beMessages: StateFlow<List<BeMessage>> = _beMessages.asStateFlow()
 
+    // --- NUEVO: ESTADO DE MENSAJE ACTIVO DE CONVERSACIÓN (BURBUJA SUPERIOR) ---
+    private val _activeConversationalMessage = MutableStateFlow<BeMessage?>(null)
+    val activeConversationalMessage: StateFlow<BeMessage?> = _activeConversationalMessage.asStateFlow()
+
     // --- ESTADO DE VISIBILIDAD DE LA BURBUJA (BADGE DE CONVERSACIÓN) ---
     private val _isBubbleMuted = MutableStateFlow(false)
     val isBubbleMuted: StateFlow<Boolean> = _isBubbleMuted.asStateFlow()
@@ -363,6 +352,10 @@ class BeBrainViewModel @Inject constructor(
 
     private val _resetBePositionTrigger = MutableStateFlow(0)
     val resetBePositionTrigger: StateFlow<Int> = _resetBePositionTrigger.asStateFlow()
+
+    // --- NUEVO: EVENTO DE SELECCIÓN DE CATEGORÍA ---
+    private val _categorySelectionEvent = MutableSharedFlow<CategoryEntity>()
+    val categorySelectionEvent = _categorySelectionEvent.asSharedFlow()
 
     private val _requestKeyboard = MutableStateFlow(false)
     val requestKeyboard = _requestKeyboard.asStateFlow()
@@ -378,14 +371,11 @@ class BeBrainViewModel @Inject constructor(
     val showProviderSimDialog: StateFlow<Boolean> = _showProviderSimDialog.asStateFlow()
 
     // 🔥 HERRAMIENTA DE UBICACIÓN CENTRALIZADA EN EL CEREBRO 🔥
-    private val _showLocationTool = MutableStateFlow(false)
-    val showLocationTool: StateFlow<Boolean> = _showLocationTool.asStateFlow()
+    //private val _showLocationTool = MutableStateFlow(false)
+    //val showLocationTool: StateFlow<Boolean> = _showLocationTool.asStateFlow()
 
-    // Guardamos el ID de la dirección seleccionada o un objeto especial para GPS
-    private val _selectedAddressId = MutableStateFlow<String?>(null)
-    val selectedAddressId: StateFlow<String?> = _selectedAddressId.asStateFlow()
-
-    private val _gpsAddressOverride = MutableStateFlow<AddressInfo?>(null)
+    // Gestión de ubicación delegada al AppActionCoordinator
+    val selectedAddressId: StateFlow<String?> = coordinator.selectedAddressId
 
     // ======================================================================================
     // --- MAPEADO DE DIRECCIONES (Ssingle Source of Truth) ---
@@ -393,67 +383,17 @@ class BeBrainViewModel @Inject constructor(
     
     /**
      * TRABAJO SUCIO (Mapeo): Derivamos la lista de direcciones directamente del estado del usuario.
-     * Esto asegura disponibilidad instantánea y coherencia global sin depender de sincronizaciones externas.
+     * Delegado al AppActionCoordinator.
      */
-    val availableAddressInfos: StateFlow<List<AddressInfo>> = userState.map { user ->
-        if (user == null) return@map emptyList<AddressInfo>()
-        val list = mutableListOf<AddressInfo>()
-        
-        // 1. Mapeo de Direcciones Personales
-        user.personalAddresses.forEach { addr ->
-            list.add(AddressInfo(
-                id = addr.id,
-                companyOrUserName = user.displayName,
-                branchName = addr.label.ifEmpty { "Mi Ubicación" },
-                streetAndNumber = "${addr.calle} ${addr.numero}",
-                locality = addr.localidad,
-                province = addr.provincia,
-                country = "Argentina", 
-                postalCode = addr.codigoPostal,
-                isCompany = false,
-                lat = addr.latitude,
-                lng = addr.longitude
-            ))
-        }
-        
-        // 2. Mapeo de Direcciones de Empresas y sus Sucursales
-        user.companies.forEach { company ->
-            company.branches.forEach { branch ->
-                list.add(AddressInfo(
-                    id = branch.id,
-                    companyOrUserName = company.name,
-                    branchName = branch.name,
-                    streetAndNumber = "${branch.address.calle} ${branch.address.numero}",
-                    locality = branch.address.localidad,
-                    province = branch.address.provincia,
-                    country = "Argentina",
-                    postalCode = branch.address.codigoPostal,
-                    isCompany = true,
-                    lat = branch.address.latitude,
-                    lng = branch.address.longitude
-                ))
-            }
-        }
-        list
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val availableAddressInfos: StateFlow<List<AddressInfo>> = coordinator.availableAddressInfos
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
      * FUENTE DE VERDAD ÚNICA: Dirección Activa (Modelo de Datos)
-     * Combina la selección del usuario con los datos derivados del perfil o GPS.
+     * Delegado al AppActionCoordinator.
      */
-    val activeAddress: StateFlow<AddressInfo?> = combine(
-        _selectedAddressId, _gpsAddressOverride, availableAddressInfos
-    ) { selectedId, gpsOverride, allAddresses ->
-        // Prioridad 1: Override de GPS Activo
-        if (selectedId == "gps_current" && gpsOverride != null) return@combine gpsOverride
-        
-        // Prioridad 2: Selección del Usuario en la lista persistente
-        val found = allAddresses.find { it.id == selectedId }
-        if (found != null) return@combine found
-        
-        // Prioridad 3: Fallback a la primera dirección del perfil (Default)
-        allAddresses.firstOrNull()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val activeAddress: StateFlow<AddressInfo?> = coordinator.activeAddress
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /**
      * FUENTE DE VERDAD ÚNICA (VISUAL): LocationOption
@@ -466,26 +406,28 @@ class BeBrainViewModel @Inject constructor(
 
     /** Selecciona una dirección específica del listado */
     fun selectAddress(addressId: String) {
-        _selectedAddressId.value = addressId
-        _gpsAddressOverride.value = null
+        coordinator.selectAddress(addressId)
     }
 
     /** Actualiza la dirección con datos frescos del GPS (Obrero) */
     fun updateAddressFromGps(address: AddressInfo) {
-        _gpsAddressOverride.value = address
-        _selectedAddressId.value = "gps_current"
+        coordinator.updateAddressFromGps(address)
     }
 
-    /** Método legacy para compatibilidad durante transición, pronto a deprecado */
+    /** Método legacy para compatibilidad durante transición, pronto a deprecado
     fun syncAvailableAddresses(list: List<AddressInfo>) {
         // Ya no hace nada, usamos availableAddressInfos derivado
     }
-
+**/
     private val _toolboxKey = MutableStateFlow("home_default")
     val toolboxKey: StateFlow<String> = _toolboxKey.asStateFlow()
 
-    private val _actionEvent = MutableSharedFlow<String>()
-    val actionEvent = _actionEvent.asSharedFlow()
+    // Eventos de acciones delegados al AppActionCoordinator
+    val actionEvent = coordinator.actionEvent
+
+    // --- NUEVO: EVENTO DE BÚSQUEDA ENVIADA ---
+    private val _searchSubmittedEvent = MutableSharedFlow<String>()
+    val searchSubmittedEvent = _searchSubmittedEvent.asSharedFlow()
 
     private val _currentActions = MutableStateFlow<List<BeSmallActionModel>>(emptyList())
     val currentActions: StateFlow<List<BeSmallActionModel>> = _currentActions.asStateFlow()
@@ -505,7 +447,7 @@ class BeBrainViewModel @Inject constructor(
     val activeFilters: StateFlow<Set<String>> = _activeFilters.asStateFlow()
 
     // --- FILTROS DINÁMICOS POR CONTEXTO ---
-    val availableFilters: StateFlow<List<ControlItem>> = _currentContext.map { context ->
+    val availableFilters: StateFlow<List<ControlItem>> = currentContext.map { context ->
         when (context) {
             HUDContext.HOME -> listOf(BeMenuRegistry.FILTER_PRODUCTS, BeMenuRegistry.FILTER_SERVICES, BeMenuRegistry.FILTER_24H, BeMenuRegistry.FILTER_LOCAL)
             HUDContext.BUDGETS, HUDContext.BUDGETS_TENDERS -> listOf(BeMenuRegistry.FILTER_TENDER_ACTIVE, BeMenuRegistry.FILTER_TENDER_CLOSED, BeMenuRegistry.FILTER_TENDER_CANCELED, BeMenuRegistry.FILTER_TENDER_AWARDED)
@@ -526,7 +468,7 @@ class BeBrainViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val availableSortOptions: StateFlow<List<ControlItem>> = _currentContext.map { context ->
+    val availableSortOptions: StateFlow<List<ControlItem>> = currentContext.map { context ->
         when (context) {
             HUDContext.HOME -> listOf(BeMenuRegistry.SORT_ALPHA, BeMenuRegistry.VIEW_COMPACT)
             HUDContext.BUDGETS, HUDContext.BUDGETS_TENDERS -> listOf(BeMenuRegistry.SORT_ALPHA, BeMenuRegistry.SORT_DATE, BeMenuRegistry.VIEW_COMPACT)
@@ -542,7 +484,7 @@ class BeBrainViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val dynamicCategories: StateFlow<List<ControlItem>> = combine(
-        _currentContext, _allCategoriesRaw, _allTendersRaw, _allBudgetsRaw
+        currentContext, _allCategoriesRaw, _allTendersRaw, _allBudgetsRaw
     ) { context, allCats, tenders, budgets ->
         val filtered = when (context) {
             HUDContext.BUDGETS, HUDContext.BUDGETS_TENDERS -> {
@@ -651,10 +593,11 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     // --- LÓGICA DE ACTUALIZACIÓN Y LOOP DE NOTIFICACIONES ---
     // ======================================================================================
-    init { startBeBrainLoop() }
+    private var behaviorLoopJob: Job? = null
 
     private fun startBeBrainLoop() {
-        viewModelScope.launch {
+        behaviorLoopJob?.cancel()
+        behaviorLoopJob = viewModelScope.launch {
             while (true) {
                 if (_isBeDormido.value) { _beState.value = BeState.IDLE; delay(2000); continue }
                 when (_beState.value) {
@@ -712,14 +655,15 @@ class BeBrainViewModel @Inject constructor(
             _isSearchActive.value = true; _showBeTools.value = false; _beState.value = BeState.IDLE; openKeyboard()
             // Se elimina _isResultadoVisible.value = true para que no se abra la pantalla BeResultadoScreen
             // ya que ahora los resultados se integrarán en la burbuja BeSearch
-            if (!_isUIBlocked.value && (_currentContext.value == HUDContext.HOME || _currentContext.value == HUDContext.SEARCH_RESULTS || _currentContext.value == HUDContext.FAST)) {
+            val context = currentContext.value
+            if (!_isUIBlocked.value && (context == HUDContext.HOME || context == HUDContext.SEARCH_RESULTS || context == HUDContext.FAST)) {
                 _isBottomBarVisible.value = false
             }
         } else cerrarBeAssistantCompleto()
     }
 
     fun cerrarBeAssistantCompleto() {
-        _isSearchActive.value = false; _searchQuery.value = ""; _isResultadoVisible.value = false
+        _isSearchActive.value = false; coordinator.updateSearchQuery(""); _isResultadoVisible.value = false
         
         // --- SECCIÓN: RESTAURACIÓN DINÁMICA DE BARRAS ---
         // Restauramos la barra solo si no hay una pantalla (como el chat) que haya pedido ocultarla.
@@ -749,8 +693,8 @@ class BeBrainViewModel @Inject constructor(
             val nextToolsState = !_showBeTools.value
             if (nextToolsState) {
                 if (!_isMultiSelectionActive.value) cerrarBeAssistantCompleto()
-                else { _isSearchActive.value = false; _searchQuery.value = ""; _isResultadoVisible.value = false }
-                _showBeTools.value = true; updateActionsForContext(_currentContext.value)
+                else { _isSearchActive.value = false; coordinator.updateSearchQuery(""); _isResultadoVisible.value = false }
+                _showBeTools.value = true; updateActionsForContext(currentContext.value)
             } else _showBeTools.value = false
         }
         updateToolboxKey()
@@ -759,18 +703,43 @@ class BeBrainViewModel @Inject constructor(
     fun setBeState(state: BeState) { _beState.value = state }
     fun nextTip() { if (_currentTipIndex.value < _beMessages.value.size - 1) _currentTipIndex.value++ }
     fun prevTip() { if (_currentTipIndex.value > 0) _currentTipIndex.value-- }
-    fun setShowBeTools(visible: Boolean) { _showBeTools.value = visible; if (visible) updateActionsForContext(_currentContext.value); updateToolboxKey() }
+    fun setShowBeTools(visible: Boolean) { _showBeTools.value = visible; if (visible) updateActionsForContext(currentContext.value); updateToolboxKey() }
 
     // --- NUEVOS CONTROLES PARA SIMULACIÓN ---
     fun setShowProviderSimDialog(visible: Boolean) { _showProviderSimDialog.value = visible }
-    private fun updateToolboxKey() { val context = _currentContext.value.name.lowercase(); val mode = if (_showBeTools.value) "tools" else "default"; _toolboxKey.value = "${context}_${mode}" }
+    private fun updateToolboxKey() { val context = currentContext.value.name.lowercase(); val mode = if (_showBeTools.value) "tools" else "default"; _toolboxKey.value = "${context}_$mode" }
 
     // ======================================================================================
     // --- SENSOR DE CONTEXTO ---
     // ======================================================================================
+    
+    /**
+     * Mapea un contexto específico a su categoría principal (Top-Level).
+     * Esto evita que se limpien las herramientas al navegar entre sub-secciones.
+     */
+    private fun getTopLevelContext(context: HUDContext): HUDContext {
+        return when (context) {
+            HUDContext.BUDGETS, 
+            HUDContext.BUDGETS_TENDERS, 
+            HUDContext.BUDGETS_DIRECT, 
+            HUDContext.TENDER_DETAILS -> HUDContext.BUDGETS
+            HUDContext.CHAT -> HUDContext.CHAT
+            HUDContext.HOME -> HUDContext.HOME
+            HUDContext.PROFILE -> HUDContext.PROFILE
+            HUDContext.SEARCH_RESULTS -> HUDContext.SEARCH_RESULTS
+            HUDContext.FAST -> HUDContext.FAST
+            HUDContext.CALENDAR -> HUDContext.CALENDAR
+            else -> HUDContext.UNKNOWN
+        }
+    }
+
     fun onRouteChanged(route: String?) {
         val currentRoute = route ?: return
+        
+        // --- EVITAR DUPLICADOS ---
+        if (_lastRoute == currentRoute) return
         _lastRoute = currentRoute
+        
         val newContext = when {
             currentRoute.contains("home") -> HUDContext.HOME
             currentRoute.contains("presupuestos") -> HUDContext.BUDGETS
@@ -781,32 +750,50 @@ class BeBrainViewModel @Inject constructor(
             currentRoute.contains("fast") -> HUDContext.FAST
             else -> HUDContext.UNKNOWN
         }
-        if (_currentContext.value != newContext) {
-            _currentContext.value = newContext; _customActions.value = emptyList()
-            
-            // --- SECCIÓN: CONTROL DE VISIBILIDAD POR CONTEXTO ---
-            // En HUD V5, permitimos que la barra sea visible por defecto. 
-            // Reseteamos el flag de ocultación forzada al cambiar de pantalla.
-            _isBottomBarForcedHidden.value = false
-            _isBottomBarVisible.value = true
+
+        val oldContext = currentContext.value
+        if (oldContext != newContext) {
+            // --- SECCIÓN: LIMPIEZA INTELIGENTE ---
+            // Solo limpiamos acciones personalizadas si cambiamos de área funcional (Top-Level)
+            if (getTopLevelContext(oldContext) != getTopLevelContext(newContext)) {
+                _customActions.value = emptyList()
+                coordinator.updateHUDContext(newContext)
+                
+                // En HUD V5, permitimos que la barra sea visible por defecto. 
+                // Reseteamos el flag de ocultación forzada al cambiar de área funcional.
+                _isBottomBarForcedHidden.value = false
+                _isBottomBarVisible.value = true
+            }
 
             // 🔥 RESET: Cerramos búsqueda al cambiar de pantalla para evitar desincronización
             if (_isSearchActive.value) {
                 cerrarBeAssistantCompleto()
             }
-
-            // 🔥 Por defecto, en resultados de búsqueda y FAST, la herramienta de ubicación está ON
-            _showLocationTool.value = (newContext == HUDContext.SEARCH_RESULTS || newContext == HUDContext.FAST)
         }
+
         _showBe.value = !(currentRoute == "login" || currentRoute == "register" || currentRoute == "startup")
-        _isResultadoVisible.value = false; _showBeTools.value = false
-        updateActionsForContext(newContext); updateBeContextMessages(currentRoute); updateToolboxKey()
+        _isResultadoVisible.value = false
+        _showBeTools.value = false
+        
+        updateActionsForContext(newContext)
+        updateBeContextMessages(currentRoute)
+        updateToolboxKey()
     }
 
     fun setHUDContext(context: HUDContext) {
-        if ((_currentContext.value == HUDContext.HOME || _currentContext.value == HUDContext.CHAT || _currentContext.value == HUDContext.CALENDAR) && context != _currentContext.value) return
-        if (_currentContext.value != context) { cerrarBeAssistantCompleto(); clearFilters() }
-        _currentContext.value = context; updateActionsForContext(context); updateToolboxKey()
+        val current = currentContext.value
+        // Si el contexto actual es igual al nuevo, no hacemos nada
+        if (current == context) return
+
+        // REGLA: Solo cerramos Be y limpiamos filtros si cambiamos de área funcional (Top-Level)
+        if (getTopLevelContext(current) != getTopLevelContext(context)) {
+            cerrarBeAssistantCompleto()
+            clearFilters()
+        }
+        
+        coordinator.updateHUDContext(context)
+        updateActionsForContext(context)
+        updateToolboxKey()
     }
 
     private fun updateActionsForContext(context: HUDContext) {
@@ -861,26 +848,29 @@ class BeBrainViewModel @Inject constructor(
     }
 
     fun syncMultiSelection(active: Boolean, selectedIds: Set<String>) {
-        if (_currentContext.value == HUDContext.HOME && !active) { _isMultiSelectionActive.value = false; _selectedItemIds.value = emptySet(); return }
+        if (currentContext.value == HUDContext.HOME && !active) { _isMultiSelectionActive.value = false; _selectedItemIds.value = emptySet(); return }
         val wasActive = _isMultiSelectionActive.value
         _isMultiSelectionActive.value = active; _selectedItemIds.value = selectedIds
         if (active && !wasActive) _showBeTools.value = true else if (!active && wasActive) _showBeTools.value = false
-        updateActionsForContext(_currentContext.value); updateToolboxKey()
+        updateActionsForContext(currentContext.value); updateToolboxKey()
     }
 
-    fun setCustomActions(actions: List<BeSmallActionModel>) { if (_currentContext.value != HUDContext.HOME) { _customActions.value = actions; updateActionsForContext(_currentContext.value) } }
+    fun setCustomActions(actions: List<BeSmallActionModel>) { 
+        _customActions.value = actions
+        updateActionsForContext(currentContext.value) 
+    }
     fun toggleMultiSelection() {
         val newState = !_isMultiSelectionActive.value
         _isMultiSelectionActive.value = newState
         if (newState) _showBeTools.value = true else { _selectedItemIds.value = emptySet(); _showBeTools.value = true }
-        updateActionsForContext(_currentContext.value); updateToolboxKey()
+        updateActionsForContext(currentContext.value); updateToolboxKey()
     }
-    fun toggleItemSelection(id: String) { val current = _selectedItemIds.value.toMutableSet(); if (!current.add(id)) current.remove(id); _selectedItemIds.value = current; updateActionsForContext(_currentContext.value) }
-    fun selectAllItems(ids: List<String>) { _selectedItemIds.value = ids.toSet(); updateActionsForContext(_currentContext.value) }
+    fun toggleItemSelection(id: String) { val current = _selectedItemIds.value.toMutableSet(); if (!current.add(id)) current.remove(id); _selectedItemIds.value = current; updateActionsForContext(currentContext.value) }
+    fun selectAllItems(ids: List<String>) { _selectedItemIds.value = ids.toSet(); updateActionsForContext(currentContext.value) }
     
     /** LIMPIEZA DE FILTROS Y BÚSQUEDA (CEREBRO ORQUESTADOR) */
     fun clearFilters() {
-        _searchQuery.value = ""
+        coordinator.updateSearchQuery("")
         _selectedSuperCategory.value = null
         _activeFilters.value = emptySet()
         _selectedItemIds.value = emptySet()
@@ -911,98 +901,6 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     // El cerebro mantiene la lógica de búsqueda global que combina varios obreros.
     // Procesa los datos crudos que los obreros le sincronizaron.
-    val searchResults: StateFlow<SearchResult> = combine(
-        _searchQuery,
-        _currentContext,
-        _selectedSuperCategory,
-        _superCategories,
-        _sortedCategories,
-        _favoriteProvidersRaw,
-        _allTendersRaw,
-        _allBudgetsRaw,
-        _allProvidersRaw
-    ) { args: Array<Any?> ->
-        val query = args[0] as String
-        val context = args[1] as HUDContext
-        val selectedSuper = args[2] as SuperCategory?
-        val allSuper = args[3] as List<SuperCategory>
-        val sortedCats = args[4] as List<CategoryEntity>
-        val favorites = args[5] as List<Provider>
-        val tenders = args[6] as List<TenderEntity>
-        val budgets = args[7] as List<BudgetEntity>
-        val providers = args[8] as List<ServiceDisplayModel>
-
-        if (query.isEmpty()) return@combine SearchResult.Empty
-        val norm = query.lowercase().trim()
-
-        when (context) {
-            HUDContext.HOME -> {
-                if (selectedSuper != null) {
-                    val normQuery = query.prepareForSearch()
-                    val filtered = selectedSuper.items.filter { it.name.wordStartsWithSmart(normQuery) }.sortedBy { it.name.lowercase() }
-                    // 🔥 SI NO HAY COINCIDENCIAS, VOLVEMOS A LA LISTA COMPLETA
-                    if (filtered.isEmpty()) SearchResult(categories = selectedSuper.items)
-                    else SearchResult(categories = filtered)
-                } else {
-                    val normQuery = query.prepareForSearch()
-                    val filteredSuper = allSuper.filter { superCat -> 
-                        superCat.title.wordStartsWithSmart(normQuery) || 
-                        superCat.items.any { it.name.wordStartsWithSmart(normQuery) } 
-                    }
-                    // 🔥 SI NO HAY COINCIDENCIAS EN SUPERCATEGORÍAS, VOLVEMOS A LA LISTA COMPLETA POR DEFECTO
-                    if (filteredSuper.isEmpty()) SearchResult(superCategories = allSuper, categories = sortedCats, favorites = favorites)
-                    else SearchResult(
-                        superCategories = filteredSuper, 
-                        categories = sortedCats, 
-                        favorites = favorites.filter { it.displayName.wordStartsWithSmart(normQuery) }
-                    )
-                }
-            }
-            HUDContext.BUDGETS, HUDContext.BUDGETS_TENDERS -> {
-                val filtered = tenders.filter { it.title.matchesSmart(norm) }
-                // 🔥 FALLBACK A LISTA COMPLETA
-                if (filtered.isEmpty()) SearchResult(tenders = tenders)
-                else SearchResult(tenders = filtered)
-            }
-            HUDContext.BUDGETS_DIRECT, HUDContext.TENDER_DETAILS -> {
-                val filtered = budgets.filter {
-                    it.providerName.matchesSmart(norm) ||
-                    it.providerCompanyName?.matchesSmart(norm) == true ||
-                    it.grandTotal.toString().startsWith(norm) ||
-                    it.budgetId.prepareForSearch().matchesSmart(norm)
-                }
-                // 🔥 FALLBACK A LISTA COMPLETA
-                if (filtered.isEmpty()) SearchResult(budgets = budgets)
-                else SearchResult(budgets = filtered)
-            }
-            HUDContext.SEARCH_RESULTS, HUDContext.FAST -> {
-                val filtered = providers.filter { it.title.matchesSmart(norm) || it.subtitle?.matchesSmart(norm) == true }
-                // 🔥 FALLBACK A LISTA COMPLETA
-                if (filtered.isEmpty()) SearchResult(providers = providers)
-                else SearchResult(providers = filtered)
-            }
-            else -> SearchResult.Empty
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SearchResult.Empty)
-
-    /**
-     * MODELO ESTRUCTURADO DE RESULTADOS (EL CEREBRO SOLO ENTREGA DATA)
-     */
-    data class SearchResult(
-        val categories: List<CategoryEntity> = emptyList(),
-        val superCategories: List<SuperCategory> = emptyList(),
-        val favorites: List<Provider> = emptyList(),
-        val budgets: List<BudgetEntity> = emptyList(),
-        val tenders: List<TenderEntity> = emptyList(),
-        val providers: List<ServiceDisplayModel> = emptyList(),
-        val genericItems: List<ControlItem> = emptyList()
-    ) {
-        companion object {
-            val Empty = SearchResult()
-        }
-        fun isEmpty() = categories.isEmpty() && superCategories.isEmpty() && favorites.isEmpty() && 
-                       budgets.isEmpty() && tenders.isEmpty() && providers.isEmpty() && genericItems.isEmpty()
-    }
 
     // ======================================================================================
     // --- SECCIÓN: COORDINACIÓN DE EVENTOS ESPECIALES (BE ASSISTANT) ---
@@ -1011,90 +909,20 @@ class BeBrainViewModel @Inject constructor(
     /**
      * Procesa el envío de la búsqueda (Enter/Lupa).
      */
-    fun onSearchSubmitted(interactionViewModel: BeInteractionViewModel) {
-        val query = _searchQuery.value.trim()
+    fun onSearchSubmitted() {
+        val query = coordinator.globalSearchQuery.value.trim()
         if (query.isEmpty()) return
         
-        // El cerebro le pide al lóbulo frontal (Interaction) que procese la consulta final.
-        // Se le pasan los resultados actuales calculados por el cerebro para decidir la reacción.
-        interactionViewModel.onSearchSubmitted(
-            query = query, 
-            resultsFound = !searchResults.value.isEmpty(),
-            onComplete = { reaction ->
-                onProcessSubmissionComplete(reaction)
-            }
-        )
-    }
-
-    /**
-     * Callback invocado por BeInteractionViewModel cuando termina de procesar el Enter.
-     * Aquí el cerebro orquestador realiza las acciones visuales finales.
-     */
-    fun onProcessSubmissionComplete(reaction: BeSearchReaction) {
         viewModelScope.launch {
-            // 1. Si Be tiene un mensaje para mostrar, lo ponemos como tip prioritario
-            reaction.message?.let { msg ->
-                _beMessages.value = listOf(msg)
-                _currentTipIndex.value = 0
-                setBeState(BeState.TALKING)
-                setHasNewMessage(true)
-            }
-            
-            // 2. Limpiamos la barra de búsqueda (Conversation Mode)
-            _searchQuery.value = ""
-            
-            // 3. Si hay un actionId asociado (ej: Easter Egg final), lo disparamos
-            reaction.actionId?.let { triggerAction(it) }
-            
-            // 4. Si hay resultados de búsqueda, nos aseguramos de que sean visibles
-            if (!reaction.results.isEmpty()) {
-                _isResultadoVisible.value = true
-                closeKeyboard()
-            }
+            // Emitimos el evento a través del COORDINADOR para que el Obrero de palabras reaccione
+            coordinator.submitSearch(query)
         }
     }
 
-    /**
-     * Cambia el contexto a resultados de búsqueda para profundizar.
-     */
-    fun searchCategories(query: String) {
-        // En HUD V5, la búsqueda profunda cambia el contexto para filtrar proveedores
-        _currentContext.value = HUDContext.SEARCH_RESULTS
-        // No cerramos la búsqueda para que BeSearch siga visible con los resultados
-        closeKeyboard()
-    }
-
-    /**
-     * Coordina el cierre del evento de Huevo de Pascua.
-     */
-    fun onEasterEggLinkClick() {
+        fun onEasterEggLinkClick() {
         cerrarBeAssistantCompleto()
         onRouteChanged(_lastRoute) // Restaurar mensajes normales
     }
 
-    // 🔥 EXTENSIONES DE BÚSQUEDA UNIFICADAS (CEREBRO) 🔥
-    private fun String.removeAccents(): String {
-        val normalized = java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
-        return "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalized, "")
-    }
-    
-    private fun String.prepareForSearch(): String = this.removeAccents().lowercase().trim()
-
-    private fun String.wordStartsWithSmart(query: String): Boolean {
-        if (query.isEmpty()) return false
-        val normQuery = query.prepareForSearch()
-        // Split por espacios y paréntesis
-        return this.prepareForSearch().split(" ", "(", ")").any { it.startsWith(normQuery) }
-    }
-
-    fun String.matchesSmart(query: String): Boolean {
-        if (query.isEmpty()) return false
-        val normQuery = query.prepareForSearch()
-        val textWords = this.prepareForSearch().split(" ", "(", ")").filter { it.isNotEmpty() }
-        val queryWords = normQuery.split(" ", "(", ")").filter { it.isNotEmpty() }
-        
-        return queryWords.all { qw ->
-            textWords.any { tw -> tw.startsWith(qw) }
-        }
-    }
+    init { startBeBrainLoop() }
 }

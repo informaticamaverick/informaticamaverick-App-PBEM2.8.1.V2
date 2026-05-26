@@ -19,6 +19,9 @@ import android.net.Uri
 import android.util.Log
 import com.example.myapplication.util.ImageUtils
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.example.myapplication.data.utils.SearchUtils.matchesSmart
+import com.example.myapplication.data.utils.SearchUtils.prepareForSearch
+import com.example.myapplication.data.utils.SearchUtils.wordStartsWithSmart
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -445,7 +448,7 @@ class BudgetViewModel @Inject constructor(
             val compName = if (location is LocationOption.Business) location.companyName else null
             val branchName = if (location is LocationOption.Business) location.branchName else null
             
-            // 🔥 CORRECCIÓN: Aseguramos que si LocationOption es Personal/Business, 
+            // 🔥 CORRECCIÓN: Aseguramos que si LocationOption es Personal/Business,
             // los datos de PostalCode se extraigan correctamente de la entidad.
             val finalPostalCode = when(location) {
                 is LocationOption.Personal -> location.postalCode
@@ -478,8 +481,11 @@ class BudgetViewModel @Inject constructor(
             // 🔥 CORRECCIÓN: Si postal code está vacío, usar un placeholder o omitir para evitar topics rotos.
             val cleanCp = finalPostalCode?.takeIf { it.isNotBlank() }?.normalizeForTopic() ?: "t4000"
             val cleanCat = category.normalizeForTopic()
+
+            // 🔥 [VALIDACIÓN DE FLUJO] Aseguramos formato estricto y agregamos LOG para depuración
             val matchKey = "tender_${cleanCp}_$cleanCat"
-            
+            Log.d("FCM_FLOW", "MatchKey Generado (Cliente): $matchKey")
+
             // Expiración: fecha de fin + 1 día de gracia
             val expiresAt = if (endDate > 0) endDate + TimeUnit.DAYS.toMillis(1) else null
 
@@ -512,7 +518,7 @@ class BudgetViewModel @Inject constructor(
 
             // 5. PERSISTENCIA Y SINCRONIZACIÓN
             repository.createNewTender(newTender)
-            
+
             // 6. ENVÍO DE NOTIFICACIÓN AL TOPIC (Costo Cero)
             repository.sendTopicNotification(
                 topic = matchKey,
@@ -685,23 +691,4 @@ fun String.normalizeForTopic(): String {
         .lowercase()
 }
 
-private fun String.prepareForSearch(): String = this.removeAccents().lowercase().trim()
-
-private fun String.wordStartsWithSmart(query: String): Boolean {
-    if (query.isEmpty()) return false
-    val normQuery = query.prepareForSearch()
-    // Split por espacios y paréntesis para permitir búsquedas precisas (ej: "(Maverick)")
-    return this.prepareForSearch().split(" ", "(", ")").any { it.startsWith(normQuery) }
-}
-
-fun String.matchesSmart(query: String): Boolean {
-    if (query.isEmpty()) return false
-    val normQuery = query.prepareForSearch()
-    val textWords = this.prepareForSearch().split(" ", "(", ")").filter { it.isNotEmpty() }
-    val queryWords = normQuery.split(" ", "(", ")").filter { it.isNotEmpty() }
-
-    return queryWords.all { qw ->
-        textWords.any { tw -> tw.startsWith(qw) }
-    }
-}
 fun CategoryEntity.matches(normalizedQuery: String): Boolean = this.name.wordStartsWithSmart(normalizedQuery)

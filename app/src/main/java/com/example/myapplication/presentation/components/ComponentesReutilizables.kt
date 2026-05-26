@@ -274,22 +274,12 @@ fun PromotionBannerItem(item: AccordionBanner, onClick: () -> Unit) {
                             }
                         }
                     }
-
                     Box(modifier = Modifier.weight(0.35f).fillMaxHeight(), contentAlignment = Alignment.Center) {
                         Text(text = item.icon, fontSize = 80.sp, modifier = Modifier.offset(y = (-8).dp))
                     }
                 }
             }
         }
-/**
-        if (item.discount != null) {
-            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).zIndex(1f)) {
-                Surface(modifier = Modifier.align(Alignment.TopStart), color = Color(0xFFE91E63), shape = RoundedCornerShape(8.dp)) {
-                    Text(text = "${item.discount}% OFF", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
-                }
-            }
-        }
-        **/
     }
 }
 
@@ -304,11 +294,11 @@ fun PromotionBannerItem(item: AccordionBanner, onClick: () -> Unit) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PremiumLensCarouselV3(
+    modifier: Modifier = Modifier,
     items: List<AccordionBanner>,
     isPaused: Boolean = false,
     onItemClick: (AccordionBanner) -> Unit,
-    modifier: Modifier = Modifier,
-    autoplayDelay: Long = 5000L
+    autoplayDelay: Long = 3000L
 ) {
     if (items.isEmpty()) return
 
@@ -317,12 +307,13 @@ fun PremiumLensCarouselV3(
     val initialPage = infiniteCount / 2 - (infiniteCount / 2 % items.size.coerceAtLeast(1))
     val pagerState = rememberPagerState(initialPage = initialPage) { infiniteCount }
 
-    // Efecto de autodesplazamiento con tiempo aumentado para lectura cómoda
-    LaunchedEffect(isPaused, items) {
+    // Efecto de autodesplazamiento robusto: Solo se reinicia si cambia el estado de pausa o si la lista se vacía/llena
+    LaunchedEffect(isPaused, items.size > 1) {
         if (!isPaused && items.size > 1) {
             while (true) {
                 delay(autoplayDelay)
-                if (!isPaused) {
+                // Verificación de seguridad antes de animar
+                if (!isPaused && items.isNotEmpty()) {
                     pagerState.animateScrollToPage(
                         page = pagerState.currentPage + 1,
                         animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)
@@ -339,8 +330,15 @@ fun PremiumLensCarouselV3(
             pageSize = PageSize.Fixed(340.dp),
             pageSpacing = 12.dp,
             contentPadding = PaddingValues(horizontal = 20.dp),
-            modifier = Modifier.fillMaxWidth().height(170.dp)
-            ) { index ->
+            modifier = Modifier.fillMaxWidth().height(170.dp),
+            key = { index -> 
+                // [FIX]: En Pager Infinito, el key debe ser único para cada posición real (index).
+                // Si usamos solo item.id, se repite cada 'items.size' y causa crash.
+                val actualIndex = index % items.size.coerceAtLeast(1)
+                val itemId = items.getOrNull(actualIndex)?.id ?: "empty"
+                "${index}_$itemId"
+            }
+        ) { index ->
             val actualIndex = index % items.size
             val item = items[actualIndex]
 

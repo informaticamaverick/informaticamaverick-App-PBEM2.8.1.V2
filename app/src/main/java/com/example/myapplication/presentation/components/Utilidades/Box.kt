@@ -207,6 +207,43 @@ fun CyberMaverickSleekTitle(
     }
 }
 
+@Composable
+fun CyberMaverickNeonBox(
+    modifier: Modifier = Modifier,
+    accentColor: Color = Color(0xFF00FFFF),
+    backgroundColor: Color = Color(0xFF0D0221),
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = modifier
+            .drawBehind {
+                drawRect(color = backgroundColor)
+                val neonColor = accentColor.copy(alpha = 0.3f)
+                drawRect(
+                    color = neonColor,
+                    style = Stroke(width = 1.dp.toPx())
+                )
+                val L = 15.dp.toPx()
+                val sw = 3.dp.toPx()
+                // Top-Left Corner
+                drawLine(accentColor, Offset(0f, 0f), Offset(L, 0f), sw)
+                drawLine(accentColor, Offset(0f, 0f), Offset(0f, L), sw)
+                // Top-Right Corner
+                drawLine(accentColor, Offset(size.width, 0f), Offset(size.width - L, 0f), sw)
+                drawLine(accentColor, Offset(size.width, 0f), Offset(size.width, L), sw)
+                // Bottom-Left Corner
+                drawLine(accentColor, Offset(0f, size.height), Offset(L, size.height), sw)
+                drawLine(accentColor, Offset(0f, size.height), Offset(0f, size.height - L), sw)
+                // Bottom-Right Corner
+                drawLine(accentColor, Offset(size.width, size.height), Offset(size.width - L, size.height), sw)
+                drawLine(accentColor, Offset(size.width, size.height), Offset(size.width, size.height - L), sw)
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        content()
+    }
+}
+
 /**
  * Header Estilo "Neon Box": Marco de neón completo para títulos destacados.
  */
@@ -216,30 +253,17 @@ fun CyberMaverickNeonBoxHeader(
     accentColor: Color = Color(0xFF00FFFF),
     content: @Composable BoxScope.() -> Unit
 ) {
-    Box(
+    CyberMaverickNeonBox(
         modifier = modifier
             .fillMaxWidth()
-            .height(90.dp)
-            .drawBehind {
-                drawRect(
-                    color = Color(0xFF0D0221)
-                )
-                val neonColor = accentColor.copy(alpha = 0.3f)
-                drawRect(
-                    color = neonColor,
-                    style = Stroke(width = 1.dp.toPx())
-                )
-                val L = 15.dp.toPx()
-                val sw = 3.dp.toPx()
-                drawLine(accentColor, Offset(0f, 0f), Offset(L, 0f), sw)
-                drawLine(accentColor, Offset(0f, 0f), Offset(0f, L), sw)
-                drawLine(accentColor, Offset(size.width, size.height), Offset(size.width - L, size.height), sw)
-                drawLine(accentColor, Offset(size.width, size.height), Offset(size.width, size.height - L), sw)
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        content()
-    }
+            .height(90.dp),
+        accentColor = accentColor,
+        content = {
+            Box(modifier = Modifier.align(Alignment.Center)) {
+                content()
+            }
+        }
+    )
 }
 
 /**

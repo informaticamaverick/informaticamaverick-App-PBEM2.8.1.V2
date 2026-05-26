@@ -31,6 +31,8 @@ data class CalendarEventEntity(
     val providerId: String,    // Para vincular con el chat
     val address: String,       // Dirección física
     val status: VisitStatus,
+    val categoryName: String? = null, // 🔥 [NUEVO] Rubro del servicio (ej: Plomería)
+    val categoryEmoji: String? = null, // 🔥 [NUEVO] Emoji del rubro
     val providerPhotoUrl: String? = null,
     val avatarColorLong: Long = 0xFF161C24 // Color de respaldo si no hay foto
 )
