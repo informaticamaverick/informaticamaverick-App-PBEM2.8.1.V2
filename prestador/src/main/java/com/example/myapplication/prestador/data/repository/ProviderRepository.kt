@@ -72,6 +72,16 @@ class ProviderRepository @Inject constructor(
             providerDao.insertProvider(entity)
             Log.d(TAG, "🏠 [LOCAL] Perfil guardado en Room.")
 
+            // ✅ VERIFICACIÓN Room: leer de vuelta y comparar nombre + email
+            val saved = providerDao.getProviderByIdOnce(uid)
+            if (saved == null) {
+                Log.e(TAG, "❌ [LOCAL] VERIFICACIÓN: no se encontró el registro en Room después de guardar!")
+            } else if (saved.name == entity.name && saved.email == entity.email) {
+                Log.d(TAG, "✅ [LOCAL] VERIFICACIÓN: datos correctos en Room → name=${saved.name}, email=${saved.email}")
+            } else {
+                Log.w(TAG, "⚠️ [LOCAL] VERIFICACIÓN: discrepancia Room! esperado name=${entity.name}/email=${entity.email}, encontrado name=${saved.name}/email=${saved.email}")
+            }
+
             // =========================================================================
             // PASO 2: SINCRONIZACIÓN REMOTA ATÓMICA (WriteBatch)
             // =========================================================================
@@ -263,7 +273,7 @@ class ProviderRepository @Inject constructor(
 
             // EJECUCIÓN ATÓMICA DEL LOTE
             batch.commit().await()
-            Log.d(TAG, "✅ [REMOTO] Sincronización exitosa con WriteBatch.")
+            Log.d(TAG, "✅ [REMOTO] Sincronización exitosa con WriteBatch para uid=$uid (campos: perfil, empresa, ubicacion, companies, addresses)")
             // Escribir local.turnosEnLocal por separado (update con dot-notation)
             // batch.set con merge no hace deep-merge en sub-mapas anidados
             firestore.collection("providers").document(uid)

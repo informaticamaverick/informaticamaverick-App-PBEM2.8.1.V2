@@ -10,11 +10,14 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.myapplication.prestador.ui.config.AcercaDeScreen
 import com.example.myapplication.prestador.ui.config.AparienciaScreen
 import com.example.myapplication.prestador.ui.config.CalendarioConfigScreen
 import com.example.myapplication.prestador.ui.config.ConfiguracionScreen
 import com.example.myapplication.prestador.ui.config.NotificacionesConfigScreen
 import com.example.myapplication.prestador.ui.config.PresupuestoConfigScreen
+import com.example.myapplication.prestador.ui.config.PrivacidadScreen
+import com.example.myapplication.prestador.ui.config.TerminosScreen
 import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 
@@ -26,7 +29,15 @@ fun NavGraphBuilder.configNavGraph(navController: NavController) {
             onNavigateToCalendario = { navController.navigate(PrestadorRoutes.CalendarConfig.route) },
             onNavigateToPresupuestoConfig = { navController.navigate(PrestadorRoutes.PresupuestoConfig.route) },
             onNavigateToApariencia = { navController.navigate(PrestadorRoutes.AparienciaConfig.route) },
-            onNavigateToNotificaciones = { navController.navigate(PrestadorRoutes.NotificacionesConfig.route) }
+            onNavigateToNotificaciones = { navController.navigate(PrestadorRoutes.NotificacionesConfig.route) },
+            onNavigateToTerminos = { navController.navigate(PrestadorRoutes.LegalTerminos.route) },
+            onNavigateToPrivacidad = { navController.navigate(PrestadorRoutes.LegalPrivacidad.route) },
+            onNavigateToAcercaDe = { navController.navigate(PrestadorRoutes.AcercaDe.route) },
+            onSignOut = {
+                navController.navigate(PrestadorRoutes.Login.route) {
+                    popUpTo(0) { inclusive = true }
+                }
+            }
         )
     }
 
@@ -81,5 +92,17 @@ fun NavGraphBuilder.configNavGraph(navController: NavController) {
 
     composable(PrestadorRoutes.NotificacionesConfig.route) {
         NotificacionesConfigScreen(onBack = { navController.navigateUp() })
+    }
+
+    composable(PrestadorRoutes.LegalTerminos.route) {
+        TerminosScreen(onBack = { navController.navigateUp() })
+    }
+
+    composable(PrestadorRoutes.LegalPrivacidad.route) {
+        PrivacidadScreen(onBack = { navController.navigateUp() })
+    }
+
+    composable(PrestadorRoutes.AcercaDe.route) {
+        AcercaDeScreen(onBack = { navController.navigateUp() })
     }
 }

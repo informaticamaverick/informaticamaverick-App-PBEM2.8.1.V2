@@ -39,5 +39,8 @@ sealed class PrestadorRoutes(val route: String) {
     }
     object AparienciaConfig : PrestadorRoutes("apariencia_config")
     object NotificacionesConfig : PrestadorRoutes("notificaciones_config")
+    object LegalTerminos : PrestadorRoutes("legal_terminos")
+    object LegalPrivacidad : PrestadorRoutes("legal_privacidad")
+    object AcercaDe : PrestadorRoutes("acerca_de")
 }
 

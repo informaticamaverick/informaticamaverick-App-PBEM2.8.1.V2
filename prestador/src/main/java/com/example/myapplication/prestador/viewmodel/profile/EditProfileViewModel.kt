@@ -20,6 +20,10 @@ import android.util.Log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import javax.inject.Inject
@@ -54,18 +58,24 @@ class EditProfileViewModel @Inject constructor(
 
     private val _loadingServicios = MutableStateFlow(false)
     val loadingServicios: StateFlow<Boolean> = _loadingServicios
+    
+    private var isLoadingProfile = false
 
     init {
+        // Cargar servicios en background sin bloquear la UI
         viewModelScope.launch {
             _loadingServicios.value = true
             try {
                 _servicios.value = serviciosRepository.getServicios()
             } catch (e: Exception) {
-                // Si falla Firebase, queda lista vaciaa
+                Log.e("EditProfileViewModel", "Error cargando servicios: ${e.message}")
+                // Si falla Firebase, queda lista vacia
             } finally {
                 _loadingServicios.value = false
             }
         }
+        // Cargar perfil solo una vez
+        loadProfile()
     }
     
     // Estado del modo de visualizaci?n del perfil
@@ -246,30 +256,58 @@ class EditProfileViewModel @Inject constructor(
         }
     }
 
-    init {
-        loadProfile()
-    }
 
     fun loadProfile() {
+        // Evitar llamadas múltiples simultáneas (verificar Y setear ANTES de lanzar coroutine)
+        synchronized(this) {
+            if (isLoadingProfile) {
+                Log.d("EditProfileViewModel", "⏭️ Ya está cargando, ignorando llamada")
+                return
+            }
+            isLoadingProfile = true
+        }
+        
         loadProfileJob?.cancel()
         loadProfileJob = viewModelScope.launch {
-            val userId = auth.currentUser?.uid ?: run {
-                _profileState.value = ProfileState.Error("Usuario no autenticado")
-                return@launch
-            }
-            // 1. Mostrar datos de Room inmediatamente (sin flash de Loading)
-            val cached = providerRepository.getProviderByIdOnce(userId)
-            if (cached != null) {
-                _profileState.value = ProfileState.Success(cached)
-            } else {
-                _profileState.value = ProfileState.Loading
-            }
-            // 2. Refrescar desde Firebase en segundo plano
             try {
-                loadFromFirebase(userId)
-            } catch (e: Exception) {
-                if (_profileState.value is ProfileState.Loading) {
-                    _profileState.value = ProfileState.Error(e.message ?: "Error al cargar perfil")
+                val userId = auth.currentUser?.uid ?: run {
+                    Log.e("EditProfileViewModel", "❌ Usuario no autenticado")
+                    _profileState.value = ProfileState.Error("Usuario no autenticado")
+                    return@launch
+                }
+                Log.d("EditProfileViewModel", "📥 Cargando perfil para userId: $userId")
+                
+                // 1. Mostrar datos de Room inmediatamente (sin flash de Loading)
+                val cached = providerRepository.getProviderByIdOnce(userId)
+                if (cached != null) {
+                    Log.d("EditProfileViewModel", "✅ Perfil encontrado en Room")
+                    _profileState.value = ProfileState.Success(cached)
+                } else {
+                    Log.d("EditProfileViewModel", "⏳ No hay perfil en Room, mostrando Loading")
+                    _profileState.value = ProfileState.Loading
+                }
+                
+                // 2. Refrescar desde Firebase en segundo plano con timeout
+                withContext(Dispatchers.IO) {
+                    try {
+                        Log.d("EditProfileViewModel", "🔄 Cargando desde Firebase...")
+                        withTimeout(10_000) { // 10 segundos timeout
+                            loadFromFirebase(userId)
+                        }
+                        Log.d("EditProfileViewModel", "✅ Firebase completado")
+                    } catch (e: TimeoutCancellationException) {
+                        Log.w("EditProfileViewModel", "⏱️ Timeout cargando desde Firebase (10s)")
+                        // No es error crítico, ya tenemos datos de Room
+                    } catch (e: Exception) {
+                        Log.e("EditProfileViewModel", "❌ Error cargando desde Firebase: ${e.message}", e)
+                        if (_profileState.value is ProfileState.Loading) {
+                            _profileState.value = ProfileState.Error(e.message ?: "Error al cargar perfil")
+                        }
+                    }
+                }
+            } finally {
+                synchronized(this@EditProfileViewModel) {
+                    isLoadingProfile = false
                 }
             }
         }
@@ -293,46 +331,56 @@ class EditProfileViewModel @Inject constructor(
 
     private suspend fun loadFromFirebase(userId: String) {
         try {
+            Log.d("EditProfileViewModel", "🌐 Llamando loadFullProfileFromFirestore...")
             val provider = providerRepository.loadFullProfileFromFirestore(userId)
             if (provider != null) {
+                Log.d("EditProfileViewModel", "✅ Perfil cargado desde Firebase: ${provider.displayName}")
 
-                _galleryImages.value = org.json.JSONArray(provider.galleryImages).toString()
-                _profileState.value = ProfileState.Success(provider)
-                
-                // Sincronizar el modo con tieneEmpresa
-                _profileMode.value = if (provider.hasCompanyProfile) {
-                    PrestadorProfileMode.EMPRESA
-                } else {
-                    PrestadorProfileMode.PERSONAL
-                }
-                
-                // Actualizar configuraci?n de tipo de servicio
-                _serviceTypeConfig.value = getServiceTypeConfig(
-                    ServiceType.fromString(provider.serviceType ?: "TECHNICAL")
-                )
-                
-                // Actualizar businessId y businessEntity para compatibilidad
-                if (provider.hasCompanyProfile) {
-                    val firstComp = provider.companies.firstOrNull()
-                    if (firstComp != null) {
-                        _businessId.value = firstComp.id
-                        _bussinesEntity.value = BusinessEntity(
-                            id = firstComp.id,
-                            providerId = userId,
-                            nombreNegocio = firstComp.name,
-                            razonSocial = firstComp.razonSocial,
-                            cuitNegocio = firstComp.cuit,
-                            direccion = firstComp.branches.firstOrNull()?.address?.fullString() ?: "",
-                            codigoPostal = firstComp.branches.firstOrNull()?.address?.codigoPostal ?: "",
-                            createdAt = System.currentTimeMillis()
-                        )
+                // Actualizar en el Main thread para garantizar que la UI se entere
+                withContext(Dispatchers.Main) {
+                    _galleryImages.value = org.json.JSONArray(provider.galleryImages).toString()
+                    _profileState.value = ProfileState.Success(provider)
+                    Log.d("EditProfileViewModel", "✅ Estado actualizado a Success en Main thread")
+                    
+                    // Sincronizar el modo con tieneEmpresa
+                    _profileMode.value = if (provider.hasCompanyProfile) {
+                        PrestadorProfileMode.EMPRESA
+                    } else {
+                        PrestadorProfileMode.PERSONAL
                     }
-                }
+                    
+                        // Actualizar configuraci?n de tipo de servicio
+                        _serviceTypeConfig.value = getServiceTypeConfig(
+                            ServiceType.fromString(provider.serviceType ?: "TECHNICAL")
+                        )
+                    
+                        // Actualizar businessId y businessEntity para compatibilidad
+                        if (provider.hasCompanyProfile) {
+                            val firstComp = provider.companies.firstOrNull()
+                            if (firstComp != null) {
+                                _businessId.value = firstComp.id
+                                _bussinesEntity.value = BusinessEntity(
+                                    id = firstComp.id,
+                                    providerId = userId,
+                                    nombreNegocio = firstComp.name,
+                                    razonSocial = firstComp.razonSocial,
+                                    cuitNegocio = firstComp.cuit,
+                                    direccion = firstComp.branches.firstOrNull()?.address?.fullString() ?: "",
+                                    codigoPostal = firstComp.branches.firstOrNull()?.address?.codigoPostal ?: "",
+                                    createdAt = System.currentTimeMillis()
+                                )
+                            }
+                        }
+                    }
             } else {
-                _profileState.value = ProfileState.Error("Perfil no encontrado")
+                    withContext(Dispatchers.Main) {
+                        _profileState.value = ProfileState.Error("Perfil no encontrado")
+                    }
             }
         } catch (e: Exception) {
-            _profileState.value = ProfileState.Error(e.message ?: "Error al cargar desde Firebase")
+            withContext(Dispatchers.Main) {
+                    _profileState.value = ProfileState.Error(e.message ?: "Error al cargar desde Firebase")
+            }
             e.printStackTrace()
         }
     }
@@ -375,6 +423,7 @@ class EditProfileViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             _updateState.value = UpdateState.Loading
+            Log.d("EditProfileViewModel", "🟢 updateProfile llamado: name=$name, email=$email, phone=$phone, profesion=$profesion")
             try {
                 val userId = auth.currentUser?.uid ?: throw Exception("Usuario no autenticado")
                 
@@ -515,9 +564,29 @@ class EditProfileViewModel @Inject constructor(
                     updateData["servicios"] = list
                 }
 
-                // --- SINCRONIZACI?N SSOT ---
-                // Sincronizar en Firebase y Room usando el Repositorio Central
+                // Sincronizaci?n SSOT: Room + Firebase atómico
+                Log.d("EditProfileViewModel", "🟡 Sincronizando con Firebase y Room...")
                 providerRepository.syncProviderWithFirebase(updatedProvider.toDomain())
+
+                // ✅ VERIFICACIÓN: leer de vuelta de Room y comparar campos clave
+                val savedInRoom = providerRepository.getProviderByIdOnce(userId)
+                if (savedInRoom == null) {
+                    Log.e("EditProfileViewModel", "❌ VERIFICACIÓN ROOM: registro no encontrado después de guardar!")
+                } else {
+                    val roomOk = savedInRoom.name == updatedProvider.name &&
+                        savedInRoom.email == updatedProvider.email &&
+                        savedInRoom.phoneNumber == updatedProvider.phoneNumber &&
+                        savedInRoom.profesion == updatedProvider.profesion
+                    if (roomOk) {
+                        Log.d("EditProfileViewModel", "✅ VERIFICACIÓN ROOM: OK → name=${savedInRoom.name}, email=${savedInRoom.email}, phone=${savedInRoom.phoneNumber}")
+                    } else {
+                        Log.w("EditProfileViewModel", "⚠️ VERIFICACIÓN ROOM: discrepancia detectada!")
+                        Log.w("EditProfileViewModel", "   Esperado → name=${updatedProvider.name}, email=${updatedProvider.email}, phone=${updatedProvider.phoneNumber}, profesion=${updatedProvider.profesion}")
+                        Log.w("EditProfileViewModel", "   Room     → name=${savedInRoom.name}, email=${savedInRoom.email}, phone=${savedInRoom.phoneNumber}, profesion=${savedInRoom.profesion}")
+                    }
+                }
+
+                Log.d("EditProfileViewModel", "✅ updateProfile completado exitosamente")
                 
                 /*
                 // Gestionar BusinessEntity (Obsoleto: syncProviderWithFirebase maneja la jerarqu?a)
@@ -914,6 +983,37 @@ class EditProfileViewModel @Inject constructor(
                             Log.i("FCM_TOPIC", "?? Desuscrito de: $topicName")
                         }
                     }
+            }
+        }
+    }
+
+    fun signOut() {
+        auth.signOut()
+    }
+
+    fun sendPasswordResetEmail(email: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            try {
+                com.google.firebase.auth.FirebaseAuth.getInstance()
+                    .sendPasswordResetEmail(email)
+                    .await()
+                onResult(true)
+            } catch (e: Exception) {
+                onResult(false)
+            }
+        }
+    }
+
+    fun deleteAccount(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val uid = auth.currentUser?.uid ?: return@launch
+                providerRepository.deleteProvider(uid)
+                auth.currentUser?.delete()?.await()
+                auth.signOut()
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.message ?: "Error al eliminar la cuenta")
             }
         }
     }

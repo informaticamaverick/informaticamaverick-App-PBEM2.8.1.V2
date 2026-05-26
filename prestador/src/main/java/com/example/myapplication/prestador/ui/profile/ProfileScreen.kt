@@ -46,7 +46,7 @@ import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 import com.example.myapplication.prestador.viewmodel.calendar.AvailabilityViewModel
-import com.example.myapplication.prestador.data.local.entity.toDayAbbr
+import com.example.myapplication.prestador.data.local.entity.*
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -99,6 +99,15 @@ fun ProfileScreen(
 ){
     val colors = getPrestadorColors()
     val profileState by viewModel.profileState.collectAsState()
+    
+    // Log para debug
+    LaunchedEffect(profileState) {
+        android.util.Log.d("ProfileScreen", "🔄 Estado cambió a: ${profileState.javaClass.simpleName}")
+        if (profileState is ProfileState.Success) {
+            android.util.Log.d("ProfileScreen", "✅ Provider: ${(profileState as ProfileState.Success).provider.displayName}")
+        }
+    }
+    
     val provider = (profileState as? ProfileState.Success)?.provider
     val perfilBloqueado = (provider?.priorizarEmpresa == true) && (provider.companies.isNotEmpty())
     val refreshTick by viewModel.refreshTick.collectAsState()
@@ -865,7 +874,7 @@ fun ProfileScreen(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Email", fontSize = 10.sp, color = colors.textSecondary)
                                         Text(
-                                            text = editEmail.ifBlank { "á" },
+                                            text = editEmail.ifBlank { "-" },
                                             fontSize = 13.sp,
                                             color = colors.textPrimary,
                                             maxLines = 1,
@@ -1009,19 +1018,19 @@ fun ProfileScreen(
                             Spacer(Modifier.height(8.dp))
                         }
                         if (!provider.dniCuit.isNullOrBlank()) {
-                            ProfileInfoRow("??", "DNI / CUIT", provider.dniCuit!!, colors)
+                            ProfileInfoRow("🪪", "DNI / CUIT", provider.dniCuit!!, colors)
                             Spacer(Modifier.height(8.dp))
                         }
                         if (provider.tieneMatricula && !provider.matricula.isNullOrBlank()) {
-                            ProfileInfoRow("??", "Matrícula", provider.matricula!!, colors)
+                            ProfileInfoRow("📋", "Matrícula", provider.matricula!!, colors)
                             Spacer(Modifier.height(8.dp))
                         }
                         if (provider.email.isNotBlank()) {
-                            ProfileInfoRow("??", "Email", provider.email, colors)
+                            ProfileInfoRow("📧", "Email", provider.email, colors)
                             Spacer(Modifier.height(8.dp))
                         }
                         if (provider.phone.isNotBlank()) {
-                            ProfileInfoRow("??", "Teléfono", provider.phone, colors)
+                            ProfileInfoRow("📞", "Teléfono", provider.phone, colors)
                             Spacer(Modifier.height(8.dp))
                         }
                     }
@@ -2043,7 +2052,7 @@ fun ProfileScreen(
                                 showPriorizarDialog = false
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
-                        ) { Text("Sá")}
+                        ) { Text("Sí")}
                     },
                     dismissButton = {
                             TextButton(
