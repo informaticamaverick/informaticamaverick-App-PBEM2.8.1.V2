@@ -1,9 +1,9 @@
+
+/**
 package com.example.myapplication.presentation.components
 
 import com.example.myapplication.presentation.global.HUDContext
 import com.example.myapplication.core.data.local.entity.CategoryEntity
-import com.example.myapplication.presentation.features.home.CategoryVisuals
-import com.example.myapplication.presentation.designsystem.components.shakeClick
 import com.example.myapplication.presentation.features.auth.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.data.local.entity.BudgetEntity
 import com.example.myapplication.core.data.local.entity.TenderEntity
 
+import androidx.compose.ui.platform.LocalConfiguration
 import com.example.myapplication.presentation.designsystem.components.MaverickTacticalButton
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -86,16 +87,17 @@ fun ResultadoLicitacionOverlay(
         val tenderBudgetsFlow = remember(tender.tenderId) { getBudgetsForTender(tender.tenderId) }
         val budgets by tenderBudgetsFlow.collectAsStateWithLifecycle(emptyList())
 
-        LaunchedEffect(tender, budgets, selectedItemIds) {
+        val currentLocale = LocalConfiguration.current.locales[0]
+        LaunchedEffect(tender, budgets, selectedItemIds, currentLocale) {
             beBrainActionEvent.collect { actionId: String ->
                 when (actionId) {
                     "compare_all" -> {
-                        onAnalyticsClick(tender, budgets.sortedBy { it.providerName.lowercase(Locale.getDefault()) })
+                        onAnalyticsClick(tender, budgets.sortedBy { it.providerName.lowercase(currentLocale) })
                     }
                     "compare_selected" -> {
                         val selectedBudgets = budgets.filter { it.budgetId in selectedItemIds }
                         if (selectedBudgets.isNotEmpty()) {
-                            onAnalyticsClick(tender, selectedBudgets.sortedBy { it.providerName.lowercase(Locale.getDefault()) })
+                            onAnalyticsClick(tender, selectedBudgets.sortedBy { it.providerName.lowercase(currentLocale) })
                         }
                     }
                     "delete_selected" -> {
@@ -137,7 +139,8 @@ fun ResultadoLicitacionOverlay(
             }
         ) {
             // --- SECCIÓN: INFO DE TIEMPO Y REQUISITOS (Sincronización con LicitacionFolderPremium) ---
-            val df = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
+            val locale = LocalConfiguration.current.locales[0]
+            val df = remember(locale) { SimpleDateFormat("dd/MM/yyyy", locale) }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -179,7 +182,8 @@ fun ResultadoLicitacionOverlay(
                     onChatClick = onChatClick,
                     onToggleMultiSelection = onToggleMultiSelection,
                     onAvatarClick = onAvatarClick,
-                    expandedStates = expandedStates
+                    expandedStates = expandedStates,
+                    locale = locale
                 )
             }
         }
@@ -224,7 +228,8 @@ fun LazyListScope.budgetGridListItems(
     onChatClick: (String, String?) -> Unit,
     onToggleMultiSelection: () -> Unit,
     onAvatarClick: (BudgetEntity) -> Unit,
-    expandedStates: MutableMap<String, Boolean> // 🔥 Estado de expansión compartido
+    expandedStates: MutableMap<String, Boolean>, // 🔥 Estado de expansión compartido
+    locale: Locale
 ) {
     if (budgets.isEmpty()) {
         item {
@@ -235,7 +240,8 @@ fun LazyListScope.budgetGridListItems(
         return
     }
 
-    val dateFormatter = SimpleDateFormat("dd MMMM yyyy", Locale("es", "ES"))
+    // Formateador de fecha
+    val dateFormatter = SimpleDateFormat("dd MMMM yyyy", locale)
     
     // Agrupar por fecha y ordenar
     val groupedBudgets = budgets.groupBy {
@@ -306,13 +312,13 @@ fun LazyListScope.budgetGridListItems(
                     rowBudgets.forEach { budget ->
                         val catIcon = categories.find { it.name.equals(budget.category, ignoreCase = true) }?.icon ?: "📋"
                         
-                        BudgetCard(
-                            modifier = Modifier.weight(1f),
+                        TarjetaPresupuestoA4Document(
+                            modifier = Modifier.weight(1f).height(180.dp),
                             budget = budget,
                             isSelected = selectedItemIds.contains(budget.budgetId),
                             isMultiSelectionActive = isMultiSelectionActive,
+                            isInsideTender = true,
                             categoryEmoji = catIcon,
-                            cardWidth = 0.dp, // El peso (weight) maneja el ancho
                             onViewClick = { onBudgetClick(budget) },
                             onChatClick = { onChatClick(budget.providerId, budget.category ?: tender.category) },
                             onAvatarClick = { onAvatarClick(budget) },
@@ -411,7 +417,7 @@ fun ResultadoLicitacionOverlayPreview() {
         )
     }
 }
-
+**/
 
 
 

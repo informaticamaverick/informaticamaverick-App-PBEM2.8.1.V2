@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.myapplication.core.data.local.AppDatabase
 import com.example.myapplication.core.data.local.dao.*
+import com.example.myapplication.core.data.remote.api.WeatherApiService
 import com.example.myapplication.core.data.repository.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
@@ -14,6 +15,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
 
 /**
@@ -24,6 +27,18 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object CoreModule {
+
+    // --- 0. SERVICIOS EXTERNOS (RETROFIT) ---
+
+    @Provides
+    @Singleton
+    fun provideWeatherApiService(): WeatherApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://api.open-meteo.com/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(WeatherApiService::class.java)
+    }
 
     // --- 1. PERSISTENCIA COMPARTIDA (ROOM) ---
 
@@ -48,6 +63,10 @@ object CoreModule {
     @Provides
     @Singleton
     fun provideCategoryDao(db: AppDatabase): CategoryDao = db.categoryDao()
+
+    @Provides
+    @Singleton
+    fun provideSuperCategoryDao(db: AppDatabase): SuperCategoryDao = db.superCategoryDao()
 
     @Provides
     @Singleton
@@ -127,4 +146,10 @@ object CoreModule {
     fun provideAuthRepository(
         auth: FirebaseAuth
     ): AuthRepository = AuthRepository(auth)
+
+    @Provides
+    @Singleton
+    fun provideWeatherRepository(
+        weatherApi: WeatherApiService
+    ): WeatherRepository = WeatherRepository(weatherApi)
 }

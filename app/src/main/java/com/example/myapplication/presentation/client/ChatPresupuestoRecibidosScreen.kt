@@ -1,10 +1,14 @@
+
+/**
 package com.example.myapplication.presentation.client
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,16 +31,25 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import com.example.myapplication.data.local.BudgetEntity
-import com.example.myapplication.data.local.CategoryEntity
-import com.example.myapplication.data.local.BudgetStatus
-import com.example.myapplication.data.local.TenderEntity
+import com.example.myapplication.core.domain.model.Provider
+import com.example.myapplication.core.data.local.entity.BudgetEntity
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.core.data.local.entity.BudgetStatus
+import com.example.myapplication.core.data.local.entity.TenderEntity
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 import com.example.myapplication.presentation.components.*
-import com.example.myapplication.presentation.components.Utilidades.*
+import com.example.myapplication.presentation.designsystem.components.*
+import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import com.example.myapplication.presentation.features.budget.BudgetViewModel
+import com.example.myapplication.presentation.features.home.CategoryViewModel
+import com.example.myapplication.presentation.global.BeBrainViewModel
+import com.example.myapplication.presentation.global.HUDContext
+import com.example.myapplication.presentation.features.budget.BudgetComparisonAnalytics
+import com.example.myapplication.uishared.components.BudgetPreviewPDFDialog
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.myapplication.ui.theme.MyApplicationTheme
 
 // =================================================================================
 // --- CONSTANTES DE DISEÑO ---
@@ -44,6 +57,7 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 private val MaverickBlue = Color(0xFF2197F5)
 private val CardSurface = Color(0xFF161C24)
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatPresupuestoRecibidosScreen(
@@ -56,22 +70,19 @@ fun ChatPresupuestoRecibidosScreen(
 ) {
     val directBudgets by viewModel.filteredDirectBudgets.collectAsStateWithLifecycle()
     val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
-    val activeFilters by beBrainViewModel.activeFilters.collectAsStateWithLifecycle()
-    val availableFilters by beBrainViewModel.availableFilters.collectAsStateWithLifecycle()
-    val availableSortOptions by beBrainViewModel.availableSortOptions.collectAsStateWithLifecycle()
     val searchQuery by beBrainViewModel.searchQuery.collectAsStateWithLifecycle()
     val isMultiSelectionActive by viewModel.isMultiSelectionActive.collectAsStateWithLifecycle()
     val selectedItemIds by viewModel.selectedIds.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
-        beBrainViewModel.onRouteChanged("chat_presupuestos_recibidos")
-        viewModel.setContext(HUDContext.BUDGETS_DIRECT) 
+        beBrainViewModel.coordinator.updateHUDContext(HUDContext.BUDGETS_DIRECT) 
     }
 
-    val budgetActions by viewModel.beActions.collectAsStateWithLifecycle()
-    val allBudgets by viewModel.allBudgets.collectAsStateWithLifecycle()
+    val budgetActionIds by viewModel.beActionIds.collectAsStateWithLifecycle()
+    val allBudgets by viewModel.allBudgets.collectAsStateWithLifecycle(emptyList())
 
     var budgetForA4Preview by remember { mutableStateOf<BudgetEntity?>(null) }
+    var providerForA4Preview by remember { mutableStateOf<Provider?>(null) }
     var providerProfileToShow by remember { mutableStateOf<BudgetEntity?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var deleteContextMessage by remember { mutableStateOf("") }
@@ -85,30 +96,15 @@ fun ChatPresupuestoRecibidosScreen(
         viewModel.setSearchQuery(searchQuery)
     }
 
-    LaunchedEffect(activeFilters) {
-        viewModel.setFilters(activeFilters)
-    }
-
-    LaunchedEffect(allBudgets, categories) {
-        beBrainViewModel.updateBudgets(allBudgets)
-        beBrainViewModel.hydrateCategories(categories)
-    }
-
-    LaunchedEffect(isMultiSelectionActive, selectedItemIds) {
-        beBrainViewModel.syncMultiSelection(isMultiSelectionActive, selectedItemIds)
-    }
-
     val hudContext by viewModel.currentHUDContext.collectAsStateWithLifecycle()
     val currentSelectedIds by rememberUpdatedState(selectedItemIds)
 
-    LaunchedEffect(budgetActions, hudContext) {
-        val baseActions = budgetActions.map { action ->
-            action.copy(onClick = { beBrainViewModel.triggerAction(action.id) })
-        }
-        beBrainViewModel.setCustomActions(baseActions)
+    LaunchedEffect(budgetActionIds, hudContext) {
+        beBrainViewModel.setCustomActionIds(budgetActionIds)
     }
 
     val currentIdsToSelect by rememberUpdatedState(directBudgets.map { it.budgetId })
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         beBrainViewModel.actionEvent.collect { actionId ->
@@ -116,7 +112,6 @@ fun ChatPresupuestoRecibidosScreen(
                 "select_all" -> viewModel.selectAll(currentIdsToSelect)
                 "mark_as_read" -> viewModel.markAsRead(currentSelectedIds)
                 "compare_selected" -> {
-                    // Acción táctica: Comparamos presupuestos directos seleccionados
                     val selected = allBudgets.filter { it.budgetId in selectedItemIds }
                     if (selected.isNotEmpty()) {
                         budgetsToAnalyze = selected
@@ -135,7 +130,7 @@ fun ChatPresupuestoRecibidosScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            beBrainViewModel.setCustomActions(emptyList())
+            beBrainViewModel.clearCustomActions(HUDContext.BUDGETS_DIRECT)
             beBrainViewModel.syncMultiSelection(false, emptySet())
         }
     }
@@ -143,16 +138,9 @@ fun ChatPresupuestoRecibidosScreen(
     Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } }) {
         ChatPresupuestoRecibidosScreenContent(
             directBudgets = directBudgets,
-            activeFilters = activeFilters,
-            refinementFilters = availableFilters,
-            sortOptions = availableSortOptions,
-            onFilterToggle = { beBrainViewModel.toggleFilter(it) },
-            onClearFilters = { beBrainViewModel.clearSpecificFilters(listOf("filter_", "cat_")) },
-            onClearSort = { beBrainViewModel.clearSpecificFilters(listOf("sort_", "view_")) },
+            categories = categories,
             onChatClick = onChatClick,
             onBack = onBack,
-            onAcceptBudget = { budget -> viewModel.acceptBudget(budget) },
-            onRejectBudget = { budget -> viewModel.rejectBudget(budget) },
             onMarkAsRead = { id -> viewModel.markAsRead(setOf(id)) },
             bottomPadding = bottomPadding,
             isMultiSelectionActive = isMultiSelectionActive,
@@ -166,6 +154,9 @@ fun ChatPresupuestoRecibidosScreen(
                 else {
                     viewModel.markAsRead(setOf(budget.budgetId))
                     budgetForA4Preview = budget
+                    coroutineScope.launch {
+                        providerForA4Preview = viewModel.getProviderById(budget.providerId)
+                    }
                 }
             },
             providerProfileToShow = providerProfileToShow,
@@ -177,25 +168,20 @@ fun ChatPresupuestoRecibidosScreen(
             onDismissDeleteDialog = { showDeleteConfirmDialog = false },
             showAnalyticsOverlay = showAnalyticsOverlay,
             onCloseAnalytics = { showAnalyticsOverlay = false },
-            budgetsToAnalyze = budgetsToAnalyze
+            budgetsToAnalyze = budgetsToAnalyze,
+            providerForA4Preview = providerForA4Preview
         )
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatPresupuestoRecibidosScreenContent(
     directBudgets: List<BudgetEntity>,
-    activeFilters: Set<String>,
-    refinementFilters: List<ControlItem>,
-    sortOptions: List<ControlItem>,
-    onFilterToggle: (String) -> Unit,
-    onClearFilters: () -> Unit,
-    onClearSort: () -> Unit,
+    categories: List<CategoryEntity>,
     onChatClick: (String) -> Unit,
     onBack: () -> Unit,
-    onAcceptBudget: (BudgetEntity) -> Unit,
-    onRejectBudget: (BudgetEntity) -> Unit,
     onMarkAsRead: (String) -> Unit,
     isMultiSelectionActive: Boolean,
     selectedItemIds: Set<String>,
@@ -212,12 +198,12 @@ fun ChatPresupuestoRecibidosScreenContent(
     deleteContextMessage: String,
     onConfirmDeleteAction: (() -> Unit)?,
     onDismissDeleteDialog: () -> Unit,
-    // Props para Analytics
     showAnalyticsOverlay: Boolean,
     onCloseAnalytics: () -> Unit,
-    budgetsToAnalyze: List<BudgetEntity>
+    budgetsToAnalyze: List<BudgetEntity>,
+    providerForA4Preview: Provider? = null
 ) {
-    val directListState = rememberLazyGridState()
+    val directListState = rememberLazyListState()
 
     MaverickBackgroundStrix {
         Scaffold(
@@ -237,43 +223,21 @@ fun ChatPresupuestoRecibidosScreenContent(
                 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                MoldeBarraMenu(
+                val expandedStates = remember { mutableStateMapOf<String, Boolean>() }
+                
+                ListaMoldeV2(
+                    titulo = "PRESUPUESTOS",
+                    subtitulo = "ADMINISTRACIÓN DIRECTA",
+                    emoji = "📩",
+                    compactInfo = "Recibidos",
                     itemCount = directBudgets.size,
-                    labelCountMain = "DIRECTOS",
-                    activeRefinements = activeFilters,
-                    refinementOptions = refinementFilters,
-                    sortOptions = sortOptions,
-                    onToggleRefinement = onFilterToggle,
-                    onClearRefinements = onClearFilters,
-                    onClearSort = onClearSort,
-                    showSuscritos = false,
-                    showCercania = false,
-                    showVista = false,
-                    modifier = Modifier.fillMaxSize(),
-                    customActions = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            sortOptions.forEach { item ->
-                                MaverickTacticalButton(
-                                    isActive = activeFilters.contains(item.id),
-                                    accentColor = item.color,
-                                    onClick = { onFilterToggle(item.id) }
-                                ) { Text(item.emoji) }
-                                Spacer(Modifier.width(6.dp))
-                            }
-                            MenuFiltros(
-                                activeFilters = activeFilters,
-                                dynamicCategories = emptyList(),
-                                refinementFilters = refinementFilters,
-                                onAction = onFilterToggle,
-                                onApply = {},
-                                onClearFilters = onClearFilters
-                            )
-                        }
-                    }
+                    accentColor = MaverickBlue,
+                    state = directListState
                 ) {
-                    BudgetGridContent(
-                        state = directListState,
+                    budgetGridListItems(
+                        tender = TenderEntity(tenderId = "direct", title = "Directo", clientId = "", description = "", category = "Varios"),
                         budgets = directBudgets,
+                        categories = categories,
                         isMultiSelectionActive = isMultiSelectionActive,
                         selectedItemIds = selectedItemIds,
                         onToggleItemSelection = onToggleItemSelection,
@@ -281,9 +245,10 @@ fun ChatPresupuestoRecibidosScreenContent(
                             onBudgetClick(budget)
                             onMarkAsRead(budget.budgetId)
                         },
-                        onChatClick = onChatClick,
+                        onChatClick = { providerId, _ -> onChatClick(providerId) },
                         onToggleMultiSelection = onToggleMultiSelection,
-                        onAvatarClick = onAvatarClick
+                        onAvatarClick = onAvatarClick,
+                        expandedStates = expandedStates
                     )
                 }
             }
@@ -302,15 +267,25 @@ fun ChatPresupuestoRecibidosScreenContent(
             )
         }
 
-        if (budgetForA4Preview != null) {
-            Dialog(onDismissRequest = onCloseBudgetA4Preview, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-                BudgetMultiPageScreen(
-                    budget = budgetForA4Preview,
-                    onBack = onCloseBudgetA4Preview,
-                    onAccept = { _ -> onAcceptBudget(budgetForA4Preview); onCloseBudgetA4Preview() },
-                    onReject = { _ -> onRejectBudget(budgetForA4Preview); onCloseBudgetA4Preview() }
-                )
-            }
+        if (budgetForA4Preview != null && providerForA4Preview != null) {
+            BudgetPreviewPDFDialog(
+                prestador = ProviderEntity(
+                    id = providerForA4Preview.uid,
+                    email = providerForA4Preview.email,
+                    phoneNumber = providerForA4Preview.phoneNumber,
+                    displayName = providerForA4Preview.displayName,
+                    name = providerForA4Preview.name,
+                    lastName = providerForA4Preview.lastName,
+                    matricula = providerForA4Preview.matricula,
+                    profesion = providerForA4Preview.profesion,
+                    categories = providerForA4Preview.categories,
+                    createdAt = 0L
+                ),
+                budget = budgetForA4Preview,
+                onDismiss = onCloseBudgetA4Preview,
+                onEnviar = null,
+                showSendButton = false
+            )
         }
 
         if (providerProfileToShow != null) {
@@ -340,7 +315,6 @@ fun ChatPresupuestoRecibidosScreenContent(
                 onDismissRequest = onCloseAnalytics,
                 properties = DialogProperties(usePlatformDefaultWidth = false)
             ) {
-                // Creamos un Tender mock para la comparativa de presupuestos directos
                 val mockTender = TenderEntity(
                     tenderId = "direct_comparison",
                     title = "Comparativa de Presupuestos Directos",
@@ -353,12 +327,10 @@ fun ChatPresupuestoRecibidosScreenContent(
                     tender = mockTender,
                     budgets = budgetsToAnalyze,
                     onBack = onCloseAnalytics,
-                    onViewBudgetDetail = { bId ->
+                    onViewBudgetDetail = { _ ->
                         onCloseAnalytics()
-                        val budget = budgetsToAnalyze.find { it.budgetId == bId }
-                        if (budget != null) {
-                            // Se podría disparar el visor A4 aquí si fuera necesario
-                        }
+                        // val budget = budgetsToAnalyze.find { it.budgetId == bId }
+                        // Visor A4
                     }
                 )
             }
@@ -366,6 +338,7 @@ fun ChatPresupuestoRecibidosScreenContent(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Preview(showBackground = true, backgroundColor = 0xFF05070A)
 @Composable
 fun ChatPresupuestoRecibidosScreenPreview() {
@@ -376,16 +349,9 @@ fun ChatPresupuestoRecibidosScreenPreview() {
 
         ChatPresupuestoRecibidosScreenContent(
             directBudgets = sampleBudgets,
-            activeFilters = emptySet(),
-            refinementFilters = emptyList(),
-            sortOptions = emptyList(),
-            onFilterToggle = {},
-            onClearFilters = {},
-            onClearSort = {},
+            categories = emptyList(),
             onChatClick = {},
             onBack = {},
-            onAcceptBudget = {},
-            onRejectBudget = {},
             onMarkAsRead = {},
             bottomPadding = PaddingValues(0.dp),
             isMultiSelectionActive = false,
@@ -408,3 +374,4 @@ fun ChatPresupuestoRecibidosScreenPreview() {
         )
     }
 }
+**/

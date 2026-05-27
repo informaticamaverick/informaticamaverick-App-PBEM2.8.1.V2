@@ -3,23 +3,17 @@ package com.example.myapplication.core.di
 import android.content.Context
 import androidx.room.Room
 import com.example.myapplication.core.data.local.dao.ProviderDao
-import com.example.myapplication.core.data.repository.*
-import com.example.myapplication.core.data.remote.weather.WeatherApiService
 import com.example.myapplication.core.database.LocalDatabase
 import com.example.myapplication.core.database.TokenManager
-import com.example.myapplication.data.local.dao.FastCategoryDao
+import com.example.myapplication.core.data.local.dao.FastCategoryDao
 import com.example.myapplication.data.local.dao.ShortcutDao
 import com.example.myapplication.data.repository.FastRepository
 import com.example.myapplication.data.repository.ShortcutRepository
-import com.example.myapplication.data.repository.WeatherRepository
-import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
 
 /**
@@ -30,18 +24,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
-
-    // --- 0. SERVICIOS EXTERNOS (RETROFIT) ---
-
-    @Provides
-    @Singleton
-    fun provideWeatherApiService(): WeatherApiService {
-        return Retrofit.Builder()
-            .baseUrl("https://api.open-meteo.com/")
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(WeatherApiService::class.java)
-    }
 
     // --- 1. PERSISTENCIA LOCAL (NO COMPARTIDA) ---
 
@@ -78,12 +60,6 @@ object AppModule {
         providerDao: ProviderDao,
         fastCategoryDao: FastCategoryDao
     ): FastRepository = FastRepository(providerDao, fastCategoryDao)
-
-    @Provides
-    @Singleton
-    fun provideWeatherRepository(
-        weatherApi: WeatherApiService
-    ): WeatherRepository = WeatherRepository(weatherApi)
 
 
     // --- 3. UTILIDADES ---

@@ -77,10 +77,15 @@ object ProviderDataMapper {
                 createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                 address = AddressProvider(
                     id = UUID.randomUUID().toString(),
-                    codigoPostal = ubicacion?.get("codigoPostal")?.toString() ?: "",
                     calle = ubicacion?.get("calle")?.toString() ?: "",
+                    numero = ubicacion?.get("numero")?.toString() ?: "",
                     localidad = ubicacion?.get("localidad")?.toString() ?: "",
-                    provincia = ubicacion?.get("provincia")?.toString() ?: ""
+                    provincia = ubicacion?.get("provincia")?.toString() ?: "",
+                    pais = ubicacion?.get("pais")?.toString() ?: "Argentina",
+                    codigoPostal = ubicacion?.get("codigoPostal")?.toString() ?: "",
+                    latitude = (ubicacion?.get("latitude") as? Number)?.toDouble() ?: 0.0,
+                    longitude = (ubicacion?.get("longitude") as? Number)?.toDouble() ?: 0.0,
+                    label = ubicacion?.get("label")?.toString() ?: "Principal"
                 ),
                 companies = mappedCompanies
             )

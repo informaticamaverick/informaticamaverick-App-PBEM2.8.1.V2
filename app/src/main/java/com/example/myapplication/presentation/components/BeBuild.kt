@@ -64,47 +64,6 @@ data class AddressInfo(
     val lng: Double
 )
 
-/** 
- * --- EXTENSIÓN UNIFICADA (MAVERICK HUD V7) ---
- * Convierte AddressInfo a LocationOption para coherencia visual y de búsqueda.
- * Esta es la ÚNICA FUENTE DE VERDAD para la conversión.
- */
-fun AddressInfo.toLocationOption(): com.example.myapplication.presentation.features.home.LocationOption {
-    return if (this.isCompany) {
-        com.example.myapplication.presentation.features.home.LocationOption.Business(
-            companyName = this.companyOrUserName,
-            branchName = this.branchName,
-            address = this.streetAndNumber,
-            number = "", // El número ya está en streetAndNumber
-            locality = this.locality,
-            province = this.province,
-            country = this.country,
-            postalCode = this.postalCode,
-            id = this.id // 🔥 IMPORTANTE: Mantenemos el ID real para comparación
-        )
-    } else if (this.id == "gps_current") {
-        com.example.myapplication.presentation.features.home.LocationOption.Gps(
-            address = this.streetAndNumber,
-            locality = this.locality,
-            province = this.province,
-            country = this.country,
-            postalCode = this.postalCode,
-            lat = this.lat,
-            lng = this.lng,
-            id = "gps_current"
-        )
-    } else {
-        com.example.myapplication.presentation.features.home.LocationOption.Personal(
-            address = this.streetAndNumber,
-            number = "", // El número ya está en streetAndNumber
-            locality = this.locality,
-            province = this.province,
-            country = this.country,
-            postalCode = this.postalCode,
-            id = this.id // 🔥 IMPORTANTE: Mantenemos el ID real para comparación
-        )
-    }
-}
 
 // ==================================================================================
 // --- COMPONENTES DE LA BARRA DE ACCIONES ---

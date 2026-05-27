@@ -3,6 +3,7 @@ package com.example.myapplication.presentation.util
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.example.myapplication.core.notifications.NotificationHelper
 
 class CalendarNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -10,6 +11,6 @@ class CalendarNotificationReceiver : BroadcastReceiver() {
         val message = intent.getStringExtra("EVENT_MESSAGE") ?: "Tienes un compromiso próximamente."
         
         val notificationHelper = NotificationHelper(context)
-        notificationHelper.showNotification(title, message)
+        notificationHelper.showAgendaNotification(title, message)
     }
 }

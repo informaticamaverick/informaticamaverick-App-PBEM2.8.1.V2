@@ -1,9 +1,10 @@
 package com.example.myapplication.data.repository
 
 import com.example.myapplication.core.data.local.dao.ProviderDao
-import com.example.myapplication.data.local.dao.FastCategoryDao
+import com.example.myapplication.core.data.local.dao.FastCategoryDao
 import com.example.myapplication.core.data.local.entity.CategoryEntity
-import com.example.myapplication.data.local.entity.FastCategoryEntity
+import com.example.myapplication.core.data.local.dao.FastCategoryEntity
+import com.example.myapplication.core.utils.MaverickGeoUtils
 import com.example.myapplication.data.model.ProviderDisplayModel
 import com.example.myapplication.presentation.features.home.FastFilterState
 import com.example.myapplication.presentation.features.home.ProviderWithDistance
@@ -48,7 +49,7 @@ class FastRepository @Inject constructor(
             val pLat = provider.address?.latitude ?: (userLat + (kotlin.random.Random.nextDouble(-0.02, 0.02)))
             val pLon = provider.address?.longitude ?: (userLon + (kotlin.random.Random.nextDouble(-0.02, 0.02)))
             
-            val distance = calcularDistanciaKm(userLat, userLon, pLat, pLon)
+            val distance = MaverickGeoUtils.calculateDistanceKm(userLat, userLon, pLat, pLon)
             
             val service = ProviderDisplayModel(
                 id = provider.uid,
@@ -68,7 +69,7 @@ class FastRepository @Inject constructor(
             ProviderWithDistance(
                 service = service,
                 distanceKm = distance,
-                estimatedMinutes = (distance * 5).toInt().coerceAtLeast(3),
+                estimatedMinutes = MaverickGeoUtils.estimateArrivalMinutes(distance),
                 lat = pLat,
                 lon = pLon
             )
@@ -80,16 +81,5 @@ class FastRepository @Inject constructor(
           //  if (filters.isSubscribed && !item.service.isSubscribed) pass = false
             pass
         }.sortedBy { it.distanceKm }.take(10)
-    }
-
-    private fun calcularDistanciaKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-        val r = 6371.0 
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
-        val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2) * sin(dLon / 2)
-        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-        return r * c
     }
 }

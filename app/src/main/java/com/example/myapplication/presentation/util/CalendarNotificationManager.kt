@@ -5,7 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import com.example.myapplication.data.local.CalendarEventEntity
+import com.example.myapplication.core.data.local.entity.CalendarEventEntity
 import java.text.SimpleDateFormat
 import java.util.*
 

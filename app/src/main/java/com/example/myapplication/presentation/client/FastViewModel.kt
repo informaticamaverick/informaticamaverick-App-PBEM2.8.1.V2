@@ -2,9 +2,11 @@ package com.example.myapplication.presentation.client
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.local.CategoryEntity
-import com.example.myapplication.data.repository.AppActionCoordinator
-import com.example.myapplication.data.repository.FastFilterState
+import com.example.myapplication.core.data.local.dao.FastCategoryEntity
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.presentation.global.AppActionCoordinator
+import com.example.myapplication.presentation.features.home.FastFilterState
+import com.example.myapplication.presentation.features.home.ProviderWithDistance
 import com.example.myapplication.data.repository.FastRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -27,7 +29,7 @@ class FastViewModel @Inject constructor(
     /**
      * Historial de categorías usadas recientemente o con más frecuencia.
      */
-    val fastHistory: StateFlow<List<com.example.myapplication.data.local.FastCategoryEntity>> = fastRepository.getFastHistory()
+    val fastHistory: StateFlow<List<FastCategoryEntity>> = fastRepository.getFastHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun startSearch(category: CategoryEntity?) {

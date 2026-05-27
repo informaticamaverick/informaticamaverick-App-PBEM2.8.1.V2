@@ -103,7 +103,9 @@ fun CompactCategoryCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit = {},
     isShortcut: Boolean = false,
-    onManageShortcut: (Boolean) -> Unit = {}
+    onManageShortcut: (Boolean, String?, String?) -> Unit = { _, _, _ -> },
+    showSuperCategoryLabel: Boolean = false,
+    isSuperCategoryFavorite: Boolean = false
 ) {
     val baseColor = Color(CategoryVisuals.getColorFor(item.superCategory))
     val haptic = LocalHapticFeedback.current
@@ -191,8 +193,62 @@ fun CompactCategoryCard(
                 // ==========================================================================================
                 // SECCIÓN: BADGES (NOTIFICACIÓN, FAVORITO E INFORMACIÓN) - SUPERPUESTOS AL EMOJI
                 // ==========================================================================================
+                
+                // [NUEVO] ETIQUETA DE SUPERCATEGORIA (Para Resultados de Búsqueda)
+                if (showSuperCategoryLabel) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(bottomEnd = 8.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)), // Borde sincronizado
+                        modifier = Modifier.align(Alignment.TopStart)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(text = item.superCategoryIcon, fontSize = 14.sp)
+                            
+                            // [NUEVO] DIVIDER VERTICAL TÁCTICO
+                            Box(
+                                modifier = Modifier
+                                    .height(20.dp) // Altura para cubrir ambas líneas
+                                    .width(1.dp)
+                                    .background(Color.White.copy(alpha = 0.3f))
+                            )
+
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy((-14).dp) // "Pegado" estilo M3
+                            ) {
+                                Text(
+                                    text = "SE ENCUENTRA EN",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.3.sp
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(
+                                        text = item.superCategory.uppercase(),
+                                        color = Color.White.copy(alpha = 0.9f),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    if (isSuperCategoryFavorite) {
+                                        Text(text = "📌", fontSize = 10.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // 1. BADGE DE NOTIFICACIÓN (Extremo Izquierdo Superior)
-                if (item.isNew || item.isNewPrestador || item.isAd) {
+                if (!showSuperCategoryLabel && (item.isNew || item.isNewPrestador || item.isAd)) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopStart)
@@ -213,7 +269,7 @@ fun CompactCategoryCard(
                 }
 
                 // 2. BADGE DE FAVORITO (Extremo Derecho Superior)
-                if (item.isFavorite) {
+                if (!showSuperCategoryLabel && item.isFavorite) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
@@ -319,131 +375,15 @@ fun CompactCategoryCard(
             isVisible = showContextMenu,
             onDismissRequest = { showContextMenu = false },
             onAction = {
-                onManageShortcut(!isShortcut)
+                onManageShortcut(!isShortcut, item.name, item.icon)
                 onToggleFavorite()
                 showContextMenu = false
             },
             touchOffset = touchOffset,
-            emotion = if (isShortcut) BeEmotion.HAPPY else BeEmotion.NORMAL,
+            emotion = if (isShortcut) BeEmotion.SAD else BeEmotion.HAPPY,
             actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
             actionIconEmoji = "📌"
         )
-    }
-}
-
-// ==========================================================================================
-// ------------------------ NUEVA TARJETA CATEGORIA MINI BENTO GLASS (FAST SCREEN) ---
-// ==========================================================================================
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun MiniCompactCategoryCard(
-    item: CategoryEntity,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val baseColor = Color(CategoryVisuals.getColorFor(item.superCategory))
-
-    Box(
-        modifier = Modifier
-            .size(width = 85.dp, height = 110.dp)
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            )
-    ) {
-        Card(
-            shape = RoundedCornerShape(6.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-            border = BorderStroke(1.dp, if (isSelected) Color(0xFF22D3EE) else Color.White.copy(alpha = 0.15f)),
-            elevation = CardDefaults.cardElevation(if (isSelected) 8.dp else 2.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                // FONDO: Saturado Mate (Top) -> Negro Mate (Bottom)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    if (isSelected) baseColor else baseColor.copy(alpha = 0.6f),
-                                    Color(0xFF080A0F)
-                                ),
-                                startY = 0f,
-                                endY = 300f
-                            )
-                        )
-                )
-                // CAPA DE DIFUMINADO SUPERIOR
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.6f)
-                        .blur(4.dp)
-                        .background(baseColor.copy(alpha = if (isSelected) 0.8f else 0.4f))
-                )
-
-                // EMOJI CENTRAL: SOMBRA
-                Text(
-                    text = item.icon,
-                    fontSize = 44.sp,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .offset(y = (-10).dp)
-                        .graphicsLayer {
-                            alpha = 0.8f
-                            colorFilter = ColorFilter.tint(Color.Black)
-                        }
-                        .blur(1.5.dp)
-                )
-
-                // EMOJI CENTRAL: PRINCIPAL
-                Text(
-                    text = item.icon,
-                    fontSize = 44.sp,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .offset(y = (-12).dp)
-                )
-
-                // SECCIÓN INFERIOR: TEXTO
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(34.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    HorizontalDivider(
-                        color = Color.White.copy(alpha = if (isSelected) 0.6f else 0.3f),
-                        thickness = 1.dp,
-                        modifier = Modifier.padding(horizontal = 1.dp)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .padding(horizontal = 2.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AutoSizeText(
-                            text = item.name.uppercase(),
-                            modifier = Modifier.fillMaxWidth(),
-                            color = if (isSelected) Color.White else Color.Gray,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.8.sp
-                            ),
-                            textAlign = TextAlign.Center,
-                            maxLines = 2
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -573,7 +513,7 @@ fun CompactCategoryCardHorizontal(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit = {},
     isShortcut: Boolean = false,
-    onManageShortcut: (Boolean) -> Unit = {}
+    onManageShortcut: (Boolean, String?, String?) -> Unit = { _, _, _ -> }
 ) {
     val baseColor = Color(CategoryVisuals.getColorFor(item.superCategory))
     val haptic = LocalHapticFeedback.current
@@ -747,12 +687,12 @@ fun CompactCategoryCardHorizontal(
             isVisible = showContextMenu,
             onDismissRequest = { showContextMenu = false },
             onAction = {
-                onManageShortcut(!isShortcut)
+                onManageShortcut(!isShortcut, item.name, item.icon)
                 onToggleFavorite()
                 showContextMenu = false
             },
             touchOffset = touchOffset,
-            emotion = if (isShortcut) BeEmotion.HAPPY else BeEmotion.NORMAL,
+            emotion = if (isShortcut) BeEmotion.SAD else BeEmotion.HAPPY,
             actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
             actionIconEmoji = "📌"
         )
@@ -771,7 +711,7 @@ fun BentoSuperCategoryCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit = {},
     isShortcut: Boolean = false,
-    onManageShortcut: (Boolean) -> Unit = {}
+    onManageShortcut: (Boolean, String?, String?) -> Unit = { _, _, _ -> }
 ) {
     val haptic = LocalHapticFeedback.current
     var showContextMenu by remember { mutableStateOf(false) }
@@ -958,7 +898,7 @@ fun BentoSuperCategoryCard(
                             }
                         }
                     }
-                    
+                    Spacer(modifier = Modifier.height(4.dp))
                     // DIVIDER DE PROFUNDIDAD (Separador de Secciones)
                     DepthDividerHorizontal(
                         shadowColor = Color.Black.copy(alpha = 0.5f),
@@ -991,12 +931,12 @@ fun BentoSuperCategoryCard(
                     isVisible = showContextMenu,
                     onDismissRequest = { showContextMenu = false },
                     onAction = {
-                        onManageShortcut(!isShortcut)
+                        onManageShortcut(!isShortcut, superCategory.title, superCategory.icon)
                         onToggleFavorite()
                         showContextMenu = false
                     },
                     touchOffset = touchOffset,
-                    emotion = if (isShortcut) BeEmotion.HAPPY else BeEmotion.NORMAL,
+                    emotion = if (isShortcut) BeEmotion.SAD else BeEmotion.HAPPY,
                     actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
                     actionIconEmoji = "📌"
                 )
@@ -1087,7 +1027,8 @@ fun ExpandedBentoSuperCategoryCard(
                             CompactCategoryCard(
                                 item = category,
                                 onClick = { onCategoryClick(category) },
-                                onToggleFavorite = { onToggleCategoryFavorite(category) }
+                                onToggleFavorite = { onToggleCategoryFavorite(category) },
+                                onManageShortcut = { _, _, _ -> }
                             )
                         }
                     }
@@ -1141,7 +1082,31 @@ fun CompactCategoryCardPreview() {
         Box(modifier = Modifier.padding(16.dp).width(160.dp)) {
             CompactCategoryCard(
                 item = sampleItem,
-                onClick = {}
+                onClick = {},
+                onManageShortcut = { _, _, _ -> }
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun CompactCategoryCardWithSearchLabelPreview() {
+    val sampleItem = CategoryEntity(
+        name = "Plomería",
+        icon = "🪠",
+        superCategory = "Hogar y Mantenimiento",
+        superCategoryIcon = "🏠",
+        isFavorite = false
+    )
+    MyApplicationTheme {
+        Box(modifier = Modifier.padding(16.dp).width(180.dp)) {
+            CompactCategoryCard(
+                item = sampleItem,
+                onClick = {},
+                onManageShortcut = { _, _, _ -> },
+                showSuperCategoryLabel = true,
+                isSuperCategoryFavorite = true
             )
         }
     }
@@ -1210,7 +1175,8 @@ fun BentoSuperCategoryCardPreview() {
                 superCategory = sampleSuperCat,
                 emoji = "🏠",
                 height = 130.dp,
-                onClick = {}
+                onClick = {},
+                onManageShortcut = { _, _, _ -> }
             )
         }
     }

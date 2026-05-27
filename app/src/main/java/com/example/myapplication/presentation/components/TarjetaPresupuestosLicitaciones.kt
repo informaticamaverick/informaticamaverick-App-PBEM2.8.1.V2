@@ -20,37 +20,30 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.designsystem.components.DepthDividerHorizontal
+import com.example.myapplication.presentation.designsystem.components.AutoSizeText
 import com.example.myapplication.core.data.local.entity.BudgetEntity
 import com.example.myapplication.core.data.local.entity.BudgetStatus
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 
 // --- PALETA DE COLORES PREMIUM ---
 private val CardSurface = Color(0xFF161C24)
@@ -59,47 +52,7 @@ private val MaverickPurple = Color(0xFF9B51E0)
 private val StatusActive = Color(0xFF38BDF8)
 private val StatusWarning = Color(0xFFF87171)
 private val NeonCyber = Color(0xFF00FFC2)
-// --- DEFINICIÓN DE COLORES ---
-val DarkCardBg = Color(0xFF1A1F26)
-val DarkBottomBg = Color(0xFF0A0E14)
 
-/**
- * Forma personalizada para las tarjetas de presupuesto:
- * - Esquinas superiores con corte (beveled) de 5dp.
- * - Esquinas inferiores casi rectas (redondeo mínimo de 2dp).
- */
-val BudgetCardShape = object : Shape {
-    override fun createOutline(
-        size: androidx.compose.ui.geometry.Size,
-        layoutDirection: LayoutDirection,
-        density: Density
-    ): Outline {
-        val cutSize = with(density) { 5.dp.toPx() }
-        val cornerRadius = with(density) { 2.dp.toPx() }
-        val path = Path().apply {
-            moveTo(cutSize, 0f)
-            lineTo(size.width - cutSize, 0f)
-            lineTo(size.width, cutSize)
-            lineTo(size.width, size.height - cornerRadius)
-            arcTo(
-                rect = Rect(size.width - 2 * cornerRadius, size.height - 2 * cornerRadius, size.width, size.height),
-                startAngleDegrees = 0f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
-            lineTo(cornerRadius, size.height)
-            arcTo(
-                rect = Rect(0f, size.height - 2 * cornerRadius, 2 * cornerRadius, size.height),
-                startAngleDegrees = 90f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
-            lineTo(0f, cutSize)
-            close()
-        }
-        return Outline.Generic(path)
-    }
-}
 
 /*** Componente Visual del Checkbox Premium*/
 @Composable
@@ -125,256 +78,6 @@ fun SelectionIndicator(isSelected: Boolean, modifier: Modifier = Modifier) {
                 modifier = Modifier.size(16.dp),
                 tint = iconColor
             )
-        }
-    }
-}
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun TarjetaPresupuestoPremium(
-    modifier: Modifier = Modifier,
-    providerName: String,
-    companyName: String?,
-    amount: Double,
-    budgetId: String,
-    category: String = "Servicio", // Se conserva para la UI mejorada
-    photoUrl: String?,
-    isOnline: Boolean = false,
-    isSubscribed: Boolean = false,
-    isSelected: Boolean = false,
-    isRead: Boolean = false,
-    isMultiSelectionActive: Boolean = false,
-    onViewClick: () -> Unit,
-    onChatClick: () -> Unit,
-    onAvatarClick: () -> Unit = {},
-    onLongClick: () -> Unit = {}
-
-) {
-    val borderColor = if (isSelected) MaverickBlue else Color.White.copy(alpha = 0.08f)
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(DarkCardBg, DarkBottomBg)
-    )
-
-    Surface(
-        modifier = modifier
-            .width(118.dp) // Tamaño optimizado para 3 por fila
-            .height(180.dp)
-            .combinedClickable(
-                onClick = {
-                    if (isMultiSelectionActive) {
-                        onLongClick()
-                    } else {
-                        onViewClick()
-                    }
-                },
-                onLongClick = onLongClick
-            ),
-        shape = RoundedCornerShape(12.dp),
-        color = Color.Transparent,
-        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
-        shadowElevation = if (isSelected) 12.dp else 4.dp
-    ) {
-        Box(modifier = Modifier.background(backgroundBrush)) {
-
-            // --- INDICADOR DE SELECCIÓN (Conserva tu componente SelectionIndicator) ---
-            if (isSelected) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(2.dp)
-                        .zIndex(30f)
-                ) {
-                    SelectionIndicator(isSelected = true)
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(4.dp)
-            ) {
-                // --- CABECERA: AVATAR + TEXTOS ---
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(modifier = Modifier
-                        .size(40.dp)
-                        .clickable { onAvatarClick() }
-                    ) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape)
-                                .border(1.dp, Color.White.copy(0.1f), CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-
-                        // PUNTO VERDE: CORNER IZQUIERDO SUPERIOR
-                        if (isOnline) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .align(Alignment.TopStart)
-                                    .offset(x = (-2).dp, y = (-2).dp)
-                                    .background(StatusActive, CircleShape)
-                                    .border(1.5.dp, DarkCardBg, CircleShape)
-                                    .zIndex(10f)
-                            )
-                        }
-
-                        // ICONO SUSCRIPTO: CORNER DERECHO INFERIOR
-                        if (isSubscribed) {
-                            Box(
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .align(Alignment.BottomEnd)
-                                    .offset(x = 2.dp, y = 2.dp)
-                                    .background(Color(0xFFF59E0B), CircleShape)
-                                    .border(1.5.dp, DarkCardBg, CircleShape)
-                                    .zIndex(10f),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.Star,
-                                    null,
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(8.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.width(2.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = providerName,
-                            color = Color.White,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = (companyName ?: "Independiente").uppercase(),
-                            color = MaverickBlue,
-                            fontSize = 7.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                // --- DIVIDER SUPERIOR ---
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 5.dp)
-                        .height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color.Transparent, Color.White.copy(0.3f), Color.Transparent)
-                            )
-                        )
-                )
-
-                // --- SECCIÓN CENTRAL: ID/CATEGORIA Y PRECIO ---
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
-                    // FILA 1: ID | CATEGORIA
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "#${budgetId.takeLast(4).uppercase()}",
-                            color = Color.Gray,
-                            fontSize = 7.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Box(modifier = Modifier.width(1.dp).height(8.dp).background(Color.White.copy(0.2f)))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = category.uppercase(),
-                            color = MaverickBlue.copy(alpha = 0.8f),
-                            fontSize = 7.sp,
-                            fontWeight = FontWeight.Black,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    Spacer(Modifier.height(2.dp))
-
-                    // FILA 2: TOTAL Y PRECIO (Alineado a la Izquierda)
-                    Text(
-                        text = "TOTAL PRESUPUESTO",
-                        color = Color.White.copy(alpha = 0.5f),
-                        fontSize = 6.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp
-                    )
-                    Text(
-                        text = "$ ${String.format(Locale.getDefault(), "%,.0f", amount)}",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-
-                Spacer(Modifier.height(2.dp))
-
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 1.dp)
-                        .height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color.Transparent, Color.White.copy(0.5f), Color.Transparent)
-                            )
-                        )
-                )
-                Spacer(Modifier.weight(1f))
-
-                // --- BOTONES FINALES ---
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    // Botón de Chat con Emoji
-                    Surface(
-                        onClick = onChatClick,
-                        modifier = Modifier.size(28.dp),
-                        color = Color.White.copy(0.05f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(0.1f))
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("💬", fontSize = 16.sp)
-                        }
-                    }
-
-                    // Botón VER (Verde StatusActive)
-                    Button(
-                        onClick = onViewClick,
-                        modifier = Modifier.weight(2f).height(28.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (isRead) Color.White.copy(0.1f) else StatusActive,
-                            contentColor = if (isRead) Color.Gray else Color.Black
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Text(
-                            text = if (isRead) "VISTO" else "VER",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -428,14 +131,15 @@ fun LicitacionFolderPremium(
     onClick: () -> Unit
 ) {
     val now = System.currentTimeMillis()
-    val isExpired = now > endDate && endDate != 0L
+    val isExpired = now > endDate && (endDate != 0L)
     val effectiveStatus = if (isExpired && (status == "ABIERTA" || status == "ACTIVO")) "CERRADA" else status
     
     val remainingDays = if (endDate > now) {
         TimeUnit.MILLISECONDS.toDays(endDate - now)
     } else 0
     
-    val df = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    val locale = LocalConfiguration.current.locales[0]
+    val df = remember(locale) { SimpleDateFormat("dd/MM/yyyy", locale) }
     
     // --- ESTADOS DE INTERACCIÓN M3 ---
     val interactionSource = remember { MutableInteractionSource() }
@@ -463,6 +167,7 @@ fun LicitacionFolderPremium(
                 val offsetY = if (isPressed) 6.dp.toPx() else 4.dp.toPx()
 
                 drawIntoCanvas { canvas ->
+                    @Suppress("DEPRECATION")
                     val paint = Paint().asFrameworkPaint().apply {
                         color = shadowColor.toArgb()
                         setShadowLayer(shadowRadius, 0f, offsetY, shadowColor.toArgb())
@@ -525,7 +230,7 @@ fun LicitacionFolderPremium(
                     Box(Modifier.width(1.dp).height(14.dp).background(Color.White.copy(0.2f)))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = category.uppercase(),
+                        text = category.uppercase(locale),
                         color = Color.White.copy(alpha = 0.95f),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Black,
@@ -539,20 +244,6 @@ fun LicitacionFolderPremium(
                         HeaderActionButton(icon = Icons.Default.ArrowUpward, onClick = onClick)
                     }
                 }
-               /**
-                // LÍNEA DE ACENTO INFERIOR (Sutil)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth(0.4f)
-                        .height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(supercategoryColor.copy(alpha = 0.8f), Color.Transparent)
-                            )
-                        )
-                )
-                */
             }
 
             // --- DIVIDER DE PROFUNDIDAD PARA LA CABECERA ---
@@ -586,7 +277,7 @@ fun LicitacionFolderPremium(
                             Box(Modifier.width(1.dp).height(10.dp).background(Color.White.copy(0.2f)))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "#${tenderId.takeLast(8).uppercase()}",
+                                text = "#${tenderId.takeLast(8).uppercase(locale)}",
                                 color = MaverickBlue.copy(alpha = 0.6f),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
@@ -612,7 +303,7 @@ fun LicitacionFolderPremium(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // 1. ESTADO
-                        StatusPillPremium(status = effectiveStatus, modifier = Modifier.wrapContentSize() .fillMaxWidth())
+                        StatusPillPremium(status = effectiveStatus, modifier = Modifier.wrapContentSize().fillMaxWidth())
 
                         // 2. TARJETA PRESUPUESTOS
                         Surface(
@@ -633,7 +324,7 @@ fun LicitacionFolderPremium(
                                     textAlign = TextAlign.Center,
                                     letterSpacing = 1.sp
                                 )
-                                HorizontalDivider( color = Color.White.copy(0.2f), thickness = 1.dp)
+                                HorizontalDivider(color = Color.White.copy(0.2f), thickness = 1.dp)
                                 Spacer(Modifier.height(10.dp))
 
                                 Row(
@@ -736,7 +427,7 @@ fun LicitacionFolderPremium(
                                 model = ImageRequest.Builder(LocalContext.current)
                                     .data(awardedProviderPhotoUrl)
                                     .crossfade(true)
-                                    .size(120, 120) // 🔥 [OPTIMIZACIÓN ELITE] Evita cargar imágenes gigantes en RAM
+                                    .size(120, 120)
                                     .build(),
                                 contentDescription = null,
                                 modifier = Modifier
@@ -752,12 +443,12 @@ fun LicitacionFolderPremium(
                         
                         Column(modifier = Modifier.weight(1f)) {
                             Text("PROVEEDOR ADJUDICADO", color = StatusActive, fontSize = 7.sp, fontWeight = FontWeight.Black)
-                            Text(awardedProviderName.uppercase(), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black)
+                            Text(awardedProviderName.uppercase(locale), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Black)
                         }
                         
                         Column(horizontalAlignment = Alignment.End) {
                             Text("PRESUPUESTO", color = Color.Gray, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                            Text("#${awardedBudgetId?.takeLast(6)?.uppercase() ?: "----"}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            Text("#${awardedBudgetId?.takeLast(6)?.uppercase(locale) ?: "----"}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
                         }
                     }
                 } else if (effectiveStatus == "CERRADA" && awardedProviderName == null) {
@@ -795,7 +486,8 @@ fun StatusPillPremium(
     status: String,
     modifier: Modifier = Modifier
 ) {
-    val upperStatus = status.uppercase()
+    val locale = LocalConfiguration.current.locales[0]
+    val upperStatus = status.uppercase(locale)
     val color = when(upperStatus) {
         "ACTIVO", "ABIERTA" -> Color(0xFF10B981) // Verde esmeralda
         "ADJUDICADO", "ADJUDICADA" -> Color(0xFF0EA5E9) // Celeste sky
@@ -840,7 +532,7 @@ fun StatusPillPremium(
 @Composable
 fun BudgetStatusBadge(status: BudgetStatus) {
     val (color, emoji) = when (status) {
-        BudgetStatus.PENDIENTE -> Color(0xFFFACC15) to "⏳"
+        BudgetStatus.PENDIENTE -> Color(0xFFFACC15) to "📄"
         BudgetStatus.ACEPTADO -> Color(0xFF10B981) to "✅"
         BudgetStatus.RECHAZADO -> Color(0xFFEF4444) to "❌"
         else -> Color.Gray to "📄"
@@ -859,335 +551,354 @@ fun BudgetStatusBadge(status: BudgetStatus) {
     }
 }
 
+
+/**
+ * --- COMPONENTE: TARJETA PRESUPUESTO A4 (ESTILO GOOGLE DRIVE / PREVIEW) ---
+ * Representa el presupuesto como una hoja A4 miniaturizada con un pie de página moderno.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun BudgetCard(
+fun TarjetaPresupuestoA4Document(
     modifier: Modifier = Modifier,
     budget: BudgetEntity,
     isSelected: Boolean = false,
     isMultiSelectionActive: Boolean = false,
+    isInsideTender: Boolean = false,
     categoryEmoji: String? = null,
-    cardWidth: Dp = 118.dp, // Variable para ajustar el ancho de la tarjeta
-    onAvatarClick: () -> Unit = {},
     onViewClick: () -> Unit = {},
     onChatClick: () -> Unit = {},
+    onAvatarClick: () -> Unit = {},
     onLongClick: () -> Unit = {}
-
 ) {
     val borderColor = if (isSelected) MaverickBlue else Color.White.copy(alpha = 0.1f)
-    val effectiveEmoji = categoryEmoji ?: "📋"
     
-    // El color del borde superior cambia si no está visto (Verde) o si ya se vio (Maverick Gradient)
-    val statusColors = if (!budget.isRead) {
-        listOf(Color(0xFF10B981), Color(0xFF10B981)) // Verde esmeralda (No visto)
-    } else {
-        listOf(MaverickBlue, MaverickPurple) // Colores estándar (Visto)
-    }
+    // --- ESTADOS DE INTERACCIÓN ---
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val locale = LocalConfiguration.current.locales[0]
 
-    Card(
+    Surface(
         modifier = modifier
-            .width(cardWidth) // Usando la variable de ancho
-            .padding(2.dp)
-            .pointerInput(isMultiSelectionActive) {
-                detectTapGestures(
-                    onTap = {
-                        if (isMultiSelectionActive) onLongClick()
-                        else onViewClick() // Abrir presupuesto al tocar la tarjeta
-                    },
-                    onLongPress = { onLongClick() }
-                )
-            },
-        shape = BudgetCardShape, // Aplicando el corte de 5dp arriba y casi recto abajo
-        colors = CardDefaults.cardColors(containerColor = DarkCardBg),
-        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 8.dp else 2.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+            .drawBehind {
+                // --- SOMBRA 3D PERSONALIZADA (Estilo Licitación) ---
+                val shadowColor = Color.Black.copy(alpha = if (isPressed) 1f else 0.8f)
+                val shadowRadius = if (isPressed) 12.dp.toPx() else 8.dp.toPx()
+                val offsetY = if (isPressed) 6.dp.toPx() else 4.dp.toPx()
 
-            // Decoración superior (Indicador de estado Visto/No Visto)
-            // Ajustamos el Box para que siga la forma de la tarjeta (el corte)
+                drawIntoCanvas { canvas ->
+                    @Suppress("DEPRECATION")
+                    val paint = Paint().asFrameworkPaint().apply {
+                        color = shadowColor.toArgb()
+                        setShadowLayer(shadowRadius, 0f, offsetY, shadowColor.toArgb())
+                    }
+                    canvas.nativeCanvas.drawRoundRect(
+                        0f,
+                        offsetY,
+                        size.width,
+                        size.height,
+                        8.dp.toPx(),
+                        8.dp.toPx(),
+                        paint
+                    )
+                }
+            }
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = {
+                    if (isMultiSelectionActive) onLongClick()
+                    else onViewClick()
+                },
+                onLongClick = onLongClick
+            ),
+        shape = RoundedCornerShape(4.dp),
+        color = Color.White, // Fondo de la "Hoja A4"
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
+        shadowElevation = 0.dp // Usamos nuestra sombra 3D personalizada
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // --- 1. FONDO: ESQUELETO DEL DOCUMENTO (SKELETON) ---
+            BudgetSkeletonA4(modifier = Modifier.fillMaxSize())
+
+            // --- 2. OVERLAY SUPERIOR: INDICADOR DE ESTADO (VISTO/NO VISTO) ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(BudgetCardShape) // Para que el gradiente se corte igual que la tarjeta
-                    .background(Brush.horizontalGradient(statusColors))
+                    .height(3.dp)
+                    .background(
+                        if (budget.isRead) Brush.horizontalGradient(listOf(MaverickBlue, MaverickPurple))
+                        else Brush.horizontalGradient(listOf(Color(0xFF10B981), Color(0xFF10B981)))
+                    )
             )
 
-            // --- INDICADOR DE SELECCIÓN ---
+            // --- 3. INDICADORES (SELECCIÓN / ESTADO / CATEGORÍA) ---
             if (isSelected) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(end = 4.dp, top = 4.dp),
-                    contentAlignment = Alignment.TopEnd
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
                 ) {
                     SelectionIndicator(isSelected = true)
                 }
             }
 
-            // --- INDICADOR DE ESTADO (MANAGER) ---
-            Box(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, top = 4.dp),
-                contentAlignment = Alignment.TopStart
+                    .align(Alignment.TopStart)
+                    .padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // ETIQUETA DE CATEGORÍA (Solo si no es Licitación)
+                if (!isInsideTender) {
+                    Box(
+                        modifier = Modifier
+                            .height(22.dp)
+                            .background(MaverickBlue.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                            .border(1.dp, MaverickBlue.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = categoryEmoji ?: "📋", fontSize = 10.sp)
+                            Spacer(Modifier.width(6.dp))
+                            // DIVIDER VERTICAL MEJORADO
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(10.dp)
+                                    .background(MaverickBlue.copy(alpha = 0.4f))
+                            )
+                            Spacer(Modifier.width(6.dp))
+
+                            Text(
+                                text = (budget.category ?: "Servicio").uppercase(locale),
+                                color = MaverickBlue,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                // BADGE DE ESTADO
                 BudgetStatusBadge(status = budget.status)
             }
 
-            // Cuerpo: Info del Proveedor (Click -> Perfil)
-            Column(
+            // --- 4. PIE DE PÁGINA (GLASSMORPHISM MAVERICK) ---
+            Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .clickable { onAvatarClick() }
-                    .padding(vertical = 2.dp), // Reducido vertical padding
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy((-2).dp) // Reducir espacio entre textos verticalmente
+                    .height(78.dp) // Un poco más de altura para el gradient
+                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.6f),
+                                Color.Black.copy(alpha = 0.95f)
+                            )
+                        )
+                    )
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.4f), Color.Transparent)
+                        ),
+                        shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
+                    )
+                    .padding(horizontal = 2.dp, vertical = 8.dp)
             ) {
-                // Imagen con anillo y check
-                Box(modifier = Modifier.padding(bottom = 2.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.05f))
-                            .border(1.dp, MaverickBlue.copy(alpha = 0.5f), CircleShape),
-                        contentAlignment = Alignment.Center
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Bottom
+                ) {
+                    // FILA: PRECIO RESALTADO
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.Bottom
                     ) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(budget.providerPhotoUrl)
-                                .crossfade(true)
-                                .size(100, 100) // 🔥 [OPTIMIZACIÓN ELITE] Imagen optimizada para el Grid
-                                .build(),
-                            contentDescription = "Foto de perfil",
-                            modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                        Text(
+                            "$",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NeonCyber
+                        )
+                       // Spacer(Modifier.width(1.dp))
+                        Text(
+                            text = String.format(locale, "%,.0f", budget.grandTotal),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White
                         )
                     }
 
-                    // Check de verificado
-                    Box(
+                    Spacer(Modifier.height(4.dp))
+
+                    // FILA: PRESTADOR Y ACCIONES
+                    Row(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .offset(x = 2.dp, y = 2.dp)
-                            .size(12.dp)
-                            .background(StatusActive, CircleShape)
-                            .border(1.dp, DarkCardBg, CircleShape),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                            .padding(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Verificado",
-                            tint = Color.Black,
-                            modifier = Modifier.size(6.dp)
+                        // Perfil del Prestador
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onAvatarClick() },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(budget.providerPhotoUrl)
+                                    .crossfade(true)
+                                    .size(60, 60)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(24.dp) // Un poco más grande
+                                    .clip(CircleShape)
+                                    .border(0.5.dp, Color.White.copy(0.3f), CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                            
+                            Spacer(Modifier.width(6.dp))
+                            
+                            AutoSizeText(
+                                text = budget.providerName.uppercase(locale),
+                                color = Color.White,
+                                style = TextStyle(
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.5.sp
+                                ),
+                                maxLines = 2,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        // DIVIDER VERTICAL
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(12.dp)
+                                .background(Color.White.copy(alpha = 0.2f))
                         )
+
+                        // BOTÓN CHAT (Icono Email/Chat)
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clickable { onChatClick() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Chat,
+                                contentDescription = "Chat",
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
                     }
-                }
-
-                Text(
-                    text = budget.providerName,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-                Text(
-                    text = (budget.providerCompanyName ?: "Independiente").uppercase(),
-                    fontSize = 7.sp,
-                    color = MaverickBlue,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                )
-            }
-
-            // Divisor (Espaciado reducido)
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 8.dp),
-                color = Color.White.copy(alpha = 0.1f),
-                thickness = 0.5.dp
-            )
-
-            // Encabezado: Categoría e ID (Alineación optimizada)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Badge de Categoría
-                Row(
-                    modifier = Modifier
-                        .background(MaverickBlue.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
-                        .border(0.5.dp, MaverickBlue.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    Text(text = effectiveEmoji, fontSize = 8.sp)
-                    Text(
-                        text = (budget.category ?: "Servicio").uppercase(),
-                        color = MaverickBlue,
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 50.dp)
-                    )
-                }
-
-                // ID del Presupuesto
-                Text(
-                    text = "#${budget.budgetId.takeLast(6).uppercase()}",
-                    color = Color.Gray,
-                    fontSize = 7.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            // Monto del Presupuesto (Diseño compacto)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.2f))
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy((-1).dp) // Reducir espacio vertical entre monto y precio
-            ) {
-                Text(
-                    text = "MONTO TOTAL",
-                    color = Color.Gray,
-                    fontSize = 6.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.5.sp
-                )
-
-                Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Text(text = "$", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Text(
-                        text = String.format(Locale.getDefault(), "%,.0f", budget.grandTotal),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White
-                    )
-                }
-
-                if (budget.validityDays > 0) {
-                    Text(
-                        text = "Válido ${budget.validityDays} días",
-                        color = MaverickBlue.copy(alpha = 0.8f),
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            // Pie: Botón de Acción Principal (Enviar Mensaje)
-            Box(modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 4.dp).fillMaxWidth()) {
-                Button(
-                    onClick = onChatClick,
-                    modifier = Modifier.fillMaxWidth().height(26.dp), // Reducido un poco el alto
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaverickBlue,
-                        contentColor = Color.Black
-                    ),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Email,
-                        contentDescription = null,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "MENSAJE",
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.ExtraBold
-                    )
                 }
             }
         }
     }
 }
 
-// Esta función te permite ver la tarjeta en la ventana de "Design" de Android Studio
-@Preview(showBackground = true, backgroundColor = 0xFF05070A)
+/**
+ * Representación visual simplificada del documento A4 (Skeleton Lines).
+ */
 @Composable
-fun BudgetCardPreview() {
-    val sampleBudgetRead = BudgetEntity(
-        budgetId = "PRE-84920",
+private fun BudgetSkeletonA4(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.padding(12.dp)) {
+        val width = size.width
+        
+        // --- CABECERA ---
+        // Líneas de texto de cabecera
+        drawLine(Color(0xFFE2E8F0), Offset(0.dp.toPx(), 4.dp.toPx()), Offset(width * 0.7f, 4.dp.toPx()), strokeWidth = 2.dp.toPx())
+        drawLine(Color(0xFFF1F5F9), Offset(0.dp.toPx(), 10.dp.toPx()), Offset(width * 0.5f, 10.dp.toPx()), strokeWidth = 1.5.dp.toPx())
+
+        // Cuadrito de ID (Derecha)
+        drawRect(Color(0xFFDBEAFE), Offset(width - 25.dp.toPx(), 0f), size = androidx.compose.ui.geometry.Size(25.dp.toPx(), 10.dp.toPx()))
+
+        // --- CUERPO (TABLA) ---
+        val tableStartY = 35.dp.toPx()
+        val rowHeight = 12.dp.toPx()
+        
+        // Cabecera de tabla
+        drawRect(Color(0xFFF8FAFC), Offset(0f, tableStartY), size = androidx.compose.ui.geometry.Size(width, rowHeight))
+        
+        // Líneas de filas
+        for (i in 1..5) {
+            val y = tableStartY + (i * rowHeight)
+            drawLine(Color(0xFFF1F5F9), Offset(0f, y), Offset(width, y), strokeWidth = 0.5.dp.toPx())
+            // Contenido de fila (Cant, Desc, Total)
+            drawLine(Color(0xFFF1F5F9), Offset(4.dp.toPx(), y + 6.dp.toPx()), Offset(12.dp.toPx(), y + 6.dp.toPx()), strokeWidth = 1.dp.toPx())
+            drawLine(Color(0xFFF1F5F9), Offset(18.dp.toPx(), y + 6.dp.toPx()), Offset(width * 0.6f, y + 6.dp.toPx()), strokeWidth = 1.dp.toPx())
+            drawLine(Color(0xFFF1F5F9), Offset(width - 20.dp.toPx(), y + 6.dp.toPx()), Offset(width - 4.dp.toPx(), y + 6.dp.toPx()), strokeWidth = 1.dp.toPx())
+        }
+        
+        // --- TOTALES ---
+        val totalY = tableStartY + (7 * rowHeight)
+        drawLine(Color(0xFFE2E8F0), Offset(width * 0.6f, totalY), Offset(width, totalY), strokeWidth = 1.dp.toPx())
+        drawLine(Color(0xFFE2E8F0), Offset(width * 0.6f, totalY + 6.dp.toPx()), Offset(width, totalY + 6.dp.toPx()), strokeWidth = 2.dp.toPx())
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFFE2E8F0)
+@Composable
+fun TarjetaPresupuestoA4DocumentPreview() {
+    val sampleBudget = BudgetEntity(
+        budgetId = "PRE-55210",
         clientId = "user123",
         providerId = "prov456",
-        providerName = "Carlos Rodríguez",
-        providerCompanyName = "Servicios Integrales S.A.",
-        category = "Electricista",
-        grandTotal = 45500.0,
-        validityDays = 15,
-        isRead = true,
+        providerName = "Ing. Marcos Tech",
+        providerCompanyName = "Tech Solutions",
+        category = "Domótica",
+        grandTotal = 125800.0,
+        validityDays = 30,
+        isRead = false,
         dateTimestamp = System.currentTimeMillis()
     )
 
-    val sampleBudgetUnread = sampleBudgetRead.copy(budgetId = "PRE-84921", isRead = false)
-
     MyApplicationTheme {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("VISTO (Gradiente Azul)", color = Color.White, fontSize = 10.sp)
-            BudgetCard(
-                budget = sampleBudgetRead,
-                categoryEmoji = "⚡",
-                onAvatarClick = {},
-                onViewClick = {},
-                onChatClick = {}
-            )
+            Text("CONTEXTO CHAT (Con Categoría)", color = Color.White, fontSize = 10.sp)
+            Row(modifier = Modifier.height(180.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                TarjetaPresupuestoA4Document(
+                    modifier = Modifier.width(118.dp).fillMaxHeight(),
+                    budget = sampleBudget,
+                    isSelected = false,
+                    isInsideTender = false,
+                    categoryEmoji = "🏠"
+                )
+                
+                TarjetaPresupuestoA4Document(
+                    modifier = Modifier.width(118.dp).fillMaxHeight(),
+                    budget = sampleBudget.copy(isRead = true, budgetId = "PRE-55211"),
+                    isSelected = true,
+                    isInsideTender = false,
+                    categoryEmoji = "🏠"
+                )
+            }
             
             Spacer(Modifier.height(8.dp))
             
-            Text("NO VISTO (Verde)", color = Color.White, fontSize = 10.sp)
-            BudgetCard(
-                budget = sampleBudgetUnread,
-                categoryEmoji = "⚡",
-                onAvatarClick = {},
-                onViewClick = {},
-                onChatClick = {}
-            )
-        }
-    }
-}
-
-
-
-
-
-@Preview(showBackground = true, backgroundColor = 0xFF05070A)
-@Composable
-fun TarjetaPresupuestoPremiumPreview() {
-    MyApplicationTheme {
-        Box(modifier = Modifier.padding(16.dp)) {
-            TarjetaPresupuestoPremium(
-                providerName = "Maverick Informática",
-                companyName = "Maverick Tech S.A.",
-                amount = 25000.0,
-                budgetId = "PRE-12345",
-                category = "Informatica",
-                photoUrl = "https://picsum.photos/seed/maverick/200/200",
-                isOnline = true,
-                isSubscribed = true,
-                isSelected = false,
-                isRead = false,
-                onViewClick = {},
-                onChatClick = {}
-            )
+            Text("CONTEXTO LICITACIÓN (Sin Categoría)", color = Color.White, fontSize = 10.sp)
+            Row(modifier = Modifier.height(180.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                TarjetaPresupuestoA4Document(
+                    modifier = Modifier.width(118.dp).fillMaxHeight(),
+                    budget = sampleBudget.copy(budgetId = "PRE-55212"),
+                    isSelected = false,
+                    isInsideTender = true
+                )
+            }
         }
     }
 }
@@ -1236,4 +947,3 @@ fun LicitacionFolderPremiumPreview() {
         }
     }
 }
-

@@ -37,7 +37,7 @@ object UserDataMapper {
                     numero = a["numero"] as? String ?: "",
                     localidad = a["localidad"] as? String ?: "",
                     provincia = a["provincia"] as? String ?: "",
-                    pais = a["pais"] as? String ?: "",
+                    pais = a["pais"] as? String ?: "Argentina",
                     codigoPostal = a["codigoPostal"] as? String ?: "",
                     latitude = (a["latitude"] as? Number)?.toDouble() ?: 0.0,
                     longitude = (a["longitude"] as? Number)?.toDouble() ?: 0.0,

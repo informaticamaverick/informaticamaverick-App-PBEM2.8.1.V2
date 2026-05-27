@@ -37,27 +37,30 @@ interface CategoryDao {
     fun getCategoriesBySuperCategory(superCategory: String): Flow<List<CategoryEntity>>
 
     /**
-     * Obtiene metadatos ligeros para la pantalla principal (Bento).
+     * Obtiene metadatos enriquecidos uniendo categorías con su configuración visual.
      */
     @Query("""
         SELECT 
-            superCategory as title, 
-            MAX(superCategoryIcon) as icon, 
-            COUNT(*) as totalItems,
-            MAX(CASE WHEN isFavorite = 1 THEN 1 ELSE 0 END) as hasFavoriteCategories
-        FROM categories_table 
-        GROUP BY superCategory 
-        ORDER BY superCategory ASC
+            sc.name as title, 
+            sc.icon as icon, 
+            sc.color as color,
+            COUNT(c.name) as totalItems,
+            MAX(CASE WHEN c.isFavorite = 1 THEN 1 ELSE 0 END) as hasFavoriteCategories
+        FROM super_categories_table sc
+        LEFT JOIN categories_table c ON sc.name = c.superCategory
+        GROUP BY sc.name
+        ORDER BY sc.name ASC
     """)
     fun getSuperCategoryMetadata(): Flow<List<SuperCategoryLight>>
 }
 
 /**
- * Representación simplificada de una Supercategoría para ahorro de memoria.
+ * Representación enriquecida de una Supercategoría.
  */
 data class SuperCategoryLight(
-    val title: String?,
-    val icon: String?,
+    val title: String,
+    val icon: String,
+    val color: Long,
     val totalItems: Int,
     val hasFavoriteCategories: Int
 )

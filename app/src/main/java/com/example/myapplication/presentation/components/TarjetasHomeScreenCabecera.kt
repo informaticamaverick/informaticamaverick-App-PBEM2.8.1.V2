@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -52,8 +53,6 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.myapplication.core.data.local.entity.UserEntity
-//import com.example.myapplication.core.data.repository.ForecastDay
-import com.example.myapplication.presentation.features.home.LocationOption
 import com.example.myapplication.presentation.features.home.Screen
 import com.example.myapplication.presentation.features.home.UbicacionClimaViewModel
 import com.example.myapplication.presentation.global.BeBrainViewModel
@@ -88,7 +87,7 @@ fun TopHeaderSection(
     val temperature by beViewModel.temperature.collectAsStateWithLifecycle()
     val weatherEmoji by beViewModel.weatherEmoji.collectAsStateWithLifecycle()
     val weatherDescription by beViewModel.weatherDescription.collectAsStateWithLifecycle()
-    val currentLocationState by beViewModel.selectedLocation.collectAsStateWithLifecycle()
+    val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
 
     TopHeaderSectionContent(
         navController = navController,
@@ -98,22 +97,13 @@ fun TopHeaderSection(
         temperature = temperature,
         weatherEmoji = weatherEmoji,
         weatherDescription = weatherDescription,
-        currentLocationState = currentLocationState ?: LocationOption.Gps(address = "Buscando...", locality = "Detectando..."),
+        activeAddress = activeAddress,
         onWeatherClick = { beViewModel.toggleWeatherDetails() },
         onRefreshLocation = { 
-            if (ubicacionObrero.isGpsHabilitado(context)) {
-                ubicacionObrero.ejecutarCalculoUbicacionGps(context) 
-            } else {
-                Toast.makeText(context, "Activa el GPS para actualizar", Toast.LENGTH_SHORT).show()
-            }
+            ubicacionObrero.ejecutarCalculoUbicacionGps(context) 
         },
         onLocationSelected = { option -> 
-            val id = when(option) {
-                is LocationOption.Gps -> "gps_current"
-                is LocationOption.Personal -> option.id
-                is LocationOption.Business -> option.id
-            }
-            beViewModel.selectAddress(id) 
+            beViewModel.selectAddress(option.id) 
         },
         onLogout = onLogout,
         userFromBrain = userFromBrain
@@ -124,6 +114,7 @@ fun TopHeaderSection(
  * TopHeaderSectionV2: Versión evolucionada (Elite) de la cabecera.
  * Implementa una estética de cápsula flotante con Glassmorphism y diseño orgánico.
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun TopHeaderSectionV2(
     navController: NavHostController,
@@ -141,7 +132,7 @@ fun TopHeaderSectionV2(
     val temperature by beViewModel.temperature.collectAsStateWithLifecycle()
     val weatherEmoji by beViewModel.weatherEmoji.collectAsStateWithLifecycle()
     val weatherDescription by beViewModel.weatherDescription.collectAsStateWithLifecycle()
-    val currentLocationState by beViewModel.selectedLocation.collectAsStateWithLifecycle()
+    val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
 
     TopHeaderSectionContentV2(
         navController = navController,
@@ -153,26 +144,20 @@ fun TopHeaderSectionV2(
         temperature = temperature,
         weatherEmoji = weatherEmoji,
         weatherDescription = weatherDescription,
-        currentLocationState = currentLocationState ?: LocationOption.Gps(address = "Buscando...", locality = "Detectando..."),
+        activeAddress = activeAddress,
         onWeatherClick = { beViewModel.toggleWeatherDetails() },
         onRefreshLocation = { 
-            if (ubicacionObrero.isGpsHabilitado(context)) {
-                ubicacionObrero.ejecutarCalculoUbicacionGps(context) 
-            } else {
-                Toast.makeText(context, "Activa el GPS para actualizar", Toast.LENGTH_SHORT).show()
-            }
+            ubicacionObrero.ejecutarCalculoUbicacionGps(context) 
         },
-        onLocationSelected = { option: LocationOption ->
-            val id = when(option) {
-                is LocationOption.Gps -> "gps_current"
-                is LocationOption.Personal -> option.id
-                is LocationOption.Business -> option.id
-            }
-            beViewModel.selectAddress(id) 
+        onLocationSelected = { option ->
+            beViewModel.selectAddress(option.id) 
         },
         onProfileSelected = { profileId -> beViewModel.selectProfile(profileId) },
         onLogout = onLogout,
-        userFromBrain = userFromBrain
+        userFromBrain = userFromBrain,
+        showWeatherDialog = beViewModel.showWeatherDetails.collectAsStateWithLifecycle().value,
+        cityName = beViewModel.locationName.collectAsStateWithLifecycle().value,
+        onSetWeatherDetailsVisible = { beViewModel.setWeatherDetailsVisible(it) }
     )
 }
 
@@ -218,10 +203,10 @@ fun TopHeaderSectionContent(
     temperature: String,
     weatherEmoji: String,
     weatherDescription: String,
-    currentLocationState: LocationOption,
+    activeAddress: AddressInfo?,
     onWeatherClick: () -> Unit,
     onRefreshLocation: () -> Unit,
-    onLocationSelected: (LocationOption) -> Unit,
+    onLocationSelected: (AddressInfo) -> Unit,
     onLogout: () -> Unit,
     userFromBrain: UserEntity?,
     onResultClick: (Any) -> Unit = {}
@@ -293,7 +278,7 @@ fun TopHeaderSectionContent(
                 // --- SLOT 2: TARJETA DE DIRECCIONES (Centro - Adaptable) ---
                 LocationSelector(
                     user = user,
-                    currentLocation = currentLocationState,
+                    activeAddress = activeAddress,
                     onRefresh = onRefreshLocation,
                     onLocationSelected = onLocationSelected,
                     brush = cardGradientBrush,
@@ -324,6 +309,7 @@ fun TopHeaderSectionContent(
  * Centro: Ubicación (Dirección centrada de alto impacto)
  * Derecha: Clima (Indicador técnico secundario)
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun TopHeaderSectionContentV2(
     navController: NavHostController,
@@ -335,13 +321,16 @@ fun TopHeaderSectionContentV2(
     temperature: String,
     weatherEmoji: String,
     weatherDescription: String,
-    currentLocationState: LocationOption,
+    activeAddress: AddressInfo?,
     onWeatherClick: () -> Unit,
     onRefreshLocation: () -> Unit,
-    onLocationSelected: (LocationOption) -> Unit,
+    onLocationSelected: (AddressInfo) -> Unit,
     onProfileSelected: (String?) -> Unit,
     onLogout: () -> Unit,
     userFromBrain: UserEntity?,
+    showWeatherDialog: Boolean = false,
+    cityName: String = "",
+    onSetWeatherDetailsVisible: (Boolean) -> Unit = {},
     onResultClick: (Any) -> Unit = {}
 ) {
     var showLocationPopup by remember { mutableStateOf(false) }
@@ -403,17 +392,17 @@ fun TopHeaderSectionContentV2(
                 )
             }
             .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 10.dp, vertical = 14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-                // --- SLOT 1: IDENTIDAD (Izquierda - Protagonista) ---
+                // --- SLOT 1: IDENTIDAD (Izquierda - Perfil) ---
             Row(
                 modifier = Modifier
-                    .weight(1.3f)
+                    .weight(1.1f)
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = { showProfilePopup = true }
@@ -440,10 +429,10 @@ fun TopHeaderSectionContentV2(
                         Icon(Icons.Default.Person, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(28.dp))
                     }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 Column {
                     Text(
-                        text = if (isPersonalProfile) "HOLA," else "ENTIDAD ACTIVA:",
+                        text = if (isPersonalProfile) "HOLA !!! " else "ENTIDAD ACTIVA:",
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Black,
                         color = CPCyberColors.MaverickCyan,
@@ -464,24 +453,18 @@ fun TopHeaderSectionContentV2(
             // --- SLOT 2: UBICACIÓN (Centro - Núcleo de Datos) ---
             Column(
                 modifier = Modifier
-                    .weight(1.4f)
+                    .weight(1.8f)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) { showLocationPopup = true },
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val (modeLabel, modeColor, modeIcon) = when (currentLocationState) {
-                    is LocationOption.Gps -> Triple("GPS_LIVE", CPCyberColors.MaverickCyan, Icons.Default.GpsFixed)
-                    is LocationOption.Personal -> Triple("STATION_HOME", Color.White.copy(alpha = 0.6f), Icons.Default.Home)
-                    is LocationOption.Business -> Triple("NETWORK_HQ", CPCyberColors.ElectricPurple, Icons.Default.Business)
-                }
+                val modeLabel = if (activeAddress?.id == "gps_current") "GPS_LIVE" else if (activeAddress?.isCompany == true) "NETWORK_HQ" else "STATION_HOME"
+                val modeColor = if (activeAddress?.id == "gps_current") CPCyberColors.MaverickCyan else if (activeAddress?.isCompany == true) CPCyberColors.ElectricPurple else Color.White.copy(alpha = 0.6f)
+                val modeIcon = if (activeAddress?.id == "gps_current") Icons.Default.GpsFixed else if (activeAddress?.isCompany == true) Icons.Default.Business else Icons.Default.Home
 
-                val locationMain = when (currentLocationState) {
-                    is LocationOption.Gps -> currentLocationState.address.ifBlank { "SCANNING..." }
-                    is LocationOption.Personal -> "${currentLocationState.address} ${currentLocationState.number}"
-                    is LocationOption.Business -> currentLocationState.branchName
-                }.uppercase()
+                val locationMain = activeAddress?.streetAndNumber ?: "SCANNING..."
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(modeIcon, null, tint = modeColor, modifier = Modifier.size(8.dp))
@@ -495,7 +478,7 @@ fun TopHeaderSectionContentV2(
                     )
                 }
                 AutoSizeText(
-                    text = locationMain,
+                    text = locationMain.uppercase(),
                     style = MaterialTheme.typography.bodySmall.copy(
                         fontWeight = FontWeight.ExtraBold,
                         color = Color.White,
@@ -505,11 +488,7 @@ fun TopHeaderSectionContentV2(
                     maxLines = 1
                 )
                 Text(
-                    text = when(currentLocationState) {
-                        is LocationOption.Gps -> currentLocationState.locality
-                        is LocationOption.Personal -> currentLocationState.locality
-                        is LocationOption.Business -> currentLocationState.address
-                    }.uppercase(),
+                    text = (activeAddress?.locality ?: "Buscando...").uppercase(),
                     fontSize = 8.sp,
                     color = Color.White.copy(alpha = 0.3f),
                     fontWeight = FontWeight.Bold,
@@ -520,7 +499,7 @@ fun TopHeaderSectionContentV2(
             // --- SLOT 3: CLIMA (Derecha - Indicador Técnico Secundario) ---
             Row(
                 modifier = Modifier
-                    .weight(0.9f)
+                    .weight(1.1f)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -528,23 +507,46 @@ fun TopHeaderSectionContentV2(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = temperature,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        color = Color.White,
-                        letterSpacing = (-0.5).sp
-                    )
-                    Text(
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        // Emoji grande y translúcido de fondo
+                        Text(
+                            text = weatherEmoji,
+                            fontSize = 40.sp,
+                            modifier = Modifier
+                                .graphicsLayer { alpha = 0.35f }
+                                .offset(x = 6.dp)
+                        )
+                        // Temperatura destacada al frente
+                        Text(
+                            text = temperature,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = (-1).sp,
+                            modifier = Modifier.padding(end = 20.dp)
+                        )
+                    }
+                    // Descripción con AutoSizeText para evitar desbordamientos
+                    AutoSizeText(
                         text = weatherDescription.uppercase(),
-                        fontSize = 6.sp,
-                        color = Color.White.copy(alpha = 0.3f),
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 7.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.5.sp
+                        ),
+                        color = Color.White.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = weatherEmoji, fontSize = 20.sp)
             }
         }
     }
@@ -553,7 +555,7 @@ fun TopHeaderSectionContentV2(
     LocationDialog(
         show = showLocationPopup,
         user = user,
-        currentLocation = currentLocationState,
+        activeAddress = activeAddress,
         onRefresh = { onRefreshLocation() },
         onLocationSelected = { onLocationSelected(it); showLocationPopup = false },
         onDismiss = { showLocationPopup = false }
@@ -571,6 +573,15 @@ fun TopHeaderSectionContentV2(
             onDismiss = { showProfilePopup = false }
         )
     }
+
+    WeatherDialog(
+        show = showWeatherDialog,
+        temperature = temperature,
+        weatherEmoji = weatherEmoji,
+        weatherDescription = weatherDescription,
+        cityName = cityName,
+        onDismiss = { onSetWeatherDetailsVisible(false) }
+    )
 }
 
 /**
@@ -603,9 +614,9 @@ fun WeatherWidget(temp: String, emoji: String, description: String, onClick: () 
 @Composable
 fun LocationSelector(
     user: UserEntity?,
-    currentLocation: LocationOption,
+    activeAddress: AddressInfo?,
     onRefresh: () -> Unit,
-    onLocationSelected: (LocationOption) -> Unit,
+    onLocationSelected: (AddressInfo) -> Unit,
     brush: Brush,
     modifier: Modifier = Modifier
 ) {
@@ -623,16 +634,11 @@ fun LocationSelector(
     )
 
     // --- SECCIÓN: DESGLOSE DINÁMICO DE UBICACIÓN ---
-    val (linea1, linea2, linea3) = when (currentLocation) {
-        is LocationOption.Gps -> {
-            Triple(
-                "UBICACIÓN ACTUAL", 
-                currentLocation.address.ifBlank { "Buscando..." }, 
-                "${currentLocation.locality}, ${currentLocation.province}".trim().trim { it == ',' }
-            )
-        }
-        is LocationOption.Personal -> Triple("MI CASA / PERSONAL", "${currentLocation.address} ${currentLocation.number}", currentLocation.locality)
-        is LocationOption.Business -> Triple(currentLocation.companyName.uppercase(), currentLocation.branchName, "${currentLocation.address} ${currentLocation.number}")
+    val (linea1, linea2, linea3) = if (activeAddress?.id == "gps_current") {
+        Triple("UBICACIÓN ACTUAL", activeAddress.streetAndNumber, activeAddress.locality)
+    } else {
+        val label = if (activeAddress?.isCompany == true) activeAddress.companyOrUserName else "MI CASA / PERSONAL"
+        Triple(label, activeAddress?.branchName ?: activeAddress?.streetAndNumber ?: "SELECCIONAR", activeAddress?.streetAndNumber ?: "")
     }
 
     Box(modifier = modifier) {
@@ -684,7 +690,7 @@ fun LocationSelector(
         LocationDialog(
             show = true,
             user = user,
-            currentLocation = currentLocation,
+            activeAddress = activeAddress,
             onRefresh = { onRefresh(); showPopup = false },
             onLocationSelected = { onLocationSelected(it); showPopup = false },
             onDismiss = { showPopup = false }
@@ -759,11 +765,17 @@ fun TopHeaderSectionPreview() {
         email = "juan.perez@example.com",
         photoUrl = null
     )
-    val mockLocation = LocationOption.Gps(
-        address = "Calle Falsa 123",
-        locality = "Tucumán",
+    val mockAddress = AddressInfo(
+        id = "gps_current",
+        companyOrUserName = "Juan",
+        branchName = "GPS",
+        streetAndNumber = "Calle Falsa 123",
+        locality = "San Miguel de Tucumán",
         province = "Tucumán",
-        postalCode = "4000"
+        postalCode = "T4000",
+        isCompany = false,
+        lat = -26.8,
+        lng = -65.2
     )
 
     MyApplicationTheme {
@@ -775,7 +787,7 @@ fun TopHeaderSectionPreview() {
             temperature = "24°C",
             weatherEmoji = "☀️",
             weatherDescription = "Despejado",
-            currentLocationState = mockLocation,
+            activeAddress = mockAddress,
             onWeatherClick = {},
             onRefreshLocation = {},
             onLocationSelected = {},
@@ -786,6 +798,7 @@ fun TopHeaderSectionPreview() {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Preview(showBackground = true, backgroundColor = 0xFF0D1117)
 @Composable
 fun TopHeaderSectionV2Preview() {
@@ -797,11 +810,17 @@ fun TopHeaderSectionV2Preview() {
         email = "juan.perez@example.com",
         photoUrl = null
     )
-    val mockLocation = LocationOption.Gps(
-        address = "Calle Falsa 123",
+    val mockAddress = AddressInfo(
+        id = "gps_current",
+        companyOrUserName = "Juan",
+        branchName = "GPS",
+        streetAndNumber = "Calle Falsa 123",
         locality = "San Miguel de Tucumán",
         province = "Tucumán",
-        postalCode = "4000"
+        postalCode = "T4000",
+        isCompany = false,
+        lat = -26.8,
+        lng = -65.2
     )
 
     MyApplicationTheme {
@@ -815,7 +834,7 @@ fun TopHeaderSectionV2Preview() {
             temperature = "24°C",
             weatherEmoji = "☀️",
             weatherDescription = "Despejado",
-            currentLocationState = mockLocation,
+            activeAddress = mockAddress,
             onWeatherClick = {},
             onRefreshLocation = {},
             onLocationSelected = {},

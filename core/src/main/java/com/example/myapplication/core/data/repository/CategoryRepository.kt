@@ -47,33 +47,11 @@ class CategoryRepository @Inject constructor(
     // --- SECCIÓN 2: SINCRONIZACIÓN ---
 
     /**
-     * Descarga las categorías desde Firebase y actualiza la base de datos local.
+     * [POLÍTICA ZERO COSTO]: Sincronización remota desactivada.
+     * El catálogo de servicios se gestiona localmente vía CategorySeeder.
      */
     suspend fun syncWithFirebase() {
-        try {
-            Log.d(TAG, "Sincronizando categorías desde remoto...")
-            val snapshot = firestore.collection("Servicios").get().await()
-            
-            val entities = snapshot.documents.mapNotNull { doc ->
-                val dto = doc.toObject(CategoryFirestoreDto::class.java)
-                dto?.let {
-                    CategoryEntity(
-                        name = it.name,
-                        icon = it.icon,
-                        superCategory = it.superCategory,
-                        superCategoryIcon = it.superCategoryIcon,
-                        description = it.description
-                    )
-                }
-            }
-
-            if (entities.isNotEmpty()) {
-                categoryDao.deleteAll()
-                categoryDao.insertAll(entities)
-                Log.d(TAG, "Sincronización exitosa: ${entities.size} rubros guardados.")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error en sincronización: ${e.message}")
-        }
+        Log.d(TAG, "Sincronización remota omitida. Usando base de datos local pre-sembrada.")
+        // Se mantiene el método para no romper firmas, pero sin lógica de red.
     }
 }

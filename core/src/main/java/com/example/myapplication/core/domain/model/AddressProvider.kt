@@ -3,21 +3,21 @@ package com.example.myapplication.core.domain.model
 import java.util.UUID
 
 /**
- * --- MODELO DE DIRECCIÓN PRESTADOR ---
+ * --- MODELO DE DIRECCIÓN PRESTADOR (PREMIUM) ---
  * Representa una dirección física asociada a un prestador, sucursal o empresa.
+ * Optimizado para el sistema de geolocalización Maverick Premium.
  */
 data class AddressProvider(
     val id: String = UUID.randomUUID().toString(),
-    var calle: String = "",
-    var numero: String = "",
-    var localidad: String = "",
-    var provincia: String = "",
-    var pais: String = "",
-    var codigoPostal: String = "",
-    var label: String = "",
-    // Coordenadas para geolocalización
-    var latitude: Double? = null,
-    var longitude: Double? = null
+    val calle: String = "",
+    val numero: String = "",
+    val localidad: String = "",
+    val provincia: String = "",
+    val pais: String = "Argentina",
+    val codigoPostal: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    val label: String = ""
 ) {
     /**
      * Devuelve la dirección formateada como una sola línea de texto.
@@ -29,3 +29,4 @@ data class AddressProvider(
             .joinToString(", ")
     }
 }
+

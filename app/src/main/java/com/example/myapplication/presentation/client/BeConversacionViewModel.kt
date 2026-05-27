@@ -4,9 +4,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.presentation.components.BeMessage
-import com.example.myapplication.presentation.registry.BeDictionary
-import com.example.myapplication.presentation.registry.BeConversacion
-import com.example.myapplication.data.repository.AppActionCoordinator
+import com.example.myapplication.presentation.registry.BeDictionaryConversation
+import com.example.myapplication.presentation.global.AppActionCoordinator
+import com.example.myapplication.presentation.global.HUDContext
+import com.example.myapplication.core.data.local.entity.CategoryEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -87,13 +88,13 @@ class BeConversacionViewModel @Inject constructor(
         _currentContext.value = context
         
         val messages = when (context) {
-            HUDContext.HOME -> BeDictionary.HomeMessages
-            HUDContext.BUDGETS, HUDContext.BUDGETS_TENDERS -> BeDictionary.BudgetMessages
-            HUDContext.CHAT -> BeDictionary.ChatMessages
-            HUDContext.CALENDAR -> BeDictionary.CalendarMessages
+            HUDContext.HOME -> BeDictionaryConversation.HomeMessages
+            HUDContext.BUDGETS, HUDContext.BUDGETS_TENDERS -> BeDictionaryConversation.BudgetMessages
+            HUDContext.CHAT -> BeDictionaryConversation.ChatMessages
+            HUDContext.CALENDAR -> BeDictionaryConversation.CalendarMessages
             HUDContext.SEARCH_RESULTS -> listOf(BeMessage("🔍", "Aquí tienes los prestadores de esta categoría.", null, Color(0xFF22D3EE)))
             HUDContext.FAST -> listOf(BeMessage("⚡", "Búsqueda táctica activada. Solo unidades de respuesta inmediata.", null, Color(0xFF22D3EE)))
-            else -> BeDictionary.DefaultMessages
+            else -> BeDictionaryConversation.DefaultMessages
         }
         _contextMessages.value = messages
     }
@@ -104,7 +105,7 @@ class BeConversacionViewModel @Inject constructor(
      */
     fun processSearchQuery(
         query: String, 
-        matchedCategories: List<com.example.myapplication.data.local.CategoryEntity> = emptyList(),
+        matchedCategories: List<CategoryEntity> = emptyList(),
         isFinalSearch: Boolean = false
     ) {
         if (query.isEmpty()) {
@@ -135,7 +136,7 @@ class BeConversacionViewModel @Inject constructor(
                 // ==================================================================================
                 // --- SECCIÓN: RESPUESTA CONVERSACIONAL (SOLO AL PRESIONAR ENTER) ---
                 // ==================================================================================
-                val response = BeConversacion.getResponse(query)
+                val response = BeDictionaryConversation.getResponse(query)
                 _activeResponse.value = response
             }
         }

@@ -1,5 +1,7 @@
 package com.example.myapplication.presentation.components
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,11 +33,13 @@ import com.example.myapplication.core.data.local.entity.BudgetEntity
 import com.example.myapplication.core.data.local.entity.BudgetStatus
 import com.example.myapplication.core.data.local.entity.BudgetItem
 import com.example.myapplication.core.data.local.entity.BudgetService
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 import com.example.myapplication.core.domain.model.Provider
 import com.example.myapplication.core.domain.model.MessageType
 import com.example.myapplication.presentation.designsystem.theme.AppColors
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.designsystem.theme.getThemeColors
+import com.example.myapplication.uishared.components.BudgetPreviewPDFDialog
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -46,6 +50,7 @@ import java.util.*
 /**
  * Burbuja que muestra el resumen de un presupuesto formal enviado por el prestador.
  */
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun BudgetBubble(
     message: MessageEntity,
@@ -53,12 +58,15 @@ fun BudgetBubble(
     isMe: Boolean,
     appColors: AppColors,
     categoryEmoji: String? = null,
-    onReply: () -> Unit = {}, // 🔥 [NUEVO]
+    onReply: () -> Unit = {},
+    providerEntity: ProviderEntity? = null, // 🔥 [NUEVO] Para el visor PDF
     onClick: () -> Unit
 ) {
     val budgetOrange = Color(0xFFFF6B35)
     val budgetAmber = Color(0xFFFFB300)
     val headerGradient = Brush.horizontalGradient(listOf(budgetOrange, budgetAmber))
+
+    var showPdfViewer by remember { mutableStateOf(false) } // 🔥 [NUEVO]
 
     val borderColor =
         if (isMe) appColors.accentGreen.copy(alpha = 0.5f) else appColors.accentBlue.copy(alpha = 0.5f)
@@ -72,7 +80,10 @@ fun BudgetBubble(
             Card(
                 modifier = Modifier
                     .width(280.dp)
-                    .clickable { onClick() },
+                    .clickable { 
+                        if (budget != null && providerEntity != null) showPdfViewer = true
+                        else onClick() 
+                    },
                 shape = RoundedCornerShape(
                     topStart = 20.dp,
                     topEnd = 20.dp,
@@ -243,7 +254,10 @@ fun BudgetBubble(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             TextButton(
-                                onClick = onClick,
+                                onClick = { 
+                                    if (budget != null && providerEntity != null) showPdfViewer = true
+                                    else onClick() 
+                                },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = budgetOrange)
                             ) {
                                 Icon(
@@ -258,7 +272,7 @@ fun BudgetBubble(
                                     fontWeight = FontWeight.ExtraBold
                                 )
                             }
-
+/**
                             Text(
                                 text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(
                                     Date(
@@ -270,11 +284,21 @@ fun BudgetBubble(
                                 color = appColors.textSecondaryColor.copy(alpha = 0.5f),
                                 modifier = Modifier.padding(end = 8.dp)
                             )
+                            */
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showPdfViewer && budget != null && providerEntity != null) {
+        BudgetPreviewPDFDialog(
+            prestador = providerEntity,
+            budget = budget,
+            onDismiss = { showPdfViewer = false },
+            showSendButton = false
+        )
     }
 }
 
@@ -602,6 +626,7 @@ fun BudgetRequestBubble(
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.CenterEnd
                     ) {
+/**
                         Text(
                             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(
                                 Date(
@@ -612,6 +637,7 @@ fun BudgetRequestBubble(
                             fontWeight = FontWeight.Medium,
                             color = appColors.textSecondaryColor.copy(alpha = 0.5f)
                         )
+                        */
                     }
                 }
             }
@@ -648,9 +674,10 @@ fun BudgetRequestBubble(
         }
     }
 
-    @Preview(showBackground = true, name = "Burbuja Presupuesto Formal")
-    @Composable
-    fun BudgetBubblePreview() {
+@RequiresApi(Build.VERSION_CODES.O)
+@Preview(showBackground = true, name = "Burbuja Presupuesto Formal")
+@Composable
+fun BudgetBubblePreview() {
         val appColors = getThemeColors()
         val message = MessageEntity(
             id = "1",

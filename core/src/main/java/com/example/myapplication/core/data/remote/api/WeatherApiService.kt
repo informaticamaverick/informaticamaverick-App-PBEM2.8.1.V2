@@ -1,4 +1,4 @@
-package com.example.myapplication.core.data.remote.weather
+package com.example.myapplication.core.data.remote.api
 
 import retrofit2.Response
 import retrofit2.http.GET

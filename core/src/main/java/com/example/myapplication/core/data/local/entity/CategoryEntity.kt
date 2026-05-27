@@ -11,7 +11,10 @@ import androidx.room.PrimaryKey
  */
 @Entity(
     tableName = "categories_table",
-    indices = [Index(value = ["superCategory"])]
+    indices = [
+        Index(value = ["superCategory"]),
+        Index(value = ["name"]) // 🔥 [ELITE] Indexado para búsquedas ultra-rápidas
+    ]
 )
 data class CategoryEntity(
     @PrimaryKey

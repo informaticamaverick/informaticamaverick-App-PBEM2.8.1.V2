@@ -33,9 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.myapplication.data.local.MessageEntity
-import com.example.myapplication.presentation.components.Utilidades.MaverickColors
-import com.example.myapplication.presentation.components.Utilidades.CPCyberColors
+import com.example.myapplication.core.data.local.entity.MessageEntity
+import com.example.myapplication.presentation.designsystem.components.MaverickColors
+import com.example.myapplication.presentation.designsystem.components.CPCyberColors
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
@@ -43,17 +43,8 @@ import java.util.*
 // ==========================================
 // CONFIGURACIÓN Y MODELOS DE DATOS
 // ==========================================
-data class DayAvailability(
-    val date: Date,
-    val startTime: String, // "HH:mm"
-    val endTime: String,   // "HH:mm"
-    val slotDurationMinutes: Int
-)
+// Los modelos DayAvailability y TimeSlot se han movido a ChatBubbleTurno.kt para evitar duplicados.
 
-data class TimeSlot(
-    val time: String, // "HH:mm"
-    val isOccupied: Boolean
-)
 
 // ==========================================
 // COMPONENTE PRINCIPAL DEL DIALOG (REDISEÑO MAVERICK)
@@ -317,170 +308,9 @@ fun BookingDialog(
     }
 }
 
-@Composable
-fun AddressItemPremium(
-    address: AddressInfo,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val maverickBlue = Color(0xFF2197F5)
-    
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
-        color = if (isSelected) maverickBlue.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(1.dp, if (isSelected) maverickBlue else Color.White.copy(alpha = 0.1f))
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(if (isSelected) maverickBlue else Color.White.copy(alpha = 0.1f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = when {
-                        address.id == "gps_current" -> Icons.Default.MyLocation
-                        address.isCompany -> Icons.Default.Business
-                        else -> Icons.Default.Home
-                    },
-                    contentDescription = null,
-                    tint = if (isSelected) Color.White else Color.Gray,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = address.branchName,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                Text(
-                    text = "${address.streetAndNumber}, ${address.locality}",
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.6f)
-                )
-            }
-            RadioButton(
-                selected = isSelected,
-                onClick = onClick,
-                colors = RadioButtonDefaults.colors(selectedColor = maverickBlue, unselectedColor = Color.Gray)
-            )
-        }
-    }
-}
+// Componentes compartidos (AddressItemPremium, DayItemV2, TimeItemV2, LocationInfoCard, EmptySlotsMessage) 
+// se han movido a ChatBubbleTurno.kt para evitar duplicados.
 
-@Composable
-fun DayItemV2(date: Date, isSelected: Boolean, onClick: () -> Unit) {
-    val dayName = SimpleDateFormat("EEE", Locale("es", "ES")).format(date).uppercase()
-    val dayNumber = SimpleDateFormat("d", Locale.getDefault()).format(date)
-    val maverickBlue = Color(0xFF2197F5)
-
-    Surface(
-        modifier = Modifier
-            .width(64.dp)
-            .height(84.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
-        color = if (isSelected) maverickBlue else Color.White.copy(alpha = 0.05f),
-        border = if (isSelected) null else BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Text(
-                text = dayName,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.5f)
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = dayNumber,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Black,
-                color = if (isSelected) Color.White else Color.White
-            )
-        }
-    }
-}
-
-@Composable
-fun TimeItemV2(slot: TimeSlot, isSelected: Boolean, onClick: () -> Unit) {
-    val maverickBlue = Color(0xFF2197F5)
-    
-    Surface(
-        modifier = Modifier
-            .width(80.dp)
-            .height(44.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = !slot.isOccupied) { onClick() },
-        color = when {
-            slot.isOccupied -> Color.White.copy(alpha = 0.02f)
-            isSelected -> maverickBlue
-            else -> Color.White.copy(alpha = 0.08f)
-        },
-        border = if (isSelected || slot.isOccupied) null else BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = slot.time,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = when {
-                    slot.isOccupied -> Color.White.copy(alpha = 0.2f)
-                    isSelected -> Color.White
-                    else -> Color.White
-                },
-                textDecoration = if (slot.isOccupied) TextDecoration.LineThrough else TextDecoration.None
-            )
-        }
-    }
-}
-
-@Composable
-fun LocationInfoCard(title: String, address: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.White.copy(alpha = 0.05f),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.LocationOn, null, tint = Color(0xFF22D3EE), modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(16.dp))
-            Column {
-                Text(title, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f))
-                Text(address, style = MaterialTheme.typography.bodyMedium, color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
-@Composable
-fun EmptySlotsMessage() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp)),
-        contentAlignment = Alignment.Center
-    ) {
-        Text("No hay horarios disponibles para hoy", fontSize = 12.sp, color = Color.White.copy(alpha = 0.4f))
-    }
-}
 
 // ==========================================
 // FUNCIONES DE PARSEO Y LÓGICA

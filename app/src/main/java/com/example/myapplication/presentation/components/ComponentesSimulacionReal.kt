@@ -5,7 +5,7 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.data.local.entity.*
-import com.example.myapplication.data.local.seed.SembradoServiciosInicia
+//import com.example.myapplication.data.local.seed.SembradoServiciosInicia
 import com.example.myapplication.core.domain.model.*
 import com.example.myapplication.core.data.repository.*
 import com.example.myapplication.core.notifications.NotificationHelper
@@ -46,43 +46,13 @@ class SimulationViewModel @Inject constructor(
     // ==================================================================================
     // --- 🚀 SECCIÓN: MIGRACIÓN DE CATEGORÍAS A FIRESTORE ---
     // ==================================================================================
+    /*
+    [OBSOLETO]: Esta función dependía de SembradoServiciosInicia.kt (comentado).
+    Para migrar nuevas categorías a Firestore, se debe usar el nuevo seed_data.json.
+    */
     fun uploadCategoriesToFirestore() {
-        viewModelScope.launch {
-            try {
-                val db = FirebaseFirestore.getInstance()
-                val batch = db.batch()
-                val collectionRef = db.collection("Servicios")
-
-                SembradoServiciosInicia.categories.forEach { item ->
-                    val docRef = collectionRef.document()
-                    val dto = hashMapOf(
-                        "name" to item.name,
-                        "icon" to item.icon,
-                        "description" to item.description,
-                        "superCategory" to item.superCategory,
-                        "superCategoryIcon" to item.superCategoryIcon,
-                        "updatedAt" to System.currentTimeMillis()
-                    )
-                    batch.set(docRef, dto)
-                }
-
-                val metadataRef = db.collection("config").document("metadata")
-                batch.set(
-                    metadataRef,
-                    mapOf("categoriesVersion" to System.currentTimeMillis() / 1000)
-                )
-
-                batch.commit().await()
-                Toast.makeText(
-                    application,
-                    "¡Sincronización Firestore completada!",
-                    Toast.LENGTH_LONG
-                ).show()
-
-            } catch (e: Exception) {
-                Toast.makeText(application, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-            }
-        }
+        // Lógica desactivada para proteger la integridad del nuevo sistema local.
+        Toast.makeText(application, "Función obsoleta. Use el nuevo sistema de assets.", Toast.LENGTH_SHORT).show()
     }
 
     // ==================================================================================

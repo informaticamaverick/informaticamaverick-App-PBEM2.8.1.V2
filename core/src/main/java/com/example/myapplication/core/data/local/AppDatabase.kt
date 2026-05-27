@@ -15,12 +15,13 @@ import com.example.myapplication.core.data.local.entity.*
         UserEntity::class,
         ProviderEntity::class,
         CategoryEntity::class,
+        SuperCategoryEntity::class,
         TenderEntity::class,
         BudgetEntity::class,
         MessageEntity::class,
         CalendarEventEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -28,6 +29,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
     abstract fun providerDao(): ProviderDao
     abstract fun categoryDao(): CategoryDao
+    abstract fun superCategoryDao(): SuperCategoryDao
     abstract fun budgetDao(): BudgetDao
     abstract fun chatDao(): ChatDao
     abstract fun calendarDao(): CalendarDao

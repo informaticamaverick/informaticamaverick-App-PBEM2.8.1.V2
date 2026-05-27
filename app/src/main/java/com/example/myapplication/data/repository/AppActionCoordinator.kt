@@ -1,6 +1,6 @@
 package com.example.myapplication.data.repository
 
-import com.example.myapplication.data.local.CategoryEntity
+import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.presentation.client.HUDContext
 import com.example.myapplication.presentation.components.AddressInfo
 import kotlinx.coroutines.flow.*
@@ -8,13 +8,18 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * --- APP ACTION COORDINATOR ---
- * Centraliza las acciones globales y el estado compartido (como la ubicación activa)
- * para evitar la inyección circular de ViewModels.
+ * --- APP ACTION COORDINATOR (OBSOLETO) ---
+ * Esta clase ha sido movida a com.example.myapplication.presentation.global.AppActionCoordinator
+ * para evitar dependencias circulares y mejorar la arquitectura.
+ * 
+ * Se mantienen los campos para evitar errores de compilación inmediatos en otras clases 
+ * que aún no han sido migradas, pero se han ELIMINADO las anotaciones de Hilt 
+ * para que no interfiera con el nuevo motor.
  */
-@Singleton
-class AppActionCoordinator @Inject constructor(
-    private val userRepository: UserRepository
+// @Singleton
+class AppActionCoordinator // @Inject constructor
+(
+    private val userRepository: com.example.myapplication.core.data.repository.UserRepository
 ) {
     // Eventos de acciones globales (ej: clics en Be, disparadores de búsqueda)
     private val _actionEvent = MutableSharedFlow<String>()
