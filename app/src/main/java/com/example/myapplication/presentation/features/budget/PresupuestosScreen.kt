@@ -1,6 +1,9 @@
 package com.example.myapplication.presentation.features.budget
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
@@ -89,6 +92,9 @@ fun PresupuestosScreen(
     // Estados de UI y Multiselección
     val isMultiSelectionActive by viewModel.isMultiSelectionActive.collectAsStateWithLifecycle()
     val selectedItemIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+
+    // --- ESTADO DE FILTROS ELEVADO (COORDINACIÓN DE COLAPSO) ---
+    var isFilterSheetOpen by remember { mutableStateOf(false) }
 
     // Estados para Sheets y Overlays (Centralizados para Sincronización de Be)
     var showCrearLicitacionSheet by remember { mutableStateOf(false) }
@@ -264,7 +270,9 @@ fun PresupuestosScreen(
         onAcceptBudget = { viewModel.acceptBudget(it) },
         onRejectBudget = { viewModel.rejectBudget(it) },
         budgetStatsMap = budgetStatsMap,
-        budgetsForSelectedTender = budgetsForSelectedTender
+        budgetsForSelectedTender = budgetsForSelectedTender,
+        isFilterSheetOpen = isFilterSheetOpen,
+        onFilterSheetVisibilityChange = { isFilterSheetOpen = it }
     )
 
     CrearLicitacionSheet(
@@ -324,13 +332,13 @@ fun PresupuestosScreenContent(
     onAcceptBudget: (BudgetEntity) -> Unit = {},
     onRejectBudget: (BudgetEntity) -> Unit = {},
     budgetStatsMap: Map<String, TenderStats> = emptyMap(),
-    budgetsForSelectedTender: List<BudgetEntity> = emptyList()
+    budgetsForSelectedTender: List<BudgetEntity> = emptyList(),
+    isFilterSheetOpen: Boolean = false,
+    onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val tenderListState = rememberLazyListState()
     val refreshState = rememberPullToRefreshState()
     
-    var isFilterMenuExpanded by remember { mutableStateOf(false) }
-
     // 🔥 [ELITE] Reset scroll to top when tenders list changes (Filter/Sort/Update)
     LaunchedEffect(tenders) {
         if (tenders.isNotEmpty()) {
@@ -388,9 +396,17 @@ fun PresupuestosScreenContent(
     // --- LÓGICA DE SCROLL Y COLAPSO DE TARJETAS (Elite V5 - Double Phase) ---
     var scrollAccumulator by remember { mutableFloatStateOf(0f) }
     
+    // 🔥 [ELITE] Lógica de Colapso Automático por Menú de Filtros
+    val autoCollapseFraction by animateFloatAsState(
+        targetValue = if (isFilterSheetOpen) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "autoCollapse"
+    )
+
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (isFilterSheetOpen) return Offset.Zero // 🔥 Bloquear scroll manual si el menú está abierto
                 val delta = available.y
                 // [Fase 1 + 2] Acumulamos hasta que todo colapse (Filtros: 180dp + Header: 250dp = 430dp)
                 val newScroll = (scrollAccumulator - delta).coerceIn(0f, 330f)
@@ -404,13 +420,13 @@ fun PresupuestosScreenContent(
     }
 
     val cardsHideFraction = remember {
-        // Fase 1: Los filtros se ocultan en los primeros 180dp
-        derivedStateOf { (scrollAccumulator / 80f).coerceIn(0f, 1f) }
+        // Fase 1: Los filtros se ocultan en los primeros 80dp o por colapso automático
+        derivedStateOf { maxOf(scrollAccumulator / 80f, autoCollapseFraction).coerceIn(0f, 1f) }
     }
 
     val collapseFraction = remember {
-        // Fase 2: La cabecera colapsa después de los filtros (de 180dp a 430dp)
-        derivedStateOf { ((scrollAccumulator - 80f) / 250f).coerceIn(0f, 1f) }
+        // Fase 2: La cabecera colapsa después de los filtros (de 80dp a 330dp) o por colapso automático
+        derivedStateOf { maxOf((scrollAccumulator - 80f) / 250f, autoCollapseFraction).coerceIn(0f, 1f) }
     }
 
     Box(
@@ -469,7 +485,7 @@ fun PresupuestosScreenContent(
                                 alpha = 1f - cardsHideFraction.value
                                 translationY = -20.dp.toPx() * cardsHideFraction.value
                             }
-                            .height(90.dp * (1f - cardsHideFraction.value)),
+                            .height(106.dp * (1f - cardsHideFraction.value)),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         MoldePremiumFilterCard(
@@ -479,27 +495,21 @@ fun PresupuestosScreenContent(
                             activeFilters = activeFilters,
                             onToggle = onFilterToggle,
                             onManageShortcuts = onManageShortcuts,
-                            onExpandChanged = { isFilterMenuExpanded = it },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            isSheetVisible = isFilterSheetOpen,
+                            onSheetVisibilityChange = onFilterSheetVisibilityChange
                         )
 
-                        AnimatedVisibility(
-                            visible = !isFilterMenuExpanded,
-                            enter = expandHorizontally() + fadeIn(),
-                            exit = shrinkHorizontally() + fadeOut()
-                        ) {
-                            MoldePremiumSortCard(
-                                label = "Ordenar por",
-                                dropdownItems = sortDropdownItems,
-                                shortcutItems = emptyList(),
-                                activeSorts = activeSorts,
-                                onToggle = onFilterToggle,
-                                onManageShortcuts = { _, _ -> }
-                            )
-                        }
+                        MoldePremiumSortCard(
+                            label = "Ordenar por",
+                            dropdownItems = sortDropdownItems,
+                            shortcutItems = emptyList(),
+                            activeSorts = activeSorts,
+                            onToggle = onFilterToggle,
+                            onManageShortcuts = { _, _ -> }
+                        )
                     }
                 }
-                    Spacer(modifier = Modifier.height(8.dp * (1f - cardsHideFraction.value)))
                 ListaMoldeV2(
                     modifier = Modifier.weight(1f),
                     titulo = "CONCURSOS PÚBLICOS",
@@ -589,12 +599,12 @@ fun PresupuestosScreenContent(
             title = "PRESUPUESTOS EN LICITACIONES",
             helperText = "ADMINISTRADOR DE",
             tenderName = selectedTenderForSheet?.title ?: "LICITACIÓN",
-            filterOptions = filterDropdownItems.map { BudgetFilterSortItem(it.id, it.label, it.emoji ?: "🔹") },
-            sortOptions = sortDropdownItems.map { BudgetFilterSortItem(it.id, it.label, it.emoji ?: "🔹") },
-            selectedFilter = activeFilters.find { !it.startsWith("sort_") },
-            selectedSort = activeFilters.find { it.startsWith("sort_") },
-            onFilterSelect = onFilterToggle,
-            onSortSelect = onFilterToggle,
+            //filterOptions = filterDropdownItems.map { BudgetFilterSortItem(it.id, it.label, it.emoji ?: "🔹") },
+            //sortOptions = sortDropdownItems.map { BudgetFilterSortItem(it.id, it.label, it.emoji ?: "🔹") },
+            //selectedFilter = activeFilters.find { !it.startsWith("sort_") },
+            //selectedSort = activeFilters.find { it.startsWith("sort_") },
+            //onFilterSelect = onFilterToggle,
+            //onSortSelect = onFilterToggle,
             budgets = budgetsForSelectedTender,
             onBudgetClick = { budget ->
                 onOpenBudgetPreview(budget)

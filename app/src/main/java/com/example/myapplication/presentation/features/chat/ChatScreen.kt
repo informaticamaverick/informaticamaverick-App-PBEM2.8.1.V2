@@ -2,6 +2,9 @@ package com.example.myapplication.presentation.features.chat
 
 // === IMPORTS ===
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -50,7 +53,7 @@ import com.example.myapplication.uishared.components.BudgetA4Viewer
 import com.example.myapplication.core.domain.model.toEntity
 import com.example.myapplication.core.domain.model.Provider
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.myapplication.presentation.features.budget.BudgetFilterSortItem
+//import com.example.myapplication.presentation.features.budget.BudgetFilterSortItem
 
 // ==================================================================================
 // --- SECCIÓN 1: CONSTANTES Y ESTILOS ---
@@ -86,6 +89,9 @@ fun ChatScreen(
     val selectedIds by chatListViewModel.selectedChatIds.collectAsStateWithLifecycle()
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showPresupuestosSheet by remember { mutableStateOf(false) }
+
+    // --- ESTADO DE FILTROS ELEVADO (COORDINACIÓN DE COLAPSO) ---
+    var isFilterSheetOpen by remember { mutableStateOf(false) }
 
     // Estados para previsualización de presupuesto
     var budgetForA4Preview by remember { mutableStateOf<BudgetEntity?>(null) }
@@ -165,7 +171,9 @@ fun ChatScreen(
         onCloseBudgetPreview = { budgetForA4Preview = null },
         providerForA4 = providerForA4,
         onAcceptBudget = { budgetViewModel.acceptBudget(it) },
-        onRejectBudget = { budgetViewModel.rejectBudget(it) }
+        onRejectBudget = { budgetViewModel.rejectBudget(it) },
+        isFilterSheetOpen = isFilterSheetOpen,
+        onFilterSheetVisibilityChange = { isFilterSheetOpen = it }
     )
 }
 
@@ -206,7 +214,9 @@ fun ChatScreenContent(
     onCloseBudgetPreview: () -> Unit = {},
     providerForA4: Provider? = null,
     onAcceptBudget: (BudgetEntity) -> Unit = {},
-    onRejectBudget: (BudgetEntity) -> Unit = {}
+    onRejectBudget: (BudgetEntity) -> Unit = {},
+    isFilterSheetOpen: Boolean = false,
+    onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val appColors = getAppColors()
     
@@ -255,7 +265,9 @@ fun ChatScreenContent(
                 beBrainViewModel = beBrainViewModel,
                 chatListViewModel = chatListViewModel,
                 isMultiSelectMode = isMultiSelectMode,
-                selectedIds = selectedIds
+                selectedIds = selectedIds,
+                isFilterSheetOpen = isFilterSheetOpen,
+                onFilterSheetVisibilityChange = onFilterSheetVisibilityChange
             )
         } else {
             // Resolver el proveedor (desde la lista local o fetch remoto vía ChatViewModel)
@@ -302,18 +314,18 @@ fun ChatScreenContent(
             title = "PRESUPUESTOS EN CHATS",
             helperText = "ADMINISTRADOR DE",
             tenderName = "HISTORIAL DE MENSAJES",
-            filterOptions = filterDropdownItems.map {
-                BudgetFilterSortItem(
-                    it.id,
-                    it.label,
-                    it.emoji ?: "🔹"
-                )
-            },
-            sortOptions = sortDropdownItems.map { BudgetFilterSortItem(it.id, it.label, it.emoji ?: "🔹") },
-            selectedFilter = activeFilters.find { !it.startsWith("sort_") },
-            selectedSort = activeFilters.find { it.startsWith("sort_") },
-            onFilterSelect = onFilterToggle,
-            onSortSelect = onFilterToggle,
+          //  filterOptions = filterDropdownItems.map {
+          //      BudgetFilterSortItem(
+          //          it.id,
+          //          it.label,
+          //          it.emoji ?: "🔹"
+          //      )
+            //},
+           // sortOptions = sortDropdownItems.map { BudgetFilterSortItem(it.id, it.label, it.emoji ?: "🔹") },
+           // selectedFilter = activeFilters.find { !it.startsWith("sort_") },
+           // selectedSort = activeFilters.find { it.startsWith("sort_") },
+           // onFilterSelect = onFilterToggle,
+           // onSortSelect = onFilterToggle,
             budgets = budgetsForChatAdmin,
             onBudgetClick = { budget -> onOpenBudgetPreview(budget) }
         )
@@ -387,7 +399,9 @@ fun ChatListContent(
     beBrainViewModel: BeBrainViewModel? = null,
     chatListViewModel: ChatListViewModel? = null,
     isMultiSelectMode: Boolean = false,
-    selectedIds: Set<String> = emptySet()
+    selectedIds: Set<String> = emptySet(),
+    isFilterSheetOpen: Boolean = false,
+    onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
 ) {
    // val refreshState = rememberPullToRefreshState()
    // val scope = rememberCoroutineScope()
@@ -403,13 +417,20 @@ fun ChatListContent(
 
     val activeSortCriteria by chatListViewModel?.activeSortCriteria?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList<String>()) }
     
-    var isFilterMenuExpanded by remember { mutableStateOf(false) }
-
     // --- LÓGICA DE SCROLL (Fase 1 + 2) ---
     var scrollAccumulator by remember { mutableFloatStateOf(0f) }
+
+    // 🔥 [ELITE] Lógica de Colapso Automático por Menú de Filtros
+    val autoCollapseFraction by animateFloatAsState(
+        targetValue = if (isFilterSheetOpen) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "autoCollapse"
+    )
+
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (isFilterSheetOpen) return Offset.Zero // 🔥 Bloquear scroll manual si el menú está abierto
                 val delta = available.y
                 val newScroll = (scrollAccumulator - delta).coerceIn(0f, 330f)
                 val consumed = scrollAccumulator - newScroll
@@ -419,8 +440,8 @@ fun ChatListContent(
         }
     }
 
-    val cardsHideFraction = (scrollAccumulator / 80f).coerceIn(0f, 1f)
-    val collapseFraction = ((scrollAccumulator - 80f) / 250f).coerceIn(0f, 1f)
+    val cardsHideFraction = maxOf(scrollAccumulator / 80f, autoCollapseFraction).coerceIn(0f, 1f)
+    val collapseFraction = maxOf((scrollAccumulator - 80f) / 250f, autoCollapseFraction).coerceIn(0f, 1f)
 
     Box(
         modifier = Modifier.fillMaxSize().background(MaverickColors.V2TechSurface).nestedScroll(nestedScrollConnection)
@@ -447,7 +468,7 @@ fun ChatListContent(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .graphicsLayer { alpha = 1f - cardsHideFraction; translationY = -20.dp.toPx() * cardsHideFraction }
-                            .height(100.dp * (1f - cardsHideFraction)),
+                            .height(106.dp * (1f - cardsHideFraction)),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         MoldePremiumFilterCard(
@@ -457,24 +478,19 @@ fun ChatListContent(
                             activeFilters = activeFilters,
                             onToggle = { chatListViewModel?.toggleFilter(it) },
                             onManageShortcuts = { id, add -> chatListViewModel?.manageShortcut(id, add) },
-                            onExpandChanged = { isFilterMenuExpanded = it },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            isSheetVisible = isFilterSheetOpen,
+                            onSheetVisibilityChange = onFilterSheetVisibilityChange
                         )
 
-                        AnimatedVisibility(
-                            visible = !isFilterMenuExpanded,
-                            enter = expandHorizontally() + fadeIn(),
-                            exit = shrinkHorizontally() + fadeOut()
-                        ) {
-                            MoldePremiumSortCard(
-                                label = "Ordenar por",
-                                dropdownItems = sortDropdownItems,
-                                shortcutItems = emptyList(),
-                                activeSorts = activeSortCriteria,
-                                onToggle = { chatListViewModel?.toggleFilter(it) },
-                                onManageShortcuts = { _, _ -> }
-                            )
-                        }
+                        MoldePremiumSortCard(
+                            label = "Ordenar por",
+                            dropdownItems = sortDropdownItems,
+                            shortcutItems = emptyList(),
+                            activeSorts = activeSortCriteria,
+                            onToggle = { chatListViewModel?.toggleFilter(it) },
+                            onManageShortcuts = { _, _ -> }
+                        )
                     }
                 }
 

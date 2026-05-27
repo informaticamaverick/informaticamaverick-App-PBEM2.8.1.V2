@@ -28,20 +28,39 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.unit.lerp
 import com.example.myapplication.presentation.components.TarjetaPresupuestoA4Document
-import androidx.compose.ui.platform.LocalConfiguration
-import com.example.myapplication.presentation.components.SheetEmergenteVertical
 import com.example.myapplication.presentation.components.SheetCloseButton
 import com.example.myapplication.presentation.designsystem.components.MaverickColors
 import com.example.myapplication.presentation.designsystem.components.DepthDividerVertical
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.BorderStroke
 import com.example.myapplication.presentation.designsystem.components.CyberTypography
 import com.example.myapplication.presentation.designsystem.components.DepthDividerHorizontal
 import com.example.myapplication.presentation.designsystem.components.ElevatedDividerHorizontal
 import com.example.myapplication.presentation.designsystem.components.AutoSizeText
 import com.example.myapplication.presentation.designsystem.components.shakeClick
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
+import androidx.compose.foundation.shape.CutCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import com.example.myapplication.presentation.designsystem.components.DepthDividerVertical
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.BorderStroke
 
 /**
  * ==========================================================================================
@@ -58,102 +77,188 @@ fun PresupuestoAdministradorSheet(
     title: String = "PRESUPUESTOS EN LICITACIONES",
     helperText: String = "ADMINISTRADOR DE",
     tenderName: String = "HISTORIAL DE MENSAJES",
-    filterOptions: List<BudgetFilterSortItem>,
-    sortOptions: List<BudgetFilterSortItem>,
-    selectedFilter: String?,
-    selectedSort: String?,
-    onFilterSelect: (String) -> Unit,
-    onSortSelect: (String) -> Unit,
     budgets: List<com.example.myapplication.core.data.local.entity.BudgetEntity>, 
-    onBudgetClick: (com.example.myapplication.core.data.local.entity.BudgetEntity) -> Unit
+    onBudgetClick: (com.example.myapplication.core.data.local.entity.BudgetEntity) -> Unit,
+    topOffset: Dp = 60.dp
 ) {
-    var scrollAccumulator by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    var screenHeight by remember { mutableFloatStateOf(0f) }
+    
+    // Estados de anclaje (Elite SSOT)
+    val hiddenAnchor = screenHeight
+    val partialAnchor = screenHeight * 0.4f
+    val fullAnchor = with(density) { topOffset.toPx() }
 
-    val nestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                val delta = available.y
-                val newScroll = (scrollAccumulator - delta).coerceIn(0f, 150f)
-                val consumed = scrollAccumulator - newScroll
-                scrollAccumulator = newScroll
-                return Offset(0f, consumed)
+    val animatableOffset = remember { Animatable(3000f) }
+    var isInitialized by remember { mutableStateOf(false) }
+
+    // --- ESTABILIZACIÓN MAVERICK ---
+    var lastVisible by remember { mutableStateOf(isVisible) }
+    var isActuallyAnimatingOut by remember { mutableStateOf(false) }
+    val shouldBeComposed = isVisible || isActuallyAnimatingOut || (lastVisible && !isVisible)
+
+    LaunchedEffect(isVisible, screenHeight) {
+        if (screenHeight > 0) {
+            if (!isInitialized) {
+                animatableOffset.snapTo(screenHeight)
+                isInitialized = true
+            }
+
+            if (lastVisible && !isVisible) isActuallyAnimatingOut = true
+            if (!lastVisible && isVisible) isActuallyAnimatingOut = false
+            lastVisible = isVisible
+
+            val target = if (isVisible) partialAnchor else hiddenAnchor
+            
+            if (animatableOffset.value != target) {
+                animatableOffset.animateTo(
+                    targetValue = target,
+                    animationSpec = tween(500, easing = FastOutSlowInEasing)
+                )
+                if (animatableOffset.value >= hiddenAnchor && !isVisible) {
+                    isActuallyAnimatingOut = false
+                }
             }
         }
     }
-    
-    // Fracción para el efecto de colapso de la cabecera
-    val collapseFraction = (scrollAccumulator / 150f).coerceIn(0f, 1f)
 
-    SheetEmergenteVertical(
-        isVisible = isVisible,
-        onClose = onClose,
-        title = title,
-        helperText = helperText,
-        showEmoji = false,
-        topOffset = 60.dp, 
-        showTitle = false, 
-        showHelperText = false, 
-        showActions = false,
-        isDraggable = true,
-        isScrollable = false, 
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(nestedScrollConnection)
+    if (shouldBeComposed) {
+        Box(
+            modifier = Modifier.fillMaxSize().onSizeChanged {
+                if (it.height > 0 && it.height.toFloat() != screenHeight) {
+                    screenHeight = it.height.toFloat()
+                }
+            }
         ) {
-            
-            // --- 1. CABECERA PERSONALIZADA ELITE (MAVERICK HUD) ---
-            HeaderAdministrador(
-                count = count,
-                title = title,
-                helperText = helperText,
-                tenderName = tenderName,
-                onClose = onClose,
-                filterOptions = filterOptions,
-                sortOptions = sortOptions,
-                selectedFilter = selectedFilter,
-                selectedSort = selectedSort,
-                onFilterSelect = onFilterSelect,
-                onSortSelect = onSortSelect,
-                collapseFraction = collapseFraction
-            )
-
-            // --- 2. LISTA DE PRESUPUESTOS (GRILLA 3 COLUMNAS) ---
-            Box(modifier = Modifier.weight(1f)) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
+            // --- 🎭 CAPA 1: FONDO OSCURO ---
+            if (isInitialized) {
+                val alpha = remember(animatableOffset.value, screenHeight, fullAnchor, hiddenAnchor) {
+                    if (screenHeight == 0f || hiddenAnchor == fullAnchor) 0f
+                    else ((hiddenAnchor - animatableOffset.value) / (hiddenAnchor - fullAnchor) * 0.85f).coerceIn(0f, 0.85f)
+                }
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 8.dp),
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(budgets) { budget ->
-                        TarjetaPresupuestoA4Document(
-                            modifier = Modifier.fillMaxWidth().height(180.dp),
-                            budget = budget,
-                            onViewClick = { onBudgetClick(budget) },
-                            onAvatarClick = { /* Opcional: Navegar a perfil */ }
-                        )
+                        .background(MaverickColors.ROG_Dark_Bg.copy(alpha = alpha))
+                        .pointerInput(Unit) { detectTapGestures { onClose() } }
+                )
+            }
+
+            // --- 🏗️ CAPA 2: CONTENIDO ELITE ---
+            if (isInitialized) {
+                val scope = rememberCoroutineScope()
+                var scrollAccumulator by remember { mutableFloatStateOf(0f) }
+
+                val nestedScrollConnection = remember {
+                    object : NestedScrollConnection {
+                        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                            val delta = available.y
+                            val newScroll = (scrollAccumulator - delta).coerceIn(0f, 150f)
+                            val consumed = scrollAccumulator - newScroll
+                            scrollAccumulator = newScroll
+                            return Offset(0f, consumed)
+                        }
                     }
                 }
                 
-                // --- SOMBRA TÉCNICA (Overlay fijo al tope para efecto 3D) ---
+                val collapseFraction = (scrollAccumulator / 150f).coerceIn(0f, 1f)
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(15.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent)
-                            )
+                        .align(Alignment.TopCenter)
+                        .offset { IntOffset(0, animatableOffset.value.roundToInt()) }
+                        .draggable(
+                            orientation = Orientation.Vertical,
+                            state = rememberDraggableState { delta ->
+                                scope.launch {
+                                    animatableOffset.snapTo((animatableOffset.value + delta).coerceIn(fullAnchor, hiddenAnchor))
+                                }
+                            },
+                            onDragStopped = {
+                                val target = if (animatableOffset.value < (partialAnchor + fullAnchor) / 2) fullAnchor
+                                            else if (animatableOffset.value < (hiddenAnchor + partialAnchor) / 2) partialAnchor
+                                            else { onClose(); hiddenAnchor }
+                                scope.launch {
+                                    animatableOffset.animateTo(target, spring(stiffness = Spring.StiffnessLow))
+                                }
+                            }
                         )
-                        .zIndex(10f)
-                )
+                ) {
+                    EliteHudContainerInternal(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(with(density) { (screenHeight - fullAnchor).toDp() })
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().nestedScroll(nestedScrollConnection)
+                        ) {
+                            HeaderAdministrador(
+                                count = count,
+                                title = title,
+                                helperText = helperText,
+                                tenderName = tenderName,
+                                onClose = onClose,
+                                collapseFraction = collapseFraction
+                            )
+
+                            Box(modifier = Modifier.weight(1f)) {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(3),
+                                    modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                                    contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(budgets) { budget ->
+                                        TarjetaPresupuestoA4Document(
+                                            modifier = Modifier.fillMaxWidth().height(180.dp),
+                                            budget = budget,
+                                            onViewClick = { onBudgetClick(budget) }
+                                        )
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(15.dp)
+                                        .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent)))
+                                        .zIndex(10f)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+/** COMPONENTE INTERNO: Contenedor Maestro Elite HUD (Independizado) */
+@Composable
+private fun EliteHudContainerInternal(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(CutCornerShape(topStart = 10.dp, topEnd = 10.dp))
+            .background(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.98f))
+            .drawBehind {
+                val strokeWidth = 1.dp.toPx()
+                val cutSize = 10.dp.toPx()
+                val borderGradient = Brush.horizontalGradient(
+                    colors = listOf(Color.Transparent, MaverickColors.ElectricCyan, MaverickColors.ElectricPurple, MaverickColors.ElectricCyan, Color.Transparent)
+                )
+                val basePath = Path().apply {
+                    moveTo(0f, cutSize); lineTo(cutSize, 0f); lineTo(size.width - cutSize, 0f); lineTo(size.width, cutSize)
+                }
+                drawPath(path = basePath, brush = borderGradient, style = Stroke(width = strokeWidth))
+                drawPath(path = basePath, color = MaverickColors.ElectricCyan.copy(alpha = 0.15f), style = Stroke(width = strokeWidth * 2.5f))
+                drawPath(path = basePath, brush = borderGradient, style = Stroke(width = strokeWidth * 5f), alpha = 0.08f)
+            }
+    ) {
+        content()
     }
 }
 
@@ -167,19 +272,26 @@ private fun HeaderAdministrador(
     helperText: String,
     tenderName: String,
     onClose: () -> Unit,
-    filterOptions: List<BudgetFilterSortItem>,
-    sortOptions: List<BudgetFilterSortItem>,
-    selectedFilter: String?,
-    selectedSort: String?,
-    onFilterSelect: (String) -> Unit,
-    onSortSelect: (String) -> Unit,
     collapseFraction: Float
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 80.dp)
-            .background(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.95f))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.08f), Color.Transparent)
+                )
+            )
+            .drawBehind {
+                // RIM LIGHTING: Brillo sutil en el borde superior
+                drawLine(
+                    color = MaverickColors.ElectricCyan.copy(alpha = 0.4f),
+                    start = Offset(0f, 0.5.dp.toPx()),
+                    end = Offset(size.width, 0.5.dp.toPx()),
+                    strokeWidth = 1.2.dp.toPx()
+                )
+            }
             .zIndex(5f)
     ) {
         // --- FILA 1: BRANDING & CONTROLES ---
@@ -190,7 +302,7 @@ private fun HeaderAdministrador(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = "📄", fontSize = 28.sp)
-            
+
             DepthDividerVertical(
                 modifier = Modifier.padding(horizontal = 12.dp).height(30.dp),
                 thickness = 1.dp
@@ -200,7 +312,7 @@ private fun HeaderAdministrador(
                 Text(
                     text = helperText.uppercase(),
                     style = CyberTypography.MonospaceData.copy(
-                        color = MaverickColors.ElectricPurple.copy(alpha = 0.8f),
+                        color = Color.Gray.copy(alpha = 0.8f),
                         fontSize = 8.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.2.sp
@@ -226,6 +338,35 @@ private fun HeaderAdministrador(
                 )
             }
 
+            // --- CONTADOR DE PRESUPUESTOS (ELITE) ---
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(start = 12.dp)
+            ) {
+                Text(
+                    text = count.toString(),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 18.sp
+                    )
+                )
+                Text(
+                    text = "RESULT",
+                    style = CyberTypography.MonospaceData.copy(
+                        color = Color.Gray.copy(alpha = 0.6f),
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
+                    )
+                )
+            }
+
+            DepthDividerVertical(
+                modifier = Modifier.padding(horizontal = 12.dp).height(24.dp),
+                thickness = 1.dp
+            )
+
             SheetCloseButton(onClick = onClose)
         }
 
@@ -236,55 +377,6 @@ private fun HeaderAdministrador(
             shadowColor = Color.Black.copy(alpha = 0.8f),
             highlightColor = Color.White.copy(alpha = 0.1f)
         )
-
-        // --- FILA 2: STATS & ACCIONES (COLAPSABLE) ---
-        if (collapseFraction < 0.8f) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 10.dp)
-                    .graphicsLayer { 
-                        alpha = 1f - collapseFraction 
-                        translationY = -20.dp.toPx() * collapseFraction
-                    },
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Contador estilo M3
-                Column(horizontalAlignment = Alignment.Start) {
-                    Text(
-                        "PRESUPUESTOS",
-                        style = CyberTypography.MonospaceData.copy(fontSize = 6.sp, color = Color.Gray)
-                    )
-                    Surface(
-                        color = MaverickColors.ElectricCyan.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(4.dp),
-                        border = BorderStroke(1.dp, MaverickColors.ElectricCyan.copy(alpha = 0.4f))
-                    ) {
-                        Text(
-                            text = count.toString(),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                            style = CyberTypography.MonospaceData.copy(
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.weight(1f))
-
-                // Acciones: Filtros y Ordenamiento
-                FiltrosVisiblesSection(
-                    filterOptions = filterOptions,
-                    sortOptions = sortOptions,
-                    selectedFilter = selectedFilter,
-                    selectedSort = selectedSort,
-                    onFilterSelect = onFilterSelect,
-                    onSortSelect = onSortSelect
-                )
-            }
-        }
 
         // --- SEPARADOR 3D FINAL ---
         Box(
@@ -299,100 +391,11 @@ private fun HeaderAdministrador(
     }
 }
 
-@Composable
-private fun FiltrosVisiblesSection(
-    filterOptions: List<BudgetFilterSortItem>,
-    sortOptions: List<BudgetFilterSortItem>,
-    selectedFilter: String?,
-    selectedSort: String?,
-    onFilterSelect: (String) -> Unit,
-    onSortSelect: (String) -> Unit
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // --- FILTROS ---
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            filterOptions.forEach { item ->
-                FilterActionChip(
-                    item = item,
-                    isSelected = selectedFilter == item.id,
-                    onClick = { onFilterSelect(item.id) }
-                )
-            }
-        }
 
-        // --- ORDENAMIENTO ---
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            sortOptions.forEach { item ->
-                FilterActionChip(
-                    item = item,
-                    isSelected = selectedSort == item.id,
-                    onClick = { onSortSelect(item.id) }
-                )
-            }
-        }
-    }
-}
 
-/**
- * Chip de acción con animación de vibración (shakeClick)
- */
-@Composable
-private fun FilterActionChip(
-    item: BudgetFilterSortItem,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val accentColor = if (isSelected) MaverickColors.ElectricCyan else Color.White.copy(alpha = 0.1f)
-    
-    Box(
-        modifier = Modifier
-            .height(32.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (isSelected) accentColor.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
-            .border(
-                width = 1.dp,
-                color = if (isSelected) accentColor.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(8.dp)
-            )
-            .shakeClick { onClick() }
-            .padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(text = item.emoji, fontSize = 14.sp)
-            Text(
-                text = item.label.uppercase(),
-                style = CyberTypography.MonospaceData.copy(
-                    fontSize = 8.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.6f)
-                )
-            )
-        }
-    }
-}
 
 
 // === DATA MODELS & UTILS ===
-
-data class BudgetFilterSortItem(
-    val id: String,
-    val label: String,
-    val emoji: String
-)
 
 // Eliminado BudgetPlaceholder a favor de BudgetEntity
 
@@ -401,17 +404,6 @@ data class BudgetFilterSortItem(
 @Preview(showBackground = true, backgroundColor = 0xFF05070A)
 @Composable
 fun PresupuestoAdministradorSheetPreview() {
-    val filters = listOf(
-        BudgetFilterSortItem("all", "Todos", "📂"),
-        BudgetFilterSortItem("pending", "Pendientes", "⏳"),
-        BudgetFilterSortItem("approved", "Aprobados", "✅")
-    )
-    
-    val sorts = listOf(
-        BudgetFilterSortItem("recent", "Recientes", "📅"),
-        BudgetFilterSortItem("price", "Precio", "💰")
-    )
-
     val budgets = List(12) { i ->
         com.example.myapplication.core.data.local.entity.BudgetEntity(
             budgetId = i.toString(),
@@ -431,12 +423,6 @@ fun PresupuestoAdministradorSheetPreview() {
                 helperText = "ADMINISTRADOR DE",
                 tenderName = "Licitación: Fachada Edificio Central",
                 onClose = {},
-                filterOptions = filters,
-                sortOptions = sorts,
-                selectedFilter = "all",
-                selectedSort = "recent",
-                onFilterSelect = {},
-                onSortSelect = {},
                 collapseFraction = 0f
             )
 

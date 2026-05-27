@@ -885,6 +885,7 @@ fun BentoSuperCategoryCard(
                                         lineHeight = 8.sp
                                     )
                                 )
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = "PROFESIONES",
                                     color = Color.Gray.copy(alpha = 0.8f),
@@ -895,6 +896,7 @@ fun BentoSuperCategoryCard(
                                         lineHeight = 8.sp
                                     )
                                 )
+                                Spacer(modifier = Modifier.height(1.dp))
                             }
                         }
                     }

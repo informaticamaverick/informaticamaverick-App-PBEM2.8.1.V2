@@ -1,6 +1,9 @@
 package com.example.myapplication.presentation.features.calendar
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -70,6 +73,9 @@ fun CalendarScreen(
     val activeSortCriteria by viewModel.activeSortCriteria.collectAsStateWithLifecycle()
     val beActionIds by viewModel.beActionIds.collectAsStateWithLifecycle()
 
+    // --- ESTADO DE FILTROS ELEVADO (COORDINACIÓN DE COLAPSO) ---
+    var isFilterSheetOpen by remember { mutableStateOf(false) }
+
     // Estados para el Historial (Integración HUD)
     val pastEvents by viewModel.pastEvents.collectAsStateWithLifecycle()
     var showHistorySheet by remember { mutableStateOf(false) }
@@ -130,6 +136,8 @@ fun CalendarScreen(
         showHistorySheet = showHistorySheet,
         onDismissHistory = { showHistorySheet = false },
         pastEvents = pastEvents,
+        isFilterSheetOpen = isFilterSheetOpen,
+        onFilterSheetVisibilityChange = { isFilterSheetOpen = it }
     )
 }
 
@@ -164,12 +172,13 @@ fun CalendarScreenContent(
     onDeleteEvent: (CalendarEventEntity) -> Unit,
     showHistorySheet: Boolean = false,
     onDismissHistory: () -> Unit = {},
-    pastEvents: List<CalendarEventEntity> = emptyList()
+    pastEvents: List<CalendarEventEntity> = emptyList(),
+    isFilterSheetOpen: Boolean = false,
+    onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     
-    var isFilterMenuExpanded by remember { mutableStateOf(false) }
     val collapsedStates = remember { mutableStateMapOf<String, Boolean>() }
     val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
 
@@ -181,9 +190,18 @@ fun CalendarScreenContent(
 
     // --- LÓGICA DE SCROLL Y COLAPSO ---
     var scrollAccumulator by remember { mutableFloatStateOf(0f) }
+    
+    // 🔥 [ELITE] Lógica de Colapso Automático por Menú de Filtros
+    val autoCollapseFraction by animateFloatAsState(
+        targetValue = if (isFilterSheetOpen) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "autoCollapse"
+    )
+
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (isFilterSheetOpen) return Offset.Zero // 🔥 Bloquear scroll manual si el menú está abierto
                 val delta = available.y
                 val newScroll = (scrollAccumulator - delta).coerceIn(0f, 430f)
                 val consumed = scrollAccumulator - newScroll
@@ -193,8 +211,8 @@ fun CalendarScreenContent(
         }
     }
 
-    val cardsHideFraction = (scrollAccumulator / 180f).coerceIn(0f, 1f)
-    val collapseFraction = ((scrollAccumulator - 180f) / 250f).coerceIn(0f, 1f)
+    val cardsHideFraction = maxOf((scrollAccumulator / 180f), autoCollapseFraction).coerceIn(0f, 1f)
+    val collapseFraction = maxOf(((scrollAccumulator - 180f) / 250f), autoCollapseFraction).coerceIn(0f, 1f)
 
     // --- CABECERA DINÁMICA ---
     val isDateSortActive = activeFilters.contains("sort_date") || activeFilters.none { it.startsWith("sort_") }
@@ -254,15 +272,16 @@ fun CalendarScreenContent(
                 }
 
                 // --- 2. MODULO DE FILTROS PREMIUM ---
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(vertical = 4.dp * (1f - cardsHideFraction))
-                        .graphicsLayer { alpha = 1f - cardsHideFraction; translationY = -20.dp.toPx() * cardsHideFraction }
-                        .height(100.dp * (1f - cardsHideFraction)),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(modifier = Modifier.height(8.dp * (1f - cardsHideFraction)))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .graphicsLayer { alpha = 1f - cardsHideFraction; translationY = -20.dp.toPx() * cardsHideFraction }
+                            .height(106.dp * (1f - cardsHideFraction)),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                     MoldePremiumFilterCard(
                         label = "Filtrar por",
                         dropdownItems = filterDropdownItems,
@@ -270,25 +289,21 @@ fun CalendarScreenContent(
                         activeFilters = activeFilters,
                         onToggle = onToggleFilter,
                         onManageShortcuts = onManageShortcuts,
-                        onExpandChanged = { isFilterMenuExpanded = it },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        isSheetVisible = isFilterSheetOpen,
+                        onSheetVisibilityChange = onFilterSheetVisibilityChange
                     )
 
-                    AnimatedVisibility(
-                        visible = !isFilterMenuExpanded,
-                        enter = expandHorizontally() + fadeIn(),
-                        exit = shrinkHorizontally() + fadeOut()
-                    ) {
-                        MoldePremiumSortCard(
-                            label = "Ordenar por",
-                            dropdownItems = sortDropdownItems,
-                            shortcutItems = emptyList(),
-                            activeSorts = activeSorts,
-                            onToggle = onToggleFilter,
-                            onManageShortcuts = { _, _ -> }
-                        )
-                    }
+                    MoldePremiumSortCard(
+                        label = "Ordenar por",
+                        dropdownItems = sortDropdownItems,
+                        shortcutItems = emptyList(),
+                        activeSorts = activeSorts,
+                        onToggle = onToggleFilter,
+                        onManageShortcuts = { _, _ -> }
+                    )
                 }
+            }
 
                 // --- 3. LISTADO DE EVENTOS ELITE ---
                 ListaMoldeV2(

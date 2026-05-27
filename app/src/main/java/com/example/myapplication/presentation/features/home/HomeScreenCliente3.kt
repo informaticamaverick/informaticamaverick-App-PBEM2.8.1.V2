@@ -538,17 +538,17 @@ fun HomeScreenContentStateless(
                                         icon = if (showMenu) Icons.Rounded.Close else Icons.Rounded.Menu,
                                         color = if (showMenu) MaverickColors.DeepRed else Color.White
                                     )
-                                   MoldeEliteDropdownMenu(
-                                        expanded = showMenu,
+                                   MoldeEliteBottomSheetV2(
+                                        visible = showMenu,
                                         onDismissRequest = { showMenu = false },
                                         items = dropdownItems,
                                         activeFilters = activeSortFilters,
-                                        shortcutIds = emptySet(), 
-                                        onToggle = { actionId ->
+                                        shortcutIds = emptySet<String>(), 
+                                        onToggle = { actionId: String ->
                                             onTriggerAction(actionId)
                                             showMenu = false
                                         },
-                                        onManageShortcuts = { _, _ -> }
+                                        onManageShortcuts = { _: String, _: Boolean -> }
                                     )
                                 }
                             }

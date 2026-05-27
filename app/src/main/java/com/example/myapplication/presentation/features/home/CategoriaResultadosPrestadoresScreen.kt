@@ -3,6 +3,7 @@ package com.example.myapplication.presentation.features.home
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -24,6 +25,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -79,6 +84,9 @@ fun ResultBusquedaCategoriaScreen(
 
     val shortcuts by providerViewModel.shortcuts.collectAsStateWithLifecycle()
     val activeSortCriteria by providerViewModel.activeSortCriteria.collectAsStateWithLifecycle()
+
+    // --- ESTADO DE FILTROS ELEVADO (COORDINACIÓN DE COLAPSO) ---
+    var isFilterSheetOpen by remember { mutableStateOf(false) }
 
     val activeProfileName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
     val activeProfilePhotoUrl by beViewModel.activeProfilePhotoUrl.collectAsStateWithLifecycle()
@@ -198,7 +206,9 @@ fun ResultBusquedaCategoriaScreen(
         onNavigateToProviderProfile = onNavigateToProviderProfile,
         onNavigateToChat = onNavigateToChat,
         onTriggerAction = { beViewModel.triggerAction(it) },
-        onManageShortcuts = { id, add -> providerViewModel.manageShortcut(id, add) }
+        onManageShortcuts = { id, add -> providerViewModel.manageShortcut(id, add) },
+        isFilterSheetOpen = isFilterSheetOpen,
+        onFilterSheetVisibilityChange = { isFilterSheetOpen = it }
     )
 }
 
@@ -231,9 +241,39 @@ fun ResultBusquedaCategoriaContent(
     onNavigateToProviderProfile: (String) -> Unit,
     onNavigateToChat: (ProviderDisplayModel) -> Unit,
     onTriggerAction: (String) -> Unit,
-    onManageShortcuts: (String, Boolean) -> Unit = { _, _ -> }
+    onManageShortcuts: (String, Boolean) -> Unit = { _, _ -> },
+    isFilterSheetOpen: Boolean = false,
+    onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val listState = rememberLazyListState()
+
+    // --- LÓGICA DE SCROLL Y COLAPSO DE TARJETAS (Elite V5 - Double Phase) ---
+    var scrollAccumulator by remember { mutableFloatStateOf(0f) }
+
+    // 🔥 [ELITE] Lógica de Colapso Automático por Menú de Filtros
+    val autoCollapseFraction by animateFloatAsState(
+        targetValue = if (isFilterSheetOpen) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "autoCollapse"
+    )
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (isFilterSheetOpen) return Offset.Zero // 🔥 Bloquear scroll manual si el menú está abierto
+                val delta = available.y
+                // Fase 1 (Filtros) + Fase 2 (ContextCard) + Fase 3 (Header)
+                val newScroll = (scrollAccumulator - delta).coerceIn(0f, 400f)
+                val consumed = scrollAccumulator - newScroll
+                scrollAccumulator = newScroll
+                return if (scrollAccumulator >= 400f && delta < 0) Offset.Zero else Offset(0f, consumed)
+            }
+        }
+    }
+
+    val filtersHideFraction = maxOf(scrollAccumulator / 80f, autoCollapseFraction).coerceIn(0f, 1f)
+    val contextHideFraction = maxOf((scrollAccumulator - 80f) / 80f, autoCollapseFraction).coerceIn(0f, 1f)
+    val collapseFraction = maxOf((scrollAccumulator - 160f) / 240f, autoCollapseFraction).coerceIn(0f, 1f)
     
     // --- ESTADOS DE DIÁLOGOS (POPUPS) ---
     var showProfileDialog by remember { mutableStateOf(false) }
@@ -275,16 +315,15 @@ fun ResultBusquedaCategoriaContent(
         )
     }
 
-    var isFilterMenuExpanded by remember { mutableStateOf(false) }
-
     Scaffold(
         containerColor = MaverickColors.StealthGray,
+        modifier = Modifier.nestedScroll(nestedScrollConnection),
         topBar = {
             BarraCabezera(
                 title = categoryName,
                 subtitle = "Servicios en ${userLocation?.locality ?: "tu zona"}",
                 emoji = selectedCategory?.icon ?: "🔍",
-                collapseFraction = if (listState.firstVisibleItemIndex > 0) 1f else 0f,
+                collapseFraction = collapseFraction,
                 onBack = onBack,
                 accentColor = categoryColor
             )
@@ -314,13 +353,20 @@ fun ResultBusquedaCategoriaContent(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp) // 🔥 Reducción a 4dp entre bloques (8dp total con el padding superior)
+                    modifier = Modifier.fillMaxSize()
                 ) {
+                    Spacer(modifier = Modifier.height(8.dp * (1f - filtersHideFraction)))
                     
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).padding(top = 6.dp, bottom = 0.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .graphicsLayer { 
+                            alpha = 1f - filtersHideFraction
+                            translationY = -20.dp.toPx() * filtersHideFraction 
+                        }
+                        .height(106.dp * (1f - filtersHideFraction)),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MoldePremiumFilterCard(
                         label = "Filtrar por",
@@ -338,49 +384,57 @@ fun ResultBusquedaCategoriaContent(
                             }
                         },
                         onManageShortcuts = onManageShortcuts,
-                        onExpandChanged = { isFilterMenuExpanded = it },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        isSheetVisible = isFilterSheetOpen,
+                        onSheetVisibilityChange = onFilterSheetVisibilityChange
                     )
 
-                    AnimatedVisibility(
-                        visible = !isFilterMenuExpanded,
-                        enter = expandHorizontally() + fadeIn(),
-                        exit = shrinkHorizontally() + fadeOut()
-                    ) {
-                        MoldePremiumSortCard(
-                            label = "Ordenar por",
-                            dropdownItems = sortDropdownItems,
-                            shortcutItems = emptyList(),
-                            activeSorts = activeSortId,
-                            onToggle = { actionId ->
-                                onTriggerAction(actionId)
-                            },
-                            onManageShortcuts = { _, _ -> }
-                        )
-                    }
+                    MoldePremiumSortCard(
+                        label = "Ordenar por",
+                        dropdownItems = sortDropdownItems,
+                        shortcutItems = emptyList(),
+                        activeSorts = activeSortId,
+                        onToggle = { actionId ->
+                            onTriggerAction(actionId)
+                        },
+                        onManageShortcuts = { _, _ -> }
+                    )
                 }
 
                     // --- 2. TARJETA DE CONTEXTO (USUARIO + UBICACIÓN REFINADA) ---
-                    MoldePremiumContextCard(
-                        user = user,
-                        activeProfileName = activeProfileName,
-                        activeProfilePhotoUrl = activeProfilePhotoUrl,
-                        mainAddress = activeAddress?.streetAndNumber ?: (userLocation?.locality ?: "Buscando..."),
-                        localityInfo = activeAddress?.let { "${it.locality}, CP ${it.postalCode}" } ?: "",
-                        description = activeAddress?.let { addr ->
-                            if (!addr.companyOrUserName.isNullOrBlank() && addr.companyOrUserName != "Mi Ubicación") {
-                                buildString {
-                                    append(addr.companyOrUserName)
-                                    if (!addr.branchName.isNullOrBlank()) append(" - ${addr.branchName}")
-                                }
-                            } else if (addr.id == "gps_current") "Mi Ubicación" else null
-                        },
-                        isGpsActive = activeAddress?.id == "gps_current",
-                        onUserClick = { showProfileDialog = true },
-                        onLocationClick = { showLocationDialog = true },
-                        onGpsToggle = { onTriggerAction("refresh_gps") },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .graphicsLayer {
+                                alpha = 1f - contextHideFraction
+                                translationY = -20.dp.toPx() * contextHideFraction
+                            }
+                            .height(64.dp * (1f - contextHideFraction))
+                    ) {
+                        MoldePremiumContextCard(
+                            user = user,
+                            activeProfileName = activeProfileName,
+                            activeProfilePhotoUrl = activeProfilePhotoUrl,
+                            mainAddress = activeAddress?.streetAndNumber ?: (userLocation?.locality ?: "Buscando..."),
+                            localityInfo = activeAddress?.let { "${it.locality}, CP ${it.postalCode}" } ?: "",
+                            description = activeAddress?.let { addr ->
+                                if (!addr.companyOrUserName.isNullOrBlank() && addr.companyOrUserName != "Mi Ubicación") {
+                                    buildString {
+                                        append(addr.companyOrUserName)
+                                        if (!addr.branchName.isNullOrBlank()) append(" - ${addr.branchName}")
+                                    }
+                                } else if (addr.id == "gps_current") "Mi Ubicación" else null
+                            },
+                            isGpsActive = activeAddress?.id == "gps_current",
+                            onUserClick = { showProfileDialog = true },
+                            onLocationClick = { showLocationDialog = true },
+                            onGpsToggle = { onTriggerAction("refresh_gps") },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp * (1f - contextHideFraction)))
 
                     // --- 4. LISTA DE RESULTADOS ELITE ---
                     val hasActiveFilters = activeRefinements.isNotEmpty() || !showSubscribedOnly || !sortByProximity
@@ -445,7 +499,7 @@ fun ResultBusquedaCategoriaContent(
                                         isCompact = false,
                                         onClick = { onNavigateToProviderProfile(item.service.id) },
                                         onChatClick = { onNavigateToChat(item.service) },
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).fillMaxWidth()
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth()
                                     )
                                 }
                             }
@@ -573,7 +627,7 @@ fun ManualZipRescuePopUp(
 @Composable
 fun ProximityDivider(text: String, emoji: String, color: Color) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 12.dp), 
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp, horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(color = color.copy(alpha = 0.1f), shape = CircleShape, border = BorderStroke(1.dp, color.copy(0.2f)), modifier = Modifier.size(32.dp)) {

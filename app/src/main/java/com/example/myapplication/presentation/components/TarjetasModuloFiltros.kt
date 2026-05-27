@@ -9,20 +9,23 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterAltOff
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -30,55 +33,37 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.positionInWindow
 import com.example.myapplication.presentation.registry.MaverickIcons
 import com.example.myapplication.presentation.designsystem.components.MenuTacticoBe
-import com.example.myapplication.presentation.designsystem.components.BeMenuItem
 import com.example.myapplication.presentation.designsystem.components.MaverickColors
 import com.example.myapplication.presentation.designsystem.components.DepthDividerHorizontal
-import com.example.myapplication.presentation.designsystem.components.DepthDividerThemedVertical
-import com.example.myapplication.presentation.designsystem.components.shakeClick
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.material3.LocalTextStyle
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import com.example.myapplication.presentation.components.BeEmotion
-
-// ==========================================================================================
-// --- CONSTANTES DE DISEÑO ELITE (UNIFICADAS) ---
-// ==========================================================================================
-private val BorderColor = MaverickColors.BentoDarkGlassBorder
-private val WhiteAccent = Color.White
-private val TextGray = MaverickColors.TextMuted
-private val MenuBg = MaverickColors.ROG_Dark_Bg
-private val ActionBtnBg = MaverickColors.AsSidebarBg
 
 // ==========================================================================================
 // --- MODELOS DE DATOS ---
 // ==========================================================================================
 
-data class DropdownItemData(
-    val id: String, 
+/**
+ * MaverickFilterItem: Modelo unificado para filtros, ordenamiento y accesos directos.
+ */
+data class MaverickFilterItem(
+    val id: String,
     val label: String,
     val section: String? = null,
     val emoji: String? = null,
     val icon: ImageVector? = null,
-    val color: Color = Color.White // 🔥 ELITE: Color de identidad neón
+    val color: Color = Color.White
 ) {
     /**
-     * 🔥 ELITE: Convierte datos de dropdown a items de control para el HUD.
+     * 🔥 ELITE: Convierte datos de filtro a items de control para el HUD.
      */
     fun toControlItem(): ControlItem {
         return ControlItem(
@@ -91,18 +76,45 @@ data class DropdownItemData(
     }
 }
 
-data class FilterSortItem(
-    val id: String,
-    val label: String,
-    val emoji: String,
-    val icon: ImageVector? = null,
-    val color: Color = Color.White,
-    val section: String? = null // 🔥 ELITE: Identificador de grupo para lógica visual
-)
+// Retrocompatibilidad con nombres antiguos
+typealias DropdownItemData = MaverickFilterItem
+typealias FilterSortItem = MaverickFilterItem
 
 // ==========================================================================================
 // --- MOLDES BASE (UI ATOMS) ---
 // ==========================================================================================
+
+@Composable
+private fun HeaderActionButtonV2(
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    emoji: String? = null,
+    onClick: () -> Unit,
+    backgroundColor: Color = Color.White.copy(0.05f),
+    borderColor: Color = Color.White.copy(0.1f),
+    contentColor: Color = Color.White.copy(alpha = 0.8f)
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(28.dp),
+        color = backgroundColor,
+        shape = CircleShape,
+        border = BorderStroke(1.dp, borderColor)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = contentColor,
+                    modifier = Modifier.size(14.dp)
+                )
+            } else if (emoji != null) {
+                Text(emoji, fontSize = 14.sp)
+            }
+        }
+    }
+}
 
 @Composable
 fun MoldePremiumCardBase(
@@ -115,11 +127,9 @@ fun MoldePremiumCardBase(
     shape: Shape = RoundedCornerShape(8.dp),
     content: @Composable () -> Unit
 ) {
-    // --- ESTADOS DE INTERACCIÓN M3 ---
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // --- ANIMACIONES DE ELEVACIÓN Y TONALIDAD ---
     val elevation by animateDpAsState(
         targetValue = when {
             isHighlighted -> 32.dp
@@ -157,95 +167,58 @@ fun MoldePremiumCardBase(
                 } else Modifier
             )
     ) {
-        // --- ETIQUETA "HELPER" EXTERNA (ARRIBA DEL BORDE) ---
         if (label != null) {
             Text(
                 text = label.uppercase(),
                 color = Color.White.copy(alpha = 0.7f),
-                fontSize = 10.sp,
+                fontSize = if (label.length > 9) 8.sp else 8.sp,
                 fontWeight = FontWeight.Black,
-                letterSpacing = 1.2.sp,
-                modifier = Modifier
-                    .padding(start = 4.dp, bottom = 0.dp)
+                letterSpacing = if (label.length > 9) 0.5.sp else 1.2.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Visible,
+                modifier = Modifier.padding(start = 2.dp)
             )
         }
 
-        // --- CONTENEDOR PRINCIPAL CON BORDE (Estilo Modern Dark) ---
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (label != null) Modifier.weight(1f) else Modifier.fillMaxHeight())
-                .shadow(
-                    elevation = elevation,
-                    shape = shape,
-                    ambientColor = Color.Black,
-                    spotColor = Color.Black
-                )
+                .shadow(elevation = elevation, shape = shape, ambientColor = Color.Black, spotColor = Color.Black)
                 .background(
                     brush = Brush.verticalGradient(
-                        colors = listOf(
-                            MaverickColors.ROG_Dark_Bg.copy(alpha = 0.9f),
-                            MaverickColors.VantaBlack
-                        )
+                        colors = listOf(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.9f), MaverickColors.VantaBlack)
                     ),
                     shape = shape
                 )
-                .border(
-                    width = 1.dp,
-                    color = borderColor,
-                    shape = shape
-                )
+                .border(width = 1.dp, color = borderColor, shape = shape)
                 .padding(innerPadding)
         ) {
             content()
         }
+        
+        Spacer(modifier = Modifier.height(14.dp))
     }
 }
 
 // ==========================================================================================
-// --- SECCIÓN 1: MOLDE TARJETA DE FILTROS (V2 SHORTCUTS) ---
+// --- SECCIÓN 1: MOLDE TARJETA DE FILTROS ---
 // ==========================================================================================
 
-/**
- * MoldePremiumFilterCard: Tarjeta de filtrado con accesos directos dinámicos.
- */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoldePremiumFilterCard(
     label: String,
-    dropdownItems: List<DropdownItemData>,
-    shortcutItems: List<FilterSortItem>,
+    dropdownItems: List<MaverickFilterItem>,
+    shortcutItems: List<MaverickFilterItem>,
     activeFilters: Set<String>,
     onToggle: (String) -> Unit,
-    onManageShortcuts: (String, Boolean) -> Unit, // (itemId, isAdd)
+    onManageShortcuts: (String, Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    isExpandedExternally: Boolean = false,
-    onExpandChanged: (Boolean) -> Unit = {}
+    isSheetVisible: Boolean = false,
+    onSheetVisibilityChange: (Boolean) -> Unit = {}
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    var menuVisible by remember { mutableStateOf(false) }
-    var cardWidth by remember { mutableStateOf(0.dp) }
-    val density = LocalDensity.current
-
-    // 🔥 ELITE: Sincronización con delay para el efecto "primero expande, luego aparece menú"
-    LaunchedEffect(expanded) {
-        onExpandChanged(expanded)
-        if (expanded) {
-            delay(150) // Delay corto para permitir que la tarjeta "se expanda" visualmente
-            menuVisible = true
-        } else {
-            menuVisible = false
-        }
-    }
-
-    // 🔥 ELITE: Forma dinámica para unión perfecta con el menú
-    val cardShape = animateHorizontalEdgeShape(expanded)
-
-    Box(modifier = modifier
-        .zIndex(1f) // Mantener tarjeta sobre el menú para el efecto de "aparece desde atrás"
-        .onGloballyPositioned {
-            cardWidth = with(density) { it.size.width.toDp() }
-        }
-    ) {
+    Box(modifier = modifier.zIndex(1f)) {
         var showTacticalMenu by remember { mutableStateOf(false) }
         var touchOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -262,14 +235,13 @@ fun MoldePremiumFilterCard(
                 },
             label = label,
             height = 106.dp,
-            isHighlighted = expanded,
-            shape = cardShape
+            isHighlighted = isSheetVisible,
+            shape = RoundedCornerShape(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // --- CUERPO: LISTA HORIZONTAL DE ACCESOS DIRECTOS Y SELECCIONADOS ---
                 Row(
                     modifier = Modifier
                         .weight(1f)
@@ -289,138 +261,76 @@ fun MoldePremiumFilterCard(
                         )
                     }
 
-                    // Calculamos los IDs de shortcuts una vez
                     val shortcutIds = remember(shortcutItems) { shortcutItems.map { it.id }.toSet() }
 
-                    // 1. Mostrar Accesos Directos (Favoritos)
                     shortcutItems.forEach { item ->
-                        val isSelected = activeFilters.contains(item.id)
                         FilterChipSmall(
                             item = item,
-                            isSelected = isSelected,
+                            isSelected = activeFilters.contains(item.id),
                             isShortcut = true,
                             onClick = { onToggle(item.id) },
                             onManageShortcuts = onManageShortcuts
                         )
                     }
 
-                    // 2. Mostrar items ACTIVOS que NO están en los accesos directos (Seleccionados del menú)
                     dropdownItems.filter {
                         activeFilters.contains(it.id) && !shortcutIds.contains(it.id)
-                    }.forEach { dropdownItem ->
+                    }.forEach { item ->
                          FilterChipSmall(
-                            item = FilterSortItem(
-                                id = dropdownItem.id,
-                                label = dropdownItem.label,
-                                emoji = dropdownItem.emoji ?: "🔹",
-                                icon = dropdownItem.icon,
-                                color = dropdownItem.color,
-                                section = dropdownItem.section
-                            ),
+                            item = item,
                             isSelected = true,
                             isShortcut = false,
-                            onClick = { onToggle(dropdownItem.id) },
+                            onClick = { onToggle(item.id) },
                             onManageShortcuts = onManageShortcuts
                         )
                     }
                 }
 
-                // --- BOTÓN DE MENÚ A LA DERECHA (Convertible en X) ---
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (expanded) MaverickColors.DeepRed.copy(alpha = 0.15f)
-                            else Color.White.copy(alpha = 0.05f)
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = if (expanded) MaverickColors.DeepRed else Color.White.copy(alpha = 0.1f),
-                            shape = CircleShape
-                        )
-                        .clickable { expanded = !expanded },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (expanded) MaverickIcons.Close else MaverickIcons.ExpandMore,
-                        contentDescription = null,
-                        tint = if (expanded) MaverickColors.DeepRed else Color.White.copy(alpha = 0.8f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                HeaderActionButtonV2(
+                    icon = if (isSheetVisible) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                    onClick = { onSheetVisibilityChange(!isSheetVisible) },
+                    backgroundColor = if (isSheetVisible) MaverickColors.DeepRed.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f),
+                    borderColor = if (isSheetVisible) MaverickColors.DeepRed.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f),
+                    contentColor = if (isSheetVisible) MaverickColors.DeepRed else Color.White.copy(alpha = 0.8f)
+                )
             }
         }
 
-        // --- MENÚ TÁCTICO PARA LA TARJETA COMPLETA (MODO IMPOSTOR) ---
-        var showActionMenu by remember { mutableStateOf(false) }
-
         MenuTacticoBe(
             isVisible = showTacticalMenu,
-            onDismissRequest = {
-                showTacticalMenu = false
-                showActionMenu = false
-            },
-            onAction = { 
-                showActionMenu = !showActionMenu
-                showTacticalMenu = false
-            },
+            onDismissRequest = { showTacticalMenu = false },
+            onAction = { showTacticalMenu = false },
             touchOffset = touchOffset,
             emotion = BeEmotion.NORMAL,
-            actionLabel = "VER ACCIONES",
+            actionLabel = "ACCIONES DE FILTRO",
             actionIconEmoji = "⚡"
         )
 
-
-        // --- MENÚ ELITE DROPDOWN ---
-        val shortcutIds = remember(shortcutItems) { shortcutItems.map { it.id }.toSet() }
-        MoldeEliteDropdownMenu(
-            expanded = menuVisible,
-            onDismissRequest = { expanded = false },
+        MoldeEliteBottomSheetV2(
+            visible = isSheetVisible,
+            onDismissRequest = { onSheetVisibilityChange(false) },
             items = dropdownItems,
             activeFilters = activeFilters,
-            shortcutIds = shortcutIds,
+            shortcutIds = shortcutItems.map { it.id }.toSet(),
             onToggle = onToggle,
-            onManageShortcuts = onManageShortcuts,
-            width = cardWidth
+            onManageShortcuts = onManageShortcuts
         )
     }
-}
-
-/**
- * Helper para animar la forma de la tarjeta (Esquinas inferiores se vuelven rectas al expandir)
- */
-@Composable
-private fun animateHorizontalEdgeShape(expanded: Boolean): Shape {
-    val cornerAnim by animateDpAsState(
-        targetValue = if (expanded) 2.dp else 8.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "cornerAnim"
-    )
-    return RoundedCornerShape(
-        topStart = 8.dp,
-        topEnd = 8.dp,
-        bottomStart = cornerAnim,
-        bottomEnd = cornerAnim
-    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FilterChipSmall(
-    item: FilterSortItem,
+    item: MaverickFilterItem,
     isSelected: Boolean,
     isShortcut: Boolean,
     onClick: () -> Unit,
     onManageShortcuts: (String, Boolean) -> Unit
 ) {
-    val isCategory = item.section?.uppercase() == "CATEGORIAS"
     val haptic = LocalHapticFeedback.current
     var showTacticalMenu by remember { mutableStateOf(false) }
-    var showActionMenu by remember { mutableStateOf(false) }
     var touchOffset by remember { mutableStateOf(Offset.Zero) }
 
-    // --- 🚀 OPTIMIZACIÓN ELITE: Animación de Shake Única para el Emoji ---
     val animatableRotation = remember { Animatable(0f) }
     
     LaunchedEffect(isSelected) {
@@ -453,10 +363,7 @@ fun FilterChipSmall(
             modifier = Modifier
                 .size(42.dp)
                 .clip(CutCornerShape(4.dp))
-                .background(
-                    if (isSelected) item.color.copy(alpha = 0.15f)
-                    else Color.Black.copy(alpha = 0.4f)
-                )
+                .background(if (isSelected) item.color.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.4f))
                 .border(
                     width = if (isSelected) 1.5.dp else 0.8.dp,
                     color = if (isSelected) item.color else Color.White.copy(alpha = 0.12f),
@@ -464,74 +371,50 @@ fun FilterChipSmall(
                 ),
             contentAlignment = Alignment.Center
         ) {
+            val isCategory = item.section?.uppercase() == "CATEGORIAS"
             if (isSelected) {
-                // MODO ACTIVO: Emoji a color con brillo
                 Text(
-                    text = item.emoji,
-                    fontSize = 20.sp,
+                    text = item.emoji ?: "🔹",
+                    fontSize = 22.sp,
                     modifier = Modifier.graphicsLayer { rotationZ = animatableRotation.value },
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = item.color,
-                            offset = Offset(0f, 0f),
-                            blurRadius = 15f
-                        )
-                    )
+                    style = TextStyle(shadow = Shadow(color = item.color, offset = Offset(0f, 0f), blurRadius = 15f))
                 )
             } else {
-                // MODO DESACTIVADO: Lógica diferenciada
                 if (isCategory) {
-                    // Categoría: Emoji en tono gris (Grayscale)
                     Text(
-                        text = item.emoji,
-                        fontSize = 18.sp,
+                        text = item.emoji ?: "🔹",
+                        fontSize = 20.sp,
                         modifier = Modifier.graphicsLayer {
                             alpha = 0.5f
                             colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
                         }
                     )
+                } else if (item.icon != null) {
+                    Icon(item.icon, null, tint = Color.Gray.copy(alpha = 0.6f), modifier = Modifier.size(22.dp))
                 } else {
-                    // Otros: Icono gris monocromático
-                    if (item.icon != null) {
-                        Icon(
-                            imageVector = item.icon,
-                            contentDescription = null,
-                            tint = Color.Gray.copy(alpha = 0.6f),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    } else {
-                        // Rescate: emoji en tono gris
-                        Text(
-                            text = item.emoji,
-                            fontSize = 18.sp,
-                            modifier = Modifier.graphicsLayer {
-                                alpha = 0.3f
-                                colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
-                            }
-                        )
-                    }
+                    Text(
+                        text = item.emoji ?: "🔹",
+                        fontSize = 20.sp,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = 0.3f
+                            colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+                        }
+                    )
                 }
             }
 
-            // 1. EL IMPOSTOR BE (DISPARADOR)
             MenuTacticoBe(
                 isVisible = showTacticalMenu,
-                onDismissRequest = {
-                    showTacticalMenu = false
-                    showActionMenu = false
-                },
+                onDismissRequest = { showTacticalMenu = false },
                 onAction = { 
                     onManageShortcuts(item.id, !isShortcut)
                     showTacticalMenu = false
-                    showActionMenu = false
                 },
                 touchOffset = touchOffset,
                 emotion = if (isShortcut) BeEmotion.SAD else BeEmotion.HAPPY,
                 actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
                 actionIconEmoji = "📌"
             )
-
-
         }
 
         Text(
@@ -541,69 +424,56 @@ fun FilterChipSmall(
             fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
             textAlign = TextAlign.Center,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = LocalTextStyle.current
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
 // ==========================================================================================
-// --- SECCIÓN 2: MOLDE TARJETA DE ORDENAMIENTO (GRID 2x2) ---
+// --- SECCIÓN 2: MOLDE TARJETA DE ORDENAMIENTO ---
 // ==========================================================================================
 
 @Composable
 fun MoldePremiumSortCard(
     label: String,
-    dropdownItems: List<DropdownItemData>,
-    shortcutItems: List<FilterSortItem>,
+    dropdownItems: List<MaverickFilterItem>,
+    shortcutItems: List<MaverickFilterItem> = emptyList(),
     activeSorts: List<String>,
     onToggle: (String) -> Unit,
-    onManageShortcuts: (String, Boolean) -> Unit,
+    onManageShortcuts: (String, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
-    // --- CÁLCULO DE ANCHO ELITE (Máximo 2 columnas visibles) ---
-    val columnCount = if (dropdownItems.size <= 2) 1 else 2
-    // 42dp (botón) + 4dp (espaciado entre cols) + paddings (aprox 8dp totales)
-    val dynamicWidth = (columnCount * 42 + (columnCount - 1) * 4 + 10).dp
+    val itemsToShow = dropdownItems.take(4)
+    val columnCount = if (itemsToShow.size <= 2) 1 else 2
+    val finalLabel = if (columnCount == 1) "ORDENAR" else label.uppercase()
+    val dynamicWidth = if (columnCount == 1) 68.dp else 102.dp
 
     MoldePremiumCardBase(
         modifier = modifier.width(dynamicWidth),
-        label = label,
+        label = finalLabel,
         height = 106.dp,
-        innerPadding = 2.dp
+        innerPadding = 4.dp
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.Center, // 🔥 Centrado horizontal para simetría
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Dividimos los items en grupos de 2 para crear las 2 filas dentro del scroll horizontal
-            val chunkedItems = dropdownItems.chunked(2)
-
-            chunkedItems.forEachIndexed { index, pair ->
+            itemsToShow.chunked(2).forEach { pair ->
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     pair.forEach { item ->
-                        val isSelected = activeSorts.contains(item.id)
                         SortGridItemSmall(
                             item = item,
-                            isSelected = isSelected,
-                            onClick = { onToggle(item.id) }
+                            isSelected = activeSorts.contains(item.id),
+                            onClick = { onToggle(item.id) },
+                            modifier = Modifier.weight(1f)
                         )
                     }
-                    // Si el grupo solo tiene 1 item, añadimos un espacio para mantener la alineación 2x2
-                    if (pair.size == 1) {
-                        Spacer(modifier = Modifier.size(42.dp))
-                    }
-                }
-                // Añadimos espacio entre columnas solo si no es la última
-                if (index < chunkedItems.size - 1) {
-                    Spacer(modifier = Modifier.width(4.dp))
+                    if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -612,11 +482,11 @@ fun MoldePremiumSortCard(
 
 @Composable
 fun SortGridItemSmall(
-    item: DropdownItemData,
+    item: MaverickFilterItem,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    // --- 🚀 OPTIMIZACIÓN ELITE: Animación de Shake Única para el Emoji ---
     val animatableRotation = remember { Animatable(0f) }
 
     LaunchedEffect(isSelected) {
@@ -630,56 +500,42 @@ fun SortGridItemSmall(
     }
 
     Box(
-        modifier = Modifier
-            .size(42.dp) // 🔥 ELITE: Tamaño estándar sin label
+        modifier = modifier
+            .width(42.dp)
+            .fillMaxHeight()
             .clip(RoundedCornerShape(8.dp))
-            .background(
-                if (isSelected) item.color.copy(alpha = 0.15f)
-                else Color.Black.copy(alpha = 0.4f)
-            )
+            .background(if (isSelected) item.color.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
             .border(
                 width = if (isSelected) 1.5.dp else 0.8.dp,
                 color = if (isSelected) item.color else Color.White.copy(alpha = 0.12f),
                 shape = RoundedCornerShape(8.dp)
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick
-            ),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (isSelected) {
-            // MODO ACTIVO: Emoji a color con brillo y shake
             if (item.emoji != null) {
                 Text(
                     text = item.emoji,
-                    fontSize = 20.sp,
+                    fontSize = 22.sp,
                     modifier = Modifier.graphicsLayer { rotationZ = animatableRotation.value },
-                    style = TextStyle(
-                        shadow = Shadow(
-                            color = item.color,
-                            offset = Offset(0f, 0f),
-                            blurRadius = 15f
-                        )
-                    )
+                    style = TextStyle(shadow = Shadow(color = item.color, offset = Offset(0f, 0f), blurRadius = 15f))
                 )
             } else {
                 Icon(
                     imageVector = item.icon ?: MaverickIcons.Sort,
                     contentDescription = null,
                     tint = item.color,
-                    modifier = Modifier.size(24.dp).graphicsLayer { rotationZ = animatableRotation.value }
+                    modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = animatableRotation.value }
                 )
             }
         } else {
-            // MODO DESACTIVADO: Icono/Emoji gris
             if (item.emoji != null) {
                 Text(
                     text = item.emoji,
-                    fontSize = 18.sp,
+                    fontSize = 20.sp,
                     modifier = Modifier.graphicsLayer {
-                        alpha = 0.3f
+                        alpha = 0.4f
                         colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
                     }
                 )
@@ -687,8 +543,8 @@ fun SortGridItemSmall(
                 Icon(
                     imageVector = item.icon ?: MaverickIcons.Sort,
                     contentDescription = null,
-                    tint = Color.Gray.copy(alpha = 0.4f),
-                    modifier = Modifier.size(22.dp)
+                    tint = Color.Gray.copy(alpha = 0.5f),
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }
@@ -696,179 +552,203 @@ fun SortGridItemSmall(
 }
 
 // ==========================================================================================
-// --- SECCIÓN 3: MENÚ ELITE DE FILTROS (2 COLUMNAS + GESTIÓN SHORTCUTS) ---
+// --- SECCIÓN 3: MENÚ ELITE DE FILTROS (BOTTOM SHEET) ---
 // ==========================================================================================
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoldeEliteDropdownMenu(
-    expanded: Boolean,
+fun MoldeEliteBottomSheetV2(
+    visible: Boolean,
     onDismissRequest: () -> Unit,
-    items: List<DropdownItemData>,
+    items: List<MaverickFilterItem>,
     activeFilters: Set<String>,
     shortcutIds: Set<String>,
     onToggle: (String) -> Unit,
-    onManageShortcuts: (String, Boolean) -> Unit,
-    width: Dp = 360.dp
+    onManageShortcuts: (String, Boolean) -> Unit
 ) {
-    // 🔥 ELITE: Sincronización de visibilidad para permitir animación de salida
-    var isVisible by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    LaunchedEffect(expanded) {
-        if (expanded) isVisible = true
-    }
-
-    // Estado para colapsar/expandir secciones
-    val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
-
-    if (isVisible || expanded) {
-        Popup(
-            alignment = Alignment.TopCenter,
-            offset = IntOffset(0, with(LocalDensity.current) { 108.dp.roundToPx() }), // 🔥 2dp de separación
-            properties = PopupProperties(
-                focusable = false,
-                dismissOnClickOutside = false
-            ),
-            onDismissRequest = { onDismissRequest() }
+    if (visible) {
+        ModalBottomSheet(
+            onDismissRequest = onDismissRequest,
+            sheetState = sheetState,
+            containerColor = Color.Transparent, // 🔥 Transparente para manejar el fondo nosotros
+            scrimColor = Color.Black.copy(alpha = 0.5f), // 🔥 Scrim más profundo para depth
+            dragHandle = null, // 🔥 Quitamos el dragHandle nativo para integrarlo en nuestra estructura
+            shape = CutCornerShape(topStart = 8.dp, topEnd = 8.dp),
+            tonalElevation = 0.dp
         ) {
-            AnimatedVisibility(
-                visible = expanded,
-                enter = expandVertically(
-                    expandFrom = Alignment.Top,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)
-                ) + fadeIn(animationSpec = tween(300)),
-                exit = shrinkVertically(
-                    shrinkTowards = Alignment.Top,
-                    animationSpec = tween(300)
-                ) + fadeOut(animationSpec = tween(200))
+            // Contenedor principal con altura máxima absoluta (Incluyendo Cabecera y Lista)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp) // 🔥 Límite de crecimiento absoluto
+                    .clip(CutCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                    .background(MaverickColors.AbsoluteBlack)
             ) {
-                // Side effect to hide popup after exit animation
-                DisposableEffect(Unit) {
-                    onDispose {
-                        if (!expanded) isVisible = false
-                    }
-                }
-
+                // 1. CABECERA TÁCTICA (Integrada)
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .width(width)
-                        .zIndex(0f)
-                ) {
-                    // --- BODY ---
-                    Column(
-                        modifier = Modifier
-                            .shadow(
-                                elevation = 40.dp,
-                                shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp, bottomStart = 12.dp, bottomEnd = 12.dp),
-                                spotColor = Color.Black,
-                                ambientColor = Color.Black
+                        .fillMaxWidth()
+                        .drawBehind {
+                            val strokeWidth = 1.6.dp.toPx()
+                            val path = Path().apply {
+                                moveTo(0f, size.height)
+                                lineTo(0f, 8.dp.toPx())
+                                lineTo(8.dp.toPx(), 0f)
+                                lineTo(size.width - 8.dp.toPx(), 0f)
+                                lineTo(size.width, 8.dp.toPx())
+                                lineTo(size.width, size.height)
+                            }
+
+                            // Borde base en escala de grises
+                            val borderGradient = Brush.horizontalGradient(
+                                0.0f to Color.Black,
+                                0.2f to Color.DarkGray,
+                                0.5f to Color.Gray,
+                                0.8f to Color.DarkGray,
+                                1.0f to Color.Black
                             )
-                            .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp, bottomStart = 12.dp, bottomEnd = 12.dp))
+
+                            drawPath(
+                                path = path,
+                                brush = borderGradient,
+                                style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                            )
+
+                            // HIGHLIGHT SUPERIOR
+                            val topRimPath = Path().apply {
+                                moveTo(0f, 8.dp.toPx())
+                                lineTo(8.dp.toPx(), 0f)
+                                lineTo(size.width - 8.dp.toPx(), 0f)
+                                lineTo(size.width, 8.dp.toPx())
+                            }
+                            drawPath(
+                                path = topRimPath,
+                                color = Color.White.copy(alpha = 0.25f),
+                                style = Stroke(width = strokeWidth * 0.8f, cap = StrokeCap.Round)
+                            )
+                        }
+                ) {
+                    // --- SOMBRA EXTERIOR SUPERIOR ---
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(18.dp)
                             .background(
                                 Brush.verticalGradient(
-                                    listOf(
-                                        MaverickColors.ROG_Dark_Bg,
-                                        MaverickColors.AbsoluteBlack
-                                    )
+                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.4f))
                                 )
                             )
-                            .border(
-                                width = 1.dp,
-                                color = Color.White.copy(alpha = 0.3f),
-                                shape = RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp, bottomStart = 12.dp, bottomEnd = 12.dp)
-                            )
-                            .padding(12.dp)
-                    ) {
-                        // --- SECCIÓN: EXPLORAR TODO EL MENÚ ---
-                        val sections = items.groupBy { it.section }
+                    )
 
-                        Column(
-                            modifier = Modifier
-                                .heightIn(max = 450.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                    Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        Text(
+                            text = "MANTÉN PARA FAVORITOS",
+                            color = Color.White.copy(alpha = 0.35f),
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.2.sp,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                        Row(
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            sections.forEach { (section, sectionItems) ->
-                                val sectionKey = section ?: "OTRO"
-                                val isSectionExpanded = expandedSections.getOrDefault(sectionKey, true)
+                            if (activeFilters.isNotEmpty()) {
+                                HeaderActionButtonV2(
+                                    icon = Icons.Default.FilterAltOff,
+                                    onClick = { onToggle("CLEAR_ALL") },
+                                    backgroundColor = MaverickColors.DeepRed.copy(alpha = 0.1f),
+                                    borderColor = MaverickColors.DeepRed.copy(alpha = 0.3f),
+                                    contentColor = MaverickColors.DeepRed
+                                )
+                            }
+                            HeaderActionButtonV2(
+                                icon = Icons.Default.ArrowDownward,
+                                onClick = onDismissRequest,
+                                backgroundColor = Color.White.copy(alpha = 0.05f),
+                                borderColor = Color.White.copy(alpha = 0.1f),
+                                contentColor = Color.White.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                    DepthDividerHorizontal(
+                        thickness = 0.8.dp, 
+                        shadowColor = Color.Black.copy(alpha = 0.9f), 
+                        highlightColor = Color.White.copy(alpha = 0.08f)
+                    )
+                }
 
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (section != null) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable {
-                                                    expandedSections[sectionKey] = !isSectionExpanded
-                                                },
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = section.uppercase(),
-                                                color = Color.White,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                letterSpacing = 1.sp
-                                            )
+                // 2. CUERPO DE FILTROS (Scrollable)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false) // 🔥 Solo crece si hay items, pero respeta el límite
+                        .background(MaverickColors.EliteSurface)
+                        .drawBehind {
+                            val strokeWidth = 1.2.dp.toPx()
+                            val borderColor = Color.Gray.copy(alpha = 0.2f)
+                            drawLine(borderColor, Offset(0f, 0f), Offset(0f, size.height), strokeWidth)
+                            drawLine(borderColor, Offset(size.width, 0f), Offset(size.width, size.height), strokeWidth)
+                        }
+                ) {
+                    MoldeEliteBottomSheetContent(items, activeFilters, shortcutIds, onToggle, onManageShortcuts)
+                }
+            }
+        }
+    }
+}
 
-                                            DepthDividerHorizontal(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .padding(horizontal = 8.dp),
-                                                thickness = 0.8.dp,
-                                                shadowColor = Color.Black,
-                                                highlightColor = Color.White.copy(alpha = 0.08f)
-                                            )
+@Composable
+private fun MoldeEliteBottomSheetContent(
+    items: List<MaverickFilterItem>,
+    activeFilters: Set<String>,
+    shortcutIds: Set<String>,
+    onToggle: (String) -> Unit,
+    onManageShortcuts: (String, Boolean) -> Unit
+) {
+    val expandedSections = remember { mutableStateMapOf<String, Boolean>() }
 
-                                            // 🔥 ELITE: Contenedor circular para la flecha
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(24.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color.White.copy(alpha = 0.05f))
-                                                    .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = if (isSectionExpanded) MaverickIcons.ExpandLess else MaverickIcons.ExpandMore,
-                                                    contentDescription = null,
-                                                    tint = Color.White.copy(alpha = 0.8f),
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                            }
-                                        }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).padding(bottom = 24.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items.groupBy { it.section }.forEach { (section, sectionItems) ->
+                val sectionKey = section ?: "OTRO"
+                val isExpanded = expandedSections.getOrDefault(sectionKey, true)
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (section != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { expandedSections[sectionKey] = !isExpanded },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(text = section.uppercase(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                            DepthDividerHorizontal(modifier = Modifier.weight(1f).padding(horizontal = 12.dp), thickness = 0.8.dp)
+                            Icon(
+                                imageVector = if (isExpanded) MaverickIcons.ExpandLess else MaverickIcons.ExpandMore,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.8f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = isExpanded, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            sectionItems.chunked(3).forEach { row ->
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    row.forEach { item ->
+                                        EliteMenuButton(
+                                            item = item,
+                                            isSelected = activeFilters.contains(item.id),
+                                            isShortcut = shortcutIds.contains(item.id),
+                                            onClick = { onToggle(item.id) },
+                                            onManageShortcuts = onManageShortcuts,
+                                            modifier = Modifier.weight(1f)
+                                        )
                                     }
-
-                                    AnimatedVisibility(
-                                        visible = isSectionExpanded,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            // Grilla de 3 columnas para items de sección (Más anchas)
-                                            val chunkedItems = sectionItems.chunked(3)
-                                            chunkedItems.forEach { row ->
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    row.forEach { item ->
-                                                        EliteMenuButton(
-                                                            item = item,
-                                                            isSelected = activeFilters.contains(item.id),
-                                                            isShortcut = shortcutIds.contains(item.id),
-                                                            onClick = { onToggle(item.id) },
-                                                            onManageShortcuts = onManageShortcuts,
-                                                            modifier = Modifier.weight(1f)
-                                                        )
-                                                    }
-                                                    repeat(3 - row.size) {
-                                                        Spacer(Modifier.weight(1f))
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                    if (row.size < 3) repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }
                         }
@@ -882,7 +762,7 @@ fun MoldeEliteDropdownMenu(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EliteMenuButton(
-    item: DropdownItemData,
+    item: MaverickFilterItem,
     isSelected: Boolean,
     isShortcut: Boolean,
     onClick: () -> Unit,
@@ -890,12 +770,22 @@ fun EliteMenuButton(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
-    val isCategory = item.section?.uppercase() == "CATEGORIAS"
     var showTacticalMenu by remember { mutableStateOf(false) }
-    var showActionMenu by remember { mutableStateOf(false) }
     var touchOffset by remember { mutableStateOf(Offset.Zero) }
 
-    // Lógica de color y brillo
+    val animatableRotation = remember { Animatable(0f) }
+    
+    LaunchedEffect(isSelected) {
+        if (isSelected) {
+            animatableRotation.animateTo(15f, tween(80, easing = LinearEasing))
+            animatableRotation.animateTo(-15f, tween(80, easing = LinearEasing))
+            animatableRotation.animateTo(0f, tween(80, easing = LinearEasing))
+        } else {
+            animatableRotation.snapTo(0f)
+        }
+    }
+
+    val isCategory = item.section?.uppercase() == "CATEGORIAS"
     val buttonColor = if (isCategory && !isSelected) Color.Gray else item.color
     val borderColor = if (isSelected) buttonColor.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f)
     val bgColor = if (isSelected) buttonColor.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.02f)
@@ -915,34 +805,15 @@ fun EliteMenuButton(
                     onTap = { onClick() }
                 )
             }
-            .padding(horizontal = 8.dp, vertical = 6.dp) // Más ancho y espaciado
+            .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            // Icono / Emoji
-            Box(
-                modifier = Modifier.size(26.dp),
-                contentAlignment = Alignment.Center
-            ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(modifier = Modifier.size(26.dp).graphicsLayer { rotationZ = animatableRotation.value }, contentAlignment = Alignment.Center) {
                 if (isSelected) {
-                    // MODO ACTIVO: Emoji a color (si existe) o Icono con color
-                    if (item.emoji != null) {
-                        Text(item.emoji, fontSize = 18.sp)
-                    } else {
-                        Icon(
-                            imageVector = item.icon ?: MaverickIcons.Filter,
-                            contentDescription = null,
-                            tint = item.color,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    if (item.emoji != null) Text(item.emoji, fontSize = 18.sp)
+                    else Icon(item.icon ?: MaverickIcons.Filter, null, tint = item.color, modifier = Modifier.size(20.dp))
                 } else {
-                    // MODO DESACTIVADO: Lógica diferenciada
-                    val isCategory = item.section?.uppercase() == "CATEGORIAS"
                     if (isCategory) {
-                        // Categoría: Emoji en tono gris (Grayscale)
                         Text(
                             text = item.emoji ?: "🔹",
                             fontSize = 18.sp,
@@ -952,63 +823,39 @@ fun EliteMenuButton(
                             }
                         )
                     } else {
-                        // Otros: Icono gris monocromático
-                        Icon(
-                            imageVector = item.icon ?: MaverickIcons.Filter,
-                            contentDescription = null,
-                            tint = Color.Gray.copy(alpha = 0.6f),
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Icon(item.icon ?: MaverickIcons.Filter, null, tint = Color.Gray.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                     }
                 }
             }
-
-            // Divisor profundo vertical
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(14.dp)
-                    .background(Color.White.copy(alpha = 0.08f))
+            Box(modifier = Modifier.width(1.dp).height(14.dp).background(Color.White.copy(alpha = 0.08f)))
+            Text(
+                text = item.label.uppercase(),
+                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
+                fontSize = 9.sp,
+                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.label.uppercase(),
-                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
-                    fontSize = 9.sp,
-                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Start
-                )
-            }
         }
 
-        // 1. EL IMPOSTOR BE (DISPARADOR)
         MenuTacticoBe(
             isVisible = showTacticalMenu,
-            onDismissRequest = {
-                showTacticalMenu = false
-                showActionMenu = false
-            },
+            onDismissRequest = { showTacticalMenu = false },
             onAction = { 
                 onManageShortcuts(item.id, !isShortcut)
                 showTacticalMenu = false
-                showActionMenu = false
             },
             touchOffset = touchOffset,
             emotion = if (isShortcut) BeEmotion.SAD else BeEmotion.HAPPY,
             actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
             actionIconEmoji = "📌"
         )
-
-
     }
 }
 
-
 // ==========================================================================================
-// --- OTROS COMPONENTES ---
+// --- CONTEXT CARD ---
 // ==========================================================================================
 
 @Composable
@@ -1019,164 +866,70 @@ fun MoldePremiumContextCard(
     activeProfilePhotoUrl: String?,
     mainAddress: String,
     localityInfo: String,
-    description: String? = null, // Sucursal o Descripción personalizada
+    description: String? = null,
     isGpsActive: Boolean,
     onUserClick: () -> Unit,
     onLocationClick: () -> Unit,
     onGpsToggle: () -> Unit
-
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(64.dp), // Un poco más alta para albergar los helpers
-        horizontalArrangement = Arrangement.spacedBy(2.dp) // "Pegadas" con micro-separación visual
-    ) {
-        // --- TARJETA 1: PERFIL (LADO IZQUIERDO) ---
+    Row(modifier = modifier.fillMaxWidth().height(64.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        // PERFIL
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
                 .shadow(4.dp, RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 2.dp, bottomEnd = 2.dp))
                 .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.95f), MaverickColors.VantaBlack)
-                    ),
+                    brush = Brush.verticalGradient(listOf(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.95f), MaverickColors.VantaBlack)),
                     shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 2.dp, bottomEnd = 2.dp)
                 )
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 2.dp, bottomEnd = 2.dp)
-                )
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 2.dp, bottomEnd = 2.dp))
                 .clickable { onUserClick() }
                 .padding(horizontal = 8.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.05f))
-                        .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                ) {
-                    if (activeProfilePhotoUrl != null) {
-                        // Dummy photo logic - In real app use AsyncImage
-                        Box(modifier = Modifier.fillMaxSize().background(Color.Gray.copy(alpha = 0.3f)))
-                    } else {
-                        Icon(MaverickIcons.Person, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp).align(Alignment.Center))
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.05f)).border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)) {
+                    if (activeProfilePhotoUrl != null) Box(modifier = Modifier.fillMaxSize().background(Color.Gray.copy(alpha = 0.3f)))
+                    else Icon(MaverickIcons.Person, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp).align(Alignment.Center))
                 }
                 Column(verticalArrangement = Arrangement.Center) {
-                    Text(
-                        text = if (user == null) "PERFIL INVITADO" else "PERFIL ACTIVO",
-                        color = Color.White.copy(alpha = 0.4f),
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 7.sp
-                    )
-                    Text(
-                        text = activeProfileName.uppercase(),
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp,
-                        lineHeight = 10.sp
-                    )
+                    Text(text = if (user == null) "PERFIL INVITADO" else "PERFIL ACTIVO", color = Color.White.copy(alpha = 0.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                    Text(text = activeProfileName.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
                 }
             }
         }
 
-        // --- TARJETA 2: DIRECCIÓN (PROTAGONISTA - LADO DERECHO) ---
+        // DIRECCIÓN
         Box(
             modifier = Modifier
-                .weight(1.8f) // PROTAGONISTA: Más ancha que el perfil
+                .weight(1.8f)
                 .fillMaxHeight()
                 .shadow(4.dp, RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 10.dp, bottomEnd = 10.dp))
                 .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.95f), MaverickColors.VantaBlack)
-                    ),
+                    brush = Brush.verticalGradient(listOf(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.95f), MaverickColors.VantaBlack)),
                     shape = RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 10.dp, bottomEnd = 10.dp)
                 )
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 10.dp, bottomEnd = 10.dp)
-                )
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 10.dp, bottomEnd = 10.dp))
                 .clickable { onLocationClick() }
                 .padding(start = 12.dp, end = 6.dp),
             contentAlignment = Alignment.CenterStart
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    // Helper Superior: Sucursal o Descripción
-                    if (!description.isNullOrBlank()) {
-                        Text(
-                            text = description.uppercase(),
-                            color = MaverickColors.NeonCyan.copy(alpha = 0.6f),
-                            fontSize = 7.sp,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 7.sp
-                        )
-                    }
-
-                    // Dirección Principal (Protagonista)
-                    Text(
-                        text = mainAddress.uppercase(),
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 11.sp
-                    )
-
-                    // Helper Inferior: Localidad + CP
-                    Text(
-                        text = localityInfo.uppercase(),
-                        color = Color.White.copy(alpha = 0.4f),
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 7.sp
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                    if (!description.isNullOrBlank()) Text(text = description.uppercase(), color = MaverickColors.NeonCyan.copy(alpha = 0.6f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                    Text(text = mainAddress.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = localityInfo.uppercase(), color = Color.White.copy(alpha = 0.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
                 }
-
-                // --- BOTÓN GPS (ESTILO M3 BOX) ---
                 Box(
-                    modifier = Modifier
-                        .padding(start = 4.dp)
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.05f))
+                    modifier = Modifier.padding(start = 4.dp).size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.05f))
                         .border(1.dp, if (isGpsActive) MaverickColors.NeonCyan.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                         .clickable { onGpsToggle() },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = if (isGpsActive) MaverickIcons.GpsOn else MaverickIcons.GpsOff,
-                            contentDescription = null,
-                            tint = if (isGpsActive) MaverickColors.NeonCyan else Color.White.copy(alpha = 0.2f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = if (isGpsActive) "ON" else "OFF",
-                            color = if (isGpsActive) MaverickColors.NeonCyan else Color.White.copy(alpha = 0.2f),
-                            fontSize = 6.sp,
-                            fontWeight = FontWeight.Black,
-                            lineHeight = 6.sp
-                        )
+                        Icon(imageVector = if (isGpsActive) MaverickIcons.GpsOn else MaverickIcons.GpsOff, null, tint = if (isGpsActive) MaverickColors.NeonCyan else Color.White.copy(alpha = 0.2f), modifier = Modifier.size(20.dp))
+                        Text(text = if (isGpsActive) "ON" else "OFF", color = if (isGpsActive) MaverickColors.NeonCyan else Color.White.copy(alpha = 0.2f), fontSize = 6.sp, fontWeight = FontWeight.Black)
                     }
                 }
             }
@@ -1185,32 +938,33 @@ fun MoldePremiumContextCard(
 }
 
 // ==========================================================================================
-// --- PREVIEW ELITE ---
+// --- PREVIEW ---
 // ==========================================================================================
 
 @Preview(showBackground = true, backgroundColor = 0xFF05070A)
 @Composable
+fun FilterBottomSheetPreview() {
+    val mockItems = listOf(
+        MaverickFilterItem("1", "Suscritos", "ESTADO", "⭐", MaverickIcons.Check, color = Color.Yellow),
+        MaverickFilterItem("2", "Cercanía", "ESTADO", "📍", MaverickIcons.Location, color = Color.Red),
+        MaverickFilterItem("5", "Digital", "CATEGORIAS", "💻", color = Color.Cyan)
+    )
+
+    MyApplicationTheme {
+        Surface(modifier = Modifier.fillMaxWidth(), color = MaverickColors.ROG_Dark_Bg, shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)) {
+            MoldeEliteBottomSheetContent(mockItems, setOf("1", "5"), setOf("1", "2"), {}, { _, _ -> })
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF05070A)
+@Composable
 fun TarjetasModuloFiltrosPreview() {
-    val mockFilters = listOf(
-        FilterSortItem("1", "Suscritos", "⭐", icon = MaverickIcons.Check, color = Color.Yellow),
-        FilterSortItem("2", "Cercanía", "📍", icon = MaverickIcons.Location, color = Color.Red),
-        FilterSortItem("3", "24hs", "🕒", icon = MaverickIcons.Timer, color = Color.Green)
-    )
-
-    val mockDropdown = listOf(
-        DropdownItemData("1", "Suscritos", "ESTADO", "⭐", MaverickIcons.Check, color = Color.Yellow),
-        DropdownItemData("2", "Cercanía", "ESTADO", "📍", MaverickIcons.Location, color = Color.Red),
-        DropdownItemData("3", "24hs", "SERVICIOS", "🕒", MaverickIcons.Timer, color = Color.Green),
-        DropdownItemData("4", "Urgencias", "SERVICIOS", "🔥", MaverickIcons.Warning, color = Color.Red)
-    )
-
-    var isFilterExpanded by remember { mutableStateOf(false) }
-
-    // 🔥 ELITE: Animación de peso para el efecto "expandir a la derecha"
-    val filterWeight by animateFloatAsState(
-        targetValue = if (isFilterExpanded) 4f else 1f,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "weightAnim"
+    val mockItems = listOf(
+        MaverickFilterItem("1", "Suscritos", "ESTADO", "⭐", MaverickIcons.Check, color = Color.Yellow),
+        MaverickFilterItem("2", "Cercanía", "ESTADO", "📍", MaverickIcons.Location, color = Color.Red),
+        MaverickFilterItem("3", "24hs", "SERVICIOS", "🕒", MaverickIcons.Timer, color = Color.Green),
+        MaverickFilterItem("4", "Urgencias", "SERVICIOS", "🔥", MaverickIcons.Warning, color = Color.Red)
     )
 
     MyApplicationTheme {
@@ -1225,22 +979,21 @@ fun TarjetasModuloFiltrosPreview() {
             ) {
                 MoldePremiumFilterCard(
                     label = "Filtrar por",
-                    dropdownItems = mockDropdown,
-                    shortcutItems = mockFilters,
+                    dropdownItems = mockItems,
+                    shortcutItems = mockItems.take(3),
                     activeFilters = setOf("1"),
                     onToggle = {},
                     onManageShortcuts = { _, _ -> },
-                    onExpandChanged = { isFilterExpanded = it },
-                    modifier = Modifier.weight(filterWeight)
+                    modifier = Modifier.weight(1f)
                 )
                 MoldePremiumSortCard(
                     label = "Ordenar por",
-                    dropdownItems = mockDropdown,
+                    dropdownItems = mockItems,
                     shortcutItems = emptyList(),
                     activeSorts = listOf("1"),
                     onToggle = {},
                     onManageShortcuts = { _, _ -> },
-                    modifier = if (isFilterExpanded) Modifier.width(0.dp).alpha(0f) else Modifier
+                    modifier = Modifier.width(102.dp)
                 )
             }
 
