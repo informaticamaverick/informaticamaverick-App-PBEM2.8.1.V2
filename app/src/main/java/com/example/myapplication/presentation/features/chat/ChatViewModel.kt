@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.features.chat
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -45,7 +46,7 @@ data class BookingUiState(
     val selectedDay: DayAvailability? = null,
     val slots: List<TimeSlot> = emptyList(),
     val selectedTime: String? = null,
-    val selectedAddress: com.example.myapplication.presentation.components.AddressInfo? = null
+    val selectedAddress: com.example.myapplication.core.domain.model.AddressInfo? = null
 )
 
 data class ChatUiState(
@@ -407,7 +408,7 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun openBookingDialog(message: MessageEntity, availableAddresses: List<com.example.myapplication.presentation.components.AddressInfo>) {
+    fun openBookingDialog(message: MessageEntity, availableAddresses: List<com.example.myapplication.core.domain.model.AddressInfo>) {
         val days = parseAvailabilityJson(message.availabilityJson ?: "[]")
         _uiState.update { it.copy(
             bookingUiState = BookingUiState(
@@ -435,7 +436,7 @@ class ChatViewModel @Inject constructor(
         ) }
     }
 
-    fun onAddressSelected(address: com.example.myapplication.presentation.components.AddressInfo) {
+    fun onAddressSelected(address: com.example.myapplication.core.domain.model.AddressInfo) {
         _uiState.update { it.copy(
             bookingUiState = it.bookingUiState.copy(selectedAddress = address)
         ) }
@@ -565,3 +566,4 @@ class ChatViewModel @Inject constructor(
         }
     }
 }
+

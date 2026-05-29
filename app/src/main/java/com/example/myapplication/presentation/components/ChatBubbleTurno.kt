@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.components
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import com.example.myapplication.presentation.features.home.*
 
 import com.example.myapplication.presentation.features.auth.*
@@ -1755,6 +1756,7 @@ fun TurnoBubblesPreview() {
         }
     }
 }
+
 
 
 

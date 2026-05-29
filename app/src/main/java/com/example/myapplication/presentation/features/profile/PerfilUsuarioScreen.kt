@@ -58,13 +58,14 @@ import com.example.myapplication.core.domain.model.CompanyClient
 import com.example.myapplication.core.domain.model.RepresentativeClient
 import com.example.myapplication.core.utils.ImageUtils
 import com.example.myapplication.presentation.components.*
+import com.example.myapplication.presentation.designsystem.components.MaverickColors
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.global.BeBrainViewModel
 import com.example.myapplication.presentation.global.HUDContext
 import kotlinx.coroutines.launch
 
 // --- CONSTANTES DE ESTILO LOCALES ---
-val GeminiAccentLocal = Color(0xFFA78BFA)
+val GeminiAccentLocal = Color(0xFF3B82F6) // Azul Premium Moderno
 // BentoDarkGlassBackgroundLocal eliminado por no usarse
 
 /**
@@ -74,7 +75,7 @@ val GeminiAccentLocal = Color(0xFFA78BFA)
 fun rememberImageModel(photoString: String?): Any? {
     return remember(photoString) {
         if (photoString.isNullOrBlank()) return@remember null
-        
+
         // [COSTO ZERO] Delegamos a ImageUtils si detectamos Base64
         if (photoString.length > 100 && !photoString.startsWith("http") && !photoString.startsWith("content")) {
             try {
@@ -112,7 +113,7 @@ sealed class EditMode {
 fun PerfilUsuarioScreen(
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
-    viewModel: ProfileViewModel = hiltViewModel(),
+    viewModel: UserViewModel = hiltViewModel(),
     beViewModel: BeBrainViewModel = hiltViewModel()
 ) {
     val userState by viewModel.userState.collectAsStateWithLifecycle()
@@ -270,7 +271,7 @@ fun PerfilUsuarioScreen(
 fun PerfilUsuarioContent(
     user: UserEntity,
     isEditMode: Boolean,
-    uiState: ProfileUiState,
+    uiState: UserUiState,
     onRefresh: () -> Unit, // [NUEVO] Callback para actualización forzada
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
@@ -357,7 +358,7 @@ fun PerfilUsuarioContent(
     val headerMinHeight = 140.dp
     val density = LocalDensity.current
     val maxScroll = with(density) { (headerMaxHeight - headerMinHeight).toPx() }
-    
+
     // [CORRECCIÓN] Uso de derivedStateOf para optimizar lecturas de scrollState que cambia frecuentemente
     val collapseFraction by remember {
         derivedStateOf { (scrollState.value.toFloat() / maxScroll).coerceIn(0f, 1f) }
@@ -390,8 +391,7 @@ fun PerfilUsuarioContent(
                 )
             }
         ) {
-            Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0F))) {
-
+            Box(modifier = Modifier.fillMaxSize().background(MaverickColors.EliteMainBackground)) {
                 // --- CONTENIDO SCROLLABLE ---
                 Column(
                     modifier = Modifier
@@ -432,20 +432,10 @@ fun PerfilUsuarioContent(
                         }
                     }
 
-                    if (!isEditMode) {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        BentoActionButtonLocal(
-                            text = "Cerrar Sesión",
-                            emoji = "🚪",
-                            color = Color(0xFFEF4444),
-                            modifier = Modifier.padding(horizontal = 24.dp),
-                            onClick = onLogout
-                        )
-                    }
                     Spacer(modifier = Modifier.height(100.dp))
                 }
 
-                // --- HEADER DINÁMICO ---
+                    // --- HEADER DINÁMICO ---
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -475,23 +465,70 @@ fun PerfilUsuarioContent(
                             )
                     )
 
-                    // Icono Eliminar Empresa en Banner
-                    if (isEditMode && pagerState.currentPage > 0 && pagerState.currentPage <= companiesList.size) {
-                        val currentComp = companiesList[pagerState.currentPage - 1]
+                    // --- ACCIONES DEL BANNER (ESTILO PREMIUM M3) ---
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 45.dp, start = 12.dp, end = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Botón Atrás con Glassmorphism
                         IconButton(
-                            onClick = {
-                                onRequestDelete("Eliminar Empresa", "¿Deseas eliminar '${currentComp.name}' y todas sus sucursales?") {
-                                    val newList = uiState.companies.filter { it.id != currentComp.id }
-                                    onUpdateCompanies(newList)
-                                    coroutineScope.launch { pagerState.animateScrollToPage(0) }
-                                }
-                            },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(top = 45.dp, end = 12.dp)
-                                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                            onClick = onNavigateBack,
+                            modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
                         ) {
-                            Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.8f))
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+                        }
+
+                        if (!isEditMode) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Botón Sincronizar Google (Dinámico)
+                                val isGoogleAccount = user.email.endsWith("@gmail.com") || user.email.endsWith("@google.com")
+                                if (!isGoogleAccount) {
+                                    Surface(
+                                        onClick = { /* TODO: Vincular Google Auth */ },
+                                        color = Color.Black.copy(alpha = 0.4f),
+                                        shape = CircleShape,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_google_logo),
+                                                contentDescription = "Sincronizar",
+                                                tint = Color.Unspecified,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                }
+
+                                // Botón Cerrar Sesión M3 Glass
+                                IconButton(
+                                    onClick = onLogout,
+                                    modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.ExitToApp, null, tint = Color.White)
+                                }
+                            }
+                        } else {
+                            // En modo edición, si es empresa, mostrar borrar aquí arriba (Opcional)
+                            if (pagerState.currentPage > 0 && pagerState.currentPage <= companiesList.size) {
+                                val currentComp = companiesList[pagerState.currentPage - 1]
+                                IconButton(
+                                    onClick = {
+                                        onRequestDelete("Eliminar Empresa", "¿Deseas eliminar '${currentComp.name}'?") {
+                                            val newList = uiState.companies.filter { it.id != currentComp.id }
+                                            onUpdateCompanies(newList)
+                                            coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                        }
+                                    },
+                                    modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                                ) {
+                                    Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.8f))
+                                }
+                            }
                         }
                     }
 
@@ -576,13 +613,6 @@ fun PerfilUsuarioContent(
                             }
                         }
                     }
-
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.padding(top = 45.dp, start = 12.dp)
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
-                    }
                 }
             }
         }
@@ -618,7 +648,7 @@ fun BubbleItem(photoUrl: String?, onClick: () -> Unit, modifier: Modifier = Modi
 fun PersonalM3Section(
     user: UserEntity,
     isEditMode: Boolean,
-    uiState: ProfileUiState,
+    uiState: UserUiState,
     onEditRequest: (EditMode) -> Unit,
     onDisplayNameChange: (String) -> Unit,
     onNameChange: (String) -> Unit,
@@ -631,7 +661,7 @@ fun PersonalM3Section(
     onRequestDelete: (String, String, () -> Unit) -> Unit
 ) {
     val context = LocalContext.current
-    
+
     Column {
         // --- TARJETA 1: DATOS PERSONALES ---
         Box(modifier = Modifier.fillMaxWidth().background(Color(0xFF16161D)).padding(vertical = 24.dp)) {
@@ -639,32 +669,32 @@ fun PersonalM3Section(
                 Text("DATOS PERSONALES", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
 
                 ProfileDataFieldItem(
-                    emoji = "🎭", 
-                    label = "APODO / NOMBRE PÚBLICO", 
+                    emoji = "🎭",
+                    label = "APODO / NOMBRE PÚBLICO",
                     value = if (isEditMode) uiState.displayName else user.displayName,
                     isEditMode = isEditMode,
                     onValueChange = onDisplayNameChange
                 )
                 ProfileDataFieldItem(
-                    emoji = "👤", 
-                    label = "NOMBRE", 
+                    emoji = "👤",
+                    label = "NOMBRE",
                     value = if (isEditMode) uiState.name else user.name,
                     isEditMode = isEditMode,
                     onValueChange = onNameChange
                 )
                 ProfileDataFieldItem(
-                    emoji = "👤", 
-                    label = "APELLIDO", 
+                    emoji = "👤",
+                    label = "APELLIDO",
                     value = if (isEditMode) uiState.lastName else user.lastName,
                     isEditMode = isEditMode,
                     onValueChange = onLastNameChange
                 )
-                
+
                 // --- SECCIÓN DE EMAILS ---
                 val primaryEmail = if (isEditMode) uiState.email else user.email
                 ProfileDataFieldItem(
-                    emoji = "📧", 
-                    label = "CORREO ELECTRÓNICO (PRINCIPAL)", 
+                    emoji = "📧",
+                    label = "CORREO ELECTRÓNICO (PRINCIPAL)",
                     value = primaryEmail,
                     isEditMode = isEditMode,
                     onValueChange = {},
@@ -712,8 +742,8 @@ fun PersonalM3Section(
 
                 // --- SECCIÓN DE TELÉFONOS ---
                 ProfileDataFieldItem(
-                    emoji = "📱", 
-                    label = "TELÉFONO (PRINCIPAL)", 
+                    emoji = "📱",
+                    label = "TELÉFONO (PRINCIPAL)",
                     value = if (isEditMode) uiState.phoneNumber else user.phoneNumber,
                     isEditMode = isEditMode,
                     onValueChange = onPhoneNumberChange,
@@ -758,8 +788,8 @@ fun PersonalM3Section(
                 }
 
                 ProfileDataFieldItem(
-                    emoji = "📝", 
-                    label = "BIOGRAFÍA", 
+                    emoji = "📝",
+                    label = "BIOGRAFÍA",
                     value = if (isEditMode) uiState.bio else user.bio,
                     isEditMode = isEditMode,
                     onValueChange = onBioChange
@@ -831,19 +861,12 @@ fun PersonalM3Section(
 fun BusinessM3Section(
     company: CompanyClient,
     isEditMode: Boolean,
-    uiState: ProfileUiState,
+    uiState: UserUiState,
     onEditRequest: (EditMode) -> Unit,
     onUpdateCompanies: (List<CompanyClient>) -> Unit,
     onRequestDelete: (String, String, () -> Unit) -> Unit
 ) {
     val context = LocalContext.current
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        val updatedBranches = company.branches.map { branch ->
-            branch.copy(galleryImages = branch.galleryImages + uris.map { it.toString() })
-        }
-        val currentCompanies = uiState.companies.map { if (it.id == company.id) company.copy(branches = updatedBranches) else it }
-        onUpdateCompanies(currentCompanies)
-    }
 
     Column {
         // --- TARJETA 1: DATOS DEL NEGOCIO ---
@@ -852,8 +875,8 @@ fun BusinessM3Section(
                 Text("DATOS DEL NEGOCIO", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
 
                 ProfileDataFieldItem(
-                    emoji = "🏢", 
-                    label = "NOMBRE COMERCIAL", 
+                    emoji = "🏢",
+                    label = "NOMBRE COMERCIAL",
                     value = company.name,
                     isEditMode = isEditMode,
                     onValueChange = { newVal ->
@@ -862,8 +885,8 @@ fun BusinessM3Section(
                     }
                 )
                 ProfileDataFieldItem(
-                    emoji = "🏭", 
-                    label = "RAZÓN SOCIAL", 
+                    emoji = "🏭",
+                    label = "RAZÓN SOCIAL",
                     value = company.razonSocial,
                     isEditMode = isEditMode,
                     onValueChange = { newVal ->
@@ -872,8 +895,8 @@ fun BusinessM3Section(
                     }
                 )
                 ProfileDataFieldItem(
-                    emoji = "🆔", 
-                    label = "CUIT", 
+                    emoji = "🆔",
+                    label = "CUIT",
                     value = company.cuit,
                     isEditMode = isEditMode,
                     onValueChange = { newVal ->
@@ -882,8 +905,8 @@ fun BusinessM3Section(
                     }
                 )
                 ProfileDataFieldItem(
-                    emoji = "📧", 
-                    label = "EMAIL CORPORATIVO", 
+                    emoji = "📧",
+                    label = "EMAIL CORPORATIVO",
                     value = company.email,
                     isEditMode = isEditMode,
                     onValueChange = { newVal ->
@@ -900,7 +923,7 @@ fun BusinessM3Section(
         Column(modifier = Modifier.fillMaxWidth().background(Color.Transparent).padding(vertical = 16.dp)) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("SUCURSALES (${company.branches.size})", style = MaterialTheme.typography.labelSmall, color = Color.Gray, fontWeight = FontWeight.Bold)
-                if (isEditMode) {
+                if (isEditMode && company.branches.size < 3) {
                     IconButton(onClick = { onEditRequest(EditMode.Branch(company, null)) }) {
                         Icon(Icons.Default.Add, null, tint = GeminiAccentLocal)
                     }
@@ -954,7 +977,7 @@ fun BusinessM3Section(
                                                 }
                                             }
                                         )
-                                        
+
                                         // Texto Casa Central seleccionable en modo edición
                                         Text(
                                             text = if (branch.isMainBranch) "Casa Central seleccionada" else "Marcar como Casa Central",
@@ -963,11 +986,11 @@ fun BusinessM3Section(
                                             fontWeight = FontWeight.Medium,
                                             modifier = Modifier.padding(top = 4.dp).clickable {
                                                 if (!branch.isMainBranch) {
-                                                    val updatedBranches = company.branches.map { 
-                                                        it.copy(isMainBranch = it.id == branch.id) 
+                                                    val updatedBranches = company.branches.map {
+                                                        it.copy(isMainBranch = it.id == branch.id)
                                                     }
-                                                    val updatedCompanies = uiState.companies.map { 
-                                                        if (it.id == company.id) it.copy(branches = updatedBranches) else it 
+                                                    val updatedCompanies = uiState.companies.map {
+                                                        if (it.id == company.id) it.copy(branches = updatedBranches) else it
                                                     }
                                                     onUpdateCompanies(updatedCompanies)
                                                 }
@@ -977,7 +1000,7 @@ fun BusinessM3Section(
                                         Text(branch.name.ifEmpty { "Sucursal" }, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                     }
                                 }
-                                
+
                                 if (isEditMode) {
                                     IconButton(onClick = {
                                         onRequestDelete("Eliminar Sucursal", "¿Estás seguro que deseas eliminar la sucursal '${branch.name}'?") {
@@ -1047,54 +1070,7 @@ fun BusinessM3Section(
                                 }
                             }
 
-                            // Galería
-                            Row(modifier = Modifier.padding(top = 20.dp, bottom = 8.dp).fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text("GALERÍA DE ESTA SEDE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-                                if (isEditMode) {
-                                    IconButton(onClick = { galleryLauncher.launch("image/*") }, modifier = Modifier.size(20.dp)) {
-                                        Icon(Icons.Default.AddPhotoAlternate, null, tint = GeminiAccentLocal, modifier = Modifier.size(16.dp))
-                                    }
-                                }
-                            }
-                            
-                            if (branch.galleryImages.isNotEmpty()) {
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    items(branch.galleryImages) { imgUrl ->
-                                        Box {
-                                            AsyncImage(
-                                                model = imgUrl,
-                                                contentDescription = null,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier
-                                                    .size(100.dp)
-                                                    .clip(RoundedCornerShape(12.dp))
-                                                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
-                                                error = painterResource(id = R.drawable.ic_launcher_background)
-                                            )
-                                            if (isEditMode) {
-                                                IconButton(
-                                                    onClick = {
-                                                        onRequestDelete("Eliminar Imagen", "¿Deseas quitar esta imagen de la galería?") {
-                                                            val updatedImages = branch.galleryImages.filter { it != imgUrl }
-                                                            val updatedBranch = branch.copy(galleryImages = updatedImages)
-                                                            val updatedBranches = company.branches.map { if (it.id == branch.id) updatedBranch else it }
-                                                            val updatedCompanies = uiState.companies.map { if (it.id == company.id) it.copy(branches = updatedBranches) else it }
-                                                            onUpdateCompanies(updatedCompanies)
-                                                        }
-                                                    },
-                                                    modifier = Modifier.align(Alignment.TopEnd).size(24.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                                ) {
-                                                    Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } else if (isEditMode) {
-                                Box(modifier = Modifier.fillMaxWidth().height(80.dp).background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                                    Text("Todavía no hay imágenes", color = Color.Gray, style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
+                            // Galería eliminada por Ley de Costo Zero en perfil de usuario
                         }
                     }
                 }
@@ -1118,8 +1094,8 @@ fun BusinessM3Section(
 
 @Composable
 fun ProfileDataFieldItem(
-    emoji: String, 
-    label: String, 
+    emoji: String,
+    label: String,
     value: String,
     isEditMode: Boolean = false,
     onValueChange: (String) -> Unit = {},
@@ -1360,15 +1336,14 @@ fun PerfilUsuarioScreenPreview() {
                         address = AddressClient(calle = "Lavalle", numero = "450", localidad = "Tucumán"),
                         representatives = listOf(
                             RepresentativeClient(nombre = "Ana", apellido = "Gómez", cargo = "Soporte", photoUrl = "https://picsum.photos/seed/ana/100/100")
-                        ),
-                        galleryImages = listOf("https://picsum.photos/seed/office1/400/300")
+                        )
                     )
                 )
             )
         )
     )
 
-    val sampleUiState = ProfileUiState(
+    val sampleUiState = UserUiState(
         displayName = "Maverick",
         name = "Maximiliano",
         lastName = "Nanterne",

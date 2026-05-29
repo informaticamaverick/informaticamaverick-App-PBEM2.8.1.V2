@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.global
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
@@ -123,20 +124,30 @@ class BeBrainViewModel @Inject constructor(
      */
     val activeProfileName: StateFlow<String> = combine(userState, selectedProfileId) { user, profileId ->
         if (profileId == null || user == null) {
-            user?.name?.ifBlank { null } ?: user?.displayName ?: "Usuario"
+            // Perfil Personal: Prioridad DisplayName -> Nombre Completo -> Email
+            user?.displayName?.ifBlank { null } 
+                ?: user?.getFullName()?.ifBlank { null } 
+                ?: user?.email?.substringBefore("@") 
+                ?: "Usuario"
         } else {
-            user.companies.find { it.id == profileId }?.name ?: user.displayName
+            // Perfil de Empresa
+            user.companies.find { it.id == profileId }?.name 
+                ?: user.displayName.ifBlank { user.getFullName() }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Cargando...")
 
     /**
-     * URL de la foto que debe mostrar la cabecera.
+     * Foto procesada (URL o ByteArray) que debe mostrar la cabecera.
      */
-    val activeProfilePhotoUrl: StateFlow<String?> = combine(userState, selectedProfileId) { user, profileId ->
-        if (profileId == null || user == null) {
-            user?.photoUrl
+    val activeProfilePhoto: StateFlow<Any?> = combine(userState, selectedProfileId) { user, profileId ->
+        if (user == null) return@combine null
+        val domainUser = user.toDomain()
+        
+        if (profileId == null) {
+            domainUser.profileImage
         } else {
-            user.companies.find { it.id == profileId }?.photoUrl ?: user.photoUrl
+            val company = domainUser.companies.find { it.id == profileId }
+            company?.profileImage ?: domainUser.profileImage
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -434,6 +445,10 @@ class BeBrainViewModel @Inject constructor(
                         it.name.lowercase().trim() == catName.lowercase().trim() 
                     }?.let { _categorySelectionEvent.emit(it) }
                     cerrarBeAssistantCompleto()
+                }
+                actionId.startsWith("select_address_") -> {
+                    val addrId = actionId.removePrefix("select_address_")
+                    selectAddress(addrId)
                 }
             }
             coordinator.triggerAction(actionId)
@@ -894,6 +909,7 @@ class BeBrainViewModel @Inject constructor(
         }
     }
 }
+
 
 
 

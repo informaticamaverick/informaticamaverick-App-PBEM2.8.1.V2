@@ -120,4 +120,28 @@ object ImageUtils {
             null
         }
     }
+
+    /**
+     * [ELITE SSOT]: Procesa un string de imagen (URL o Base64) y lo convierte
+     * en un objeto listo para ser consumido por Coil (String o ByteArray).
+     */
+    fun processImageSource(source: String?): Any? {
+        if (source.isNullOrBlank()) return null
+        
+        // Si es una URL o una URI de contenido, la devolvemos tal cual
+        if (source.startsWith("http") || source.startsWith("content://") || source.startsWith("file://")) {
+            return source
+        }
+
+        // Si es un Base64 (detectado por longitud y falta de prefijo de red), decodificamos a ByteArray
+        return try {
+            if (source.length > 100) {
+                Base64.decode(source, Base64.DEFAULT)
+            } else {
+                source
+            }
+        } catch (e: Exception) {
+            source // Fallback al string original si falla la decodificación
+        }
+    }
 }

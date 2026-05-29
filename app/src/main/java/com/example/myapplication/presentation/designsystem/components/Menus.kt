@@ -66,7 +66,9 @@ data class FileNode(
     val name: String,
     val isDirectory: Boolean,
     val children: List<FileNode> = emptyList(),
-    val icon: ImageVector? = null
+    val icon: ImageVector? = null,
+    val tint: Color? = null, // Para el color gris/cyan
+    val alpha: Float = 1f    // Para el efecto "apagado"
 )
 
 @Composable
@@ -77,20 +79,25 @@ fun DirectoryTree(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         nodes.forEach { node ->
-            FileNodeItem(node, onNodeClick = onNodeClick)
+            TacticalFileNodeItem(node, onNodeClick = onNodeClick)
         }
     }
 }
 
 @Composable
-private fun FileNodeItem(
+private fun TacticalFileNodeItem(
     node: FileNode,
     level: Int = 0,
     onNodeClick: (FileNode) -> Unit
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    val rotation by animateFloatAsState(if (isExpanded) 90f else 0f, label = "rot")
+    val alphaAnim by animateFloatAsState(if (isExpanded) 1f else 0.7f, label = "alpha")
+    val finalAlpha = alphaAnim * node.alpha
 
-    Column {
+    val accentColor = node.tint ?: if (node.isDirectory) MaverickColors.NeonCyan else MaverickColors.TextMuted
+
+    Column(modifier = Modifier.alpha(finalAlpha)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -98,48 +105,85 @@ private fun FileNodeItem(
                     if (node.isDirectory) isExpanded = !isExpanded
                     onNodeClick(node)
                 }
-                .padding(start = (level * 16).dp, top = 8.dp, bottom = 8.dp, end = 16.dp),
+                .padding(start = (level * 20).dp, top = 6.dp, bottom = 6.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Guía visual (línea vertical de jerarquía)
+            if (level > 0) {
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(32.dp)
+                        .padding(start = 8.dp)
+                        .background(MaverickColors.TextMuted.copy(alpha = 0.2f))
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+
             if (node.isDirectory) {
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(16.dp)
-                        .rotate(if (isExpanded) 90f else 0f),
-                    tint = MaverickColors.TextMuted
+                        .size(14.dp)
+                        .rotate(rotation),
+                    tint = accentColor
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Icon(
                     imageVector = Icons.Default.Folder,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaverickColors.NeonCyan
+                    modifier = Modifier.size(18.dp).alpha(alphaAnim),
+                    tint = accentColor
                 )
             } else {
-                Spacer(modifier = Modifier.width(20.dp))
+                // Punto de conexión para hojas
+                Canvas(modifier = Modifier.size(14.dp)) {
+                    drawCircle(
+                        color = accentColor.copy(alpha = 0.5f),
+                        radius = 2.dp.toPx(),
+                        center = center
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
                 Icon(
                     imageVector = node.icon ?: Icons.AutoMirrored.Filled.InsertDriveFile,
                     contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaverickColors.TextMuted
+                    modifier = Modifier.size(18.dp),
+                    tint = accentColor
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
-            Text(
-                text = node.name,
-                color = if (node.isDirectory) Color.White else MaverickColors.TextMain,
-                fontSize = 14.sp,
-                fontWeight = if (node.isDirectory) FontWeight.Bold else FontWeight.Normal
-            )
+            Column {
+                Text(
+                    text = node.name.uppercase(),
+                    color = if (node.isDirectory) Color.White else MaverickColors.TextMain,
+                    fontSize = 11.sp,
+                    fontWeight = if (node.isDirectory) FontWeight.ExtraBold else FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                if (!node.isDirectory) {
+                    Text(
+                        text = "ENTRY_NODE",
+                        color = accentColor.copy(alpha = 0.4f),
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
 
-        if (node.isDirectory && isExpanded) {
-            node.children.forEach { child ->
-                FileNodeItem(child, level + 1, onNodeClick)
+        AnimatedVisibility(
+            visible = node.isDirectory && isExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column {
+                node.children.forEach { child ->
+                    TacticalFileNodeItem(child, level + 1, onNodeClick)
+                }
             }
         }
     }
@@ -244,9 +288,9 @@ fun MenuCP(
                         }
 
                         // BOTÓN DE CIERRE (X) - Centrado a la derecha de la cabecera
-                        BtnCancelStealth(
-                            onClick = onDismiss
-                        )
+                      //  BtnCancelStealth(
+                       //     onClick = onDismiss
+                       // )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))

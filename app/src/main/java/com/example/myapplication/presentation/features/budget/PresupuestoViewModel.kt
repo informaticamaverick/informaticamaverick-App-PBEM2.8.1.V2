@@ -24,7 +24,7 @@ import com.example.myapplication.core.common.extensions.prepareForSearch
 import com.example.myapplication.core.common.extensions.wordStartsWithSmart
 import com.example.myapplication.core.common.extensions.normalizeForTopic
 import dagger.hilt.android.lifecycle.HiltViewModel
-import com.example.myapplication.presentation.components.AddressInfo
+import com.example.myapplication.core.domain.model.AddressInfo
 import com.example.myapplication.presentation.global.HUDContext
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -737,3 +737,4 @@ class BudgetViewModel @Inject constructor(
         }
     }
 }
+

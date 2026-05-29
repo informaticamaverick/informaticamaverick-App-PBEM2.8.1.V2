@@ -958,6 +958,7 @@ fun BentoBottomSheetContent(
                 .padding(end = 16.dp)
                 .offset(y = 10.dp, x = shakeOffsetClose.value.dp)
         ) {
+           /**
             CarcasaAccionBento(
                 emoji = "❌",
                 label = "",
@@ -972,6 +973,7 @@ fun BentoBottomSheetContent(
                 size = 42.dp,
                 emojiSize = 20.sp
             )
+            */
         }
     }
 }

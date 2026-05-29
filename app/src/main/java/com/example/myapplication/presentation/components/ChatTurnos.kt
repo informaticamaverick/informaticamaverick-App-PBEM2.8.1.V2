@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.components
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -402,3 +403,4 @@ fun generateSlotsFromAvailability(avail: DayAvailability, booked: List<Pair<Stri
 
     return slots
 }
+

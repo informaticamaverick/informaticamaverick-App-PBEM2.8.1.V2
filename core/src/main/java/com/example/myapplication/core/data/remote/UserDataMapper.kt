@@ -48,19 +48,38 @@ object UserDataMapper {
             // Mapeo de Empresas
             val companiesRaw = (data["companies"] ?: perfil["companies"] ?: data["empresas"] ?: perfil["empresas"]) as? List<*> ?: emptyList<Any>()
             val mappedCompanies = companiesRaw.mapNotNull { it as? Map<*, *> }.map { c ->
-                val branchesRaw = c["branches"] as? List<*> ?: emptyList<Any>()
+                val branchesRaw = (c["branches"] ?: c["sucursales"]) as? List<*> ?: emptyList<Any>()
                 val mappedBranches = branchesRaw.mapNotNull { it as? Map<*, *> }.map { b ->
                     BranchClient(
                         id = b["id"] as? String ?: UUID.randomUUID().toString(),
-                        name = b["name"] as? String ?: "",
-                        isMainBranch = b["isMainBranch"] as? Boolean ?: false,
-                        address = (b["address"] as? Map<*, *>)?.let { adr ->
+                        name = b["name"] as? String ?: b["nombre"] as? String ?: "",
+                        isMainBranch = b["isMainBranch"] as? Boolean ?: b["principal"] as? Boolean ?: false,
+                        address = (b["address"] ?: b["direccion"])?.let { adrRaw ->
+                            val adr = adrRaw as? Map<*, *> ?: emptyMap<String, Any>()
                             AddressClient(
                                 id = adr["id"] as? String ?: UUID.randomUUID().toString(),
                                 calle = adr["calle"] as? String ?: "",
-                                localidad = adr["localidad"] as? String ?: ""
+                                numero = adr["numero"] as? String ?: "",
+                                localidad = adr["localidad"] as? String ?: "",
+                                provincia = adr["provincia"] as? String ?: "",
+                                pais = adr["pais"] as? String ?: "Argentina",
+                                codigoPostal = adr["codigoPostal"] as? String ?: "",
+                                latitude = (adr["latitude"] as? Number)?.toDouble() ?: 0.0,
+                                longitude = (adr["longitude"] as? Number)?.toDouble() ?: 0.0,
+                                label = adr["label"] as? String ?: ""
                             )
-                        } ?: AddressClient()
+                        } ?: AddressClient(),
+                        representatives = (b["representatives"] ?: b["representantes"])?.let { repsRaw ->
+                            (repsRaw as? List<*>)?.mapNotNull { it as? Map<*, *> }?.map { r ->
+                                RepresentativeClient(
+                                    id = r["id"] as? String ?: UUID.randomUUID().toString(),
+                                    nombre = r["nombre"] as? String ?: "",
+                                    apellido = r["apellido"] as? String ?: "",
+                                    cargo = r["cargo"] as? String ?: "",
+                                    photoUrl = r["photoUrl"] as? String ?: r["imageUrl"] as? String
+                                )
+                            }
+                        } ?: emptyList()
                     )
                 }
 
@@ -71,6 +90,8 @@ object UserDataMapper {
                     cuit = c["cuit"] as? String ?: "",
                     email = c["email"] as? String ?: "",
                     phoneNumber = c["phoneNumber"] as? String ?: "",
+                    photoUrl = c["photoUrl"] as? String ?: c["imageUrl"] as? String,
+                    bannerImageUrl = c["bannerImageUrl"] as? String ?: c["bannerUrl"] as? String,
                     branches = mappedBranches
                 )
             }
@@ -85,7 +106,6 @@ object UserDataMapper {
                 bio = getDeepString("bio") ?: "",
                 photoUrl = getDeepString("photoUrl") ?: getDeepString("imageUrl") ?: getDeepString("photo"),
                 bannerImageUrl = getDeepString("bannerImageUrl") ?: getDeepString("bannerUrl"),
-                galleryImages = ((data["galleryImages"] ?: perfil["galleryImages"]) as? List<*>)?.map { it.toString() } ?: emptyList(),
                 additionalEmails = ((data["additionalEmails"] ?: perfil["additionalEmails"]) as? List<*>)?.map { it.toString() } ?: emptyList(),
                 additionalPhones = ((data["additionalPhones"] ?: perfil["additionalPhones"]) as? List<*>)?.map { it.toString() } ?: emptyList(),
                 personalAddresses = mappedAddresses,

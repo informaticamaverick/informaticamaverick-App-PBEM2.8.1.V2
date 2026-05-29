@@ -30,3 +30,24 @@ data class AddressClient(
             .joinToString(", ")
     }
 }
+
+/**
+ * --- MODELO DE DATOS PARA UI (READY-TO-CONSUME) ---
+ * Representa una dirección aplanada y lista para ser mostrada en listas, popups o cabeceras.
+ * Unifica direcciones personales y de sucursales empresariales.
+ */
+data class AddressInfo(
+    val id: String,
+    val ownerId: String? = null, // ID del propietario (User=null o Company.id)
+    val companyOrUserName: String,
+    val profilePhoto: Any? = null, // Foto procesada (User.profileImage o Company.profileImage)
+    val branchName: String,
+    val streetAndNumber: String,
+    val locality: String,
+    val province: String = "",
+    val country: String = "",
+    val postalCode: String,
+    val isCompany: Boolean,
+    val lat: Double,
+    val lng: Double
+)

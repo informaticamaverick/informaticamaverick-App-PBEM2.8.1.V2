@@ -61,8 +61,8 @@ class UserRepository @Inject constructor(
             // 1. Persistencia local inmediata (Costo Zero)
             userDao.insertOrUpdateUser(UserEntity.fromDomain(user))
 
-            // 2. Preparación de mapa compatible con SSOT
-            val perfilMap = mapOf(
+            // 2. Preparación de mapa compatible con SSOT (Limpieza de nulos para Costo Zero)
+            val perfilMap = mutableMapOf<String, Any?>(
                 "name" to user.name,
                 "nombre" to user.name, 
                 "lastName" to user.lastName,
@@ -76,7 +76,7 @@ class UserRepository @Inject constructor(
                 "imageUrl" to user.photoUrl,
                 "bannerImageUrl" to user.bannerImageUrl,
                 "rating" to user.rating
-            )
+            ).filterValues { it != null && (it !is String || it.isNotBlank()) }
 
             val userData = mutableMapOf<String, Any?>(
                 "uid" to uid,
@@ -91,7 +91,7 @@ class UserRepository @Inject constructor(
                 "isOnline" to user.isOnline,
                 "createdAt" to user.createdAt,
                 "updatedAt" to System.currentTimeMillis()
-            )
+            ).filterValues { it != null }
 
             // 3. Sincronización con la nube
             firestore.collection("usuarios").document(uid).set(userData, SetOptions.merge()).await()

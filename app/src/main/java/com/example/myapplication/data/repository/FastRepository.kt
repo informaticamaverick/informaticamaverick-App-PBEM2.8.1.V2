@@ -54,7 +54,8 @@ class FastRepository @Inject constructor(
             val service = ProviderDisplayModel(
                 id = provider.uid,
                 title = provider.displayName,
-                photoUrl = provider.photoUrl ?: "",
+                photoUrl = provider.profileImage,
+                bannerImageUrl = provider.bannerImage,
                 rating = provider.rating.toDouble(),
                 isVerified = provider.isVerified,
                 isOnline = provider.isOnline,

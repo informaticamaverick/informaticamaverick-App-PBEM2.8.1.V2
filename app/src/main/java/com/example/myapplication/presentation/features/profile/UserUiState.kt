@@ -4,12 +4,12 @@ import com.example.myapplication.core.domain.model.AddressClient
 import com.example.myapplication.core.domain.model.CompanyClient
 
 /**
- * --- PROFILE UI STATE ---
+ * --- USER UI STATE (SSOT) ---
  * 
- * Representa el estado de la interfaz de usuario para la gestión del perfil del dueño.
- * Alineado con la nueva estructura de UserEntity.
+ * Representa el estado de la identidad del usuario en todo el sistema.
+ * Alineado con la nueva estructura de UserEntity y leyes de Costo Zero.
  */
-data class ProfileUiState(
+data class UserUiState(
     val uid: String = "",
     val displayName: String = "",
     val name: String = "",
@@ -31,7 +31,6 @@ data class ProfileUiState(
     val personalAddresses: List<AddressClient> = emptyList(),
     val additionalEmails: List<String> = emptyList(),
     val additionalPhones: List<String> = emptyList(),
-    val galleryImages: List<String> = emptyList(),
     
     // --- GESTIÓN DE EMPRESAS ---
     val isEmpresa: Boolean = false, // Vinculado a hasCompanyProfile
@@ -44,7 +43,7 @@ data class ProfileUiState(
     val notificationsEnabled: Boolean = false,
     val isPublicProfile: Boolean = false,
     val isProfileComplete: Boolean = false,
-    
+
     // --- SOCIAL Y REPUTACIÓN ---
     val rating: Float = 0f,
     val favoriteProviderIds: List<String> = emptyList(),
@@ -64,12 +63,3 @@ data class ProfileUiState(
     // ==========================================
     val isEditMode: Boolean = false
 )
-
-
-
-
-
-
-
-
-

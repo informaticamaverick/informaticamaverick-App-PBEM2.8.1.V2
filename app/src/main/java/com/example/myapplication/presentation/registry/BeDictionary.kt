@@ -12,6 +12,18 @@ import com.example.myapplication.presentation.components.ControlItem
 import com.example.myapplication.presentation.components.BeMessage
 
 /**
+ * --- MAVERICK BUTTON STYLES ---
+ * Define el molde físico del botón.
+ */
+enum class MaverickButtonStyle {
+    RECTANGULAR_PREMIUM, // MaverickButton (Grande, Neón)
+    ACTION_CIRCLE,      // Estilo Cabecera (Circular Glass sutil)
+    ROUND_BENTO,        // MaverickRoundButton (Círculo con etiqueta)
+    TACTICAL_SQUARE,     // MaverickTacticalButton (HUD Cuadrado)
+    COMPACT_HUD         // MaverickCompactHudButton (Sobre semi-esfera)
+}
+
+/**
  * --- BE DICTIONARY (DICCIONARIO DE ACTIVOS VISUALES) ---
  * Única fuente de verdad para Iconos, Emojis y Colores de la aplicación.
  * Permite que los Obreros (ViewModels) operen solo con IDs de comando.
@@ -27,31 +39,40 @@ object BeDictionary {
         val icon: ImageVector,
         val emoji: String? = null,
         val tint: Color = Color.White,
-        val isDefault: Boolean = false
+        val isDefault: Boolean = false,
+        val style: MaverickButtonStyle = MaverickButtonStyle.ACTION_CIRCLE
     )
 
     val Actions = mapOf(
-        "cancel" to ActionVisuals("Cerrar", MaverickIcons.Close, tint = Color.Red),
+        // --- BOTONES DE CABECERA (ACTION_CIRCLE) ---
+        "cancel" to ActionVisuals("Cerrar", MaverickIcons.Close, tint = Color.Red, style = MaverickButtonStyle.ACTION_CIRCLE),
+        "view_details" to ActionVisuals("Detalles", Icons.Default.PriorityHigh, emoji = "❗", style = MaverickButtonStyle.ACTION_CIRCLE),
+        "expand_view" to ActionVisuals("Subir", Icons.Default.ArrowUpward, style = MaverickButtonStyle.ACTION_CIRCLE),
+        
+        // --- ACCIONES TÁCTICAS (TACTICAL_SQUARE) ---
+        "delete_multi" to ActionVisuals("Eliminar", MaverickIcons.Delete, tint = Color.Red, style = MaverickButtonStyle.TACTICAL_SQUARE),
+        "compare_selected" to ActionVisuals("Comparar", Icons.AutoMirrored.Filled.CompareArrows, emoji = "⚖️", style = MaverickButtonStyle.TACTICAL_SQUARE),
+        "select_all" to ActionVisuals("Todos", MaverickIcons.SelectAll, emoji = "✅", style = MaverickButtonStyle.TACTICAL_SQUARE),
+        "mark_as_read" to ActionVisuals("Leídos", MaverickIcons.DoneAll, emoji = "📖", style = MaverickButtonStyle.TACTICAL_SQUARE),
+        "fav" to ActionVisuals("Favoritos", MaverickIcons.Favorite, emoji = "❤️", style = MaverickButtonStyle.TACTICAL_SQUARE),
+        "fast" to ActionVisuals("Fast", Icons.Default.FlashOn, emoji = "⚡", style = MaverickButtonStyle.TACTICAL_SQUARE),
+
+        // --- ACCIONES BENTO (ROUND_BENTO) ---
+        "goto_direct_budgets" to ActionVisuals("Presupuestos", MaverickIcons.Message, emoji = "📩", tint = Color(0xFF2197F5), style = MaverickButtonStyle.ROUND_BENTO),
+        "licit" to ActionVisuals("Nueva Lic", MaverickIcons.Add, emoji = "📄", tint = Color(0xFF2197F5), style = MaverickButtonStyle.ROUND_BENTO),
+        "goto_history" to ActionVisuals("Historial", MaverickIcons.History, emoji = "📜", tint = Color(0xFFFF9800), style = MaverickButtonStyle.ROUND_BENTO),
+        "add_company" to ActionVisuals("Empresa", Icons.Default.Business, emoji = "🏢", style = MaverickButtonStyle.ROUND_BENTO),
+        "settings_profile" to ActionVisuals("Ajustes", Icons.Default.Settings, emoji = "⚙️", style = MaverickButtonStyle.ROUND_BENTO),
+
+        // --- BOTONES PREMIUM (RECTANGULAR_PREMIUM) ---
+        "save_profile" to ActionVisuals("Guardar", Icons.Default.Save, emoji = "💾", tint = Color(0xFF00FFC2), style = MaverickButtonStyle.RECTANGULAR_PREMIUM),
+        "edit_profile" to ActionVisuals("Editar", MaverickIcons.Edit, emoji = "✏️", style = MaverickButtonStyle.RECTANGULAR_PREMIUM),
+        "cancel_edit" to ActionVisuals("Cancelar", Icons.Default.Close, emoji = "✖️", tint = Color.Red, style = MaverickButtonStyle.RECTANGULAR_PREMIUM),
+
+        // --- OTROS ---
+        "share" to ActionVisuals("Compartir", MaverickIcons.Share, emoji = "📤", style = MaverickButtonStyle.ACTION_CIRCLE),
         "divider_v1" to ActionVisuals("", Icons.Default.VerticalAlignBottom),
-        "divider_v2" to ActionVisuals("", Icons.Default.VerticalAlignBottom),
-        "divider_v3" to ActionVisuals("", Icons.Default.VerticalAlignBottom),
-        "view_tender_details" to ActionVisuals("Detalles", Icons.AutoMirrored.Filled.Assignment, emoji = "📋"),
-        "delete_multi" to ActionVisuals("Eliminar", MaverickIcons.Delete, tint = Color.Red),
-        "compare_selected" to ActionVisuals("Comparar", Icons.AutoMirrored.Filled.CompareArrows, emoji = "⚖️"),
-        "compare_all" to ActionVisuals("Comparar Todo", Icons.AutoMirrored.Filled.CompareArrows, emoji = "⚖️", isDefault = true),
-        "select_all" to ActionVisuals("Todos", MaverickIcons.SelectAll, emoji = "✅"),
-        "mark_as_read" to ActionVisuals("Leídos", MaverickIcons.DoneAll, emoji = "📖"),
-        "goto_direct_budgets" to ActionVisuals("Presupuestos", MaverickIcons.Message, emoji = "📩", tint = Color(0xFF2197F5), isDefault = true),
-        "licit" to ActionVisuals("Nueva Lic", MaverickIcons.Add, emoji = "📄", tint = Color(0xFF2197F5), isDefault = true),
-        "goto_history" to ActionVisuals("Historial", MaverickIcons.History, emoji = "📜", tint = Color(0xFFFF9800), isDefault = true),
-        "edit_profile" to ActionVisuals("Editar", MaverickIcons.Edit, emoji = "✏️", isDefault = true),
-        "save_profile" to ActionVisuals("Guardar", Icons.Default.Save, emoji = "💾", tint = Color(0xFF00FFC2), isDefault = true),
-        "cancel_edit" to ActionVisuals("Cancelar", Icons.Default.Close, emoji = "✖️", tint = Color.Red, isDefault = true),
-        "add_company" to ActionVisuals("Empresa", Icons.Default.Business, emoji = "🏢", isDefault = true),
-        "settings_profile" to ActionVisuals("Ajustes", Icons.Default.Settings, emoji = "⚙️", isDefault = true),
-        "fast" to ActionVisuals("Fast", Icons.Default.FlashOn, emoji = "⚡", isDefault = true),
-        "fav" to ActionVisuals("Favoritos", MaverickIcons.Favorite, emoji = "❤️", isDefault = true),
-        "share" to ActionVisuals("Compartir", MaverickIcons.Share, emoji = "📤")
+        "compare_all" to ActionVisuals("Comparar Todo", Icons.AutoMirrored.Filled.CompareArrows, emoji = "⚖️", isDefault = true, style = MaverickButtonStyle.TACTICAL_SQUARE)
     )
 
     // ======================================================================================

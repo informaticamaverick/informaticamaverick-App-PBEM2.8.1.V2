@@ -70,49 +70,68 @@ data class ProviderEntity(
 ) {
     /**
      * Mapea la entidad de Room al modelo de Dominio puro.
+     * [ELITE SSOT]: Procesa las imágenes para consumo directo en UI.
      */
-    fun toDomain(): Provider = Provider(
-        uid = id,
-        email = email,
-        alternateEmail = alternateEmail,
-        emails = emails,
-        phoneNumber = phoneNumber,
-        additionalPhones = additionalPhones,
-        displayName = displayName,
-        name = name,
-        lastName = lastName,
-        matricula = matricula,
-        profesion = profesion,
-        titulo = titulo,
-        cuilCuit = cuilCuit,
-        addresses = addresses,
-        address = address,
-        doesService = doesService,
-        doesProduct = doesProduct,
-        works24h = works24h,
-        hasPhysicalLocation = hasPhysicalLocation,
-        doesHomeVisits = doesHomeVisits,
-        doesShipping = doesShipping,
-        acceptsAppointments = acceptsAppointments,
-        trabajaConOtros = trabajaConOtros,
-        isSubscribed = isSubscribed,
-        isVerified = isVerified,
-        isFavorite = isFavorite,
-        isOnline = isOnline,
-        rating = rating,
-        workingHours = workingHours,
-        categories = categories,
-        description = description,
-        companies = companies,
-        hasCompanyProfile = hasCompanyProfile,
-        priorizarEmpresa = priorizarEmpresa,
-        photoUrl = photoUrl,
-        bannerImageUrl = bannerImageUrl,
-        galleryImages = galleryImages,
-        favoriteProviderIds = favoriteProviderIds,
-        serviceType = serviceType,
-        createdAt = createdAt
-    )
+    fun toDomain(): Provider {
+        val processedCompanies = companies.map { company ->
+            company.copy(
+                profileImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(company.photoUrl),
+                bannerImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(company.bannerImageUrl),
+                branches = company.branches.map { branch ->
+                    branch.copy(
+                        employees = branch.employees.map { emp ->
+                            emp.copy(profileImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(emp.photoUrl))
+                        }
+                    )
+                }
+            )
+        }
+
+        return Provider(
+            uid = id,
+            email = email,
+            alternateEmail = alternateEmail,
+            emails = emails,
+            phoneNumber = phoneNumber,
+            additionalPhones = additionalPhones,
+            displayName = displayName,
+            name = name,
+            lastName = lastName,
+            matricula = matricula,
+            profesion = profesion,
+            titulo = titulo,
+            cuilCuit = cuilCuit,
+            addresses = addresses,
+            address = address,
+            doesService = doesService,
+            doesProduct = doesProduct,
+            works24h = works24h,
+            hasPhysicalLocation = hasPhysicalLocation,
+            doesHomeVisits = doesHomeVisits,
+            doesShipping = doesShipping,
+            acceptsAppointments = acceptsAppointments,
+            trabajaConOtros = trabajaConOtros,
+            isSubscribed = isSubscribed,
+            isVerified = isVerified,
+            isFavorite = isFavorite,
+            isOnline = isOnline,
+            rating = rating,
+            workingHours = workingHours,
+            categories = categories,
+            description = description,
+            companies = processedCompanies,
+            hasCompanyProfile = hasCompanyProfile,
+            priorizarEmpresa = priorizarEmpresa,
+            photoUrl = photoUrl,
+            bannerImageUrl = bannerImageUrl,
+            profileImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(photoUrl),
+            bannerImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(bannerImageUrl),
+            galleryImages = galleryImages,
+            favoriteProviderIds = favoriteProviderIds,
+            serviceType = serviceType,
+            createdAt = createdAt
+        )
+    }
 
     companion object {
         /**

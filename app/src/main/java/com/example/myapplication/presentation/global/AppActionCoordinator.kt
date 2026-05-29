@@ -3,8 +3,9 @@ package com.example.myapplication.presentation.global
 import com.example.myapplication.core.common.extensions.prepareForSearch
 import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.data.repository.UserRepository
+import com.example.myapplication.core.domain.model.AddressInfo
 import com.example.myapplication.core.utils.HardwareStateProvider
-import com.example.myapplication.presentation.components.AddressInfo
+import com.example.myapplication.core.utils.ImageUtils
 import com.example.myapplication.presentation.components.BeMessage
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -183,7 +184,11 @@ class AppActionCoordinator @Inject constructor(
 
     private val _gpsAddressOverride = MutableStateFlow<AddressInfo?>(null)
 
-    fun selectAddress(addressId: String) {
+    fun selectAddress(addressId: String?) {
+        if (addressId.isNullOrBlank()) {
+            resetAddressToDefault()
+            return
+        }
         _selectedAddressId.value = addressId
         
         // Sincronización automática de Perfil:
@@ -200,6 +205,16 @@ class AppActionCoordinator @Inject constructor(
         }
     }
 
+    /**
+     * [NUEVO] RESTAURAR A VALOR POR DEFECTO:
+     * Limpia selecciones manuales y el override de GPS, volviendo a la dirección principal del perfil.
+     */
+    fun resetAddressToDefault() {
+        _gpsAddressOverride.value = null
+        _selectedAddressId.value = null
+        _selectedProfileId.value = null
+    }
+
     fun updateAddressFromGps(address: AddressInfo) {
         _gpsAddressOverride.value = address
         _selectedAddressId.value = "gps_current"
@@ -212,51 +227,18 @@ class AppActionCoordinator @Inject constructor(
     val availableAddressInfos: Flow<List<AddressInfo>> = combine(
         userRepository.userProfile,
         _gpsAddressOverride
-    ) { user, gpsOverride ->
+    ) { userEntity, gpsOverride ->
         val list = mutableListOf<AddressInfo>()
         
         // 1. Prioridad: Ubicación GPS actual (Si está activa)
         gpsOverride?.let { list.add(it) }
         
-        if (user == null) return@combine list
+        if (userEntity == null) return@combine list
         
-        // 2. Direcciones Personales
-        user.personalAddresses.forEach { addr ->
-            list.add(AddressInfo(
-                id = addr.id,
-                ownerId = null, // Pertenece al Usuario Principal
-                companyOrUserName = user.displayName,
-                branchName = addr.label.ifEmpty { "Mi Domicilio" },
-                streetAndNumber = "${addr.calle} ${addr.numero}",
-                locality = addr.localidad,
-                province = addr.provincia,
-                country = addr.pais, 
-                postalCode = addr.codigoPostal,
-                isCompany = false,
-                lat = addr.latitude,
-                lng = addr.longitude
-            ))
-        }
+        // 2. Direcciones del Usuario (Mapeo centralizado en Core)
+        val domainUser = userEntity.toDomain()
+        list.addAll(domainUser.toAddressInfoList())
         
-        // 3. Direcciones de Empresas
-        user.companies.forEach { company ->
-            company.branches.forEach { branch ->
-                list.add(AddressInfo(
-                    id = branch.id,
-                    ownerId = company.id, // Pertenece a esta Empresa
-                    companyOrUserName = company.name,
-                    branchName = branch.name,
-                    streetAndNumber = "${branch.address.calle} ${branch.address.numero}",
-                    locality = branch.address.localidad,
-                    province = branch.address.provincia,
-                    country = branch.address.pais,
-                    postalCode = branch.address.codigoPostal,
-                    isCompany = true,
-                    lat = branch.address.latitude,
-                    lng = branch.address.longitude
-                ))
-            }
-        }
         list
     }
 
@@ -298,3 +280,4 @@ class AppActionCoordinator @Inject constructor(
         initTopicAutomation()
     }
 }
+

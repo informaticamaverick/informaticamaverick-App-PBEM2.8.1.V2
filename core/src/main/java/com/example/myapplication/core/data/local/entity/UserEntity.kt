@@ -5,6 +5,7 @@ import androidx.room.PrimaryKey
 import com.example.myapplication.core.domain.model.AddressClient
 import com.example.myapplication.core.domain.model.CompanyClient
 import com.example.myapplication.core.domain.model.User
+import com.example.myapplication.core.utils.ImageUtils
 
 /**
  * --- ENTIDAD DE USUARIO / CLIENTE (ROOM) ---
@@ -22,7 +23,6 @@ data class UserEntity(
     val bio: String = "",
     val photoUrl: String? = null,
     val bannerImageUrl: String? = null,
-    val galleryImages: List<String> = emptyList(),
     val additionalEmails: List<String> = emptyList(),
     val additionalPhones: List<String> = emptyList(),
     val personalAddresses: List<AddressClient> = emptyList(),
@@ -48,36 +48,54 @@ data class UserEntity(
 
     /**
      * Convierte la entidad de Room al modelo de Dominio.
+     * [ELITE SSOT]: Procesa las imágenes para consumo directo en UI.
      */
-    fun toDomain(): User = User(
-        uid = id,
-        email = email,
-        displayName = displayName,
-        name = name,
-        lastName = lastName,
-        phoneNumber = phoneNumber,
-        bio = bio,
-        photoUrl = photoUrl,
-        bannerImageUrl = bannerImageUrl,
-        galleryImages = galleryImages,
-        additionalEmails = additionalEmails,
-        additionalPhones = additionalPhones,
-        personalAddresses = personalAddresses,
-        hasCompanyProfile = hasCompanyProfile,
-        companies = companies,
-        isOnline = isOnline,
-        isSubscribed = isSubscribed,
-        isVerified = isVerified,
-        notificationsEnabled = notificationsEnabled,
-        isPublicProfile = isPublicProfile,
-        isProfileComplete = isProfileComplete,
-        rating = rating,
-        favoriteProviderIds = favoriteProviderIds,
-        latitude = latitude,
-        longitude = longitude,
-        createdAt = createdAt,
-        isSynced = isSynced
-    )
+    fun toDomain(): User {
+        val processedCompanies = companies.map { company ->
+            company.copy(
+                profileImage = ImageUtils.processImageSource(company.photoUrl),
+                bannerImage = ImageUtils.processImageSource(company.bannerImageUrl),
+                branches = company.branches.map { branch ->
+                    branch.copy(
+                        representatives = branch.representatives.map { rep ->
+                            rep.copy(photoImage = ImageUtils.processImageSource(rep.photoUrl))
+                        }
+                    )
+                }
+            )
+        }
+
+        return User(
+            uid = id,
+            email = email,
+            displayName = displayName,
+            name = name,
+            lastName = lastName,
+            phoneNumber = phoneNumber,
+            bio = bio,
+            photoUrl = photoUrl,
+            bannerImageUrl = bannerImageUrl,
+            profileImage = ImageUtils.processImageSource(photoUrl),
+            bannerImage = ImageUtils.processImageSource(bannerImageUrl),
+            additionalEmails = additionalEmails,
+            additionalPhones = additionalPhones,
+            personalAddresses = personalAddresses,
+            hasCompanyProfile = hasCompanyProfile,
+            companies = processedCompanies,
+            isOnline = isOnline,
+            isSubscribed = isSubscribed,
+            isVerified = isVerified,
+            notificationsEnabled = notificationsEnabled,
+            isPublicProfile = isPublicProfile,
+            isProfileComplete = isProfileComplete,
+            rating = rating,
+            favoriteProviderIds = favoriteProviderIds,
+            latitude = latitude,
+            longitude = longitude,
+            createdAt = createdAt,
+            isSynced = isSynced
+        )
+    }
 
     companion object {
         /**
@@ -93,7 +111,6 @@ data class UserEntity(
             bio = u.bio,
             photoUrl = u.photoUrl,
             bannerImageUrl = u.bannerImageUrl,
-            galleryImages = u.galleryImages,
             additionalEmails = u.additionalEmails,
             additionalPhones = u.additionalPhones,
             personalAddresses = u.personalAddresses,

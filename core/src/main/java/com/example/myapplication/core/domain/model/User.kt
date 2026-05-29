@@ -21,7 +21,10 @@ data class User(
     var bio: String = "",
     var photoUrl: String? = null,
     var bannerImageUrl: String? = null,
-    val galleryImages: List<String> = emptyList(),
+
+    /** [ELITE SSOT]: Imágenes listas para consumo UI (String o ByteArray) */
+    val profileImage: Any? = null,
+    val bannerImage: Any? = null,
 
     // --- CONTACTOS ADICIONALES ---
     val additionalEmails: List<String> = emptyList(),
@@ -85,4 +88,54 @@ data class User(
      */
     val mainAddress: AddressClient?
         get() = personalAddresses.firstOrNull()
+
+    /**
+     * --- MAPEO INTELIGENTE (LEY 2: READY-TO-CONSUME) ---
+     * Aplana todas las direcciones disponibles (Personales + Empresas) en una lista única de AddressInfo.
+     * Centraliza la lógica de nombres y fotos para que la UI sea puramente reactiva.
+     */
+    fun toAddressInfoList(): List<AddressInfo> {
+        val list = mutableListOf<AddressInfo>()
+
+        // 1. Direcciones Personales
+        personalAddresses.forEach { addr ->
+            list.add(AddressInfo(
+                id = addr.id,
+                ownerId = null, // Usuario Principal
+                companyOrUserName = fullName,
+                profilePhoto = profileImage,
+                branchName = addr.label.ifBlank { "Mi Domicilio" },
+                streetAndNumber = "${addr.calle} ${addr.numero}".trim(),
+                locality = addr.localidad,
+                province = addr.provincia,
+                country = addr.pais,
+                postalCode = addr.codigoPostal,
+                isCompany = false,
+                lat = addr.latitude,
+                lng = addr.longitude
+            ))
+        }
+
+        // 2. Direcciones de Empresas
+        companies.forEach { company ->
+            company.branches.forEach { branch ->
+                list.add(AddressInfo(
+                    id = branch.id,
+                    ownerId = company.id, // ID de la Empresa para cambio de perfil
+                    companyOrUserName = company.name,
+                    profilePhoto = company.profileImage,
+                    branchName = branch.name,
+                    streetAndNumber = "${branch.address.calle} ${branch.address.numero}".trim(),
+                    locality = branch.address.localidad,
+                    province = branch.address.provincia,
+                    country = branch.address.pais,
+                    postalCode = branch.address.codigoPostal,
+                    isCompany = true,
+                    lat = branch.address.latitude,
+                    lng = branch.address.longitude
+                ))
+            }
+        }
+        return list
+    }
 }

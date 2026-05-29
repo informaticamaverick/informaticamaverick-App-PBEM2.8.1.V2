@@ -37,9 +37,12 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import coil.compose.AsyncImage
 import com.example.myapplication.core.data.local.entity.UserEntity
+import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.presentation.features.home.Screen
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
-import com.example.myapplication.presentation.designsystem.components.CPCyberColors
+import com.example.myapplication.presentation.designsystem.components.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import com.example.myapplication.core.common.QRUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -49,14 +52,40 @@ import androidx.navigation.NavHostController
 // --- SECCIÓN: COMPONENTES DE DIÁLOGOS Y POPUPS (ELITE) ---
 // ==================================================================================
 
+// --- COMPONENTES AUXILIARES ---
+
+@Composable
+fun MaverickCloseButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .background(Color.Red.copy(alpha = 0.1f))
+            .border(1.dp, Color.Red.copy(alpha = 0.3f), CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = true, radius = 12.dp),
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Cerrar",
+            tint = Color.Red,
+            modifier = Modifier.size(14.dp)
+        )
+    }
+}
+
 /**
  * MaverickQRDisplay: Pantalla completa estilo WhatsApp para mostrar el QR del usuario.
  */
 @Composable
 fun MaverickQRDisplay(
-    user: UserEntity,
+    user: User,
     activeProfileName: String,
-    activeProfilePhoto: String?,
+    activeProfilePhoto: Any?,
     onClose: () -> Unit
 ) {
     val cyberCyan = CPCyberColors.MaverickCyan
@@ -108,7 +137,7 @@ fun MaverickQRDisplay(
                     contentAlignment = Alignment.Center
                 ) {
                     // Generamos el código basado en el UID (o ID de empresa si aplica)
-                    val qrContent = QRUtils.generateUniqueMAVCode(user.id)
+                    val qrContent = QRUtils.generateUniqueMAVCode(user.uid)
                     
                     Icon(
                         Icons.Default.QrCode2, 
@@ -135,7 +164,7 @@ fun MaverickQRDisplay(
 
             // --- DATOS DEL PERFIL ---
             AsyncImage(
-                model = activeProfilePhoto ?: user.photoUrl,
+                model = activeProfilePhoto ?: user.profileImage,
                 contentDescription = null,
                 modifier = Modifier
                     .size(70.dp)
@@ -186,7 +215,7 @@ fun MaverickQRDisplay(
  */
 @Composable
 fun UserProfilePopup(
-    user: UserEntity, 
+    user: User, 
     isPersonalProfile: Boolean = true,
     selectedProfileId: String? = null,
     onProfileSelected: (String?) -> Unit = {},
@@ -196,7 +225,6 @@ fun UserProfilePopup(
     onProfileClick: () -> Unit
 ) {
     val cyberCyan = CPCyberColors.MaverickCyan
-    val cyberPurple = CPCyberColors.ElectricPurple
     val deepGlass = Color(0xFF0B0F19).copy(alpha = 0.98f)
 
     var showMyQR by remember { mutableStateOf(false) }
@@ -206,8 +234,8 @@ fun UserProfilePopup(
             onDismissRequest = { showMyQR = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            val activeName = if (isPersonalProfile) user.getFullName() else user.companies.find { it.id == selectedProfileId }?.name ?: user.displayName
-            val activePhoto = if (isPersonalProfile) user.photoUrl else user.companies.find { it.id == selectedProfileId }?.photoUrl ?: user.photoUrl
+            val activeName = if (isPersonalProfile) user.fullName else user.companies.find { it.id == selectedProfileId }?.name ?: user.displayName
+            val activePhoto = if (isPersonalProfile) user.profileImage else user.companies.find { it.id == selectedProfileId }?.profileImage ?: user.profileImage
             
             MaverickQRDisplay(
                 user = user,
@@ -221,15 +249,15 @@ fun UserProfilePopup(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(CutCornerShape(topEnd = 24.dp, bottomStart = 24.dp))
+            .clip(CutCornerShape(topEnd = 28.dp, bottomStart = 32.dp))
             .background(deepGlass)
             .border(
                 width = 1.2.dp,
-                brush = Brush.linearGradient(listOf(cyberCyan, cyberPurple)),
-                shape = CutCornerShape(topEnd = 24.dp, bottomStart = 24.dp)
+                brush = Brush.linearGradient(listOf(cyberCyan, Color.Transparent, cyberCyan)),
+                shape = CutCornerShape(topEnd = 32.dp, bottomStart = 32.dp)
             )
-            .then(if (isScrollable) Modifier.heightIn(max = 750.dp).verticalScroll(rememberScrollState()) else Modifier)
-            .padding(24.dp),
+            .then(if (isScrollable) Modifier.heightIn(max = 700.dp).verticalScroll(rememberScrollState()) else Modifier)
+            .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // --- HEADER DEL POPUP ---
@@ -242,264 +270,314 @@ fun UserProfilePopup(
                 Text(
                     text = "SYS_ID // PROFILE_V2",
                     color = cyberCyan,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp
                 )
                 Text(
-                    text = if (isPersonalProfile) "MODO: PERSONAL" else "MODO: EMPRESARIAL",
+                    text = " GESTIÓN DE IDENTIDAD DIGITAL",
                     color = Color.White.copy(alpha = 0.4f),
                     fontSize = 8.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // BOTÓN: GENERAR QR (ID)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(cyberCyan.copy(0.1f))
-                        .clickable { showMyQR = true }
-                        .padding(6.dp)
-                ) {
-                    Icon(Icons.Default.QrCode2, "Generar ID QR", tint = cyberCyan, modifier = Modifier.size(22.dp))
-                }
-                Spacer(Modifier.width(8.dp))
-                // BOTÓN: ESCANEAR QR
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(cyberPurple.copy(0.1f))
-                        .clickable { /* Logic Escaneo QR - TODO: Inyectar disparador de cámara */ }
-                        .padding(6.dp)
-                ) {
-                    Icon(Icons.Default.QrCodeScanner, "Escanear QR", tint = cyberPurple, modifier = Modifier.size(22.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                // BOTÓN DE CIERRE RESALTADO
-                IconButton(
-                    onClick = onClose, 
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(Color.White.copy(alpha = 0.05f), CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-                ) {
-                    Icon(Icons.Default.Close, null, tint = Color.White.copy(0.7f), modifier = Modifier.size(20.dp))
-                }
-            }
+            MaverickCloseButton(onClick = onClose)
         }
         
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
 
-        // --- SECCIÓN: AVATAR Y DATOS ---
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(110.dp)
-                .clickable { onProfileClick() }
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(cyberCyan.copy(0.05f), CircleShape)
-                    .border(1.5.dp, Brush.sweepGradient(listOf(cyberCyan, cyberPurple, cyberCyan)), CircleShape)
-            )
+        // --- LÓGICA DE DATOS DEL PERFIL ACTIVO (REACTIVE SSOT) ---
+        val activeCompany = remember(user, selectedProfileId) { user.companies.find { it.id == selectedProfileId } }
+        val activeName = remember(user, isPersonalProfile, activeCompany) { if (isPersonalProfile) user.fullName else activeCompany?.name ?: user.displayName }
+        val activeEmail = remember(user, isPersonalProfile, activeCompany) { if (isPersonalProfile) user.email else activeCompany?.email ?: user.email }
+        val activePhoto = remember(user, isPersonalProfile, activeCompany) { if (isPersonalProfile) user.profileImage else activeCompany?.profileImage ?: user.profileImage }
+
+        // ==================================================================================
+        // --- SECCIÓN 1: PERFIL ACTIVO (VISTA CENTRAL DINÁMICA) ---
+        // ==================================================================================
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(110.dp)) {
+            Canvas(modifier = Modifier.size(100.dp)) {
+                drawCircle(
+                    brush = Brush.sweepGradient(listOf(cyberCyan, Color.Transparent, cyberCyan)),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            }
             AsyncImage(
-                model = user.photoUrl,
+                model = activePhoto,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(90.dp)
-                    .clip(CircleShape),
+                    .size(85.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, Color.White.copy(alpha = 0.1f), CircleShape)
+                    .clickable { onProfileClick() },
                 contentScale = ContentScale.Crop
             )
         }
         
-        Spacer(Modifier.height(16.dp))
-        
-        Text(
-            text = "${user.name} ${user.lastName}".uppercase(),
-            color = Color.White,
-            fontWeight = FontWeight.Black,
-            fontSize = 20.sp,
-            letterSpacing = 1.sp,
-            textAlign = TextAlign.Center
-        )
+        Spacer(Modifier.height(12.dp))
 
-        // --- BURBUJAS DE EMPRESAS ---
-        if (user.companies.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Row(
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = activeName.uppercase(),
+                color = Color.White,
+                fontWeight = FontWeight.Black,
+                fontSize = 16.sp,
+                letterSpacing = 0.5.sp
+            )
+            if (isPersonalProfile && user.isVerified) {
+                Spacer(Modifier.width(6.dp))
+                Icon(Icons.Default.Verified, null, tint = cyberCyan, modifier = Modifier.size(14.dp))
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = activeEmail,
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 11.sp
+            )
+            if (isPersonalProfile && activeEmail.endsWith("@gmail.com")) {
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = "Google",
+                    tint = Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        DepthDividerHorizontal(shadowColor = Color.Black.copy(0.4f), highlightColor = Color.White.copy(0.05f))
+        Spacer(Modifier.height(20.dp))
+
+        // ==================================================================================
+        // --- SECCIÓN 2: NETWORK // ENTIDADES (BURBUJAS INACTIVAS) ---
+        // ==================================================================================
+        Text(
+            "🏢 NETWORK // CAMBIAR DE PERFIL",
+            color = Color.White.copy(alpha = 0.4f),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp,
+            modifier = Modifier.align(Alignment.Start)
+        )
+        
+        Spacer(Modifier.height(16.dp))
+
+        // Lista de perfiles INACTIVOS para las burbujas (Ocultamos el actual para evitar duplicidad)
+        val inactiveProfiles = remember(user, selectedProfileId, isPersonalProfile) {
+            val list = mutableListOf<ProfileBubbleData>()
+            
+            // 1. Si no estamos en el perfil personal, lo agregamos como opción
+            if (!isPersonalProfile) {
+                list.add(ProfileBubbleData(null, user.fullName, user.profileImage, false))
+            }
+            
+            // 2. Agregamos todas las empresas EXCEPTO la que está activa
+            user.companies.forEach { company ->
+                if (isPersonalProfile || company.id != selectedProfileId) {
+                    list.add(ProfileBubbleData(company.id, company.name, company.profileImage, false))
+                }
+            }
+            list
+        }
+
+        if (inactiveProfiles.isEmpty()) {
+            Text(
+                "NO HAY OTROS PERFILES DISPONIBLES",
+                color = Color.White.copy(alpha = 0.2f),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+        } else {
+            androidx.compose.foundation.lazy.LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                user.companies.take(3).forEach { company ->
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .clip(CircleShape)
-                            .background(cyberPurple.copy(alpha = 0.15f))
-                            .border(0.5.dp, cyberPurple.copy(alpha = 0.4f), CircleShape)
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = company.name.uppercase(),
-                            fontSize = 7.sp,
-                            fontWeight = FontWeight.Black,
-                            color = cyberPurple,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-                }
-                if (user.companies.size > 3) {
-                    Text("+${user.companies.size - 3}", color = Color.White.copy(alpha = 0.4f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                items(inactiveProfiles.size) { index ->
+                    val profile = inactiveProfiles[index]
+                    ProfileBubbleSwitch(
+                        data = profile,
+                        onClick = { onProfileSelected(profile.id) }
+                    )
                 }
             }
         }
 
+        Spacer(Modifier.height(20.dp))
+        DepthDividerHorizontal(shadowColor = Color.Black.copy(0.4f), highlightColor = Color.White.copy(0.05f))
+        Spacer(Modifier.height(20.dp))
+
+        // ==================================================================================
+        // --- SECCIÓN 3: HERRAMIENTAS DE COMPARTIR ---
+        // ==================================================================================
         Text(
-            text = user.email,
-            color = Color.White.copy(0.5f),
-            fontSize = 12.sp,
-            textAlign = TextAlign.Center
+            "🤝 INTERCAMBIO // COMPARTIR NODO",
+            color = Color.White.copy(alpha = 0.4f),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp,
+            modifier = Modifier.align(Alignment.Start)
         )
+        Spacer(Modifier.height(12.dp))
 
-        // --- ACCIÓN: REGRESAR A PERSONAL (Solo si está en modo empresa) ---
-        if (!isPersonalProfile) {
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = { onProfileSelected(null) },
-                colors = ButtonDefaults.buttonColors(containerColor = cyberCyan.copy(alpha = 0.15f)),
-                shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, cyberCyan.copy(alpha = 0.4f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.Person, null, tint = cyberCyan, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("VOLVER AL PERFIL PERSONAL", color = cyberCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            SharingActionBotton(icon = Icons.Default.QrCodeScanner, label = "ESCANEAR", color = Color.White.copy(0.6f)) { /* TODO */ }
+            SharingActionBotton(icon = Icons.Default.QrCode2, label = "MI QR", color = Color.White.copy(0.6f)) { showMyQR = true }
+            SharingActionBotton(icon = Icons.Default.Share, label = "GOOGLE", color = Color(0xFF4285F4).copy(alpha = 0.8f)) { /* TODO: Share via System */ }
         }
 
-        Spacer(Modifier.height(32.dp))
-        HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
         Spacer(Modifier.height(24.dp))
-
-        // --- SECCIÓN: NETWORK / ENTIDADES ASOCIADAS ---
-        if (user.companies.isNotEmpty()) {
-            Text(
-                "NETWORK // ENTIDADES VINCULADAS",
-                color = cyberPurple,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp,
-                modifier = Modifier.align(Alignment.Start)
-            )
-            Spacer(Modifier.height(20.dp))
-            
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                user.companies.forEach { company ->
-                    val isActive = !isPersonalProfile && company.id == selectedProfileId
-                    
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(CutCornerShape(topStart = 12.dp))
-                            .background(if (isActive) cyberPurple.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.03f))
-                            .border(1.dp, if (isActive) cyberPurple else Color.White.copy(alpha = 0.1f), CutCornerShape(topStart = 12.dp))
-                            .clickable { onProfileSelected(company.id) }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(cyberPurple.copy(0.1f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (company.photoUrl != null) {
-                                AsyncImage(model = company.photoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().clip(CircleShape), contentScale = ContentScale.Crop)
-                            } else {
-                                Icon(Icons.Default.Business, null, tint = cyberPurple, modifier = Modifier.size(24.dp))
-                            }
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = company.name.uppercase(), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Black)
-                            Text(text = "CONEXIÓN EMPRESARIAL", color = Color.White.copy(alpha = 0.4f), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Icon(Icons.Default.ChevronRight, null, tint = cyberPurple, modifier = Modifier.size(20.dp))
-                    }
-                }
-            }
-            Spacer(Modifier.height(32.dp))
-        }
+        DepthDividerHorizontal(shadowColor = Color.Black.copy(0.4f), highlightColor = Color.White.copy(0.05f))
+        Spacer(Modifier.height(20.dp))
 
         // --- BOTÓN DESCONECTAR ---
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
-                .clip(CutCornerShape(bottomStart = 16.dp)) // CORTE EN BORDE INFERIOR IZQUIERDO
-                .background(Color(0xFFFF1744).copy(0.1f))
-                .border(1.dp, Color(0xFFFF1744).copy(0.3f), CutCornerShape(bottomStart = 16.dp))
+                .height(44.dp)
+                .clip(CutCornerShape(bottomStart = 16.dp))
+                .background(Color(0xFFFF1744).copy(0.06f))
+                .border(1.dp, Color(0xFFFF1744).copy(0.15f), CutCornerShape(bottomStart = 16.dp))
                 .clickable { onLogout() },
             contentAlignment = Alignment.Center
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.PowerSettingsNew, null, tint = Color(0xFFFF1744), modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(12.dp))
-                Text("DESCONECTAR SESIÓN", color = Color(0xFFFF1744), fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.5.sp)
+                Icon(Icons.Default.PowerSettingsNew, null, tint = Color(0xFFFF1744), modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("TERMINAR SESIÓN SEGURA", color = Color(0xFFFF1744), fontWeight = FontWeight.Black, fontSize = 9.sp, letterSpacing = 1.sp)
             }
         }
     }
 }
 
+@Composable
+private fun SharingActionBotton(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onClick() }) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .background(color.copy(0.05f), CircleShape)
+                .border(1.dp, color.copy(0.2f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = color, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(label, color = Color.White.copy(0.4f), fontSize = 7.sp, fontWeight = FontWeight.Black)
+    }
+}
+
+/**
+ * Data class auxiliar para las burbujas de perfil.
+ */
+private data class ProfileBubbleData(
+    val id: String?,
+    val name: String,
+    val photo: Any?,
+    val isActive: Boolean
+)
+
+/**
+ * Componente de Burbuja para cambio de perfil en el Popup.
+ */
+@Composable
+private fun ProfileBubbleSwitch(
+    data: ProfileBubbleData,
+    onClick: () -> Unit
+) {
+    val cyberCyan = CPCyberColors.MaverickCyan
+    val borderColor = if (data.isActive) cyberCyan else Color.White.copy(alpha = 0.2f)
+    val borderWidth = if (data.isActive) 2.dp else 1.dp
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.05f))
+                .border(borderWidth, borderColor, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (data.photo != null) {
+                AsyncImage(
+                    model = data.photo,
+                    contentDescription = data.name,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = if (data.id == null) Icons.Default.Person else Icons.Default.Business,
+                    contentDescription = null,
+                    tint = if (data.isActive) cyberCyan else Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = data.name.split(" ").firstOrNull()?.uppercase() ?: "",
+            fontSize = 7.sp,
+            fontWeight = FontWeight.Black,
+            color = if (data.isActive) cyberCyan else Color.White.copy(alpha = 0.4f),
+            letterSpacing = 0.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(54.dp),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 /**
  * LocationPopup: Ventana emergente para visualización y selección de ubicación.
- * Rediseñada bajo el estándar "Elite Masterpiece" con arquitectura de 3 secciones:
- * 1. RADAR SATELITAL (GPS Prioridad con Glow Activo)
- * 2. NODOS PERSONALES (Ubicaciones Guardadas)
- * 3. BUSINESS NETWORK (Sincronización de Perfil de Empresa)
  */
 @Composable
 fun LocationPopup(
-    user: UserEntity?,
+    availableAddresses: List<AddressInfo>,
     onClose: () -> Unit,
     onRefresh: () -> Unit,
     onLocationSelected: (AddressInfo) -> Unit,
+    onGpsToggle: () -> Unit,
     activeAddress: AddressInfo?,
-    isScrollable: Boolean = true
+    selectedProfileId: String? = null,
+    isGpsSystemEnabled: Boolean = true // Detecta si el GPS de Android está ON/OFF
 ) {
     val cyberCyan = CPCyberColors.MaverickCyan
-    val cyberPurple = CPCyberColors.ElectricPurple
+    val deepGlass = Color(0xFF0B0F19).copy(alpha = 0.98f)
     var isRefreshing by remember { mutableStateOf(false) }
 
     val rotationAnim by animateFloatAsState(
         targetValue = if (isRefreshing) 360f else 0f,
         animationSpec = if (isRefreshing) {
-            infiniteRepeatable(
-                animation = tween(1000, easing = LinearOutSlowInEasing),
-                repeatMode = RepeatMode.Restart
-            )
-        } else {
-            tween(0)
-        },
+            infiniteRepeatable(animation = tween(1000, easing = LinearOutSlowInEasing))
+        } else tween(0),
         label = "GpsRotation"
     )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(CutCornerShape(topStart = 24.dp, bottomEnd = 24.dp))
-            .background(Color(0xFF0B0F19).copy(alpha = 0.98f))
+            .clip(CutCornerShape(topEnd = 32.dp, bottomStart = 32.dp))
+            .background(deepGlass)
             .border(
                 width = 1.2.dp,
-                brush = Brush.linearGradient(listOf(cyberCyan, cyberPurple)),
-                shape = CutCornerShape(topStart = 24.dp, bottomEnd = 24.dp)
+                brush = Brush.linearGradient(listOf(cyberCyan, Color.Transparent, cyberCyan)),
+                shape = CutCornerShape(topEnd = 32.dp, bottomStart = 32.dp)
             )
             .heightIn(max = 700.dp)
             .padding(24.dp)
@@ -514,200 +592,222 @@ fun LocationPopup(
                 Text(
                     text = "GEO_HUD // LOCATOR_V3",
                     color = cyberCyan,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp
                 )
                 Text(
-                    text = "CONFIGURACIÓN DE NODO ACTIVO",
+                    text = " CONFIGURACIÓN DE NODO GEOGRÁFICO",
                     color = Color.White.copy(alpha = 0.4f),
                     fontSize = 8.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
-            // BOTÓN DE CIERRE RESALTADO
-            IconButton(
-                onClick = onClose, 
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(Color.White.copy(alpha = 0.05f), CircleShape)
-                    .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
-            ) {
-                Icon(Icons.Default.Close, null, tint = Color.White.copy(0.7f), modifier = Modifier.size(20.dp))
-            }
+            MaverickCloseButton(onClick = onClose)
         }
 
         Spacer(Modifier.height(24.dp))
 
-        // --- SECCIÓN 1: RADAR SATELITAL (GPS) ---
+        // ==================================================================================
+        // --- SECCIÓN 1: NODO ACTIVO SELECCIONADO ---
+        // ==================================================================================
         val isGpsActive = activeAddress?.id == "gps_current"
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(CutCornerShape(topStart = 16.dp))
-                .background(if (isGpsActive) cyberCyan.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.02f))
-                .border(
-                    width = 1.dp, 
-                    color = if (isGpsActive) cyberCyan else Color.White.copy(alpha = 0.1f), 
-                    shape = CutCornerShape(topStart = 16.dp)
-                )
-                .padding(16.dp)
+        
+        Text(
+            text = "📍 NODO SELECCIONADO",
+            color = if (isGpsActive) cyberCyan else Color.White.copy(0.4f),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            modifier = Modifier.padding(bottom = 8.dp).align(Alignment.Start)
+        )
+
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = if (isGpsActive) cyberCyan.copy(0.05f) else Color.White.copy(alpha = 0.03f),
+            shape = CutCornerShape(topStart = 16.dp),
+            border = BorderStroke(1.dp, (if (isGpsActive) cyberCyan else Color.White).copy(alpha = 0.15f))
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.SatelliteAlt, 
-                    contentDescription = null, 
-                    tint = if (isGpsActive) cyberCyan else Color.White.copy(alpha = 0.3f), 
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text = "RADAR SATELITAL // GPS_LIVE", 
-                    color = if (isGpsActive) Color.White else Color.White.copy(alpha = 0.4f), 
-                    fontSize = 10.sp, 
-                    fontWeight = FontWeight.Black, 
-                    letterSpacing = 1.sp
-                )
-                if (isGpsActive) {
-                    Spacer(Modifier.width(8.dp))
-                    Box(modifier = Modifier.size(6.dp).background(cyberCyan, CircleShape))
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(
-                    onClick = {
-                        isRefreshing = true
-                        onRefresh()
-                    },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(cyberCyan.copy(0.1f), CircleShape)
-                ) {
-                    Icon(Icons.Default.MyLocation, null, tint = cyberCyan, modifier = Modifier.rotate(rotationAnim).size(18.dp))
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            
-            val address = if (isGpsActive) activeAddress.streetAndNumber.ifBlank { "DETECTANDO..." } else "MODO OFFLINE"
-            val detail = if (isGpsActive) {
-                listOfNotNull(activeAddress.locality, activeAddress.province, activeAddress.postalCode, activeAddress.country)
-                    .filter { it.isNotBlank() }
-                    .joinToString(", ")
-            } else "TOCA EL ICONO PARA ACTIVAR"
-            
-            Text(text = address.uppercase(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = if (isGpsActive) Color.White else Color.White.copy(alpha = 0.3f))
-            Text(text = detail.uppercase(), fontSize = 9.sp, color = if (isGpsActive) cyberCyan else Color.White.copy(alpha = 0.2f), fontWeight = FontWeight.Bold)
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        // --- SECCIÓN: DIRECTORIO DE NODOS ---
-        Column(modifier = if (isScrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier) {
-            if (user != null) {
-                // --- SECCIÓN 2: NODOS PERSONALES ---
-                Text(
-                    "NODOS PERSONALES // GUARDADOS",
-                    color = Color.White.copy(alpha = 0.4f),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.5.sp
-                )
-                Spacer(Modifier.height(16.dp))
-
-                user.personalAddresses.forEach { addr ->
-                    val isActive = !isGpsActive && activeAddress?.id == addr.id
-                    val fullDetail = if (isActive) {
-                        listOfNotNull(addr.localidad, addr.provincia, addr.codigoPostal, addr.pais)
-                            .filter { it.isNotBlank() }
-                            .joinToString(", ")
-                    } else {
-                        "${addr.localidad}, ${addr.provincia}"
-                    }
-
-                    CyberTreeLeaf(
-                        icon = Icons.Default.Home,
-                        title = "${addr.calle} ${addr.numero}",
-                        subtitle = fullDetail,
-                        accentColor = if (isActive) cyberCyan else Color.White.copy(alpha = 0.3f),
-                        isActive = isActive
-                    ) {
-                        onLocationSelected(
-                            AddressInfo(
-                                id = addr.id,
-                                ownerId = null,
-                                companyOrUserName = user.displayName,
-                                branchName = addr.label.ifEmpty { "Mi Domicilio" },
-                                streetAndNumber = "${addr.calle} ${addr.numero}",
-                                locality = addr.localidad,
-                                province = addr.provincia,
-                                country = addr.pais,
-                                postalCode = addr.codigoPostal,
-                                isCompany = false,
-                                lat = addr.latitude,
-                                lng = addr.longitude
-                            )
+            Column(modifier = Modifier.padding(16.dp)) {
+                if (activeAddress != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (isGpsActive) Icons.Default.SatelliteAlt else if (activeAddress.isCompany) Icons.Default.Business else Icons.Default.Home,
+                            contentDescription = null,
+                            tint = if (isGpsActive) cyberCyan else Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(22.dp)
                         )
-                    }
-                }
-                
-                Spacer(Modifier.height(32.dp))
-                
-                // --- SECCIÓN 3: NETWORK BUSINESS ---
-                if (user.companies.isNotEmpty()) {
-                    Text(
-                        "BUSINESS NETWORK // SUCURSALES",
-                        color = Color.White.copy(alpha = 0.4f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.5.sp
-                    )
-                    Spacer(Modifier.height(16.dp))
-
-                    user.companies.forEach { company ->
-                        company.branches.forEach { branch ->
-                            val isActive = !isGpsActive && activeAddress?.id == branch.id
-                            val addr = branch.address
-                            val fullDetail = if (isActive) {
-                                listOfNotNull(addr.localidad, addr.provincia, addr.codigoPostal, addr.pais)
-                                    .filter { it.isNotBlank() }
-                                    .joinToString(", ")
-                            } else {
-                                "${addr.localidad}, ${addr.provincia}"
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = activeAddress.streetAndNumber.uppercase(),
+                                color = Color.White,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 14.sp,
+                                letterSpacing = 0.5.sp
+                            )
+                            val detailText = buildString {
+                                if (activeAddress.isCompany) {
+                                    append("${activeAddress.companyOrUserName} - ${activeAddress.branchName} | ")
+                                }
+                                append("${activeAddress.locality}, ${activeAddress.province} [CP: ${activeAddress.postalCode}]")
                             }
-
-                            CyberTreeLeaf(
-                                icon = Icons.Default.Business,
-                                title = "${company.name} - ${branch.name}",
-                                subtitle = fullDetail,
-                                accentColor = if (isActive) cyberPurple else Color.White.copy(alpha = 0.3f),
-                                isActive = isActive
-                            ) {
-                                onLocationSelected(
-                                    AddressInfo(
-                                        id = branch.id,
-                                        ownerId = company.id,
-                                        companyOrUserName = company.name,
-                                        branchName = branch.name,
-                                        streetAndNumber = "${branch.address.calle} ${branch.address.numero}",
-                                        locality = branch.address.localidad,
-                                        province = branch.address.provincia,
-                                        country = branch.address.pais,
-                                        postalCode = branch.address.codigoPostal,
-                                        isCompany = true,
-                                        lat = branch.address.latitude,
-                                        lng = branch.address.longitude
-                                    )
-                                )
-                            }
+                            Text(
+                                text = detailText.uppercase(),
+                                color = Color.White.copy(alpha = 0.4f),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
+                } else {
+                    Text("NO SE HA DETECTADO UN NODO ACTIVO", color = Color.Red.copy(0.6f), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
             }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ==================================================================================
+        // --- SECCIÓN 2: CONTROL DE ESTADO GPS ---
+        // ==================================================================================
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(0.02f))
+                .border(0.5.dp, Color.White.copy(0.1f), RoundedCornerShape(12.dp))
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                val gpsText = when {
+                    !isGpsSystemEnabled -> "GPS DESACTIVADO EN EL SISTEMA"
+                    isGpsActive -> "USANDO DATOS DE GPS EN TIEMPO REAL"
+                    else -> "USAR UBICACIÓN GPS"
+                }
+                Text(
+                    text = gpsText,
+                    color = if (!isGpsSystemEnabled) Color.Red.copy(0.7f) else if (isGpsActive) cyberCyan else Color.White.copy(0.5f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp
+                )
+                if (!isGpsSystemEnabled) {
+                    Text("ACTIVA EL GPS DESDE AJUSTES", color = Color.White.copy(0.3f), fontSize = 7.sp)
+                }
+            }
+
+            IconButton(
+                onClick = {
+                    isRefreshing = true
+                    onGpsToggle()
+                },
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(
+                        if (isGpsActive) cyberCyan.copy(0.15f) else Color.White.copy(0.05f),
+                        CircleShape
+                    )
+                    .border(1.dp, if (isGpsActive) cyberCyan.copy(alpha = 0.4f) else Color.White.copy(0.1f), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MyLocation,
+                    null,
+                    tint = if (isGpsActive) cyberCyan else Color.White.copy(0.4f),
+                    modifier = Modifier.rotate(rotationAnim).size(22.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        DepthDividerHorizontal(shadowColor = Color.Black.copy(0.4f), highlightColor = Color.White.copy(0.05f))
+        Spacer(Modifier.height(20.dp))
+
+        // ==================================================================================
+        // --- SECCIÓN 3: DIRECTORIO DE NODOS GUARDADOS (DIRECTORY TREE) ---
+        // ==================================================================================
+        Text(
+            "📂 NODOS DE RED DISPONIBLES // DIR_TREE",
+            color = Color.White.copy(alpha = 0.3f),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp,
+            modifier = Modifier.align(Alignment.Start)
+        )
+        
+        Spacer(Modifier.height(12.dp))
+
+        // El arbol tiene su propio scroll interno
+        Box(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            val locationNodes = remember(availableAddresses, selectedProfileId) {
+                val personal = availableAddresses.filter { !it.isCompany && it.id != "gps_current" }
+                val companies = availableAddresses.filter { it.isCompany }
+
+                val nodes = mutableListOf<FileNode>()
+                
+                if (personal.isNotEmpty()) {
+                    val isPersonalActive = selectedProfileId == null
+                    nodes.add(FileNode(
+                        name = "Mis Direcciones",
+                        isDirectory = true,
+                        alpha = if (isPersonalActive) 1f else 0.5f,
+                        children = personal.map { addr ->
+                            FileNode(
+                                name = "${addr.streetAndNumber} (${addr.locality})",
+                                isDirectory = false,
+                                icon = Icons.Default.Home,
+                                tint = if (isPersonalActive) cyberCyan else Color.Gray
+                            )
+                        }
+                    ))
+                }
+                
+                if (companies.isNotEmpty()) {
+                    nodes.add(FileNode(
+                        name = "Business Network",
+                        isDirectory = true,
+                        children = companies.groupBy { it.companyOrUserName }.map { (companyName, branches) ->
+                            val companyId = branches.firstOrNull()?.ownerId
+                            val isCompanyActive = selectedProfileId != null && selectedProfileId == companyId
+                            
+                            FileNode(
+                                name = companyName,
+                                isDirectory = true,
+                                alpha = if (isCompanyActive) 1f else 0.5f,
+                                children = branches.map { branch ->
+                                    FileNode(
+                                        name = "${branch.branchName}: ${branch.streetAndNumber} CP:${branch.postalCode}",
+                                        isDirectory = false,
+                                        icon = Icons.Default.Business,
+                                        tint = if (isCompanyActive) CPCyberColors.ElectricPurple else Color.Gray
+                                    )
+                                }
+                            )
+                        }
+                    ))
+                }
+                nodes
+            }
+
+            DirectoryTree(
+                nodes = locationNodes,
+                onNodeClick = { node ->
+                    if (!node.isDirectory) {
+                        val selected = availableAddresses.find { addr ->
+                            val personalName = "${addr.streetAndNumber} (${addr.locality})"
+                            val companyName = "${addr.branchName}: ${addr.streetAndNumber} CP:${addr.postalCode}"
+                            node.name == personalName || node.name == companyName
+                        }
+                        selected?.let { onLocationSelected(it) }
+                    }
+                }
+            )
         }
     }
 
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) {
-            delay(2000)
+            delay(1500)
             isRefreshing = false
         }
     }
@@ -783,7 +883,7 @@ fun CyberTreeLeaf(icon: ImageVector, title: String, subtitle: String, accentColo
  */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun WeatherExpandedCard(temperature: String, weatherEmoji: String, weatherDescription: String, cityName: String) {
+fun WeatherExpandedCard(temperature: String, weatherEmoji: String, weatherDescription: String, cityName: String, onDismiss: () -> Unit) {
     val cyberCyan = CPCyberColors.MaverickCyan
     val deepGlass = Color(0xFF0B0F19).copy(alpha = 0.98f)
 
@@ -813,14 +913,21 @@ fun WeatherExpandedCard(temperature: String, weatherEmoji: String, weatherDescri
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "SYS_WTHR // ATMÓSFERA_V2", 
-            color = cyberCyan, 
-            fontSize = 10.sp, 
-            fontWeight = FontWeight.Black, 
-            letterSpacing = 2.sp, 
-            modifier = Modifier.align(Alignment.Start)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "SYS_WTHR // ATMÓSFERA_V2", 
+                color = cyberCyan, 
+                fontSize = 10.sp, 
+                fontWeight = FontWeight.Black, 
+                letterSpacing = 2.sp
+            )
+            
+            MaverickCloseButton(onClick = onDismiss)
+        }
         
         Spacer(modifier = Modifier.height(32.dp))
         
@@ -901,7 +1008,7 @@ fun WeatherExpandedCard(temperature: String, weatherEmoji: String, weatherDescri
 @Composable
 fun ProfileDialog(
     show: Boolean,
-    user: UserEntity,
+    user: User,
     isPersonalProfile: Boolean = true,
     selectedProfileId: String? = null,
     onProfileSelected: (String?) -> Unit = {},
@@ -978,9 +1085,12 @@ fun ProfileDialog(
 @Composable
 fun LocationDialog(
     show: Boolean,
-    user: UserEntity?,
+    availableAddresses: List<AddressInfo>,
     activeAddress: AddressInfo?,
+    selectedProfileId: String? = null,
+    isGpsSystemEnabled: Boolean = true,
     onRefresh: () -> Unit,
+    onGpsToggle: () -> Unit,
     onLocationSelected: (AddressInfo) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -1035,11 +1145,14 @@ fun LocationDialog(
                         exit = fadeOut(animationSpec = tween(300)) + shrinkVertically(animationSpec = tween(300))
                     ) {
                         LocationPopup(
-                            user = user,
+                            availableAddresses = availableAddresses,
                             onClose = { closeWithAnimation() },
                             onRefresh = { onRefresh(); closeWithAnimation() },
+                            onGpsToggle = { onGpsToggle(); closeWithAnimation() },
                             onLocationSelected = { onLocationSelected(it); closeWithAnimation() },
-                            activeAddress = activeAddress
+                            activeAddress = activeAddress,
+                            selectedProfileId = selectedProfileId,
+                            isGpsSystemEnabled = isGpsSystemEnabled
                         )
                     }
                 }
@@ -1115,7 +1228,8 @@ fun WeatherDialog(
                             temperature = temperature,
                             weatherEmoji = weatherEmoji,
                             weatherDescription = weatherDescription,
-                            cityName = cityName
+                            cityName = cityName,
+                            onDismiss = { closeWithAnimation() }
                         )
                     }
                 }
@@ -1127,13 +1241,14 @@ fun WeatherDialog(
 @Preview(showBackground = true, backgroundColor = 0xFF0D1117)
 @Composable
 fun UserProfilePopupPreview() {
-    val mockUser = UserEntity(
-        id = "1",
+    val mockUser = User(
+        uid = "1",
         name = "Juan",
         lastName = "Pérez",
         displayName = "JUAN",
-        email = "juan.perez@example.com",
-        photoUrl = null
+        email = "juan.perez@gmail.com",
+        isVerified = true,
+        isSubscribed = true
     )
 
     MyApplicationTheme {
@@ -1151,14 +1266,6 @@ fun UserProfilePopupPreview() {
 @Preview(showBackground = true, backgroundColor = 0xFF0D1117)
 @Composable
 fun LocationPopupPreview() {
-    val mockUser = UserEntity(
-        id = "1",
-        name = "Juan",
-        lastName = "Pérez",
-        displayName = "JUAN",
-        email = "juan.perez@example.com",
-        photoUrl = null
-    )
     val mockAddress = AddressInfo(
         id = "gps_current",
         companyOrUserName = "Juan",
@@ -1175,9 +1282,10 @@ fun LocationPopupPreview() {
     MyApplicationTheme {
         Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
             LocationPopup(
-                user = mockUser,
+                availableAddresses = listOf(mockAddress),
                 onClose = {},
                 onRefresh = {},
+                onGpsToggle = {},
                 onLocationSelected = {},
                 activeAddress = mockAddress
             )
@@ -1195,8 +1303,10 @@ fun WeatherExpandedCardPreview() {
                 temperature = "32°C",
                 weatherEmoji = "☀️",
                 weatherDescription = "Despejado y caluroso",
-                cityName = "San Miguel de Tucumán"
+                cityName = "San Miguel de Tucumán",
+                onDismiss = {}
             )
         }
     }
 }
+

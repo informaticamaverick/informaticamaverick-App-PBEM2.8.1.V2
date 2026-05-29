@@ -20,6 +20,8 @@ data class CompanyProvider(
     val rating: Float = 0f,
     val photoUrl: String? = null,
     val bannerImageUrl: String? = null,
+    val profileImage: Any? = null,
+    val bannerImage: Any? = null,
     val categories: List<String> = emptyList(),
     val isVerified: Boolean = false,
     val branches: List<BranchProvider> = emptyList()
@@ -54,5 +56,6 @@ data class EmployeeProvider(
     val lastName: String = "",
     val position: String = "", // Rol (Ej: Referente, Técnico)
     val detail: String = "",
-    val photoUrl: String? = null
+    val photoUrl: String? = null,
+    val profileImage: Any? = null
 )

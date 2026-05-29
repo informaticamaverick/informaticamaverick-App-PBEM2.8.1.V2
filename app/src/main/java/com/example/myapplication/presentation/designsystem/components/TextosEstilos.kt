@@ -313,6 +313,7 @@ fun StandardTextFieldM3(
     trailingIcon: @Composable (() -> Unit)? = null,
     singleLine: Boolean = true,
     readOnly: Boolean = false,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp),
     visualTransformation: VisualTransformation = VisualTransformation.None
 ) {
     OutlinedTextField(
@@ -334,7 +335,13 @@ fun StandardTextFieldM3(
         isError = isError,
         singleLine = singleLine,
         visualTransformation = visualTransformation,
-        shape = RoundedCornerShape(12.dp)
+        shape = shape,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = MaverickColors.ElectricCyan,
+            unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+            focusedContainerColor = Color.White.copy(alpha = 0.05f),
+            unfocusedContainerColor = Color.White.copy(alpha = 0.02f)
+        )
     )
 }
 

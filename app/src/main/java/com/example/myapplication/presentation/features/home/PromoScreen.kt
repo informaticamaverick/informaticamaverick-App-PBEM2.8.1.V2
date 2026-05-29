@@ -77,7 +77,7 @@ data class Promotion(
     val type: PromoType,
     val tag: PromoTag?,
     val imageUrls: List<String>,
-    val providerImageUrl: String?,
+    val providerImageUrl: Any?,
     val providerName: String,
     val description: String,
     val providerId: String,

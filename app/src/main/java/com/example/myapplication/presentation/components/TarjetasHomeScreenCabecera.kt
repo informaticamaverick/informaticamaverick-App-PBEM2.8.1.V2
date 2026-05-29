@@ -1,7 +1,6 @@
 package com.example.myapplication.presentation.components
 
 import android.os.Build
-import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -58,6 +57,8 @@ import com.example.myapplication.presentation.features.home.UbicacionClimaViewMo
 import com.example.myapplication.presentation.global.BeBrainViewModel
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.core.domain.model.CompanyClient
+import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.presentation.designsystem.components.CPCyberColors
 import com.example.myapplication.presentation.designsystem.components.GeminiCyberWrapper
 import com.example.myapplication.presentation.designsystem.components.AutoSizeText
@@ -83,17 +84,21 @@ fun TopHeaderSection(
     // --- SUSCRIPCIÓN AL CEREBRO (Elite SSOT) ---
     val userFromBrain by beViewModel.userState.collectAsStateWithLifecycle()
     val activeName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
-    val activePhoto by beViewModel.activeProfilePhotoUrl.collectAsStateWithLifecycle()
+    val activePhoto by beViewModel.activeProfilePhoto.collectAsStateWithLifecycle()
+    val selectedProfileId by beViewModel.selectedProfileId.collectAsStateWithLifecycle()
     val temperature by beViewModel.temperature.collectAsStateWithLifecycle()
     val weatherEmoji by beViewModel.weatherEmoji.collectAsStateWithLifecycle()
     val weatherDescription by beViewModel.weatherDescription.collectAsStateWithLifecycle()
     val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
+    val isGpsEnabled by ubicacionObrero.isGpsEnabled.collectAsStateWithLifecycle()
 
     TopHeaderSectionContent(
         navController = navController,
         user = userFromBrain,
         activeName = activeName,
         activePhoto = activePhoto,
+        isPersonalProfile = selectedProfileId == null,
+        selectedProfileId = selectedProfileId,
         temperature = temperature,
         weatherEmoji = weatherEmoji,
         weatherDescription = weatherDescription,
@@ -102,9 +107,12 @@ fun TopHeaderSection(
         onRefreshLocation = { 
             ubicacionObrero.ejecutarCalculoUbicacionGps(context) 
         },
+        onGpsToggle = { ubicacionObrero.toggleGps(context) },
+        isGpsEnabled = isGpsEnabled,
         onLocationSelected = { option -> 
             beViewModel.selectAddress(option.id) 
         },
+        onProfileSelected = { profileId -> beViewModel.selectProfile(profileId) },
         onLogout = onLogout,
         userFromBrain = userFromBrain
     )
@@ -127,12 +135,13 @@ fun TopHeaderSectionV2(
     // --- SUSCRIPCIÓN AL CEREBRO (Elite SSOT) ---
     val userFromBrain by beViewModel.userState.collectAsStateWithLifecycle()
     val activeName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
-    val activePhoto by beViewModel.activeProfilePhotoUrl.collectAsStateWithLifecycle()
+    val activePhoto by beViewModel.activeProfilePhoto.collectAsStateWithLifecycle()
     val selectedProfileId by beViewModel.selectedProfileId.collectAsStateWithLifecycle()
     val temperature by beViewModel.temperature.collectAsStateWithLifecycle()
     val weatherEmoji by beViewModel.weatherEmoji.collectAsStateWithLifecycle()
     val weatherDescription by beViewModel.weatherDescription.collectAsStateWithLifecycle()
     val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
+    val isGpsEnabled by ubicacionObrero.isGpsEnabled.collectAsStateWithLifecycle()
 
     TopHeaderSectionContentV2(
         navController = navController,
@@ -149,6 +158,8 @@ fun TopHeaderSectionV2(
         onRefreshLocation = { 
             ubicacionObrero.ejecutarCalculoUbicacionGps(context) 
         },
+        onGpsToggle = { ubicacionObrero.toggleGps(context) },
+        isGpsEnabled = isGpsEnabled,
         onLocationSelected = { option ->
             beViewModel.selectAddress(option.id) 
         },
@@ -173,14 +184,18 @@ fun ProfileSection(
 ) {
     val userFromBrain by beViewModel.userState.collectAsStateWithLifecycle()
     val activeName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
-    val activePhoto by beViewModel.activeProfilePhotoUrl.collectAsStateWithLifecycle()
+    val activePhoto by beViewModel.activeProfilePhoto.collectAsStateWithLifecycle()
+    val selectedProfileId by beViewModel.selectedProfileId.collectAsStateWithLifecycle()
     
     ProfileSectionContent(
         user = userFromBrain,
         userFromBrain = userFromBrain,
         activeName = activeName,
         activePhoto = activePhoto,
+        isPersonalProfile = selectedProfileId == null,
+        selectedProfileId = selectedProfileId,
         navController = navController,
+        onProfileSelected = { beViewModel.selectProfile(it) },
         onLogout = onLogout,
         brush = brush
     )
@@ -199,14 +214,19 @@ fun TopHeaderSectionContent(
     navController: NavHostController,
     user: UserEntity?,
     activeName: String,
-    activePhoto: String?,
+    activePhoto: Any?,
+    isPersonalProfile: Boolean = true,
+    selectedProfileId: String? = null,
     temperature: String,
     weatherEmoji: String,
     weatherDescription: String,
     activeAddress: AddressInfo?,
     onWeatherClick: () -> Unit,
     onRefreshLocation: () -> Unit,
+    onGpsToggle: () -> Unit = {},
+    isGpsEnabled: Boolean = true,
     onLocationSelected: (AddressInfo) -> Unit,
+    onProfileSelected: (String?) -> Unit = {},
     onLogout: () -> Unit,
     userFromBrain: UserEntity?,
     onResultClick: (Any) -> Unit = {}
@@ -280,6 +300,8 @@ fun TopHeaderSectionContent(
                     user = user,
                     activeAddress = activeAddress,
                     onRefresh = onRefreshLocation,
+                    onGpsToggle = onGpsToggle,
+                    isGpsEnabled = isGpsEnabled,
                     onLocationSelected = onLocationSelected,
                     brush = cardGradientBrush,
                     modifier = Modifier.weight(1f).fillMaxHeight()
@@ -291,7 +313,10 @@ fun TopHeaderSectionContent(
                     userFromBrain = userFromBrain,
                     activeName = activeName,
                     activePhoto = activePhoto,
+                    isPersonalProfile = isPersonalProfile,
+                    selectedProfileId = selectedProfileId,
                     navController = navController,
+                    onProfileSelected = onProfileSelected,
                     onLogout = onLogout,
                     brush = cardGradientBrush,
                     onResultClick = onResultClick,
@@ -315,7 +340,7 @@ fun TopHeaderSectionContentV2(
     navController: NavHostController,
     user: UserEntity?,
     activeName: String,
-    activePhoto: String?,
+    activePhoto: Any?,
     isPersonalProfile: Boolean,
     selectedProfileId: String?,
     temperature: String,
@@ -324,6 +349,8 @@ fun TopHeaderSectionContentV2(
     activeAddress: AddressInfo?,
     onWeatherClick: () -> Unit,
     onRefreshLocation: () -> Unit,
+    onGpsToggle: () -> Unit = {},
+    isGpsEnabled: Boolean = true,
     onLocationSelected: (AddressInfo) -> Unit,
     onProfileSelected: (String?) -> Unit,
     onLogout: () -> Unit,
@@ -331,10 +358,25 @@ fun TopHeaderSectionContentV2(
     showWeatherDialog: Boolean = false,
     cityName: String = "",
     onSetWeatherDetailsVisible: (Boolean) -> Unit = {},
-    onResultClick: (Any) -> Unit = {}
+    onResultClick: (Any) -> Unit = {},
+    showLocationPopupHoisted: Boolean? = null,
+    showProfilePopupHoisted: Boolean? = null,
+    onLocationPopupToggle: (Boolean) -> Unit = {},
+    onProfilePopupToggle: (Boolean) -> Unit = {}
 ) {
-    var showLocationPopup by remember { mutableStateOf(false) }
-    var showProfilePopup by remember { mutableStateOf(false) }
+    var showLocationPopupLocal by remember { mutableStateOf(false) }
+    var showProfilePopupLocal by remember { mutableStateOf(false) }
+
+    val showLocationPopup = showLocationPopupHoisted ?: showLocationPopupLocal
+    val showProfilePopup = showProfilePopupHoisted ?: showProfilePopupLocal
+
+    val setShowLocationPopup: (Boolean) -> Unit = { 
+        if (showLocationPopupHoisted != null) onLocationPopupToggle(it) else showLocationPopupLocal = it 
+    }
+    val setShowProfilePopup: (Boolean) -> Unit = { 
+        if (showProfilePopupHoisted != null) onProfilePopupToggle(it) else showProfilePopupLocal = it 
+    }
+
     val finalUser = userFromBrain ?: user
 
     val displayName = activeName.uppercase()
@@ -405,7 +447,7 @@ fun TopHeaderSectionContentV2(
                     .weight(1.1f)
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onTap = { showProfilePopup = true }
+                            onTap = { setShowProfilePopup(true) }
                         )
                     },
                 verticalAlignment = Alignment.CenterVertically
@@ -457,7 +499,7 @@ fun TopHeaderSectionContentV2(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { showLocationPopup = true },
+                    ) { setShowLocationPopup(true) },
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 val modeLabel = if (activeAddress?.id == "gps_current") "GPS_LIVE" else if (activeAddress?.isCompany == true) "NETWORK_HQ" else "STATION_HOME"
@@ -554,23 +596,26 @@ fun TopHeaderSectionContentV2(
     // --- DIÁLOGOS ---
     LocationDialog(
         show = showLocationPopup,
-        user = user,
+        availableAddresses = finalUser?.toDomain()?.toAddressInfoList() ?: emptyList(),
         activeAddress = activeAddress,
+        selectedProfileId = selectedProfileId,
+        isGpsSystemEnabled = isGpsEnabled,
         onRefresh = { onRefreshLocation() },
-        onLocationSelected = { onLocationSelected(it); showLocationPopup = false },
-        onDismiss = { showLocationPopup = false }
+        onGpsToggle = onGpsToggle,
+        onLocationSelected = { onLocationSelected(it); setShowLocationPopup(false) },
+        onDismiss = { setShowLocationPopup(false) }
     )
 
     if (finalUser != null) {
         ProfileDialog(
             show = showProfilePopup,
-            user = finalUser,
+            user = finalUser.toDomain(),
             isPersonalProfile = isPersonalProfile,
             selectedProfileId = selectedProfileId,
             onProfileSelected = onProfileSelected,
             navController = navController,
-            onLogout = { onLogout(); showProfilePopup = false },
-            onDismiss = { showProfilePopup = false }
+            onLogout = { onLogout(); setShowProfilePopup(false) },
+            onDismiss = { setShowProfilePopup(false) }
         )
     }
 
@@ -618,7 +663,9 @@ fun LocationSelector(
     onRefresh: () -> Unit,
     onLocationSelected: (AddressInfo) -> Unit,
     brush: Brush,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onGpsToggle: () -> Unit = {},
+    isGpsEnabled: Boolean = true
 ) {
     var showPopup by remember { mutableStateOf(false) }
 
@@ -689,9 +736,12 @@ fun LocationSelector(
     if (showPopup) {
         LocationDialog(
             show = true,
-            user = user,
+            availableAddresses = user?.toDomain()?.toAddressInfoList() ?: emptyList(),
             activeAddress = activeAddress,
+            selectedProfileId = if (activeAddress?.isCompany == true) activeAddress.ownerId else null,
+            isGpsSystemEnabled = isGpsEnabled,
             onRefresh = { onRefresh(); showPopup = false },
+            onGpsToggle = { onGpsToggle(); showPopup = false },
             onLocationSelected = { onLocationSelected(it); showPopup = false },
             onDismiss = { showPopup = false }
         )
@@ -707,8 +757,11 @@ fun ProfileSectionContent(
     user: UserEntity?,
     userFromBrain: UserEntity?,
     activeName: String,
-    activePhoto: String?,
+    activePhoto: Any?,
+    isPersonalProfile: Boolean = true,
+    selectedProfileId: String? = null,
     navController: NavHostController,
+    onProfileSelected: (String?) -> Unit = {},
     onLogout: () -> Unit,
     brush: Brush,
     onResultClick: (Any) -> Unit = {}
@@ -746,7 +799,10 @@ fun ProfileSectionContent(
     if (showPopup && finalUser != null) {
         ProfileDialog(
             show = true,
-            user = finalUser,
+            user = finalUser.toDomain(),
+            isPersonalProfile = isPersonalProfile,
+            selectedProfileId = selectedProfileId,
+            onProfileSelected = onProfileSelected,
             navController = navController,
             onLogout = { onLogout(); showPopup = false },
             onDismiss = { showPopup = false }
@@ -790,6 +846,8 @@ fun TopHeaderSectionPreview() {
             activeAddress = mockAddress,
             onWeatherClick = {},
             onRefreshLocation = {},
+            onGpsToggle = {},
+            isGpsEnabled = true,
             onLocationSelected = {},
             onLogout = {},
             userFromBrain = mockUser,
@@ -837,6 +895,8 @@ fun TopHeaderSectionV2Preview() {
             activeAddress = mockAddress,
             onWeatherClick = {},
             onRefreshLocation = {},
+            onGpsToggle = {},
+            isGpsEnabled = true,
             onLocationSelected = {},
             onProfileSelected = {},
             onLogout = {},
@@ -845,3 +905,4 @@ fun TopHeaderSectionV2Preview() {
         )
     }
 }
+

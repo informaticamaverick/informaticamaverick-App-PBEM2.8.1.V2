@@ -258,10 +258,10 @@ fun CalendarScreenContent(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .padding(vertical = 8.dp * (1f - cardsHideFraction))
+                            .padding(horizontal = 8.dp)
+                            .padding(vertical = 2.dp * (1f - cardsHideFraction))
                             .graphicsLayer { alpha = 1f - cardsHideFraction; translationY = -10.dp.toPx() * cardsHideFraction }
-                            .height(130.dp * (1f - cardsHideFraction))
+                            .height(220.dp * (1f - cardsHideFraction))
                     ) {
                         NextCommitmentCarousel(
                             events = nextEvents,
@@ -273,7 +273,7 @@ fun CalendarScreenContent(
 
                 // --- 2. MODULO DE FILTROS PREMIUM ---
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Spacer(modifier = Modifier.height(8.dp * (1f - cardsHideFraction)))
+                    Spacer(modifier = Modifier.height(1.dp * (1f - cardsHideFraction)))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -304,7 +304,8 @@ fun CalendarScreenContent(
                     )
                 }
             }
-
+                //Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp * (1f - cardsHideFraction)))
                 // --- 3. LISTADO DE EVENTOS ELITE ---
                 ListaMoldeV2(
                     modifier = Modifier.weight(1f),

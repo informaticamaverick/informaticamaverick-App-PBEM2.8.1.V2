@@ -28,6 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.example.myapplication.core.domain.model.AddressInfo
 import com.example.myapplication.presentation.designsystem.components.*
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 
@@ -45,25 +46,6 @@ data class BeSmallActionModel(
     val tint: Color = Color.White,
     val onClick: () -> Unit = {}
 )
-
-// ==================================================================================
-// --- SECCIÓN: MODELO DE DATOS PARA UBICACIÓN (ENRIQUECIDO V3) ---
-// ==================================================================================
-data class AddressInfo(
-    val id: String,
-    val ownerId: String? = null, // ID del propietario (User o Company)
-    val companyOrUserName: String,
-    val branchName: String,
-    val streetAndNumber: String,
-    val locality: String,
-    val province: String = "",
-    val country: String = "",
-    val postalCode: String,
-    val isCompany: Boolean,
-    val lat: Double,
-    val lng: Double
-)
-
 
 // ==================================================================================
 // --- COMPONENTES DE LA BARRA DE ACCIONES ---
@@ -220,6 +202,7 @@ fun BeSmallActionsBuilderPreview() {
         }
     }
 }
+
 
 
 

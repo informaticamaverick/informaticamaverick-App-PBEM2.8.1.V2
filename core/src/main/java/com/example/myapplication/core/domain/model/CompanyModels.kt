@@ -19,6 +19,11 @@ data class CompanyClient(
     val phoneNumber: String = "",
     val bannerImageUrl: String? = null,
     val photoUrl: String? = null,
+
+    /** [ELITE SSOT]: Imágenes procesadas para UI */
+    val bannerImage: Any? = null,
+    val profileImage: Any? = null,
+
     val branches: List<BranchClient> = emptyList()
 )
 
@@ -30,8 +35,7 @@ data class BranchClient(
     val name: String = "", // "Sucursal Centro", "Casa Central", etc.
     val isMainBranch: Boolean = false,
     val address: AddressClient = AddressClient(),
-    val representatives: List<RepresentativeClient> = emptyList(), // Equipo de trabajo
-    val galleryImages: List<String> = emptyList()
+    val representatives: List<RepresentativeClient> = emptyList() // Equipo de trabajo
 )
 
 /**
@@ -42,5 +46,8 @@ data class RepresentativeClient(
     val nombre: String = "",
     val apellido: String = "",
     val cargo: String = "",
-    val photoUrl: String? = null
+    val photoUrl: String? = null,
+    
+    /** [ELITE SSOT]: Imagen procesada */
+    val photoImage: Any? = null
 )

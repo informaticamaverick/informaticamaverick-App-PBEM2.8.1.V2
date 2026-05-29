@@ -10,7 +10,8 @@ data class ProviderDisplayModel(
     val title: String,              // Nombre del Prestador o de la Empresa
     val subtitle: String? = null,    // Ejem: "Independiente" o "Nombre de la Empresa"
     val email: String? = null,       // Para detalles de contacto en la UI
-    val photoUrl: String,
+    val photoUrl: Any? = null,
+    val bannerImageUrl: Any? = null,
     val rating: Double,
     val isVerified: Boolean,
     val isOnline: Boolean,

@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.features.home
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -52,7 +53,7 @@ import com.example.myapplication.presentation.registry.MaverickIcons
 import com.example.myapplication.presentation.components.*
 import com.example.myapplication.presentation.designsystem.components.*
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
-import com.example.myapplication.presentation.features.profile.ProfileViewModel
+import com.example.myapplication.presentation.features.profile.UserViewModel
 import com.example.myapplication.presentation.features.profile.ProviderViewModel
 import com.example.myapplication.presentation.global.BeBrainViewModel
 import com.example.myapplication.presentation.global.HUDContext
@@ -76,7 +77,7 @@ import kotlin.collections.isNotEmpty
 fun HomeScreenComplete(
     navController: NavHostController,
     onLogoutRoot: () -> Unit = {}, 
-    profileViewModel: ProfileViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel(),
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
     beViewModel: BeBrainViewModel = hiltViewModel(),
@@ -111,7 +112,7 @@ fun HomeScreenComplete(
     val allServices by providerViewModel.unifiedServices.collectAsStateWithLifecycle()
     val favorites = remember(allServices, favoriteIds) { allServices.filter { it.id in favoriteIds } }
 
-    val userState by profileViewModel.userState.collectAsStateWithLifecycle()
+    val userState by userViewModel.userState.collectAsStateWithLifecycle()
 
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -165,7 +166,7 @@ fun HomeScreenComplete(
         bannerItems = bannerItems,
         favoriteProviders = favorites,
         onLogout = {
-            profileViewModel.logout()
+            userViewModel.logout()
             onLogoutRoot()
         },
         beViewModel = beViewModel,
@@ -275,7 +276,7 @@ fun HomeScreenContent(
 
     val userFromBrain by beViewModel.userState.collectAsStateWithLifecycle()
     val activeName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
-    val activePhoto by beViewModel.activeProfilePhotoUrl.collectAsStateWithLifecycle()
+    val activePhoto by beViewModel.activeProfilePhoto.collectAsStateWithLifecycle()
     val selectedProfileId by beViewModel.selectedProfileId.collectAsStateWithLifecycle()
     val selectedSuperCategory by beViewModel.selectedSuperCategory.collectAsStateWithLifecycle()
     val isInitialLoading by categoryViewModel.isInitialLoading.collectAsStateWithLifecycle()
@@ -338,6 +339,7 @@ fun HomeScreenContent(
         onSetWeatherDetailsVisible = { beViewModel.setWeatherDetailsVisible(it) },
         onSetFavoritesPanelVisible = { beViewModel.setFavoritesPanelVisible(it) },
         onRefreshLocation = { ubicacionObrero.ejecutarCalculoUbicacionGps(context) },
+        onGpsToggle = { ubicacionObrero.toggleGps(context) },
         onProfileSelected = { beViewModel.selectProfile(it) },
         onWeatherClick = { beViewModel.toggleWeatherDetails() },
         shortcutIds = shortcutIds,
@@ -379,7 +381,7 @@ fun HomeScreenContentStateless(
     searchQuery: String,
     userFromBrain: UserEntity?,
     activeName: String,
-    activePhoto: String?,
+    activePhoto: Any?,
     selectedProfileId: String?,
     activeAddress: AddressInfo?,
     selectedSuperCategory: SuperCategory?,
@@ -394,6 +396,7 @@ fun HomeScreenContentStateless(
     onSetWeatherDetailsVisible: (Boolean) -> Unit,
     onSetFavoritesPanelVisible: (Boolean) -> Unit,
     onRefreshLocation: () -> Unit,
+    onGpsToggle: () -> Unit,
     onProfileSelected: (String?) -> Unit,
     shortcutIds: Set<String> = emptySet(),
     superCategoryFavorites: Set<String> = emptySet(),
@@ -403,6 +406,9 @@ fun HomeScreenContentStateless(
     searchAnimationSettled: Boolean,
     onWeatherClick: () -> Unit
 ) {
+    var showLocationPopup by remember { mutableStateOf(false) }
+    var showProfilePopup by remember { mutableStateOf(false) }
+
     val pullToRefreshState = rememberPullToRefreshState()
     var scrollAccumulator by remember { mutableFloatStateOf(0f) }
 
@@ -473,13 +479,18 @@ fun HomeScreenContentStateless(
                         activeAddress = activeAddress ?: AddressInfo(id = "searching", companyOrUserName = "...", branchName = "...", streetAndNumber = "...", locality = cityName, postalCode = "", isCompany = false, lat = 0.0, lng = 0.0),
                         onWeatherClick = onWeatherClick,
                         onRefreshLocation = onRefreshLocation,
-                        onLocationSelected = { },
+                        onGpsToggle = onGpsToggle,
+                        onLocationSelected = { beViewModel.selectAddress(it.id) },
                         onProfileSelected = onProfileSelected,
                         onLogout = onLogout,
                         userFromBrain = userFromBrain,
                         showWeatherDialog = showWeatherDetails,
                         cityName = cityName,
-                        onSetWeatherDetailsVisible = onSetWeatherDetailsVisible
+                        onSetWeatherDetailsVisible = onSetWeatherDetailsVisible,
+                        showLocationPopupHoisted = showLocationPopup,
+                        showProfilePopupHoisted = showProfilePopup,
+                        onLocationPopupToggle = { showLocationPopup = it },
+                        onProfilePopupToggle = { showProfilePopup = it }
                     )
 
                     AnimatedVisibility(
@@ -769,3 +780,4 @@ fun HomeScreenPreview() {
         }
     }
 }
+

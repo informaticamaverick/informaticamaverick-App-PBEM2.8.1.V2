@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.features.chat
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -750,3 +751,4 @@ fun ChatConversationScreenPreview() {
         )
     }
 }
+

@@ -2,11 +2,16 @@ package com.example.myapplication.presentation.features.home
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.utils.MaverickGeoUtils
-import com.example.myapplication.presentation.components.AddressInfo
+import com.example.myapplication.core.domain.model.AddressInfo
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import android.location.Location
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -47,6 +52,23 @@ class UbicacionClimaViewModel @Inject constructor(
     // --- 2. ACCIONES TÁCTICAS (GEOPROCESAMIENTO) ---
     // ======================================================================================
 
+    /**
+     * [NUEVO] TOGGLE INTELIGENTE DE GPS:
+     * Si el GPS está activo, lo apaga y vuelve al domicilio por defecto.
+     * Si está apagado, intenta disparar el cálculo de ubicación.
+     */
+    fun toggleGps(context: Context) {
+        val currentAddress = activeAddress.value
+        if (currentAddress?.id == "gps_current") {
+            // Apagamos GPS: Volvemos al default y notificamos
+            coordinator.resetAddressToDefault()
+            Toast.makeText(context, "🏠 Volviendo a dirección predeterminada", Toast.LENGTH_SHORT).show()
+        } else {
+            // Intentamos activar GPS
+            ejecutarCalculoUbicacionGps(context)
+        }
+    }
+
     @SuppressLint("MissingPermission")
     fun ejecutarCalculoUbicacionGps(
         context: Context,
@@ -61,13 +83,29 @@ class UbicacionClimaViewModel @Inject constructor(
             lng: Double
         ) -> Unit = { _, _, _, _, _, _, _, _ -> }
     ) {
-        if (!MaverickGeoUtils.isGpsEnabled(context)) return
+        // 1. Validar hardware del sistema
+        if (!MaverickGeoUtils.isGpsEnabled(context)) {
+            Toast.makeText(context, "📍 El GPS está desactivado en el sistema", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // 2. Validar permisos de Android
+        val fineLocation = ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)
+        if (fineLocation != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(context, "🚫 No hay permisos de ubicación concedidos", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         viewModelScope.launch {
             _isCargando.value = true
             try {
                 val fusedClient = LocationServices.getFusedLocationProviderClient(context)
-                val location = fusedClient.lastLocation.await()
+                var location: Location? = fusedClient.lastLocation.await()
+                
+                if (location == null) {
+                    // Si lastLocation falla, intentamos una petición activa (Elite Rescue)
+                    location = fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null).await()
+                }
 
                 if (location != null) {
                     val lat = location.latitude
@@ -89,11 +127,15 @@ class UbicacionClimaViewModel @Inject constructor(
                             lng = a.longitude
                         )
                         coordinator.updateAddressFromGps(freshGpsAddress)
+                        Toast.makeText(context, "🛰️ Ubicación GPS activada: ${freshGpsAddress.locality}", Toast.LENGTH_SHORT).show()
 
                         onResultado(a.pais, a.provincia, a.localidad, a.calle, a.numero, a.codigoPostal, a.latitude, a.longitude)
                     }
+                } else {
+                    Toast.makeText(context, "❌ No se pudo obtener la ubicación actual", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                Toast.makeText(context, "⚠️ Error al procesar GPS: ${e.message}", Toast.LENGTH_SHORT).show()
             } finally {
                 _isCargando.value = false
             }
@@ -144,10 +186,18 @@ class UbicacionClimaViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             _isCargando.value = true
-            MaverickGeoUtils.getAddressFromText(context, direccionTexto)?.let { a ->
-                onResultado(a.pais, a.provincia, a.localidad, a.calle, a.numero, a.codigoPostal, a.latitude, a.longitude)
+            try {
+                MaverickGeoUtils.getAddressFromText(context, direccionTexto)?.let { a ->
+                    // Si el geocoder no detectó el número pero está en el texto original,
+                    // podríamos intentar un parseo extra aquí si fuera necesario,
+                    // pero MaverickGeoUtils ya fue mejorado.
+                    onResultado(a.pais, a.provincia, a.localidad, a.calle, a.numero, a.codigoPostal, a.latitude, a.longitude)
+                }
+            } catch (e: Exception) {
+                // Log o manejo de error silencioso
+            } finally {
+                _isCargando.value = false
             }
-            _isCargando.value = false
         }
     }
 
@@ -187,3 +237,4 @@ class UbicacionClimaViewModel @Inject constructor(
         }
     }
 }
+

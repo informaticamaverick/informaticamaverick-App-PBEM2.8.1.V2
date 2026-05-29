@@ -97,7 +97,7 @@ fun AppNavigation(
     categoryViewModel: CategoryViewModel = hiltViewModel(),
     simulationViewModel: SimulationViewModel = hiltViewModel(),
     beAssistantViewModel: BeAssistantViewModel = hiltViewModel(),
-    profileViewModel: ProfileViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel(),
     ubicacionObrero: UbicacionClimaViewModel = hiltViewModel()
 ) {
     val coordinator = hudViewModel.coordinator
@@ -186,7 +186,7 @@ fun AppNavigation(
         hasNewMessage = hasNewMessage,
         providerViewModel = providerViewModel,
         categoryViewModel = categoryViewModel,
-        profileViewModel = profileViewModel,
+        userViewModel = userViewModel,
         ubicacionObrero = ubicacionObrero
     )
 }
@@ -234,7 +234,7 @@ fun AppNavigationContent(
     onMigrateCategories: () -> Unit = {},
     providerViewModel: ProviderViewModel,
     categoryViewModel: CategoryViewModel,
-    profileViewModel: ProfileViewModel,
+    userViewModel: UserViewModel,
     ubicacionObrero: UbicacionClimaViewModel
 ) {
     val navController = rememberNavController()
@@ -330,7 +330,7 @@ fun AppNavigationContent(
         beViewModel = beViewModel,
         categoryViewModel = categoryViewModel,
         providerViewModel = providerViewModel,
-        profileViewModel = profileViewModel,
+        userViewModel = userViewModel,
         ubicacionObrero = ubicacionObrero
         )
 }
@@ -385,7 +385,7 @@ fun AppNavigationStateless(
     beViewModel: BeBrainViewModel? = null,
     categoryViewModel: CategoryViewModel? = null,
     providerViewModel: ProviderViewModel? = null,
-    profileViewModel: ProfileViewModel? = null,
+    userViewModel: UserViewModel? = null,
     ubicacionObrero: UbicacionClimaViewModel? = null,
     navHostContent: @Composable (PaddingValues) -> Unit = { innerPadding ->
         val navItems = listOf(
@@ -436,7 +436,7 @@ fun AppNavigationStateless(
                         beViewModel = beViewModel ?: hiltViewModel(),
                         categoryViewModel = categoryViewModel ?: hiltViewModel(),
                         providerViewModel = providerViewModel ?: hiltViewModel(),
-                        profileViewModel = profileViewModel ?: hiltViewModel(),
+                        userViewModel = userViewModel ?: hiltViewModel(),
                         ubicacionObrero = ubicacionObrero ?: hiltViewModel(),
                         onLogoutRoot = onLogoutRequest 
                     )
@@ -532,7 +532,7 @@ fun AppNavigationStateless(
 
                 composable(route = Screen.PerfilPrestador.route, arguments = listOf(navArgument("providerId") { type = NavType.StringType })) { backStackEntry ->
                     val providerId = backStackEntry.arguments?.getString("providerId") ?: ""
-                    PerfilPrestadorCliente(providerId = providerId, onBack = { navController.popBackStack() })
+                    PerfilPrestadorScreen(providerId = providerId, onBack = { navController.popBackStack() })
                 }
 
                 composable(route = Screen.Fast.route) { FastScreen(navController = navController, bottomPadding = innerPadding) }

@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.components
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
@@ -722,6 +723,7 @@ fun BudgetBubblePreview() {
             }
         }
     }
+
 
 
 

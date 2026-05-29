@@ -1,7 +1,6 @@
 package com.example.myapplication.presentation.features.chat
 
 // === IMPORTS ===
-import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -40,8 +39,8 @@ import com.example.myapplication.presentation.components.DropdownItemData
 import com.example.myapplication.presentation.components.FilterSortItem
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.designsystem.theme.getAppColors
-import com.example.myapplication.presentation.features.profile.ProfileViewModel
-import com.example.myapplication.presentation.features.profile.ProfileUiState
+import com.example.myapplication.presentation.features.profile.UserViewModel
+import com.example.myapplication.presentation.features.profile.UserUiState
 import com.example.myapplication.core.ChatIdHelper
 import com.example.myapplication.presentation.global.BeBrainViewModel
 import com.example.myapplication.presentation.global.HUDContext
@@ -71,14 +70,14 @@ fun ChatScreen(
     initialCategoryId: String? = null,
     navController: NavHostController? = null,
     onInConversationChange: (Boolean) -> Unit = {},
-    profileViewModel: ProfileViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel(),
     beBrainViewModel: BeBrainViewModel = hiltViewModel(),
     chatListViewModel: ChatListViewModel = hiltViewModel(),
     budgetViewModel: BudgetViewModel = hiltViewModel()
 ) {
     // --- SUSCRIPCIÓN A DATOS (SSOT) ---
     val chattingThreads by chatListViewModel.chattingThreads.collectAsStateWithLifecycle()
-    val profileState by profileViewModel.uiState.collectAsStateWithLifecycle()
+    val profileState by userViewModel.uiState.collectAsStateWithLifecycle()
     // Obtenemos los conteos de forma reactiva a través del ViewModel
     val unreadCountsMap by chatListViewModel.unreadCountsMap.collectAsStateWithLifecycle()
     val allCategories by beBrainViewModel.allCategories.collectAsStateWithLifecycle()
@@ -154,7 +153,7 @@ fun ChatScreen(
         isMultiSelectMode = isMultiSelectMode,
         selectedIds = selectedIds,
         showDeleteConfirmDialog = showDeleteConfirmDialog,
-        onDismissDeleteDialog = { },
+        onDismissDeleteDialog = { showDeleteConfirmDialog = false },
         onConfirmDelete = { 
             chatListViewModel.deleteSelectedChats()
             showDeleteConfirmDialog = false
@@ -185,7 +184,7 @@ fun ChatScreen(
 @Composable
 fun ChatScreenContent(
     allThreads: List<ChatThread>,
-    profileState: ProfileUiState,
+    profileState: UserUiState,
     unreadCountsMap: Map<String, Int>,
     allCategories: List<CategoryEntity> = emptyList(),
     shortcuts: List<FilterSortItem> = emptyList(),
@@ -240,14 +239,6 @@ fun ChatScreenContent(
     }
 
     val currentUserId = profileState.uid
-    val chatViewModel: ChatViewModel = if (activeProviderId != null) {
-        val chatId = ChatIdHelper.generateChatId(currentUserId, activeProviderId!!)
-        hiltViewModel(key = chatId)
-    } else {
-        hiltViewModel() // Dummy or ignore
-    }
-
-    val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
 
     if (profileState.isLoading || profileState.uid.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -271,6 +262,10 @@ fun ChatScreenContent(
             )
         } else {
             // Resolver el proveedor (desde la lista local o fetch remoto vía ChatViewModel)
+            val chatId = ChatIdHelper.generateChatId(currentUserId, activeProviderId!!)
+            val chatViewModel: ChatViewModel = hiltViewModel(key = chatId)
+            val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
+
             val providerFromList = allThreads.find { it.provider.uid == activeProviderId }?.provider
             val effectiveProvider = providerFromList ?: chatUiState.activeProvider
 
@@ -415,7 +410,7 @@ fun ChatListContent(
     // Estado de expansión de grupos
     // Removed grouping logic for now
 
-    val activeSortCriteria by chatListViewModel?.activeSortCriteria?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList<String>()) }
+    val activeSortCriteria by chatListViewModel?.activeSortCriteria?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
     
     // --- LÓGICA DE SCROLL (Fase 1 + 2) ---
     var scrollAccumulator by remember { mutableFloatStateOf(0f) }
@@ -493,7 +488,8 @@ fun ChatListContent(
                         )
                     }
                 }
-
+                Spacer(modifier = Modifier.height(16.dp * (1f - cardsHideFraction)))
+                //Spacer(modifier = Modifier.height(16.dp))
                 ListaMoldeV2(
                     modifier = Modifier.weight(1f),
                     titulo = "BANDEJA DE ENTRADA",
@@ -594,7 +590,7 @@ fun EmptyChatPlaceholder() {
 @Preview(showBackground = true)
 @Composable
 fun ChatScreenPreview() {
-    val sampleProfileState = ProfileUiState(
+    val sampleProfileState = UserUiState(
         uid = "user_demo_66",
         displayName = "Demo User",
         isLoading = false

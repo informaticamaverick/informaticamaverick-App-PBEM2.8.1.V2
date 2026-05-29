@@ -1,25 +1,8 @@
 package com.example.myapplication.presentation.designsystem.components
 import com.example.myapplication.presentation.registry.MaverickIcons
 import com.example.myapplication.presentation.features.home.AppNavigation
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import com.example.myapplication.presentation.features.auth.*
-
 import com.example.myapplication.presentation.features.home.*
-
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
@@ -50,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -76,13 +60,118 @@ import com.example.myapplication.R
 import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull.content
+import com.example.myapplication.presentation.registry.BeDictionary
+import com.example.myapplication.presentation.registry.MaverickButtonStyle
+
+// ==========================================================================================
+// 🎯 SECCIÓN 0: COMPONENTE INTELIGENTE (SEMANTIC DISPATCHER)
+// ==========================================================================================
+
+/**
+ * Botón "Mágico" que se configura solo desde el diccionario.
+ * Busca la acción por key y aplica el molde Maverick correspondiente.
+ */
+@Composable
+fun MaverickActionButton(
+    actionKey: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    overrideTint: Color? = null
+) {
+    val action = BeDictionary.Actions[actionKey] ?: return
+
+    when (action.style) {
+        MaverickButtonStyle.ACTION_CIRCLE -> {
+            MaverickActionCircle(
+                icon = action.icon,
+                emoji = action.emoji,
+                onClick = onClick,
+                modifier = modifier,
+                accentColor = overrideTint ?: action.tint
+            )
+        }
+        MaverickButtonStyle.RECTANGULAR_PREMIUM -> {
+            MaverickButton(
+                text = action.label,
+                onClick = onClick,
+                modifier = modifier,
+                emoji = action.emoji,
+                accentColor = overrideTint ?: action.tint
+            )
+        }
+        MaverickButtonStyle.ROUND_BENTO -> {
+            MaverickRoundButton(
+                emoji = action.emoji ?: "❓",
+                label = action.label,
+                onClick = onClick,
+                modifier = modifier,
+                accentColor = overrideTint ?: action.tint
+            )
+        }
+        MaverickButtonStyle.TACTICAL_SQUARE -> {
+            MaverickTacticalButton(
+                onClick = onClick,
+                modifier = modifier,
+                accentColor = overrideTint ?: action.tint
+            ) {
+                if (action.emoji != null) Text(action.emoji, fontSize = 18.sp)
+                else Icon(action.icon, null, tint = overrideTint ?: action.tint, modifier = Modifier.size(18.dp))
+            }
+        }
+        MaverickButtonStyle.COMPACT_HUD -> {
+            MaverickCompactHudButton(
+                label = action.label,
+                onClick = onClick,
+                modifier = modifier,
+                emoji = action.emoji,
+                icon = action.icon,
+                accentColor = overrideTint ?: action.tint
+            )
+        }
+    }
+}
+
+/**
+ * Molde: ACTION_CIRCLE (Boton de Cabecera Glass)
+ * Conserva la forma y estilo de la Tarjeta de Licitaciones.
+ */
+@Composable
+fun MaverickActionCircle(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    emoji: String? = null,
+    icon: ImageVector? = null,
+    accentColor: Color = Color.White,
+    size: Dp = 28.dp
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(size),
+        color = Color.White.copy(0.1f),
+        shape = CircleShape,
+        border = BorderStroke(1.dp, Color.White.copy(0.2f))
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size((size.value * 0.55).dp)
+                )
+            } else if (emoji != null) {
+                Text(text = emoji, fontSize = (size.value * 0.5).sp)
+            }
+        }
+    }
+}
 
 // ==========================================================================================
 // 🔘 SECCIÓN 1: BOTONES RECTANGULARES (MAVERICK BASE)
 // ==========================================================================================
 
 /**
- * Botón base con estilo Maverick: Cristal, bordes brillantes y animación shake.
+ * Botón base con estilo Maverick: Cristal, bordes brillantes y animación 3D.
  */
 @Composable
 fun MaverickButton(
@@ -98,20 +187,52 @@ fun MaverickButton(
     fontSize: TextUnit = 16.sp,
     paddingHorizontal: Dp = 24.dp
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+        label = "ButtonScale"
+    )
+
+    val elevation by animateDpAsState(
+        targetValue = if (isPressed) 2.dp else 12.dp,
+        label = "ButtonElevation"
+    )
+
     Box(
         modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .height(height)
             .shadow(
-                elevation = 8.dp,
+                elevation = elevation,
                 shape = RoundedCornerShape(cornerRadius),
-                spotColor = accentColor,
-                ambientColor = Color.Transparent
+                ambientColor = Color.Black.copy(alpha = 0.5f),
+                spotColor = Color.Black
             )
             .clip(RoundedCornerShape(cornerRadius))
             .background(backgroundColor)
-            .background(MaverickColors.BentoGlassBrush)
-            .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(cornerRadius))
-            .shakeClick { onClick() }
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.08f), Color.Transparent)
+                )
+            )
+            .border(
+                1.dp, 
+                Brush.verticalGradient(
+                    listOf(accentColor.copy(alpha = 0.6f), Color.Transparent)
+                ), 
+                RoundedCornerShape(cornerRadius)
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(horizontal = paddingHorizontal),
         contentAlignment = Alignment.Center
     ) {
@@ -124,7 +245,7 @@ fun MaverickButton(
                 text = text,
                 color = textColor,
                 fontSize = fontSize,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Black,
                 letterSpacing = 1.sp
             )
         }
@@ -175,37 +296,12 @@ fun MaverickButtonSimple(
     }
 }
 
-/**
- * Variantes rápidas de botones rectangulares
- */
-object BotonesPremium {
-    @Composable
-    fun Aceptar(onClick: () -> Unit, modifier: Modifier = Modifier, text: String = "ACEPTAR") =
-        MaverickButton(text, onClick, modifier, emoji = "✅", accentColor = MaverickColors.AcidGreen)
-
-    @Composable
-    fun Cancelar(onClick: () -> Unit, modifier: Modifier = Modifier, text: String = "CANCELAR") =
-        MaverickButton(text, onClick, modifier, emoji = "❌", accentColor = MaverickColors.DeepRed)
-
-    @Composable
-    fun Enviar(onClick: () -> Unit, modifier: Modifier = Modifier, text: String = "ENVIAR") =
-        MaverickButton(text, onClick, modifier, emoji = "🚀", accentColor = MaverickColors.GeminiAccent)
-
-    @Composable
-    fun Generico(text: String, emoji: String, accentColor: Color, onClick: () -> Unit, modifier: Modifier = Modifier) =
-        MaverickButton(text, onClick, modifier, emoji = emoji, accentColor = accentColor)
-
-    @Composable
-    fun Simple(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, emoji: String? = null, accentColor: Color = MaverickColors.NeonCyan) =
-        MaverickButtonSimple(text, onClick, modifier, emoji = emoji, accentColor = accentColor)
-}
-
 // ==========================================================================================
 // 🔵 SECCIÓN 2: BOTONES CIRCULARES (ROUND & BENTO ACTIONS)
 // ==========================================================================================
 
 /**
- * Botón redondo base con estilo Maverick: Cristal, bordes brillantes y etiqueta opcional.
+ * Botón redondo base con estilo Maverick: Efecto Flotante 3D y etiqueta.
  */
 @Composable
 fun MaverickRoundButton(
@@ -216,36 +312,78 @@ fun MaverickRoundButton(
     accentColor: Color = MaverickColors.NeonCyan,
     buttonSize: Dp = 64.dp,
     emojiSize: TextUnit = 28.sp,
-    labelColor: Color = Color.White.copy(alpha = 0.8f),
+    labelColor: Color = Color.Black.copy(alpha = 0.6f),
     labelFontSize: TextUnit = 12.sp,
     showLabel: Boolean = true,
     content: @Composable (BoxScope.() -> Unit)? = null
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.94f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "RoundButtonScale"
+    )
+
+    val elevation by animateDpAsState(
+        targetValue = if (isPressed) 4.dp else 16.dp,
+        label = "RoundButtonElevation"
+    )
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.padding(8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(buttonSize)
-                .shadow(
-                    elevation = 12.dp,
-                    shape = CircleShape,
-                    spotColor = accentColor,
-                    ambientColor = Color.Transparent
-                )
-                .clip(CircleShape)
-                .background(MaverickColors.BentoDarkGlassBackground)
-                .background(MaverickColors.BentoGlassBrush)
-                .border(1.5.dp, MaverickColors.BentoBorderBrush, CircleShape)
-                .background(accentColor.copy(alpha = 0.05f))
-                .shakeClick { onClick() },
-            contentAlignment = Alignment.Center
-        ) {
-            if (content != null) {
-                content()
-            } else {
-                Text(text = emoji, fontSize = emojiSize)
+        Box(contentAlignment = Alignment.Center) {
+            // --- CAPA 0: SOMBRA MANUAL (CÍRCULO NEGRO DESFASADO) ---
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .size(buttonSize)
+                    .offset(y = 3.dp, x = 3.dp)
+                    .background(Color.Black.copy(alpha = 0.9f), CircleShape)
+                    //.background(Brush.verticalGradient(listOf(Color.Black, Color.Transparent))))
+            )
+
+
+            // --- CAPA 1: CUERPO DEL BOTÓN ---
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                    .size(buttonSize)
+                    .clip(CircleShape)
+                    .background(MaverickColors.AsPanelBorder)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.1f), Color.Transparent)
+                        )
+                    )
+                    .border(
+                        1.5.dp,
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.3f), Color.Transparent)
+                        ),
+                        CircleShape
+                    )
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = onClick
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (content != null) {
+                    content()
+                } else {
+                    Text(text = emoji, fontSize = emojiSize)
+                }
             }
         }
 
@@ -255,144 +393,10 @@ fun MaverickRoundButton(
                 text = label,
                 color = labelColor,
                 fontSize = labelFontSize,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Black
             )
         }
     }
-}
-
-@Composable
-fun MaverickRoundButtonSimple(
-    emoji: String,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    accentColor: Color = MaverickColors.NeonCyan,
-    buttonSize: Dp = 64.dp,
-    emojiSize: TextUnit = 28.sp,
-    labelColor: Color = Color.White.copy(alpha = 0.8f),
-    labelFontSize: TextUnit = 12.sp,
-    showLabel: Boolean = true,
-    content: @Composable (BoxScope.() -> Unit)? = null
-) {
-    // ==========================================================================================
-    // 🛡️ SECCIÓN: CONFIGURACIÓN TÁCTICA HUD (MAVERICK SUTIL STYLE V2)
-    // ==========================================================================================
-    // Borde más fino y gradiente sutil para no sobrecargar el HUD
-    val borderGradient = Brush.linearGradient(
-        listOf(accentColor.copy(alpha = 0.3f), Color.Transparent)
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.padding(2.dp) // Reducido para máxima compacidad en HUD
-    ) {
-        Box(
-            modifier = Modifier
-                .size(buttonSize)
-                // --- CAPA 1: BLUR DE COLOR (BASADO EN EL ICONO) ---
-                // Reemplazamos la sombra blanca/plateada por un glow suave del color referido
-                .drawBehind {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(accentColor.copy(alpha = 0.15f), Color.Transparent),
-                            center = center,
-                            radius = size.maxDimension / 1.2f
-                        ),
-                        radius = size.maxDimension / 1.2f
-                    )
-                }
-                .clip(CircleShape)
-                // --- CAPA 2: FONDO MAVERICK CRISTAL (IGUAL QUE APPNAVIGATION) ---
-                // Fondo oscuro bento + efecto cristal vertical
-                .background(MaverickColors.ROG_Dark_Bg)
-                .background(MaverickColors.BentoGlassBrush)
-                // --- CAPA 3: BORDE SUTIL (Fino 0.5dp) ---
-                .border(BorderStroke(0.5.dp, borderGradient), CircleShape)
-                .background(accentColor.copy(alpha = 0.01f)) // Tinte mínimo casi imperceptible
-                .shakeClick { onClick() }, // Efecto Shake al tocar (Estilo AppNavigation)
-            contentAlignment = Alignment.Center
-        ) {
-            // Capa extra de profundidad (Sutil Glow Interior)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            listOf(accentColor.copy(alpha = 0.05f), Color.Transparent)
-                        )
-                    )
-            )
-
-            if (content != null) {
-                content()
-            } else {
-                Text(text = emoji, fontSize = emojiSize)
-            }
-        }
-
-        // ==========================================================================================
-        // 📝 SECCIÓN: ETIQUETA SUTIL
-        // ==========================================================================================
-        if (showLabel && label.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = label,
-                color = labelColor,
-                fontSize = labelFontSize,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-/**
- * Colección de acciones circulares predefinidas (Iconos Bento)
- */
-object IconosAccion {
-    @Composable fun Presupuesto(showLabel: Boolean = true, onClick: () -> Unit) =
-        CarcasaAccionBento("💰", if (showLabel) "PRESUPUESTO" else "", onClick = onClick, accentColor = MaverickColors.GoldPremium)
-
-    @Composable fun Aceptar(showLabel: Boolean = true, onClick: () -> Unit) =
-        CarcasaAccionBento("✅", if (showLabel) "ACEPTAR" else "", onClick = onClick, accentColor = MaverickColors.AcidGreen)
-
-    @Composable fun Cancelar(showLabel: Boolean = true, onClick: () -> Unit) =
-        CarcasaAccionBento("❌", if (showLabel) "CERRAR" else "", onClick = onClick, accentColor = MaverickColors.DeepRed)
-
-    @Composable fun Editar(showLabel: Boolean = true, onClick: () -> Unit) =
-        CarcasaAccionBento("✏️", if (showLabel) "EDITAR" else "", onClick = onClick, accentColor = MaverickColors.ElectricViolet)
-
-    @Composable fun Eliminar(showLabel: Boolean = true, onClick: () -> Unit) =
-        CarcasaAccionBento("🗑️", if (showLabel) "BORRAR" else "", onClick = onClick, accentColor = MaverickColors.Garnet)
-
-    @Composable fun Mensaje(showLabel: Boolean = true, onClick: () -> Unit) =
-        CarcasaAccionBento("💬", if (showLabel) "MENSAJE" else "", onClick = onClick, accentColor = MaverickColors.NeonCyan)
-
-    @Composable fun Generico(emoji: String, label: String = "", accentColor: Color = Color.White, onClick: () -> Unit) =
-        CarcasaAccionBento(emoji, label, onClick = onClick, accentColor = accentColor)
-}
-
-@Composable
-fun CarcasaAccionBento(
-    emoji: String,
-    label: String,
-    modifier: Modifier = Modifier,
-    accentColor: Color = Color.White,
-    onClick: () -> Unit,
-    size: Dp = 64.dp,
-    emojiSize: TextUnit = 28.sp,
-    showLabel: Boolean = true
-) {
-    MaverickRoundButton(
-        emoji = emoji,
-        label = label,
-        onClick = onClick,
-        modifier = modifier,
-        accentColor = accentColor,
-        buttonSize = size,
-        emojiSize = emojiSize,
-        showLabel = showLabel
-    )
 }
 
 // ==========================================================================================
@@ -702,7 +706,6 @@ fun BtnEliteAndroid13(
             .shadow(
                 elevation = elevation,
                 shape = RoundedCornerShape(20.dp),
-                spotColor = accentColor.copy(alpha = 0.5f),
                 ambientColor = Color.Black
             )
             .clip(RoundedCornerShape(20.dp))
@@ -746,7 +749,7 @@ fun BentoActionButton(
         modifier = modifier
             .fillMaxWidth()
             .height(58.dp)
-            .shadow(12.dp, RoundedCornerShape(18.dp))
+            .shadow(elevation = 12.dp, shape = RoundedCornerShape(18.dp))
             .clip(RoundedCornerShape(18.dp))
             .background(MaverickColors.BentoDarkGlassBackground)
             .background(MaverickColors.BentoGlassBrush)
@@ -778,7 +781,7 @@ fun BentoPillMenu(
 ) {
     Row(
         modifier = modifier
-            .shadow(35.dp, RoundedCornerShape(50), ambientColor = Color.Black, spotColor = MaverickColors.GeminiAccent)
+            .shadow(elevation = 35.dp, shape = RoundedCornerShape(50), ambientColor = Color.Black)
             .clip(RoundedCornerShape(50))
             .background(MaverickColors.BentoDarkGlassBackground)
             .background(MaverickColors.BentoGlassBrush)
@@ -838,40 +841,6 @@ fun MaverickM3AdaptiveIcon(
 
 
 // ==========================================================================================
-// 🎛️ SECCIÓN 6: BOTONES DE ACCIÓN VECTORIALES (3 ESTILOS)
-// ==========================================================================================
-
-// --- 1. ACEPTAR ---
-@Composable fun BtnAcceptRog(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).clip(CutCornerShape(8.dp)).background(CyberColorsV3.SuccessGreen.copy(alpha = 0.1f)).border(1.dp, CyberColorsV3.SuccessGreen, CutCornerShape(8.dp)).clickable { onClick() }) { androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(12.dp)) { val path = Path().apply { moveTo(0f, size.height/2); lineTo(size.width/3, size.height); lineTo(size.width, 0f) }; drawPath(path, CyberColorsV3.SuccessGreen, style = Stroke(width = 2.dp.toPx())) } } }
-@Composable fun BtnAcceptStealth(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.05f), CircleShape).clickable { onClick() }, contentAlignment = Alignment.Center) { Icon(Icons.Default.Check, contentDescription = "Accept", tint = CyberColorsV3.SuccessGreen) } }
-@Composable fun BtnAcceptEmoji(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).border(1.dp, CyberColorsV3.SuccessGreen.copy(alpha = 0.5f), RectangleShape).background(Color.Black).clickable { onClick() }, contentAlignment = Alignment.Center) { Text("✅", fontSize = 16.sp) } }
-
-// --- 2. CANCELAR ---
-@Composable fun BtnCancelRog(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).clip(CutCornerShape(topEnd = 12.dp, bottomStart = 12.dp)).background(CyberColorsV3.WarningRed.copy(alpha = 0.1f)).clickable { onClick() }) { androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(12.dp)) { drawLine(CyberColorsV3.WarningRed, Offset(0f, 0f), Offset(size.width, size.height), 2.dp.toPx()); drawLine(CyberColorsV3.WarningRed, Offset(size.width, 0f), Offset(0f, size.height), 2.dp.toPx()) } } }
-@Composable fun BtnCancelStealth(modifier: Modifier = Modifier, onClick: () -> Unit = {}) { Box(modifier = modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.05f)).border(0.5.dp, MaverickColors.AsPanelBorder, CircleShape).clickable { onClick() }, contentAlignment = Alignment.Center) { Icon(Icons.Default.Close, contentDescription = "Cancel", tint = CyberColorsV3.WarningRed.copy(alpha = 0.8f), modifier = Modifier.size(16.dp)) } }
-@Composable fun BtnCancelEmoji(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).border(2.dp, CyberColorsV3.WarningRed.copy(alpha = 0.3f), RectangleShape).clickable { onClick() }, contentAlignment = Alignment.Center) { Text("❌", fontSize = 14.sp) } }
-
-// --- 3. LIMPIAR ---
-@Composable fun BtnClearRog(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).border(1.dp, CyberColorsV3.ElectricCyan, CutCornerShape(bottomEnd = 12.dp)).clickable { onClick() }, contentAlignment = Alignment.Center) { androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) { drawLine(CyberColorsV3.ElectricCyan, Offset(0f, size.height/2), Offset(size.width, size.height/2), 2.dp.toPx()); drawLine(CyberColorsV3.ElectricCyan, Offset(size.width*0.6f, 0f), Offset(size.width, size.height/2), 2.dp.toPx()); drawLine(CyberColorsV3.ElectricCyan, Offset(size.width*0.6f, size.height), Offset(size.width, size.height/2), 2.dp.toPx()) } } }
-@Composable fun BtnClearStealth(modifier: Modifier = Modifier, onClick: () -> Unit = {}) { Box(modifier = modifier.size(32.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.05f)).border(0.5.dp, CyberColorsV3.ElectricCyan.copy(alpha = 0.4f), CircleShape).clickable { onClick() }, contentAlignment = Alignment.Center) { Icon(Icons.Default.Refresh, contentDescription = "Clear", tint = CyberColorsV3.ElectricCyan, modifier = Modifier.size(16.dp)) } }
-@Composable fun BtnClearEmoji(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).background(CyberColorsV3.DeepVoid).border(1.dp, Color.DarkGray).clickable { onClick() }, contentAlignment = Alignment.Center) { Text("🧹", fontSize = 16.sp) } }
-
-// --- 4. BORRAR ---
-@Composable fun BtnDeleteRog(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).background(CyberColorsV3.WarningRed.copy(alpha = 0.05f)).border(1.dp, CyberColorsV3.WarningRed, CutCornerShape(topStart = 8.dp, topEnd = 8.dp)).clickable { onClick() }, contentAlignment = Alignment.Center) { androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(10.dp)) { drawRect(CyberColorsV3.WarningRed, Offset(size.width*0.2f, size.height*0.3f), Size(size.width*0.6f, size.height*0.7f), style = Stroke(2.dp.toPx())); drawLine(CyberColorsV3.WarningRed, Offset(0f, size.height*0.3f), Offset(size.width, size.height*0.3f), 2.dp.toPx()); drawLine(CyberColorsV3.WarningRed, Offset(size.width*0.4f, 0f), Offset(size.width*0.6f, 0f), 2.dp.toPx()) } } }
-@Composable fun BtnDeleteStealth(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).clickable { onClick() }, contentAlignment = Alignment.Center) { Icon(Icons.Default.Delete, contentDescription = "Delete", tint = CyberColorsV3.WarningRed.copy(alpha = 0.6f)) } }
-@Composable fun BtnDeleteEmoji(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).background(Color.Black).clickable { onClick() }, contentAlignment = Alignment.Center) { Text("[ 🗑️ ]", style = CyberTypography.MonospaceData.copy(color = CyberColorsV3.WarningRed)) } }
-
-// --- 5. ENVIAR ---
-@Composable fun BtnSendRog(onClick: () -> Unit = {}) { Box(modifier = Modifier.width(60.dp).height(40.dp).clip(CutCornerShape(bottomEnd = 16.dp)).background(CyberColorsV3.NeonMagenta).clickable { onClick() }, contentAlignment = Alignment.Center) { androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(12.dp)) { val path = Path().apply { moveTo(0f, 0f); lineTo(size.width, size.height/2); lineTo(0f, size.height); lineTo(size.width*0.3f, size.height/2); close() }; drawPath(path, Color.White) } } }
-@Composable fun BtnSendStealth(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(44.dp).background(Brush.radialGradient(listOf(CyberColorsV3.ElectricCyan.copy(alpha=0.2f), Color.Transparent))), contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = CyberColorsV3.ElectricCyan, modifier = Modifier.clickable { onClick() }) } }
-@Composable fun BtnSendEmoji(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(44.dp).border(1.dp, CyberColorsV3.TechPurple, RectangleShape).background(CyberColorsV3.RogDarkGray).clickable { onClick() }, contentAlignment = Alignment.Center) { Text("🚀", fontSize = 18.sp) } }
-
-// --- 6. PERFIL ---
-@Composable fun BtnProfileRog(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(48.dp).drawBehind { val path = Path().apply { moveTo(size.width/2, 0f); lineTo(size.width, size.height*0.25f); lineTo(size.width, size.height*0.75f); lineTo(size.width/2, size.height); lineTo(0f, size.height*0.75f); lineTo(0f, size.height*0.25f); close() }; drawPath(path, CyberColorsV3.TechPurple, style = Stroke(2.dp.toPx())) }.clickable { onClick() }, contentAlignment = Alignment.Center) { androidx.compose.foundation.Canvas(modifier = Modifier.size(20.dp)) { drawCircle(CyberColorsV3.NeonMagenta, radius = size.width/3, center = Offset(size.width/2, size.height/3)); drawArc(CyberColorsV3.NeonMagenta, 0f, 180f, false, Offset(0f, size.height*0.6f), Size(size.width, size.height), style = Stroke(2.dp.toPx())) } } }
-@Composable fun BtnProfileStealth(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.05f), CircleShape).border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape).clickable { onClick() }, contentAlignment = Alignment.Center) { Icon(Icons.Default.Person, contentDescription = "Profile", tint = Color.LightGray) } }
-@Composable fun BtnProfileEmoji(onClick: () -> Unit = {}) { Box(modifier = Modifier.size(40.dp).background(CyberColorsV3.AbsoluteBlack).border(1.dp, CyberColorsV3.ElectricCyan.copy(alpha=0.3f), CutCornerShape(4.dp)).clickable { onClick() }, contentAlignment = Alignment.Center) { Text("👾", fontSize = 20.sp) } }
-
-// ==========================================================================================
 // 📋 SECCIÓN 7: OTROS COMPONENTES (DATA ROWS & CHAT)
 // ==========================================================================================
 
@@ -925,7 +894,7 @@ fun ChatBubbleRogElite(text: String, onCloseClick: () -> Unit = {}) {
 // 🖼️ SECCIÓN 8: PREVIEW COMPLETA (LARGA PARA TODOS LOS BOTONES)
 // ==========================================================================================
 
-@Preview(showBackground = true, backgroundColor = 0xFF0A0E14, heightDp = 2500)
+@Preview(showBackground = true, backgroundColor = 0xFFFFFFFF, heightDp = 1500)
 @Composable
 fun PreviewMaverickButtonsFull() {
     Column(
@@ -936,60 +905,44 @@ fun PreviewMaverickButtonsFull() {
         verticalArrangement = Arrangement.spacedBy(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // --- SECCIÓN 1 ---
-        Text("🔘 RECTANGULAR PREMIUM", color = MaverickColors.TextMuted, fontWeight = FontWeight.Black)
-        BotonesPremium.Aceptar(onClick = {}, modifier = Modifier.fillMaxWidth())
-        BotonesPremium.Cancelar(onClick = {}, modifier = Modifier.fillMaxWidth())
-        BotonesPremium.Enviar(onClick = {}, modifier = Modifier.fillMaxWidth())
-        BotonesPremium.Simple("SIMPLE BUTTON", onClick = {}, modifier = Modifier.fillMaxWidth())
-
-        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-        // --- SECCIÓN 2 ---
-        Text("🔵 ROUND & BENTO ACTIONS", color = MaverickColors.TextMuted, fontWeight = FontWeight.Black)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-            IconosAccion.Presupuesto {}
-            IconosAccion.Aceptar {}
-            IconosAccion.Cancelar {}
-            IconosAccion.Editar {}
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-            IconosAccion.Eliminar {}
-            IconosAccion.Mensaje {}
-            IconosAccion.Generico("🎮", "PLAY") {}
-            MaverickRoundButtonSimple("🌑", "SIMPLE", {})
-        }
-
-        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-        // --- SECCIÓN 3 ---
-        Text("🌪️ TACTICAL & HUD", color = MaverickColors.TextMuted, fontWeight = FontWeight.Black)
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            MaverickTacticalButton(onClick = {}) { Icon(Icons.Default.FilterList, "", tint = Color.White, modifier = Modifier.size(18.dp)) }
-            MaverickTacticalButton(onClick = {}, accentColor = MaverickColors.NeonCyan) { Icon(Icons.Default.Settings, "", tint = MaverickColors.NeonCyan, modifier = Modifier.size(18.dp)) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            BeSmallActionButton("SCAN", {}, icon = Icons.Default.QrCodeScanner, isSelected = true)
-            BeSmallActionButton("CHAT", {}, emoji = "🤖")
-            BeSmallActionButton("MAP", {}, icon = Icons.Default.Map)
-        }
-        Text("🛠️ COMPACT HUD BUTTONS", color = MaverickColors.TextMuted, fontSize = 10.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MaverickCompactHudButton("SCAN", {}, emoji = "🔍")
-            MaverickCompactHudButton("LOCK", {}, icon = Icons.Default.Lock, accentColor = MaverickColors.DeepRed)
-            MaverickCompactHudButton("USER", {}, icon = Icons.Default.Person, isSelected = true, accentColor = MaverickColors.GoldPremium)
+        // ==========================================================================================
+        // 📚 SECCIÓN: CATÁLOGO DEL DICCIONARIO (ÚNICA FUENTE DE VERDAD)
+        // ==========================================================================================
+        Text("📖 BE_DICTIONARY CATALOG (SMART DISPATCHER)", color = Color.Cyan, fontWeight = FontWeight.Black, fontSize = 18.sp)
+        
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(16.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            BeDictionary.Actions.keys.chunked(3).forEach { keys ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    keys.forEach { key ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            MaverickActionButton(actionKey = key, onClick = {})
+                            Spacer(Modifier.height(4.dp))
+                            Text(key.uppercase(), fontSize = 8.sp, color = Color.Gray)
+                        }
+                    }
+                }
+            }
         }
 
         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-        // --- SECCIÓN 4 ---
+        // --- SECCIÓN: COMPONENTES ESPECIALES (AÚN NO TOKENIZADOS) ---
         Text("💎 BENTO SPECIALS", color = MaverickColors.TextMuted, fontWeight = FontWeight.Black)
         BentoActionButton("CONTINUAR PROCESO", emoji = "🔥", onClick = {})
         BentoPillMenu(items = listOf("🏠" to {}, "🔍" to {}, "👤" to {}))
 
         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-        // --- SECCIÓN 5 ---
         Text("📱 M3 ADAPTIVE ICONS", color = MaverickColors.TextMuted, fontWeight = FontWeight.Black)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)) {
             MaverickM3AdaptiveIcon(icon = MaverickIcons.Search, containerColor = MaverickColors.DeepSpace)
@@ -997,33 +950,12 @@ fun PreviewMaverickButtonsFull() {
             MaverickM3AdaptiveIcon(icon = MaverickIcons.Delete, containerColor = MaverickColors.DeepRed.copy(alpha = 0.2f), iconColor = MaverickColors.DeepRed)
             MaverickM3AdaptiveIcon(icon = MaverickIcons.Budget, containerColor = MaverickColors.GoldPremium.copy(alpha = 0.2f), iconColor = MaverickColors.GoldPremium)
         }
-/**
+
         HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-        // --- SECCIÓN 6 ---
-        Text("🎛️ VECTORIAL ACTIONS (ROG / STEALTH / EMOJI)", color = MaverickColors.TextMuted, fontWeight = FontWeight.Black)
-        val rows = listOf(
-            "ACEPTAR" to  { Row { BtnAcceptRog(); Spacer(Modifier.width(20.dp)); BtnAcceptStealth(); Spacer(Modifier.width(20.dp)); BtnAcceptEmoji() } },
-            "CANCELAR" to { Row { BtnCancelRog(); Spacer(Modifier.width(20.dp)); BtnCancelStealth(); Spacer(Modifier.width(20.dp)); BtnCancelEmoji() } },
-            "LIMPIAR" to { Row { BtnClearRog(); Spacer(Modifier.width(20.dp)); BtnClearStealth(); Spacer(Modifier.width(20.dp)); BtnClearEmoji() } },
-            "BORRAR" to { Row { BtnDeleteRog(); Spacer(Modifier.width(20.dp)); BtnDeleteStealth(); Spacer(Modifier.width(20.dp)); BtnDeleteEmoji() } },
-            "ENVIAR" to { Row { BtnSendRog(); Spacer(Modifier.width(20.dp)); BtnSendStealth(); Spacer(Modifier.width(20.dp)); BtnSendEmoji() } },
-            "PERFIL" to { Row { BtnProfileRog(); Spacer(Modifier.width(20.dp)); BtnProfileStealth(); Spacer(Modifier.width(20.dp)); BtnProfileEmoji() } }
-        )
-        rows.forEach { (label, content) ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(label, fontSize = 10.sp, color = Color.Gray)
-                content()
-            }
-        }
-**/
-        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-        // --- SECCIÓN 7 ---
         Text("📋 DATA & CHAT", color = MaverickColors.TextMuted, fontWeight = FontWeight.Black)
         MaverickDataRow("NOMBRE DE USUARIO", "Maverick_User_01", emoji = "👤", isEditMode = false)
-        MaverickDataRow("ESTADO DEL SISTEMA", "Operativo", emoji = "⚡", isEditMode = true)
-        ChatBubbleRogElite("Sistemas Maverick actualizados. Todos los botones están listos para el despliegue.")
+        ChatBubbleRogElite("Sistemas Maverick actualizados. Los botones redundantes han sido eliminados.")
 
         Spacer(modifier = Modifier.height(50.dp))
     }

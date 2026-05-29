@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.features.home
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
@@ -74,11 +75,16 @@ fun FastScreen(
     val uiState by fastViewModel.uiState.collectAsStateWithLifecycle()
     val userState by beViewModel.userState.collectAsStateWithLifecycle()
     val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
+    val availableAddresses by beViewModel.availableAddressInfos.collectAsStateWithLifecycle()
+    val activeProfileName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
+    val activeProfilePhoto by beViewModel.activeProfilePhoto.collectAsStateWithLifecycle()
+    val selectedProfileId by beViewModel.selectedProfileId.collectAsStateWithLifecycle()
     val allCategories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
     val sortedCategories by categoryViewModel.sortedCategories.collectAsStateWithLifecycle()
 
     val beSearchQuery by beViewModel.searchQuery.collectAsStateWithLifecycle()
     val isBeSearchActive by beViewModel.isSearchActive.collectAsStateWithLifecycle()
+    val isGpsActive by beViewModel.isGpsEnabled.collectAsStateWithLifecycle()
     val fastHistory by fastViewModel.fastHistory.collectAsStateWithLifecycle()
     val shortcuts by fastViewModel.shortcuts.collectAsStateWithLifecycle()
 
@@ -143,7 +149,12 @@ fun FastScreen(
         searchFinished = uiState.searchFinished,
         searchResults = uiState.searchResults,
         activeAddress = activeAddress,
+        availableAddresses = availableAddresses,
         user = userState,
+        activeProfileName = activeProfileName,
+        activeProfilePhoto = activeProfilePhoto,
+        selectedProfileId = selectedProfileId,
+        isGpsActive = isGpsActive,
         allCategories = allCategories,
         fastHistory = fastHistory,
         selectedCategory = uiState.selectedCategory,
@@ -153,6 +164,9 @@ fun FastScreen(
         shortcuts = shortcuts,
         onAddressSelected = { addr -> beViewModel.selectAddress(addr.id) },
         onUpdateGps = { beViewModel.triggerAction("refresh_gps") },
+        onGpsToggle = { ubicacionViewModel.toggleGps(context) },
+        onProfileSelected = { beViewModel.selectProfile(it) },
+        onLogout = { beViewModel.triggerAction("logout") },
         onCategoryClick = { category -> 
             fastViewModel.selectCategory(category)
         },
@@ -171,7 +185,12 @@ fun FastScreenContent(
     searchFinished: Boolean,
     searchResults: List<ProviderWithDistance>,
     activeAddress: AddressInfo?,
+    availableAddresses: List<AddressInfo>,
     user: UserEntity?,
+    activeProfileName: String,
+    activeProfilePhoto: Any?,
+    selectedProfileId: String?,
+    isGpsActive: Boolean,
     allCategories: List<CategoryEntity>,
     fastHistory: List<com.example.myapplication.core.data.local.dao.FastCategoryEntity>,
     selectedCategory: CategoryEntity?,
@@ -181,6 +200,9 @@ fun FastScreenContent(
     shortcuts: List<FilterSortItem> = emptyList(),
     onAddressSelected: (AddressInfo) -> Unit,
     onUpdateGps: () -> Unit,
+    onGpsToggle: () -> Unit = {},
+    onProfileSelected: (String?) -> Unit,
+    onLogout: () -> Unit,
     onCategoryClick: (CategoryEntity) -> Unit,
     onToggleFilter: (String) -> Unit,
     onManageShortcuts: (String, Boolean) -> Unit = { _, _ -> },
@@ -189,6 +211,8 @@ fun FastScreenContent(
 ) {
     var selectedProviderOnRadar by remember { mutableStateOf<ProviderWithDistance?>(null) }
     var radarScale by remember { mutableFloatStateOf(1f) }
+    var showLocationPopup by remember { mutableStateOf(false) }
+    var showProfilePopup by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val notificationHelper = remember { NotificationHelper(context) }
@@ -231,6 +255,21 @@ fun FastScreenContent(
                 onBack = { navController.popBackStack() },
                 onInfoClick = { /* Info */ },
                 backgroundBrush = MaverickColors.RogHorizontalGradient
+            )
+            
+            // --- NUEVO: TARJETA DE CONTEXTO MAVERICK ---
+            MoldePremiumContextCard(
+                user = user,
+                activeProfileName = activeProfileName,
+                activeProfilePhoto = activeProfilePhoto,
+                mainAddress = activeAddress?.streetAndNumber ?: "SELECCIONAR UBICACIÓN",
+                localityInfo = activeAddress?.locality ?: "ESCANEANDO...",
+                description = if (activeAddress?.id == "gps_current") "GPS_LIVE" else if (activeAddress?.isCompany == true) "NETWORK_HQ" else "STATION_HOME",
+                isGpsActive = isGpsActive,
+                onUserClick = { showProfilePopup = true },
+                onLocationClick = { showLocationPopup = true },
+                onGpsToggle = onUpdateGps,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
 
@@ -456,29 +495,7 @@ fun FastScreenContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Box(modifier = Modifier.width(250.dp).height(80.dp).padding(bottom = 10.dp)) {
-                LocationSelector(
-                    user = user,
-                    activeAddress = activeAddress ?: AddressInfo(
-                        id = "searching",
-                        companyOrUserName = "BUSCANDO...",
-                        branchName = "UBICACIÓN",
-                        streetAndNumber = "SCANNING...",
-                        locality = "PROCESANDO...",
-                        postalCode = "",
-                        isCompany = false,
-                        lat = 0.0,
-                        lng = 0.0
-                    ),
-                    onRefresh = onUpdateGps,
-                    onLocationSelected = { addr ->
-                        onAddressSelected(addr)
-                    },
-                    brush = Brush.verticalGradient(
-                        listOf(Color(0xFF1A1A24).copy(alpha = 0.9f), Color(0xFF0D0D12).copy(alpha = 1f))
-                    )
-                )
-            }
+            Spacer(Modifier.width(16.dp)) // Espacio para equilibrar el botón
 
             MaverickTacticalButton(
                 onClick = {
@@ -500,6 +517,40 @@ fun FastScreenContent(
 
             }
 
+        }
+
+        // --- DIÁLOGOS DE CONTROL ---
+        LocationDialog(
+            show = showLocationPopup,
+            availableAddresses = availableAddresses,
+            activeAddress = activeAddress,
+            isGpsSystemEnabled = isGpsActive,
+            onRefresh = onUpdateGps,
+            onGpsToggle = onGpsToggle,
+            onLocationSelected = { addr ->
+                onAddressSelected(addr)
+                showLocationPopup = false
+            },
+            onDismiss = { showLocationPopup = false }
+        )
+
+        if (user != null) {
+            ProfileDialog(
+                show = showProfilePopup,
+                user = user.toDomain(),
+                isPersonalProfile = selectedProfileId == null,
+                selectedProfileId = selectedProfileId,
+                onProfileSelected = { id -> 
+                    onProfileSelected(id)
+                    showProfilePopup = false 
+                },
+                navController = navController,
+                onLogout = { 
+                    onLogout()
+                    showProfilePopup = false 
+                },
+                onDismiss = { showProfilePopup = false }
+            )
         }
 
         GoogleVerticalInterstitialAd(
@@ -620,7 +671,8 @@ fun TacticalMapBackground(
                             modifier = Modifier.padding(top = 4.dp).offset(y = (-8).dp)
                         ) {
                             Text(
-                                String.format(Locale.getDefault(), "%.1fkm", data.distanceKm),
+                                //String.format(Locale.getDefault(), "%.1fkm", data.distanceKm),
+                                text = "${data.distanceKm}km",
                                 color = Color(0xFF22D3EE),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Black,
@@ -768,6 +820,8 @@ fun RadarPulse(delay: Int) {
     Box(modifier = Modifier.size(150.dp).graphicsLayer { scaleX = scale; scaleY = scale }.alpha(alpha).border(2.dp, Color(0xFF22D3EE).copy(0.4f), CircleShape))
 }
 
+
+/**
 @RequiresApi(Build.VERSION_CODES.O)
 @Preview(showBackground = true, backgroundColor = 0xFF05070A)
 @Composable
@@ -795,7 +849,17 @@ fun PreviewFastScreen() {
             onToggleFilter = {},
             onManageShortcuts = { _, _ -> },
             onResetSearch = {},
-            onStartSearch = {}
+            onProfileSelected = {},
+            onLogout = {},
+            onStartSearch = {},
+            selectedProfileId = null,
+            isGpsActive = false,
+            activeProfileName = "",
+            activeProfilePhoto = null,
+            onUserClick = {},
+            onLocationClick = {}
         )
     }
 }
+
+*/

@@ -1,5 +1,6 @@
 package com.example.myapplication.presentation.features.home
 
+import com.example.myapplication.core.domain.model.AddressInfo
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
@@ -74,6 +75,9 @@ fun ResultBusquedaCategoriaScreen(
     val allCategories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
     val activeAddress by beViewModel.activeAddress.collectAsStateWithLifecycle()
     val userState by beViewModel.userState.collectAsStateWithLifecycle()
+    val activeProfilePhoto by beViewModel.activeProfilePhoto.collectAsStateWithLifecycle()
+    val activeProfileName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
+    val selectedProfileId by beViewModel.selectedProfileId.collectAsStateWithLifecycle()
 
     val uiItems by providerViewModel.uiItems.collectAsStateWithLifecycle()
     val isLoading by providerViewModel.isLoading.collectAsStateWithLifecycle()
@@ -84,12 +88,10 @@ fun ResultBusquedaCategoriaScreen(
 
     val shortcuts by providerViewModel.shortcuts.collectAsStateWithLifecycle()
     val activeSortCriteria by providerViewModel.activeSortCriteria.collectAsStateWithLifecycle()
+    val isGpsEnabled by ubicacionViewModel.isGpsEnabled.collectAsStateWithLifecycle()
 
     // --- ESTADO DE FILTROS ELEVADO (COORDINACIÓN DE COLAPSO) ---
     var isFilterSheetOpen by remember { mutableStateOf(false) }
-
-    val activeProfileName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
-    val activeProfilePhotoUrl by beViewModel.activeProfilePhotoUrl.collectAsStateWithLifecycle()
 
     // --- SINCRONIZACIÓN DE CONTEXTO ELITE ---
     LaunchedEffect(Unit) {
@@ -200,12 +202,16 @@ fun ResultBusquedaCategoriaScreen(
         userLocation = userLocation,
         user = userState,
         activeProfileName = activeProfileName,
-        activeProfilePhotoUrl = activeProfilePhotoUrl,
+        activeProfilePhoto = activeProfilePhoto,
         activeAddress = activeAddress,
+        selectedProfileId = selectedProfileId,
         onBack = onBack,
         onNavigateToProviderProfile = onNavigateToProviderProfile,
         onNavigateToChat = onNavigateToChat,
         onTriggerAction = { beViewModel.triggerAction(it) },
+        onGpsToggle = { ubicacionViewModel.toggleGps(context) },
+        onProfileSelected = { beViewModel.selectProfile(it) },
+        isGpsSystemEnabled = isGpsEnabled,
         onManageShortcuts = { id, add -> providerViewModel.manageShortcut(id, add) },
         isFilterSheetOpen = isFilterSheetOpen,
         onFilterSheetVisibilityChange = { isFilterSheetOpen = it }
@@ -235,12 +241,16 @@ fun ResultBusquedaCategoriaContent(
     userLocation: UserLocation?,
     user: UserEntity?,
     activeProfileName: String,
-    activeProfilePhotoUrl: String?,
+    activeProfilePhoto: Any?,
     activeAddress: AddressInfo?,
+    selectedProfileId: String? = null,
     onBack: () -> Unit,
     onNavigateToProviderProfile: (String) -> Unit,
     onNavigateToChat: (ProviderDisplayModel) -> Unit,
     onTriggerAction: (String) -> Unit,
+    onGpsToggle: () -> Unit,
+    onProfileSelected: (String?) -> Unit = {},
+    isGpsSystemEnabled: Boolean = true,
     onManageShortcuts: (String, Boolean) -> Unit = { _, _ -> },
     isFilterSheetOpen: Boolean = false,
     onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
@@ -355,7 +365,7 @@ fun ResultBusquedaCategoriaContent(
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    Spacer(modifier = Modifier.height(8.dp * (1f - filtersHideFraction)))
+                   // Spacer(modifier = Modifier.height(8.dp * (1f - filtersHideFraction)))
                     
                 Row(
                     modifier = Modifier
@@ -415,7 +425,7 @@ fun ResultBusquedaCategoriaContent(
                         MoldePremiumContextCard(
                             user = user,
                             activeProfileName = activeProfileName,
-                            activeProfilePhotoUrl = activeProfilePhotoUrl,
+                            activeProfilePhoto = activeProfilePhoto,
                             mainAddress = activeAddress?.streetAndNumber ?: (userLocation?.locality ?: "Buscando..."),
                             localityInfo = activeAddress?.let { "${it.locality}, CP ${it.postalCode}" } ?: "",
                             description = activeAddress?.let { addr ->
@@ -429,13 +439,12 @@ fun ResultBusquedaCategoriaContent(
                             isGpsActive = activeAddress?.id == "gps_current",
                             onUserClick = { showProfileDialog = true },
                             onLocationClick = { showLocationDialog = true },
-                            onGpsToggle = { onTriggerAction("refresh_gps") },
-                            modifier = Modifier.fillMaxSize()
+                            onGpsToggle = onGpsToggle
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp * (1f - contextHideFraction)))
-
+                    Spacer(modifier = Modifier.height(16.dp * (1f - contextHideFraction)))
+                   // Spacer(modifier = Modifier.height(16.dp))
                     // --- 4. LISTA DE RESULTADOS ELITE ---
                     val hasActiveFilters = activeRefinements.isNotEmpty() || !showSubscribedOnly || !sortByProximity
                     
@@ -513,23 +522,29 @@ fun ResultBusquedaCategoriaContent(
     // --- POPUPS DE CONTEXTO ---
     if (showProfileDialog && user != null) {
         ProfileDialog(
-            show = true,
-            user = user,
+            show = showProfileDialog,
+            user = user.toDomain(),
+            isPersonalProfile = selectedProfileId == null,
+            selectedProfileId = selectedProfileId,
+            onProfileSelected = { onProfileSelected(it) },
             navController = androidx.navigation.compose.rememberNavController(),
-            onLogout = { /* handle logout */ },
+            onLogout = { showProfileDialog = false },
             onDismiss = { showProfileDialog = false }
         )
     }
 
     if (showLocationDialog) {
         LocationDialog(
-            show = true,
-            user = user,
+            show = showLocationDialog,
+            availableAddresses = user?.toDomain()?.toAddressInfoList() ?: emptyList(),
             activeAddress = activeAddress,
+            selectedProfileId = selectedProfileId,
+            isGpsSystemEnabled = isGpsSystemEnabled,
             onRefresh = { onRefresh() },
+            onGpsToggle = onGpsToggle,
             onLocationSelected = { addr ->
-                onTriggerAction("select_address_${addr.id}") // El coordinador debería tener una acción o el ViewModel un método
-                // beViewModel.selectAddress(addr.id)
+                onTriggerAction("select_address_${addr.id}")
+                showLocationDialog = false
             },
             onDismiss = { showLocationDialog = false }
         )
@@ -694,13 +709,15 @@ fun ResultBusquedaCategoriaScreenPreview() {
             userLocation = null,
             user = null,
             activeProfileName = "Invitado",
-            activeProfilePhotoUrl = null,
+            activeProfilePhoto = null,
             activeAddress = null,
             onBack = {},
             onNavigateToProviderProfile = {},
             onNavigateToChat = {},
-            onTriggerAction = {}
+            onTriggerAction = {},
+            onGpsToggle = {}
         )
     }
 }
+
 

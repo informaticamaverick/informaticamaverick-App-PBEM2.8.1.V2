@@ -1,4 +1,4 @@
-# 📘 Manual de Operaciones: Módulo compartido `:core` (v2.1)
+# 📘 Manual de Operaciones: Módulo compartido `:core` (v2.3)
 
 Este módulo es el **corazón de datos e inteligencia** del ecosistema Informática Maverick. Centraliza la lógica de negocio, persistencia local (Room) y comunicación remota (Firebase) para asegurar que la App del Cliente y la App del Prestador hablen el mismo idioma bajo el estándar **Elite SSOT**.
 
@@ -13,15 +13,14 @@ Cualquier desarrollo en este módulo debe respetar estas 3 leyes inquebrantables
     *   **Lectura Local-First:** Las consultas se realizan **SIEMPRE** a Room. Firebase solo se usa para verificar actualizaciones o descargar deltas.
     *   **Mapeo Quirúrgico:** Usar los `Mappers` centralizados para transformar Documentos de la nube en Entidades de Room inmediatamente.
 
-2.  **Carga On-Demand (Bajo Demanda):**
-    *   **Mapeo Gradual:** Los mappers están diseñados para procesar datos en dos niveles:
-        *   *Nivel Tarjeta:* Extrae solo campos visuales mínimos (`title`, `photo`, `rating`) para listas masivas.
-        *   *Nivel Detalle:* Procesa subcolecciones y metadatos pesados (`branches`, `items`, `gallery`) solo cuando el usuario entra a una vista específica.
-    *   La sincronización con la nube se dispara solo por eventos (Push) o cuando el usuario entra a una sección específica.
+2.  **Carga On-Demand (Bajo Demanda) e Imágenes "Ready-to-Consume":**
+    *   **Mapeo Gradual:** Los mappers procesan datos en dos niveles: *Tarjeta* (mínimo visual) y *Detalle* (pesado).
+    *   **Procesamiento Centralizado de Imágenes:** La UI **nunca** debe decidir si una imagen es URL o Base64. El Core (vía `toDomain()`) procesa los `photoUrl` y entrega objetos `profileImage: Any?` listos para `AsyncImage`.
+    *   La sincronización con la nube se dispara solo por eventos (Push) o acceso a secciones específicas.
 
 3.  **SSOT (Single Source of Truth):**
     *   El módulo `:core` es la única fuente de verdad. 
-    *   Si un dato cambia (ej: Estado de un presupuesto), debe cambiar en `:core` para que ambas apps se actualicen automáticamente.
+    *   Si un dato cambia, debe cambiar en `:core` para que ambas apps se actualicen automáticamente.
 
 ---
 
@@ -29,9 +28,9 @@ Cualquier desarrollo en este módulo debe respetar estas 3 leyes inquebrantables
 
 El flujo de datos sigue el esquema de **Director, Mediador y Obreros**:
 
-*   **Los Obreros (ViewModels de Pantalla):** Responsables del "trabajo sucio". Transforman datos de Room en `UiState`. No acceden a Firebase directamente; usan los repositorios de `:core`.
-*   **Pantallas Tontas (Stateless Screens):** La UI no piensa. Solo refleja el estado enviado por el Obrero y emite eventos hacia el ViewModel.
-*   **Mappers Centralizados (`data/remote/`):** Traductores universales. Convierten JSON/Firestore a Entidades de Room asegurando consistencia matemática y de tipos.
+*   **Los Obreros (ViewModels de Pantalla):** Transforman datos de Room en `UiState` consumiendo los repositorios de `:core`.
+*   **Pantallas Tontas (Stateless Screens):** La UI no piensa. Solo refleja el estado enviado por el Obrero.
+*   **Mappers Centralizados (`data/remote/`):** Traductores universales. Convierten Firestore a Entidades de Room.
 
 ---
 
@@ -66,8 +65,9 @@ graph TD
     DAO -- "Persistencia" --> Room
 
     %% Flujo de Lectura (UI)
-    Room -- "Flow&lt;Entity&gt;" --> Repo
-    Repo -- "Domain Model" --> VM
+    Room -- "Flow<Entity>" --> Repo
+    Repo -- "toDomain()" --> Domain
+    Domain -- "profileImage: Any?" --> VM
     VM -- "UiState" --> UI
 
     %% Flujo de Escritura (Sync Up)
@@ -79,69 +79,49 @@ graph TD
 
 ### 🧱 Responsabilidades por Capa
 
-1.  **Entity (`data/local/entity/`)**: Define la estructura de la tabla en Room. Es el espejo de los datos persistidos.
-2.  **DAO (`data/local/dao/`)**: Contratos de acceso a datos. Proporciona `Flows` para reactividad en tiempo real.
-3.  **Mapper (`data/remote/`)**: Traduce la anarquía del JSON de Firestore al orden de las `Entities`. Es el guardián de la integridad de tipos.
+1.  **Entity (`data/local/entity/`)**: Define la estructura de Room.
+2.  **DAO (`data/local/dao/`)**: Contratos de acceso reactivo (`Flow`).
+3.  **Mapper (`data/remote/`)**: Traduce JSON de Firestore a `Entities`.
 4.  **Repository (`data/repository/`)**: 
-    *   **Lectura:** Expone datos de Room transformados a Modelos de Dominio.
-    *   **Escritura:** Aplica la ley de "Costo Zero": guarda en Room inmediatamente y dispara la sincronización en segundo plano hacia Firestore.
-5.  **ViewModel (`presentation/`)**: Consume el `Repository`. Mantiene el `UiState` y maneja la lógica de navegación/eventos. No conoce la existencia de Firebase.
-6.  **Screen (`presentation/ui/`)**: Refleja el `UiState`. Es 100% agnóstica de dónde vienen los datos.
+    *   **Lectura:** Expone datos de Room transformados a **Modelos de Dominio**.
+    *   **Conversión Táctica:** Invoca `toDomain()` en las entidades para procesar imágenes (Base64 -> ByteArray) y metadatos.
+5.  **ViewModel (`presentation/`)**: Consume el `Repository`. Mantiene el `UiState`.
+6.  **Screen (`presentation/ui/`)**: Refleja el `UiState`. Usa `AsyncImage(model = domain.profileImage)`.
 
 ---
 
 ## 📂 Estructura del Módulo
 
-1.  **`domain/model/`**: Data Classes puras. El lenguaje común del ecosistema.
-2.  **`data/local/`**: Gestión de Room (`Entity` y `DAO`). Aquí se define la estructura de las tablas.
-3.  **`data/remote/`**: 
-    *   **Mappers:** (`UserDataMapper`, `BudgetDataMapper`, `ChatMessageMapper`). 
-        *   Implementan lógica de **Auto-Decodificación Multimedia** (Base64 -> Local File).
-        *   Soportan **Side-Effect Sync**: El chat dispara actualizaciones en Presupuestos y Agenda automáticamente.
-4.  **`data/repository/`**: El cerebro de decisión. Implementa la lógica **Offline-First**. 
-    *   Sectorizado por responsabilidades: Común, Cliente y Prestador.
-5.  **`utils/`**: Manuales de procedimientos y utilidades compartidas (Imagen, Ubicación, String).
+1.  **`domain/model/`**: Modelos de Dominio (`User`, `CompanyClient`, etc.). Poseen los campos `profileImage: Any?`.
+2.  **`data/local/entity/`**: Entidades de Room. Contienen la función `toDomain()` que centraliza el procesamiento visual.
+3.  **`data/remote/`**: Mappers que manejan la jerarquía Firestore -> Room.
+4.  **`utils/`**: Utilidades compartidas (`ImageUtils`, `MaverickGeoUtils`).
 
 ---
 
 ## 🌐 Infraestructura de APIs y Utilidades Centralizadas (v2.2)
 
-Para evitar la anarquía de cálculos en las aplicaciones, el `:core` ahora centraliza:
+1.  **`data/remote/api/`**: Interfaces Retrofit compartidas.
+2.  **`utils/MaverickGeoUtils`**: Consistencia geográfica (Haversine, CPA Premium, Normalización).
 
-1.  **`data/remote/api/`**: Contiene las interfaces de Retrofit para servicios externos compartidos (Clima, Geocodificación, etc.).
-2.  **`utils/MaverickGeoUtils`**: El "Manual de Procedimientos Geográficos". Todas las apps DEBEN usar este objeto para asegurar consistencia en:
-    *   Cálculos de distancia (Haversine).
-    *   Estimación de tiempos de llegada.
-    *   Normalización de coordenadas.
-    *   **Normalización CPA Premium:** Traduce códigos postales numéricos al formato legal (Ej: "4000" -> "T4000").
-    *   **Interoperabilidad:** Uso de `clientToProvider()` y `providerToClient()` para compartir ubicaciones vía Chat sin pérdida de datos.
-
-### 📝 Guía de Implementación para Prestadores (v2.2):
-Si eres el encargado de la App del Prestador, sigue estos pasos para sincronizarte con el estándar Premium:
-1.  **Geocodificación:** Reemplaza cualquier uso de `Geocoder` manual por `MaverickGeoUtils.getAddressFromCoordinates()`. Esto garantiza que guardes el `codigoPostal` en formato CPA (Letra + 4 dígitos).
-2.  **Perfil de Empresa:** Al guardar sucursales, asegúrate de persistir la `latitude` y `longitude` obtenidas del Utils. El cliente las usará para el Radar FAST.
-3.  **Chat:** Si recibes una ubicación del cliente, usa `MaverickGeoUtils.clientToProvider(address)` antes de intentar guardarla en la base de datos del prestador.
+### 📝 Guía de Implementación para Prestadores (v2.3):
+Para sincronizarte con el estándar Premium y evitar imágenes rotas o lógica duplicada:
+1.  **Consumo de Imágenes:** En tus ViewModels/Screens, asegúrate de usar los **Modelos de Dominio** (ej: `User`) obtenidos del repositorio. No uses `UserEntity` directamente en la UI.
+2.  **Atributo `profileImage`:** Utiliza siempre el atributo `profileImage` (o `photoImage`) de tipo `Any?`. Pásalo directamente al `model` de `AsyncImage`. El Core ya se encargó de decodificar el Base64 si era necesario.
+3.  **Geocodificación:** Usa `MaverickGeoUtils` para asegurar el formato CPA legal (Letra + 4 dígitos).
 
 ---
 
 ## 🚦 Reglas de Oro para Desarrolladores
 
 ### 1. Prohibido código de UI
-Ningún archivo en `:core` debe importar librerías de `Compose` o `View`. Este módulo es puramente lógico.
+`:core` es puramente lógico. Sin imports de `Compose`.
 
-### 2. Uso de Mappers
-Nunca uses `toObject(User::class.java)` de Firebase. Utiliza los mappers centralizados para garantizar que los campos anidados (`perfil`, `empresas`, etc.) se procesen correctamente y se guarden en Room siguiendo la jerarquía SSOT.
+### 2. Uso de Mappers y toDomain()
+Es obligatorio usar `toDomain()` para pasar de la base de datos a la UI. Esta función es la que "limpia" y "prepara" los datos (imágenes, cálculos de nombres, etc.).
 
 ### 3. Optimización Multimedia
-Toda imagen o audio debe pasar por `ImageUtils.compressImageToWebP` antes de ser enviada. Los mappers se encargan de decodificar Base64 recibidos y persistirlos en `maverick_media` para ahorrar ancho de banda.
-
----
-
-## 🛠️ Cómo agregar una nueva entidad compartida
-1.  Define el modelo en `domain/model`.
-2.  Crea la `Entity` y el `DAO` en `data/local`.
-3.  **Crea su Mapper** en `data/remote` manejando los niveles de carga (Tarjeta vs Detalle).
-4.  Expón la funcionalidad mediante un `Repository` sectorizado e inyectable vía Hilt.
+Usa `ImageUtils.processImageSource` dentro de `toDomain()` para procesar cualquier String que provenga de la nube o base de datos local antes de enviarlo a la UI.
 
 ---
 

@@ -32,7 +32,7 @@ import com.example.myapplication.presentation.designsystem.theme.MyApplicationTh
 fun ConfigUserScreen(
     onNavigateBack: () -> Unit,
     onAccountDeleted: () -> Unit,
-    viewModel: ProfileViewModel = hiltViewModel()
+    viewModel: UserViewModel = hiltViewModel()
 ) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
 

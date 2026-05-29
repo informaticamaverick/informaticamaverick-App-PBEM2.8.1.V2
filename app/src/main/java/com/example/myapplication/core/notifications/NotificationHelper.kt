@@ -40,7 +40,13 @@ class NotificationHelper(private val context: Context) {
      */
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+            // Se usa try-catch para evitar fallos en el modo Preview de Android Studio,
+            // donde algunos servicios del sistema no están disponibles.
+            val manager = try {
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            } catch (_: Throwable) {
+                null
+            } ?: return
             
             // Canal para Chat
             val chatChannel = NotificationChannel(
@@ -88,8 +94,8 @@ class NotificationHelper(private val context: Context) {
 
         try {
             NotificationManagerCompat.from(context).notify(Random.nextInt(), builder.build())
-        } catch (e: SecurityException) {
-            e.printStackTrace()
+        } catch (_: Throwable) {
+            // Silenciamos errores en Preview o fallos de permisos inesperados
         }
     }
 

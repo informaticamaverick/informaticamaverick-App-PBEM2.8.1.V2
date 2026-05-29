@@ -57,13 +57,14 @@ data class Provider(
     // --- MULTIMEDIA ---
     val photoUrl: String? = null,
     val bannerImageUrl: String? = null,
+    val profileImage: Any? = null,
+    val bannerImage: Any? = null,
     val galleryImages: List<String> = emptyList(),
     val favoriteProviderIds: List<String> = emptyList(),
     val serviceType: String = "TECHNICAL",
     val createdAt: Long
 ) {
     val id: String get() = uid
-    val profileImage: String? get() = photoUrl
 
     // --- ALIASES DE COMPATIBILIDAD UI ---
     val apellido: String get() = lastName

@@ -510,6 +510,8 @@ fun PresupuestosScreenContent(
                         )
                     }
                 }
+                  //  Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(16.dp * (1f - cardsHideFraction.value)))
                 ListaMoldeV2(
                     modifier = Modifier.weight(1f),
                     titulo = "CONCURSOS PÚBLICOS",

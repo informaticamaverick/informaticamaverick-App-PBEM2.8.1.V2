@@ -92,9 +92,24 @@ object MaverickGeoUtils {
                 // Discriminación inteligente Ciudad/Localidad/Barrio
                 val locality = a.locality ?: a.subLocality ?: a.subAdminArea ?: ""
 
+                // Intento robusto de obtener el número de la dirección
+                val streetNumber = a.subThoroughfare ?: a.featureName?.filter { it.isDigit() } ?: ""
+                
+                // Intento robusto de obtener la calle (a veces thoroughfare es null)
+                var streetName = a.thoroughfare ?: ""
+                if (streetName.isBlank() && !a.featureName.isNullOrBlank() && !a.featureName.any { it.isDigit() }) {
+                    streetName = a.featureName
+                }
+                
+                // Fallback final: Parsear la primera línea de la dirección si sigue vacía
+                if (streetName.isBlank()) {
+                    val fullLine = a.getAddressLine(0) ?: ""
+                    streetName = fullLine.split(",").firstOrNull()?.replace(streetNumber, "")?.trim() ?: ""
+                }
+
                 AddressClient(
-                    calle = a.thoroughfare ?: "",
-                    numero = a.subThoroughfare ?: "",
+                    calle = streetName,
+                    numero = streetNumber,
                     localidad = locality,
                     provincia = province,
                     pais = a.countryName ?: "Argentina",
@@ -124,12 +139,28 @@ object MaverickGeoUtils {
             if (!addresses.isNullOrEmpty()) {
                 val a = addresses[0]
                 val province = a.adminArea ?: ""
+                val rawZip = a.postalCode ?: ""
                 val locality = a.locality ?: a.subLocality ?: a.subAdminArea ?: ""
-                val cleanZip = normalizeCPA(province, a.postalCode ?: "")
+                
+                // Normalización de CPA
+                val cleanZip = normalizeCPA(province, rawZip)
+
+                // Lógica robusta para calle y número (igual que en Reverse Geocoding)
+                val streetNumber = a.subThoroughfare ?: a.featureName?.filter { it.isDigit() } ?: ""
+                var streetName = a.thoroughfare ?: ""
+                
+                if (streetName.isBlank() && !a.featureName.isNullOrBlank() && !a.featureName.any { it.isDigit() }) {
+                    streetName = a.featureName
+                }
+
+                if (streetName.isBlank()) {
+                    val fullLine = a.getAddressLine(0) ?: ""
+                    streetName = fullLine.split(",").firstOrNull()?.replace(streetNumber, "")?.trim() ?: ""
+                }
 
                 AddressClient(
-                    calle = a.thoroughfare ?: "",
-                    numero = a.subThoroughfare ?: "",
+                    calle = streetName,
+                    numero = streetNumber,
                     localidad = locality,
                     provincia = province,
                     pais = a.countryName ?: "Argentina",

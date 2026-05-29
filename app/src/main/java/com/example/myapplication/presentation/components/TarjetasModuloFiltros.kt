@@ -45,6 +45,8 @@ import com.example.myapplication.presentation.designsystem.components.MaverickCo
 import com.example.myapplication.presentation.designsystem.components.DepthDividerHorizontal
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 
 // ==========================================================================================
@@ -197,7 +199,7 @@ fun MoldePremiumCardBase(
             content()
         }
         
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(2.dp))
     }
 }
 
@@ -863,7 +865,7 @@ fun MoldePremiumContextCard(
     modifier: Modifier = Modifier,
     user: com.example.myapplication.core.data.local.entity.UserEntity?,
     activeProfileName: String,
-    activeProfilePhotoUrl: String?,
+    activeProfilePhoto: Any?,
     mainAddress: String,
     localityInfo: String,
     description: String? = null,
@@ -872,6 +874,8 @@ fun MoldePremiumContextCard(
     onLocationClick: () -> Unit,
     onGpsToggle: () -> Unit
 ) {
+    val premiumBlue = Color(0xFF3B82F6)
+
     Row(modifier = modifier.fillMaxWidth().height(64.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         // PERFIL
         Box(
@@ -880,22 +884,41 @@ fun MoldePremiumContextCard(
                 .fillMaxHeight()
                 .shadow(4.dp, RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 2.dp, bottomEnd = 2.dp))
                 .background(
-                    brush = Brush.verticalGradient(listOf(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.95f), MaverickColors.VantaBlack)),
+                    brush = Brush.verticalGradient(listOf(MaverickColors.EliteMainBackground, MaverickColors.EliteSurface)),
                     shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 2.dp, bottomEnd = 2.dp)
                 )
-                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 2.dp, bottomEnd = 2.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp, topEnd = 2.dp, bottomEnd = 2.dp))
                 .clickable { onUserClick() }
                 .padding(horizontal = 8.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.05f)).border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)) {
-                    if (activeProfilePhotoUrl != null) Box(modifier = Modifier.fillMaxSize().background(Color.Gray.copy(alpha = 0.3f)))
-                    else Icon(MaverickIcons.Person, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(18.dp).align(Alignment.Center))
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, Color.White.copy(alpha = 0.1f), CircleShape)
+                ) {
+                    if (activeProfilePhoto != null) {
+                        AsyncImage(
+                            model = activeProfilePhoto,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = MaverickIcons.Person,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp).align(Alignment.Center)
+                        )
+                    }
                 }
                 Column(verticalArrangement = Arrangement.Center) {
-                    Text(text = if (user == null) "PERFIL INVITADO" else "PERFIL ACTIVO", color = Color.White.copy(alpha = 0.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                    Text(text = activeProfileName.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp)
+                    Text(text = if (user == null) "INVITADO" else "PERFIL", color = Color.White.copy(alpha = 0.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                    Text(text = activeProfileName.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 0.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -907,34 +930,35 @@ fun MoldePremiumContextCard(
                 .fillMaxHeight()
                 .shadow(4.dp, RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 10.dp, bottomEnd = 10.dp))
                 .background(
-                    brush = Brush.verticalGradient(listOf(MaverickColors.ROG_Dark_Bg.copy(alpha = 0.95f), MaverickColors.VantaBlack)),
+                    brush = Brush.verticalGradient(listOf(MaverickColors.EliteMainBackground, MaverickColors.EliteSurface)),
                     shape = RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 10.dp, bottomEnd = 10.dp)
                 )
-                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 10.dp, bottomEnd = 10.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(topStart = 2.dp, bottomStart = 2.dp, topEnd = 10.dp, bottomEnd = 10.dp))
                 .clickable { onLocationClick() }
                 .padding(start = 12.dp, end = 6.dp),
             contentAlignment = Alignment.CenterStart
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                    if (!description.isNullOrBlank()) Text(text = description.uppercase(), color = MaverickColors.NeonCyan.copy(alpha = 0.6f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                    if (!description.isNullOrBlank()) Text(text = description.uppercase(), color = premiumBlue.copy(alpha = 0.8f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
                     Text(text = mainAddress.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(text = localityInfo.uppercase(), color = Color.White.copy(alpha = 0.4f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
                 }
                 Box(
                     modifier = Modifier.padding(start = 4.dp).size(44.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.05f))
-                        .border(1.dp, if (isGpsActive) MaverickColors.NeonCyan.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                        .border(1.dp, if (isGpsActive) premiumBlue.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
                         .clickable { onGpsToggle() },
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = if (isGpsActive) MaverickIcons.GpsOn else MaverickIcons.GpsOff, null, tint = if (isGpsActive) MaverickColors.NeonCyan else Color.White.copy(alpha = 0.2f), modifier = Modifier.size(20.dp))
-                        Text(text = if (isGpsActive) "ON" else "OFF", color = if (isGpsActive) MaverickColors.NeonCyan else Color.White.copy(alpha = 0.2f), fontSize = 6.sp, fontWeight = FontWeight.Black)
+                        Icon(imageVector = if (isGpsActive) MaverickIcons.GpsOn else MaverickIcons.GpsOff, null, tint = if (isGpsActive) premiumBlue else Color.White.copy(alpha = 0.2f), modifier = Modifier.size(20.dp))
+                        Text(text = if (isGpsActive) "ON" else "OFF", color = if (isGpsActive) premiumBlue else Color.White.copy(alpha = 0.2f), fontSize = 6.sp, fontWeight = FontWeight.Black)
                     }
                 }
             }
         }
     }
+
 }
 
 // ==========================================================================================
@@ -1000,7 +1024,7 @@ fun TarjetasModuloFiltrosPreview() {
             MoldePremiumContextCard(
                 user = null,
                 activeProfileName = "Invitado",
-                activeProfilePhotoUrl = null,
+                activeProfilePhoto = null,
                 mainAddress = "Calle Falsa 123, Sector B",
                 localityInfo = "Tucumán, CP 4000",
                 description = "Mi Ubicación",
