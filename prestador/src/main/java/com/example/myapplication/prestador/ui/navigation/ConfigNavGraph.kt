@@ -1,6 +1,11 @@
 ﻿package com.example.myapplication.prestador.ui.navigation
 
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -23,7 +28,25 @@ import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 
 fun NavGraphBuilder.configNavGraph(navController: NavController) {
 
-    composable(PrestadorRoutes.ServiceConfig.route) {
+    composable(
+        route = PrestadorRoutes.ServiceConfig.route,
+        enterTransition = {
+            slideInHorizontally(animationSpec = tween(320)) { -it } +
+            fadeIn(animationSpec = tween(320))
+        },
+        exitTransition = {
+            slideOutHorizontally(animationSpec = tween(280)) { -it } +
+            fadeOut(animationSpec = tween(280))
+        },
+        popEnterTransition = {
+            slideInHorizontally(animationSpec = tween(320)) { -it } +
+            fadeIn(animationSpec = tween(320))
+        },
+        popExitTransition = {
+            slideOutHorizontally(animationSpec = tween(280)) { -it } +
+            fadeOut(animationSpec = tween(280))
+        }
+    ) {
         ConfiguracionScreen(
             onBack = { navController.navigateUp() },
             onNavigateToCalendario = { navController.navigate(PrestadorRoutes.CalendarConfig.route) },

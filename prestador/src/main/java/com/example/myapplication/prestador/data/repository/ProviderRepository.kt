@@ -459,8 +459,8 @@ class ProviderRepository @Inject constructor(
                     provincia = addrDoc.getString("provincia") ?: "",
                     pais = addrDoc.getString("pais") ?: "Argentina",
                     codigoPostal = addrDoc.getString("codigoPostal") ?: "",
-                    latitude = addrDoc.getDouble("latitude"),
-                    longitude = addrDoc.getDouble("longitude")
+                    latitude = addrDoc.getDouble("latitude") ?: 0.0,
+                    longitude = addrDoc.getDouble("longitude") ?: 0.0
                 ))
             }
         } else if (ubicacion != null) {
@@ -526,8 +526,8 @@ class ProviderRepository @Inject constructor(
                         "Argentina",
                         codigoPostal = branchAddrMap["codigoPostal"] as?
                                 String ?: "",
-                        latitude = branchAddrMap["latitude"] as? Double,
-                        longitude = branchAddrMap["longitude"] as? Double
+                        latitude = branchAddrMap["latitude"] as? Double ?: 0.0,
+                        longitude = branchAddrMap["longitude"] as? Double ?: 0.0
                     )
                 } else {
 

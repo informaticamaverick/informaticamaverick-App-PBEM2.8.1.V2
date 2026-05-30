@@ -8,6 +8,12 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.BorderStroke
@@ -84,6 +90,7 @@ import com.example.myapplication.prestador.utils.errorCuitMensaje
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import com.example.myapplication.prestador.viewmodel.localidades.LocalidadesViewModel
+import kotlinx.coroutines.selects.select
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -178,6 +185,16 @@ fun ProfileScreen(
     var empresaPendiente by remember { mutableStateOf<CompanyProvider?>(null) }
     var showPriorizarDialog by remember { mutableStateOf(false) }
     var showSavedCheck by remember { mutableStateOf(false) }
+
+    // Auto-navegar al perfil empresa o personal según el modo activo
+    LaunchedEffect(provider?.priorizarEmpresa, provider?.companies) {
+        val p = provider ?: return@LaunchedEffect
+        if (p.priorizarEmpresa && p.companies.isNotEmpty()) {
+            selectedCompanyId = p.companies.first().id
+        } else if (!p.priorizarEmpresa) {
+            selectedCompanyId = null
+        }
+    }
 
 
     fun calcularProgresoPerfil(): Float {
@@ -439,48 +456,40 @@ fun ProfileScreen(
         val selectedCompany = provider.companies.find { it.id == selectedCompanyId }
 
         if (selectedCompany != null) {
-            CompanyDetailView(
-                company = selectedCompany,
-                providerImageUrl = provider.imageUrl,
-                paddingValues = padding,
-                onBack = { selectedCompanyId = null },
-                colors = colors,
-                otherAvatars = provider.companies
-                    .filter { it.id != selectedCompany.id }
-                    .map { c -> Pair(c.photoUrl) { selectedCompanyId = c.id } },
-                onNavigateToCalendarioConfig = onNavigateToCalendarioConfigEntity,
-                onUpdateBranch = { updatedBranch ->
-                    val updatedCompany = selectedCompany.copy(
-                        branches = selectedCompany.branches.map {
-                            if (it.id == updatedBranch.id) updatedBranch else it
-                        }
-                    )
-                    viewModel.addCompany(updatedCompany)
-                },
-                onUpdateAllBranches = { updatedBranches ->
-                    val updatedCompany = selectedCompany.copy(branches = updatedBranches)
-                    viewModel.addCompany(updatedCompany)
-                },
-                onAddBranch = { newBranch, esCasaCentral ->
-                    val updatedBranches = if (esCasaCentral) {
-                        listOf(newBranch) + selectedCompany.branches
-                    } else {
-                        selectedCompany.branches + newBranch
-                    }
-                    viewModel.addCompany(selectedCompany.copy(branches = updatedBranches))
-                },
-                onUpdateCompany = { updatedCompany ->
-                    viewModel.addCompany(updatedCompany)
-                },
-                onDeleteCompany = {
-                    viewModel.removeCompany(selectedCompany.id)
-                    selectedCompanyId = null
-                },
-                onEditCompanyPhoto = { companyPhotoLauncher.launch("image/*") },
-                onEditCompanyBanner = { companyBannerLauncher.launch("image/*") },
-                bloqueada = !provider.priorizarEmpresa,
-                onSettings = onSettings,
-            )
+                CompanyDetailView(
+                    company = selectedCompany,
+                    providerImageUrl = provider.imageUrl,
+                    paddingValues = padding,
+                    onBack = { selectedCompanyId = null },
+                    colors = colors,
+                    otherAvatars = provider.companies
+                        .filter { it.id != selectedCompany.id }
+                        .map { c -> Pair(c.photoUrl) { selectedCompanyId = c.id } },
+                    onNavigateToCalendarioConfig = onNavigateToCalendarioConfigEntity,
+                    onUpdateBranch = { updatedBranch ->
+                        val updatedCompany = selectedCompany.copy(
+                            branches = selectedCompany.branches.map {
+                                if (it.id == updatedBranch.id) updatedBranch else it
+                            }
+                        )
+                        viewModel.addCompany(updatedCompany)
+                    },
+                    onUpdateAllBranches = { updatedBranches ->
+                        val updatedCompany = selectedCompany.copy(branches = updatedBranches)
+                        viewModel.addCompany(updatedCompany)
+                    },
+                    onUpdateCompany = { updatedCompany ->
+                        viewModel.addCompany(updatedCompany)
+                    },
+                    onDeleteCompany = {
+                        viewModel.removeCompany(selectedCompany.id)
+                        selectedCompanyId = null
+                    },
+                    onEditCompanyPhoto = { companyPhotoLauncher.launch("image/*") },
+                    onEditCompanyBanner = { companyBannerLauncher.launch("image/*") },
+                    bloqueada = !provider.priorizarEmpresa,
+                    onSettings = onSettings,
+                )
             return@Scaffold
         }
 

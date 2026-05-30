@@ -79,6 +79,27 @@ fun NavGraphBuilder.dashboardNavGraph(navController: NavController) {
             },
             onNavigateToClientePerfil = { clientId ->
                 navController.navigate(PrestadorRoutes.ClientePerfil.createRoute(clientId))
+            },
+            onNavigateToPresupuestoConfig = {
+                navController.navigate(PrestadorRoutes.PresupuestoConfig.route)
+            },
+            onNavigateToCalendarioConfig = {
+                navController.navigate(PrestadorRoutes.CalendarConfig.route)
+            },
+            onNavigateToApariencia = {
+                navController.navigate(PrestadorRoutes.AparienciaConfig.route)
+            },
+            onNavigateToNotificaciones = {
+                navController.navigate(PrestadorRoutes.NotificacionesConfig.route)
+            },
+            onNavigateToTerminos = {
+                navController.navigate(PrestadorRoutes.LegalTerminos.route)
+            },
+            onNavigateToPrivacidad = {
+                navController.navigate(PrestadorRoutes.LegalPrivacidad.route)
+            },
+            onNavigateToAcercaDe = {
+                navController.navigate(PrestadorRoutes.AcercaDe.route)
             }
         )
     }

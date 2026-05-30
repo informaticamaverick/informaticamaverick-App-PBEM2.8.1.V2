@@ -314,7 +314,7 @@ fun AddressBottomSheet(
                 }
             }
 
-            // GPS: boton de sync rápido
+            // GPS: botón de sync rápido
             OutlinedButton(
                 onClick = {
                     val query = buildString {

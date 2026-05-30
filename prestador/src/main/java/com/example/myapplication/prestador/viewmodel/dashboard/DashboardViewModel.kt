@@ -21,7 +21,8 @@ data class DashboardUiState(
     val gananciasSemanales: Double = 0.0,
     val serviceType: String = "",
     val isLoading: Boolean = true,
-    val imageBase64: String? = null
+    val imageBase64: String? = null,
+    val email: String = ""
 )
 
 @HiltViewModel
@@ -61,6 +62,7 @@ class DashboardViewModel @Inject constructor(
                         serviceType = tipo,
                         nombrePrestador = provider?.name ?: "",
                         imageBase64 = provider?.photoUrl,
+                        email = FirebaseAuth.getInstance().currentUser?.email ?: "",
                         isLoading = false
                     )
                 }

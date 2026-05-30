@@ -109,8 +109,8 @@ class SucursalesViewModel @Inject constructor(
                         localidad = localidad ?: "",
                         provincia = provincia ?: "",
                         codigoPostal = cp ?: "",
-                        latitude = lat,
-                        longitude = lng
+                        latitude = lat ?: 0.0,
+                        longitude = lng ?: 0.0
                     ),
                     hasPhysicalLocation = true
                 )

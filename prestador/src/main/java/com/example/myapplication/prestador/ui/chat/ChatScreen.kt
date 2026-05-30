@@ -112,7 +112,11 @@ fun PrestadorChatScreen(
             else -> onBack()
         }
     }
+    val liveClientPhoto by chatViewModel.liveClientPhotos.collectAsState()
 
+    LaunchedEffect(activeChatUserId) {
+        activeChatUserId?.let { chatViewModel.observeClientPhoto(it)}
+    }
     Crossfade(targetState = activeChatUserId, animationSpec = tween(300)) { chatUserId ->
         if (chatUserId == null) {
             ChatListScreen(
@@ -150,7 +154,7 @@ fun PrestadorChatScreen(
             )
         } else {
             val userName = realConversations.firstOrNull { it.userId == chatUserId }?.userName ?: "Usuario"
-            val userPhotoUrl = realConversations.firstOrNull { it.userId == chatUserId }?.userAvatarUrl
+            val userPhotoUrl = liveClientPhoto[chatUserId] ?: realConversations.firstOrNull { it.userId == chatUserId }?.userAvatarUrl
             ChatConversationScreen(
                 userId = chatUserId,
                 userName = userName,

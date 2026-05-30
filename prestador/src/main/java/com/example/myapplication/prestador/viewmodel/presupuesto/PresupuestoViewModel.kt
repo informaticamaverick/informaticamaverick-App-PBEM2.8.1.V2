@@ -284,6 +284,69 @@ class PresupuestoViewModel @Inject constructor(
         }
     }
 
+    fun deleteArticleFromCatalog(description: String) {
+        viewModelScope.launch {
+            val existing = repository.getPresupuestoById("__catalog_articles__") ?: return@launch
+            val updated = existing.itemsJson.split("|")
+                .filter { it.split(";").getOrNull(1) != description }
+                .joinToString("|")
+            repository.updatePresupuesto(existing.copy(itemsJson = updated))
+        }
+    }
+
+    fun updateArticleInCatalog(oldDescription: String, newItem: BudgetItem) {
+        viewModelScope.launch {
+            val existing = repository.getPresupuestoById("__catalog_articles__") ?: return@launch
+            val newEntry = "${newItem.code};${newItem.description};${newItem.quantity};${newItem.unitPrice};${newItem.taxPercentage};${newItem.discountPercentage}"
+            val updated = existing.itemsJson.split("|").joinToString("|") { s ->
+                if (s.split(";").getOrNull(1) == oldDescription) newEntry else s
+            }
+            repository.updatePresupuesto(existing.copy(itemsJson = updated))
+        }
+    }
+
+    fun deleteServiceFromCatalog(description: String) {
+        viewModelScope.launch {
+            val existing = repository.getPresupuestoById("__catalog_services__") ?: return@launch
+            val updated = existing.serviciosJson.split("|")
+                .filter { it.split(";").getOrNull(1) != description }
+                .joinToString("|")
+            repository.updatePresupuesto(existing.copy(serviciosJson = updated))
+        }
+    }
+
+    fun updateServiceInCatalog(oldDescripcion: String, newItem: BudgetService) {
+        viewModelScope.launch {
+            val existing = repository.getPresupuestoById("__catalog_services__") ?: return@launch
+            val newEntry = "${newItem.code};${newItem.description};${newItem.total}"
+            val updated = existing.serviciosJson.split("|").joinToString("|") { s ->
+                if (s.split(";").getOrNull(1) == oldDescripcion) newEntry else s
+            }
+            repository.updatePresupuesto(existing.copy(serviciosJson = updated))
+        }
+    }
+
+    fun deleteFeeFromCatalog(description: String) {
+        viewModelScope.launch {
+            val existing = repository.getPresupuestoById("__catalog_fees__") ?: return@launch
+            val updated = existing.honorariosJson.split("|")
+                .filter { it.split(";").getOrNull(1) != description }
+                .joinToString("|")
+            repository.updatePresupuesto(existing.copy(honorariosJson = updated))
+        }
+    }
+
+    fun updateFeeInCatalog(oldDescripcion: String, newItem: BudgetProfessionalFee) {
+        viewModelScope.launch {
+            val existing = repository.getPresupuestoById("__catalog_fees__") ?: return@launch
+            val newEntry = "${newItem.code};${newItem.description};${newItem.total}"
+            val updated = existing.honorariosJson.split("|").joinToString("|") { s ->
+                if (s.split(";").getOrNull(1) == oldDescripcion) newEntry else s
+            }
+            repository.updatePresupuesto(existing.copy(honorariosJson = updated))
+        }
+    }
+
     //Multi-select
     private val _selectedIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedIds: StateFlow<Set<String>> = _selectedIds

@@ -36,4 +36,26 @@ class CalendarViewModel @Inject constructor(
             bookedAppointmentDao.updateStatus(id, "COMPLETED")
         }
     }
+
+    fun crearTurno(
+        clienteNombre: String,
+        fecha: String,
+        hora: String,
+        servicio: String,
+        notas: String = ""
+    ) {
+        viewModelScope.launch {
+            val nuevo = BookedAppointmentEntity(
+                id = java.util.UUID.randomUUID().toString(),
+                clientId = "",
+                clientName = clienteNombre,
+                date = fecha,
+                time = hora,
+                service = servicio,
+                notes = notas,
+                status = "CONFIRMED"
+            )
+            bookedAppointmentDao.insertAppointment(nuevo)
+        }
+    }
 }

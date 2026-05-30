@@ -7,7 +7,9 @@ import com.example.myapplication.prestador.data.model.ClienteEmpresa
 import com.example.myapplication.prestador.data.model.ClienteProfile
 import com.example.myapplication.prestador.data.model.ClienteSucursal
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,6 +49,10 @@ class ClienteRepository @Inject constructor(
             firestore.collection("usuarios").document(clientId).get().await()
         if (!doc.exists()) throw Exception("No se encontró el perfil del cliente")
             val data = doc.data ?: emptyMap()
+        //El perfil puede estar anidado a un submapa "perfil" (igual que UserDataMapper)
+        val perfil = data["perfil"] as? Map<*, *> ?: emptyMap<String, Any>()
+        fun getDeepString(key: String): String? = (perfil[key] as? String) ?: (data[key] as? String)
+        fun getDeepBoolean(key: String, default: Boolean = false): Boolean = (perfil[key] as? Boolean) ?: (data[key] as? Boolean) ?: default
 
         val addresses = firestore.collection("usuarios")
 
@@ -116,26 +122,59 @@ class ClienteRepository @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         return ClienteProfile(
             clientId = clientId,
-            name = data["name"] as? String ?: "",
-            lastName = data["lastName"] as? String ?: "",
-            displayName = data["displayName"] as? String ?: "",
-            email = data["email"] as? String ?: "",
-            phoneNumber = data["phoneNumber"] as? String ?: "",
-            bio = data["bio"] as? String ?: "",
-            photoUrl = data["photoUrl"] as? String,
-            bannerImageUrl = data["bannerImageUrl"] as? String,
-            isVerified = data["isVerified"] as? Boolean ?: false,
-            isOnline = data["isOnline"] as? Boolean ?: false,
-            isSubscribed = data["isSubscribed"] as? Boolean ?: false,
-            isPublicProfile = data["isPublicProfile"] as? Boolean ?: false,
-            rating = (data["rating"] as? Number)?.toFloat() ?: 0f,
-            galleryImages = data["galleryImages"] as? List<String> ?:
-            emptyList(),
+            name = getDeepString("name") ?: getDeepString("nombre") ?: "",
+            lastName = getDeepString("lastName") ?: getDeepString("apellido") ?: "",
+            displayName = getDeepString("displayName") ?: "",
+            email = getDeepString("email") ?: "",
+            phoneNumber = getDeepString("phoneNumber") ?: getDeepString("telefono") ?: "",
+            bio = getDeepString("bio") ?: "",
+            photoUrl = getDeepString("photoUrl") ?: getDeepString("imageUrl") ?: getDeepString("photo"),
+            bannerImageUrl = getDeepString("bannerImageUrl") ?: getDeepString("bannerUrl"),
+            isVerified = getDeepBoolean("isVerified"),
+            isOnline = getDeepBoolean("isOnline"),
+            isSubscribed = getDeepBoolean("isSubscribed"),
+            isPublicProfile = getDeepBoolean("isPublicProfile"),
+            rating = (perfil["rating"] as? Number ?: data["rating"] as? Number)?.toFloat() ?: 0f,
+            galleryImages = ((data["galleryImages"] ?: perfil["galleryImages"]) as? List<*>)?.map { it.toString() } ?: emptyList(),
             personalAddresses = addresses,
-            hasCompanyProfile = data["hasCompanyProfile"] as? Boolean ?:
-            false,
+            hasCompanyProfile = getDeepBoolean("hasCompanyProfile"),
             companies = companies,
-            createdAt = (data["createdAt"] as? Number)?.toLong() ?: 0L
+            createdAt = (perfil["createdAt"] as? Number ?: data["createdAt"] as? Number)?.toLong() ?: 0L
         )
+    }
+
+    fun observerClienteProfile(clientId: String): Flow<ClienteProfile?> = callbackFlow {
+        val listener = firestore.collection("usuarios").document(clientId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) {
+                    trySend(null)
+                    return@addSnapshotListener
+                }
+                val data = snapshot.data ?: emptyMap()
+                val perfil = data["perfil"]  as? Map<*, *> ?: emptyMap<String, Any>()
+                fun getDeepString(key: String): String? = (perfil[key] as? String) ?: (data[key] as? String)
+                fun getDeepBoolean(key: String, default: Boolean = false): Boolean = (perfil[key] as? Boolean) ?: (data[key] as? Boolean) ?: default
+                val profile = ClienteProfile(
+                    clientId = clientId,
+                    name = getDeepString("name") ?: getDeepString("nombre") ?: "",
+                    lastName = getDeepString("lastName") ?: getDeepString("apellido") ?: "",
+                    displayName = getDeepString("displayName") ?: "",
+                    email = getDeepString("email") ?: "",
+                    phoneNumber = getDeepString("phoneNumber") ?: getDeepString("telefono") ?: "",
+                    bio = getDeepString("bio") ?: "",
+                    photoUrl = getDeepString("photoUrl") ?: getDeepString("imageUrl") ?: getDeepString("photo"),
+                    bannerImageUrl = getDeepString("bannerImageUrl") ?: getDeepString("bannerUrl"),
+                    isVerified = getDeepBoolean("isVerified"),
+                    isOnline = getDeepBoolean("isOnline"),
+                    isSubscribed = getDeepBoolean("isSubscribed"),
+                    isPublicProfile = getDeepBoolean("isPublicProfile"),
+                    rating = (perfil["rating"] as? Number ?: data["rating"] as? Number)?.toFloat() ?: 0f,
+                    galleryImages = ((data["galleryImages"] ?: perfil["galleryImages"]) as? List<*>)?.map { it.toString() } ?: emptyList(),
+                    hasCompanyProfile = getDeepBoolean("hasCompanyProfile"),
+                    createdAt = (perfil["createdAt"] as? Number ?: data["createdAt"] as? Number)?.toLong() ?: 0L
+                )
+                trySend(profile)
+            }
+        awaitClose { listener.remove() }
     }
 }

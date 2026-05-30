@@ -63,6 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.myapplication.uishared.components.asCoilModel
+import com.example.myapplication.uishared.components.rememberImageModel
 import com.example.myapplication.prestador.R
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
@@ -564,7 +566,15 @@ fun AudioMessageBubbleWA(
             if (mediaPlayer == null && audioUrl != null) {
                 try {
                     mediaPlayer = MediaPlayer().apply {
-                        setDataSource(audioUrl)
+                        //Usar FileDescriptor para rutas locales, Uri para http
+                        if (audioUrl.startsWith("/") || audioUrl.startsWith("file://")) {
+                            val file = java.io.File(audioUrl.removePrefix("file://"))
+                            val fis = java.io.FileInputStream(file)
+                            setDataSource(fis.fd)
+                            fis.close()
+                        } else {
+                            setDataSource(audioUrl)
+                        }
                         prepare()
                         audioDuration = this.duration
                         setOnCompletionListener { isPlaying = false; currentPosition = 0 }
@@ -598,7 +608,7 @@ fun AudioMessageBubbleWA(
                 ) {
                     if (senderAvatarUrl != null) {
                         AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current).data(senderAvatarUrl).crossfade(true).build(),
+                            model = ImageRequest.Builder(LocalContext.current).data(senderAvatarUrl.asCoilModel()).crossfade(true).build(),
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.CircleShape),
                             contentScale = ContentScale.Crop

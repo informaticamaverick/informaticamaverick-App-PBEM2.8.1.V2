@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.myapplication.uishared.components.rememberImageModel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -31,6 +32,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.ui.draw.rotate
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import com.example.myapplication.prestador.data.model.ClienteDireccion
 import com.example.myapplication.prestador.data.model.ClienteEmpresa
 import com.example.myapplication.prestador.data.model.ClienteProfile
@@ -48,6 +52,13 @@ fun ClientePerfilScreen(
 ) {
     val colors = getPrestadorColors()
     val uiState by viewModel.uiState.collectAsState()
+    val refreshTick by viewModel.refreshTick.collectAsState()
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullToRefreshState = rememberPullToRefreshState()
+
+    LaunchedEffect(refreshTick) {
+        if (refreshTick > 0) isRefreshing = false
+    }
 
     Scaffold(
         topBar = {
@@ -110,10 +121,26 @@ fun ClientePerfilScreen(
                 }
             }
             else -> {
-                ClientePerfilContent(
-                    uiState = uiState,
-                    paddingValues = paddingValues
-                )
+                PullToRefreshBox(
+                    state = pullToRefreshState,
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        isRefreshing = true
+                        viewModel.refreshProfile()
+                    },
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = pullToRefreshState,
+                            isRefreshing = isRefreshing,
+                            color = colors.primaryOrange
+                        )
+                    }
+                ) {
+                    ClientePerfilContent(
+                        uiState = uiState,
+                        paddingValues = paddingValues
+                    )
+                }
             }
         }
     }
@@ -171,7 +198,7 @@ private fun ClienteHeaderSection(profile: ClienteProfile) {
         ) {
             if (profile.bannerImageUrl != null) {
                 AsyncImage(
-                    model = profile.bannerImageUrl,
+                    model = rememberImageModel(profile.bannerImageUrl),
                     contentDescription = "Banner",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -191,7 +218,7 @@ private fun ClienteHeaderSection(profile: ClienteProfile) {
                 ) {
                     if (profile.photoUrl != null) {
                         AsyncImage(
-                            model = profile.photoUrl,
+                            model = rememberImageModel(profile.photoUrl),
                             contentDescription = "Foto de perfil",
                             modifier = Modifier
                                 .fillMaxSize()

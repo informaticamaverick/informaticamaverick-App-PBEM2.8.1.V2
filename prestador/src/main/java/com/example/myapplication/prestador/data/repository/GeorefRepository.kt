@@ -2,7 +2,7 @@ package com.example.myapplication.prestador.data.repository
 
 import android.util.Log
 import com.example.myapplication.prestador.data.remote.GeorefApiService
-import com.example.myapplication.prestador.ui.profile.Localidad
+import com.example.myapplication.prestador.data.model.Localidad
 import javax.inject.Inject
 import javax.inject.Singleton
 

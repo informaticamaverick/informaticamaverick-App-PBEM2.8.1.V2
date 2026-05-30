@@ -48,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import coil.compose.AsyncImage
+import com.example.myapplication.uishared.components.rememberImageModel
 import com.example.myapplication.prestador.data.ChatData
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
@@ -718,7 +719,7 @@ fun ChatListItem(
                 ) {
                     if (conversation.userAvatarUrl != null) {
                         AsyncImage(
-                            model = conversation.userAvatarUrl,
+                            model = rememberImageModel(conversation.userAvatarUrl),
                             contentDescription = "Foto de ${conversation.userName}",
                             modifier = Modifier
                                 .fillMaxSize()

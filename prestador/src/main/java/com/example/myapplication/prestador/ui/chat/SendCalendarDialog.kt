@@ -120,12 +120,12 @@ fun SendCalendarDialog(
             (mostrarBranchesEmpresa || (tieneEmpresa && !hasPhysicalLocation))
 
     val filteredSchedules = remember(schedules, companySchedules, appointmentType, usarHorariosEmpresa) {
-        when {
-            // Turno en local de empresa: mostrar TODOS los horarios de la empresa
-            // (sin filtrar por scheduleType, ya que cualquier horario configurado es su horario de atención)
+        val raw = when {
             usarHorariosEmpresa -> companySchedules
             else -> schedules.filter { it.scheduleType == appointmentType }
         }
+        // Evitar duplicados: un registro por día de semana
+        raw.distinctBy { it.dayOfWeek }
     }
     val blockedSet = remember(blockedDatesActive) {
         blockedDatesActive.map { it.date }.toSet()

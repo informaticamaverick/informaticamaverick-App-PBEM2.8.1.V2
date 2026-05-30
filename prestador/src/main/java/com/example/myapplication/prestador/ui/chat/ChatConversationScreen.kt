@@ -28,6 +28,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
+import com.example.myapplication.uishared.components.rememberImageModel
+import com.example.myapplication.uishared.components.rememberImageModel
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
-//import com.example.myapplication.prestador.data.PPrestadorProfileFalso
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.presupuesto.BudgetItem
 import com.example.myapplication.prestador.ui.presupuesto.BudgetMiscExpense
@@ -63,6 +64,7 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -586,7 +588,7 @@ fun ChatConversationScreen(
                         ) {
                             if (userPhotoUrl != null) {
                                 AsyncImage(
-                                    model = userPhotoUrl,
+                                    model = rememberImageModel(userPhotoUrl),
                                     contentDescription = "Foto de $userName",
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -717,6 +719,7 @@ fun ChatConversationScreen(
                             MessageBubble(
                                 message = message,
                                 isFromCurrentUser = message.isFromCurrentUser,
+                                senderAvatarUrl = if (!message.isFromCurrentUser) userPhotoUrl else null,
                                 clientName = userName,
                                 onVerPresupuesto = if (message.type == Message.MessageType.BUDGET) {
                                     { presupuestoMsgToView = message }

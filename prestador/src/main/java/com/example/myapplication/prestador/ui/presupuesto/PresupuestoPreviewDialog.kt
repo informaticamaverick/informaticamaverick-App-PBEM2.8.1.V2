@@ -65,6 +65,7 @@ fun BudgetPreviewPDFDialog(
     onEnviar: () -> Unit,
     onEnviarBudget: (() -> Unit)? = null,
     onCapturePng: ((android.graphics.Bitmap) -> Unit)? = null,
+    onCompartirPDF: ((android.graphics.Bitmap) -> Unit)? = null,
     onEnviarBudgetConImagen: ((String) -> Unit)? = null,
     showSendButton: Boolean = true,
     showTaxDetail: Boolean = false,
@@ -311,6 +312,25 @@ fun BudgetPreviewPDFDialog(
                         ) {
                             Icon(Icons.Default.Refresh, "Resetear", tint = Color.White)
                         }
+                    }
+
+                    //Botón compartir PDF
+                    if (onCompartirPDF != null) {
+                        OutlinedButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val bitmap = captureLayer.toImageBitmap().asAndroidBitmap()
+                                    onCompartirPDF(bitmap)
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF6B35))
+                        ) {
+                            Icon(Icons.Default.Share, null, tint = Color(0XFFFF6B65), modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Compartir PDF", color = Color(0xFFFF6B35), fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.width(8.dp))
                     }
 
                     // Botón enviar

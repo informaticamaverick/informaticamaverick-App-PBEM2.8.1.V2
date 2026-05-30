@@ -3,7 +3,7 @@ package com.example.myapplication.prestador.viewmodel.localidades
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.prestador.data.repository.GeorefRepository
-import com.example.myapplication.prestador.ui.profile.Localidad
+import com.example.myapplication.prestador.data.model.Localidad
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

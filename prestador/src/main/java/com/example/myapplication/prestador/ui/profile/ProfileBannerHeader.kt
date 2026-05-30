@@ -1,5 +1,12 @@
 package com.example.myapplication.prestador.ui.profile
 
+import android.R.attr.label
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -214,14 +221,25 @@ internal fun ProfileBannerHeaderView(
                     .padding(end = 16.dp, bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy((-12).dp)
             ) {
-                companyAvatars.forEach { (avatarUrl, onClick) ->
+                companyAvatars.forEach { (avatarUrl, onClicck) ->
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val isPressed by interactionSource.collectIsPressedAsState()
+                    val scale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.82F else 1f,
+                        animationSpec = spring(dampingRatio = 0.4f, stiffness = 500f),
+                        label = "avatarScale"
+                    )
                     Box(
                         modifier = Modifier
+                            .scale(scale)
                             .size(52.dp)
                             .clip(CircleShape)
                             .border(2.dp, Color.White.copy(alpha = 0.8f), CircleShape)
                             .background(colors.surfaceColor)
-                            .clickable { onClick() }
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null
+                            ) { onClicck() }
                     ) {
                         ProfilePhoto(imageUrl = avatarUrl, colors = colors, isCompany = true)
                     }

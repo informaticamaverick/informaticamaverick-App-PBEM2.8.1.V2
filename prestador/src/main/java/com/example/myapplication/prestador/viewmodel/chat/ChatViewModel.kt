@@ -32,6 +32,7 @@ enum class InboxType { PERSONAL, EMPRESA }
 class ChatViewModel @Inject constructor(
     private val repository: ChatRepository,
     private val providerRepository: ProviderRepository,
+    private val clienteRepository: com.example.myapplication.prestador.data.repository.ClienteRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
@@ -143,6 +144,22 @@ class ChatViewModel @Inject constructor(
     private val _isClientTyping = MutableStateFlow(false)
     val isClientTyping: StateFlow<Boolean> = _isClientTyping.asStateFlow()
     private var typingObserveJob: kotlinx.coroutines.Job? = null
+    //Fotos clientes en tiempo real (userId -> PhotoUrl)
+    private val _liveClientPhotos = MutableStateFlow<Map<String, String?>>(emptyMap())
+    val liveClientPhotos: StateFlow<Map<String, String?>> = _liveClientPhotos.asStateFlow()
+
+    private val clientPhotoJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
+
+    fun observeClientPhoto(clientId: String) {
+        if (clientPhotoJobs.containsKey(clientId)) return
+        clientPhotoJobs[clientId] = viewModelScope.launch {
+            clienteRepository.observerClienteProfile(clientId).collect { profile ->
+                val photo = profile?.photoUrl
+                _liveClientPhotos.value = _liveClientPhotos.value + (clientId to photo)
+                repository.updateClientAvatarUrl(clientId, photo)
+            }
+        }
+    }
 
     fun observeClientTyping(chatId: String, clientId: String) {
         android.util.Log.d(
@@ -770,6 +787,8 @@ class ChatViewModel @Inject constructor(
         repository.stopListening()
         repository.stopGlobalListening()
         repository.stopGlobalListeningForCompany()
+        clientPhotoJobs.values.forEach { it.cancel() }
+        clientPhotoJobs.clear()
     }
 
     fun deleteConversations(userIds: Set<String>) {

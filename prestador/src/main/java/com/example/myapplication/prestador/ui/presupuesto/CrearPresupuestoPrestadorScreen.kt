@@ -63,6 +63,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.zIndex
+import android.graphics.Bitmap
+import android.graphics.pdf.PdfDocument
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileOutputStream
 
 enum class SheetType { Article, Service, ProfessionalFee, Misc, Tax, Attachment, Sections, ClientPicker }
 
@@ -1112,6 +1118,38 @@ fun CrearPresupuestoPrestadorScreen(
                             )
                         }
                         onBack()
+                    },
+                    onCompartirPDF = { bitmap ->
+                        try {
+                            //Convertir bitmap a PDF
+                            val pdfDoc = PdfDocument()
+                            val pageInfo = PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create()
+                            val page = pdfDoc.startPage(pageInfo)
+                            page.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                            pdfDoc.finishPage(page)
+
+                            //Guardar en caché
+                            val dir = File(context.cacheDir, "presupuestos").also { it.mkdirs() }
+                            val file = File(dir, "presupuesto_${System.currentTimeMillis()}.pdf")
+                            FileOutputStream(file).use { pdfDoc.writeTo(it) }
+                            pdfDoc.close()
+
+                            //Compartir
+                            val uri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                file
+                            )
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/pdf"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                putExtra(Intent.EXTRA_SUBJECT, "Presupuesto")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Compartir presupuesto"))
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     },
                     clientName = clienteNombre,
                     clientAddress = clienteDireccion.ifBlank { null },

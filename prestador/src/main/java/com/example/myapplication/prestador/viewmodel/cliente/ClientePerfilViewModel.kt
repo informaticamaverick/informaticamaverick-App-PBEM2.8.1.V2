@@ -8,9 +8,9 @@ import com.example.myapplication.prestador.data.repository.ClienteRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.flow.asStateFlow
 
 data class ClientePerfilUiState(
     val isLoading: Boolean = true,
@@ -24,29 +24,44 @@ class ClientePerfilViewModel @Inject constructor(
     private val clienteRepository: ClienteRepository
 ) : ViewModel() {
 
-    private val clientId: String =
-        checkNotNull(savedStateHandle["clientId"])
+    private val clientId: String = checkNotNull(savedStateHandle["clientId"])
 
     private val _uiState = MutableStateFlow(ClientePerfilUiState())
     val uiState: StateFlow<ClientePerfilUiState> = _uiState.asStateFlow()
 
+    private val _refreshTick = MutableStateFlow(0)
+    val refreshTick: StateFlow<Int> = _refreshTick.asStateFlow()
+
     init {
-        loadClienteProfile()
+        observeClienteProfile()
     }
 
-    private fun loadClienteProfile() {
+    private fun observeClienteProfile() {
         viewModelScope.launch {
             try {
-                val profile =
-                    clienteRepository.fetchClienteProfile(clientId)
-                _uiState.value = _uiState.value.copy(isLoading = false,
-                    profile = profile)
+                clienteRepository.observerClienteProfile(clientId).collect {
+                    profile ->
+                    if (profile != null) {
+                        _uiState.value = _uiState.value.copy(isLoading = false, profile = profile)
+                    } else {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = "No se encontró el perfil del cliente"
+                        )
+                    }
+                }
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = "Error al cargar el perfil: ${e.message}"
                 )
             }
+        }
+    }
+    fun refreshProfile() {
+        viewModelScope.launch {
+            observeClienteProfile()
+            _refreshTick.value++
         }
     }
 }

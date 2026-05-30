@@ -57,10 +57,16 @@ fun PrestadorDashboardScreen(
     onNavigateToPromotion: () -> Unit = {},
     onNavigateToPromotionList: () -> Unit = {},
     onNavigateToThemeDemo: () -> Unit = {},
-  //  fastSimulationViewModel: com.example.myapplication.prestador.viewmodel.oportunidades.FastSimulationViewModel = hiltViewModel(),
     notificacionesViewModel: NotificacionesViewModel = hiltViewModel(),
     chatViewModel: ChatViewModel = hiltViewModel(),
     onNavigateToClientePerfil: (clientId: String) -> Unit = {},
+    onNavigateToPresupuestoConfig: () -> Unit = {},
+    onNavigateToCalendarioConfig: () -> Unit = {},
+    onNavigateToApariencia: () -> Unit = {},
+    onNavigateToNotificaciones: () -> Unit = {},
+    onNavigateToTerminos: () -> Unit = {},
+    onNavigateToPrivacidad: () -> Unit = {},
+    onNavigateToAcercaDe: () -> Unit = {},
 ) {
     val colors = getPrestadorColors()
     var selectedTab by rememberSaveable { mutableStateOf(2) }
@@ -77,12 +83,9 @@ fun PrestadorDashboardScreen(
 
     Scaffold(
         floatingActionButton = {
-            if (!isInConversation && selectedTab in listOf(1, 2)) {
+            if (!isInConversation && selectedTab == 1) {
                 FloatingActionButton(
-                    onClick = {
-                        if (selectedTab == 2) onNavigateToPromotion()
-                        else if (selectedTab == 1) triggerCalendarCreate = true
-                    },
+                    onClick = { triggerCalendarCreate = true },
                     containerColor = colors.primaryOrange,
                     contentColor = Color.White,
                     elevation = FloatingActionButtonDefaults.elevation(
@@ -91,20 +94,11 @@ fun PrestadorDashboardScreen(
                     ),
                     modifier = Modifier.padding(bottom = 16.dp)
                 ) {
-                    AnimatedContent(
-                        targetState = selectedTab,
-                        transitionSpec = {
-                            (scaleIn(animationSpec = tween(200)) + fadeIn(animationSpec = tween(200))) togetherWith
-                            (scaleOut(animationSpec = tween(200)) + fadeOut(animationSpec = tween(200)))
-                        },
-                        label = "fab_icon"
-                    ) { tab ->
-                        Icon(
-                            imageVector = if (tab == 2) Icons.Filled.Campaign else Icons.Filled.Add,
-                            contentDescription = if (tab == 2) "Crear promoción" else "Nueva cita",
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "Nueva cita",
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
             }
         },
@@ -186,7 +180,14 @@ fun PrestadorDashboardScreen(
                         onNavigateToChat = { clientId ->
                             targetChatUserId = clientId
                             selectedTab = 3
-                        }
+                        },
+                        onNavigateToPresupuestoConfig = onNavigateToPresupuestoConfig,
+                        onNavigateToCalendarioConfig = onNavigateToCalendarioConfig,
+                        onNavigateToApariencia = onNavigateToApariencia,
+                        onNavigateToNotificaciones = onNavigateToNotificaciones,
+                        onNavigateToTerminos = onNavigateToTerminos,
+                        onNavigateToPrivacidad = onNavigateToPrivacidad,
+                        onNavigateToAcercaDe = onNavigateToAcercaDe,
                     )
                     3 -> {
                         println("🔥 DASHBOARD: Renderizando tab de chat")

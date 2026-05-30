@@ -814,10 +814,12 @@ class ChatRepository @Inject constructor(
     private suspend fun resolveParticipantData(userId: String, fallbackAvatarUrl: String?): Pair<String, String?>? {
 
         fun extractName(doc: com.google.firebase.firestore.DocumentSnapshot): String {
-            val name = doc.getString("name") ?: ""
-            val lastName = doc.getString("lastName") ?: ""
-            val displayNameField = doc.getString("displayName") ?: ""
-            val emailField = doc.getString("email") ?: ""
+            val perfil = doc.get("perfil") as? Map<*, *> ?: emptyMap<String, Any>()
+            fun deep(key: String) = (perfil[key] as? String)?.takeIf { it.isNotBlank() } ?: doc.getString(key) ?: ""
+            val name = deep("name")
+            val lastName = deep("lastName")
+            val displayNameField = deep("displayName")
+            val emailField = deep("email")
             return when {
                 name.isNotBlank() || lastName.isNotBlank() -> "$name $lastName".trim()
                 displayNameField.isNotBlank() -> displayNameField
@@ -826,13 +828,22 @@ class ChatRepository @Inject constructor(
             }
         }
 
+        fun extractPhoto(doc: com.google.firebase.firestore.DocumentSnapshot, fallback: String?): String? {
+            val perfil = doc.get("perfil") as? Map<*, *> ?: emptyMap<String, Any>()
+            return (perfil["photoUrl"] as? String)?.takeIf { it.isNotBlank() }
+                ?: (perfil["imageUrl"] as? String)?.takeIf { it.isNotBlank() }
+                ?: doc.getString("photoUrl")?.takeIf { it.isNotBlank() }
+                ?: doc.getString("imageUrl")?.takeIf { it.isNotBlank() }
+                ?: fallback
+        }
+
         // Intentar en colección de clientes
         try {
             val userDoc = firestore.collection("usuarios").document(userId).get().await()
             if (userDoc.exists()) {
                 // Documento encontrado → el usuario existe, usar lo que haya (o "Cliente" si todo vacío)
                 val name = extractName(userDoc).ifBlank { "Cliente" }
-                val photo = userDoc.getString("photoUrl") ?: fallbackAvatarUrl
+                val photo = extractPhoto(userDoc, fallbackAvatarUrl)
                 Log.d("ChatRepo", "✅ usuarios/$userId → nombre='$name'")
                 return Pair(name, photo)
             }
@@ -845,7 +856,7 @@ class ChatRepository @Inject constructor(
             val provDoc = firestore.collection("providers").document(userId).get().await()
             if (provDoc.exists()) {
                 val name = extractName(provDoc).ifBlank { "Cliente" }
-                val photo = provDoc.getString("photoUrl") ?: fallbackAvatarUrl
+                val photo = extractPhoto(provDoc, fallbackAvatarUrl)
                 Log.d("ChatRepo", "✅ providers/$userId → nombre='$name'")
                 return Pair(name, photo)
             }
@@ -883,7 +894,6 @@ class ChatRepository @Inject constructor(
     }
 
     // ── Sincronizar conversaciones desde Firestore ─────────────────────────────
-    private val userDataCache = mutableMapOf<String, Pair<String, String?>>()
     // IDs ya detectados como fantasmas — evita que coroutines concurrentes los procesen múltiples veces
     private val ghostsBeingDeleted = Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<String, Boolean>())
 
@@ -896,6 +906,10 @@ class ChatRepository @Inject constructor(
                     return@addSnapshotListener
                 }
                 scope.launch {
+                    // Cache local por lote: evita llamadas duplicadas para el mismo usuario
+                    // dentro del mismo snapshot, pero no persiste entre snapshots para que
+                    // la foto de perfil siempre sea la más reciente.
+                    val batchCache = mutableMapOf<String, Pair<String, String?>>()
                     for (doc in snapshot.documents) {
                         @Suppress("UNCHECKED_CAST")
                         val participants = doc.get("participants") as? List<String> ?: continue
@@ -913,7 +927,7 @@ class ChatRepository @Inject constructor(
                         var displayName = storedName.takeIf { !nameSeemsBad } ?: otherUserId
                         var freshAvatarUrl: String? = existing?.userAvatarUrl
 
-                        if (existing == null || !userDataCache.containsKey(otherUserId) || nameSeemsBad) {
+                        if (existing == null || !batchCache.containsKey(otherUserId) || nameSeemsBad) {
                             val resolved = resolveParticipantData(otherUserId, freshAvatarUrl)
                             if (resolved == null) {
                                 // Si ya está siendo eliminado por otra coroutine, saltar
@@ -931,10 +945,10 @@ class ChatRepository @Inject constructor(
                             }
                             displayName = resolved.first
                             freshAvatarUrl = resolved.second
-                            userDataCache[otherUserId] = resolved
+                            batchCache[otherUserId] = resolved
                         } else {
-                            // Usar cache si ya lo pedimos en esta sesión y el nombre era válido
-                            userDataCache[otherUserId]?.let {
+                            // Reusar datos del lote actual (mismo snapshot)
+                            batchCache[otherUserId]?.let {
                                 displayName = it.first
                                 freshAvatarUrl = it.second
                             }
@@ -984,6 +998,7 @@ class ChatRepository @Inject constructor(
                     return@addSnapshotListener
                 }
                 scope.launch {
+                    val batchCache = mutableMapOf<String, Pair<String, String?>>()
                     for (doc in snapshot.documents) {
                         @Suppress("UNCHECKED_CAST")
                         val participants = doc.get("participants") as? List<String> ?: continue
@@ -997,7 +1012,7 @@ class ChatRepository @Inject constructor(
                                 || storedName.matches(Regex("^[A-Za-z0-9_-]{20,}$"))
                         var displayName = storedName.takeIf { !nameSeemsBad } ?: otherUserId
                         var freshAvatarUrl: String? = existing?.userAvatarUrl
-                        if (existing == null || !userDataCache.containsKey(otherUserId) || nameSeemsBad) {
+                        if (existing == null || !batchCache.containsKey(otherUserId) || nameSeemsBad) {
                             val resolved = resolveParticipantData(otherUserId, freshAvatarUrl)
                             if (resolved == null) {
                                 Log.w("ChatRepo", "Cliente $otherUserId no encontrado. Saltando.")
@@ -1005,9 +1020,9 @@ class ChatRepository @Inject constructor(
                             }
                             displayName = resolved.first
                             freshAvatarUrl = resolved.second
-                            userDataCache[otherUserId] = resolved
+                            batchCache[otherUserId] = resolved
                         } else {
-                            userDataCache[otherUserId]?.let {
+                            batchCache[otherUserId]?.let {
                                 displayName = it.first
                                 freshAvatarUrl = it.second
                             }
@@ -1056,6 +1071,10 @@ class ChatRepository @Inject constructor(
 
     fun getTotalUnreadCount(): Flow<Int> =
         conversationDao.getTotalUnreadCountFlow()
+
+    suspend fun updateClientAvatarUrl(userId: String, avatarUrl: String?) {
+        conversationDao.updateUserAvatarUrl(userId, avatarUrl)
+    }
 
     suspend fun saveMessage(message: MessageEntity) {
         messageDao.insertMessage(message)
@@ -1731,6 +1750,10 @@ class ChatRepository @Inject constructor(
         } catch (e: Exception) {
             Log.e("ChatRepository", "Error al bloquear slot: ${e.message}")
         }
+    }
+
+    suspend fun updateClientAvatar(userId: String, avatarUrl: String?) {
+        conversationDao.updateUserAvatarUrl(userId, avatarUrl)
     }
 
 

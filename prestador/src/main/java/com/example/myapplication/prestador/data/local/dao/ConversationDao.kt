@@ -158,4 +158,7 @@ interface ConversationDao {
 
     @Query("SELECT SUM(unreadCount) FROM conversations")
     fun getTotalUnreadCountFlow(): Flow<Int>
+
+    @Query("UPDATE conversations SET userAvatarUrl = :avatarUrl WHERE userId = :userId")
+    suspend fun updateUserAvatarUrl(userId: String, avatarUrl: String?)
 }

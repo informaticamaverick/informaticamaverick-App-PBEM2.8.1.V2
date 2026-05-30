@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.ui.theme.*
@@ -55,23 +56,83 @@ fun PrestadorRegisterScreen(
     isGoogleUser: Boolean = false,
     viewModel: PrestadorRegisterViewModel = hiltViewModel()
 ) {
+    val registerState by viewModel.registerState.collectAsState()
+    val servicios by viewModel.servicios.collectAsState()
+    val loadingServicios by viewModel.loadingServicios.collectAsState()
+    var showPriorizarDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(registerState) {
+        when (registerState) {
+            is RegisterState.Success -> {
+                showPriorizarDialog = true
+            }
+            else -> {}
+        }
+    }
+
+    PrestadorRegisterScreenContent(
+        isLoading = registerState is RegisterState.Loading,
+        errorMessage = (registerState as? RegisterState.Error)?.message,
+        showPriorizarDialog = showPriorizarDialog,
+        servicios = servicios,
+        loadingServicios = loadingServicios,
+        isGoogleUser = isGoogleUser,
+        onRegisterClick = { email, password, nombre, apellido, categoria, mensaje, serviceType, googleUser ->
+            viewModel.register(
+                email = email,
+                password = password,
+                nombre = nombre,
+                apellido = apellido,
+                categoria = categoria,
+                mensaje = mensaje,
+                serviceType = serviceType,
+                isGoogleUser = googleUser
+            )
+        },
+        onBackToLogin = onBackToLogin,
+        onDismissPriorizarDialog = {
+            showPriorizarDialog = false
+            onRegisterSuccess()
+        },
+        onConfirmEmpresaPrincipal = { priorizarEmpresa ->
+            showPriorizarDialog = false
+            if (priorizarEmpresa) {
+                viewModel.setPriorizarEmpresa(true)
+            }
+            onRegisterSuccess()
+        },
+        onResetError = { viewModel.resetState() }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun PrestadorRegisterScreenContent(
+    isLoading: Boolean,
+    errorMessage: String?,
+    showPriorizarDialog: Boolean,
+    servicios: List<ServicioFirebase>,
+    loadingServicios: Boolean,
+    isGoogleUser: Boolean,
+    onRegisterClick: (email: String, password: String, nombre: String, apellido: String, categoria: String, mensaje: String, serviceType: String, isGoogleUser: Boolean) -> Unit,
+    onBackToLogin: () -> Unit,
+    onDismissPriorizarDialog: () -> Unit,
+    onConfirmEmpresaPrincipal: (Boolean) -> Unit,
+    onResetError: () -> Unit,
+) {
     val colors = getPrestadorColors()
 
-    // Estados del formulario
     var nombre by remember { mutableStateOf("") }
     var apellido by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
 
-
-    // Pre-rellenar desde Google cuando el composable arranca
     LaunchedEffect(isGoogleUser) {
         if (isGoogleUser) {
             val user = FirebaseAuth.getInstance().currentUser
             val displayName = user?.displayName ?: ""
             nombre = displayName.substringBefore(" ", "").trim()
             email = user?.email ?: ""
-            //Foto de perfil
             val googlePhoto = user?.photoUrl?.toString()
             if (!googlePhoto.isNullOrBlank()) {
                 profileImageUri = android.net.Uri.parse(googlePhoto)
@@ -79,8 +140,7 @@ fun PrestadorRegisterScreen(
         }
     }
 
-    // Email de la cuenta de Google (solo para mostrar en UI)
-    val googleEmail = remember {
+    val googleEmail = remember(isGoogleUser) {
         if (isGoogleUser) FirebaseAuth.getInstance().currentUser?.email ?: "" else ""
     }
     var password by remember { mutableStateOf("") }
@@ -91,11 +151,6 @@ fun PrestadorRegisterScreen(
     var expandedTipoServicio by remember { mutableStateOf(false) }
     var expandedCategoria by remember { mutableStateOf(false) }
 
-
-
-
-
-    // Variables requeridas por componentes reusables (no usadas en registro inicial)
     var serviciosSeleccionados by remember { mutableStateOf(listOf<String>()) }
     var searchQuery by remember { mutableStateOf("") }
     var showServiceModal by remember { mutableStateOf(false) }
@@ -111,48 +166,13 @@ fun PrestadorRegisterScreen(
     var sucursales by remember { mutableStateOf(listOf(Sucursal("", ""))) }
     var showMatriculaTooltip by remember { mutableStateOf(false) }
 
-    // Sección expandida (acordeón: solo una a la vez)
-    // Google users: arranca en "personal" (no necesitan datos de acceso)
     var expandedSection by remember { mutableStateOf<String?>(if (isGoogleUser) "personal" else "acceso") }
 
-    val registerState by viewModel.registerState.collectAsState()
-    val servicios by viewModel.servicios.collectAsState()
-    val loadingServicios by viewModel.loadingServicios.collectAsState()
-    val serviciosAgrupados = remember (servicios) { servicios.groupBy { it.superCategory }}
+    val serviciosAgrupados = remember(servicios) { servicios.groupBy { it.superCategory } }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> profileImageUri = uri }
-
-    var showPriorizarDialog by remember { mutableStateOf(false) }
-
-    LaunchedEffect(registerState) {
-        when (registerState) {
-            is RegisterState.Success -> {
-                showPriorizarDialog = true
-            }
-            else -> {}
-        }
-    }
-    if (showPriorizarDialog) {
-        AlertDialog(
-            onDismissRequest = { onRegisterSuccess()},
-            title = { Text("¿Perfil principal?")},
-            text = { Text("¿Querés que tu empresa aparezca como perfil principal cuando los usuarios te busquen?")},
-            confirmButton = {
-                TextButton(onClick = { showPriorizarDialog = false
-                viewModel.setPriorizarEmpresa(true)
-                onRegisterSuccess()
-                }) { Text("Sí, mi empresa") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showPriorizarDialog = false
-                    onRegisterSuccess()
-                }) { Text("No, yo como prestador")}
-            }
-        )
-    }
 
     Scaffold(
         containerColor = colors.backgroundColor,
@@ -163,15 +183,15 @@ fun PrestadorRegisterScreen(
             ) {
                 Button(
                     onClick = {
-                        viewModel.register(
-                            email = email,
-                            password = password,
-                            nombre = nombre,
-                            apellido = apellido,
-                            categoria = categoriaSeleccionada,
-                            mensaje = mensaje,
-                            serviceType = serviceType.name,
-                            isGoogleUser = isGoogleUser
+                        onRegisterClick(
+                            email,
+                            password,
+                            nombre,
+                            apellido,
+                            categoriaSeleccionada,
+                            mensaje,
+                            serviceType.name,
+                            isGoogleUser
                         )
                     },
                     modifier = Modifier
@@ -181,7 +201,7 @@ fun PrestadorRegisterScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    if (registerState is RegisterState.Loading) {
+                    if (isLoading) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                     } else {
                         Text("Crear cuenta", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -196,7 +216,6 @@ fun PrestadorRegisterScreen(
                 .padding(padding),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            // ── HERO HEADER ──────────────────────────────────────────────
             item {
                 Box(
                     modifier = Modifier
@@ -215,7 +234,6 @@ fun PrestadorRegisterScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Barra superior con botón volver
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -240,7 +258,6 @@ fun PrestadorRegisterScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Foto de perfil circular
                         Box(
                             modifier = Modifier
                                 .size(110.dp)
@@ -271,7 +288,6 @@ fun PrestadorRegisterScreen(
                                     )
                                 }
                             }
-                            // Botón cámara
                             Surface(
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
@@ -310,7 +326,6 @@ fun PrestadorRegisterScreen(
 
             item { Spacer(modifier = Modifier.height(8.dp)) }
 
-            // ── SECCIÓN: Datos de acceso (solo para registro manual, no Google) ──
             if (!isGoogleUser) {
                 item {
                     RegisterSectionCard(
@@ -346,7 +361,6 @@ fun PrestadorRegisterScreen(
                 item { Spacer(modifier = Modifier.height(12.dp)) }
             }
 
-            // ── SECCIÓN: Información personal ─────────────────────────────
             item {
                 RegisterSectionCard(
                     title = "Información personal",
@@ -358,7 +372,6 @@ fun PrestadorRegisterScreen(
                         expandedSection = if (expandedSection == "personal") null else "personal"
                     }
                 ) {
-                    // Banner cuenta de Google (solo si vino de Google)
                     if (isGoogleUser && googleEmail.isNotEmpty()) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -395,7 +408,6 @@ fun PrestadorRegisterScreen(
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                     }
-                    // Banner informativo
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
@@ -436,7 +448,6 @@ fun PrestadorRegisterScreen(
 
             item { Spacer(modifier = Modifier.height(12.dp)) }
 
-            // ── SECCIÓN: Tu servicio ───────────────────────────────────────
             item {
                 RegisterSectionCard(
                     title = "Tu servicio",
@@ -448,7 +459,6 @@ fun PrestadorRegisterScreen(
                         expandedSection = if (expandedSection == "servicio") null else "servicio"
                     }
                 ) {
-                    // Dropdown Tipo de servicio
                     ExposedDropdownMenuBox(
                         expanded = expandedTipoServicio,
                         onExpandedChange = { expandedTipoServicio = !expandedTipoServicio }
@@ -477,7 +487,7 @@ fun PrestadorRegisterScreen(
                                     text = { Text(type.displayName) },
                                     onClick = {
                                         serviceType = type
-                                        categoriaSeleccionada = "" // resetear al cambiar tipo
+                                        categoriaSeleccionada = ""
                                         expandedTipoServicio = false
                                     }
                                 )
@@ -495,7 +505,6 @@ fun PrestadorRegisterScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Dropdown Categoría
                     ExposedDropdownMenuBox(
                         expanded = expandedCategoria,
                         onExpandedChange = { expandedCategoria = !expandedCategoria }
@@ -536,7 +545,6 @@ fun PrestadorRegisterScreen(
                                 )
                             } else {
                                 serviciosAgrupados.forEach { (superCategoria, items) ->
-                                    //Encabezado de grupo
                                     DropdownMenuItem(
                                         text = {
                                             Text(
@@ -548,9 +556,7 @@ fun PrestadorRegisterScreen(
                                         },
                                         onClick = {},
                                         enabled = false,
-
                                     )
-                                    //Items del grupo
                                     items.forEach { servicio ->
                                         DropdownMenuItem(
                                             text = {
@@ -609,20 +615,46 @@ fun PrestadorRegisterScreen(
         }
     }
 
-    // Mostrar error si lo hay
-    if (registerState is RegisterState.Error) {
-        val errorMsg = (registerState as RegisterState.Error).message
+    if (showPriorizarDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissPriorizarDialog,
+            title = { Text("¿Perfil principal?") },
+            text = { Text("¿Querés que tu empresa aparezca como perfil principal cuando los usuarios te busquen?") },
+            confirmButton = {
+                TextButton(onClick = { onConfirmEmpresaPrincipal(true) }) { Text("Sí, mi empresa") }
+            },
+            dismissButton = {
+                TextButton(onClick = { onConfirmEmpresaPrincipal(false) }) { Text("No, yo como prestador") }
+            }
+        )
+    }
+
+    if (errorMessage != null) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = {},
             title = { Text("Error al registrar") },
-            text = { Text(errorMsg) },
+            text = { Text(errorMessage) },
             confirmButton = {
-                TextButton(onClick = { viewModel.resetState() }) { Text("OK") }
+                TextButton(onClick = onResetError) { Text("OK") }
             }
         )
     }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Tarjeta de sección estilo Archivero (igual que EditProfileScreenUnified)
-// ─────────────────────────────────────────────────────────────────
+@Preview(showBackground = true, showSystemUi = true)
+@Composable
+private fun PrestadorRegisterScreenPreview() {
+    PrestadorRegisterScreenContent(
+        isLoading = false,
+        errorMessage = null,
+        showPriorizarDialog = false,
+        servicios = emptyList(),
+        loadingServicios = false,
+        isGoogleUser = false,
+        onRegisterClick = { _, _, _, _, _, _, _, _ -> },
+        onBackToLogin = {},
+        onDismissPriorizarDialog = {},
+        onConfirmEmpresaPrincipal = {},
+        onResetError = {}
+    )
+}
