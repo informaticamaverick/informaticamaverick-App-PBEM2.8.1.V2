@@ -1,16 +1,19 @@
 package com.example.myapplication.presentation.features.home
 
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.animation.*
-import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,6 +41,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.LoadState
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.data.local.entity.UserEntity
 import com.example.myapplication.data.model.ProviderDisplayModel
@@ -64,8 +70,8 @@ import kotlinx.coroutines.launch
 fun ResultBusquedaCategoriaScreen(
     categoryName: String,
     onBack: () -> Unit,
-    onNavigateToProviderProfile: (String) -> Unit,
-    onNavigateToChat: (ProviderDisplayModel) -> Unit,
+    onNavigateToProviderProfile: (String, String?, String?) -> Unit,
+    onNavigateToChat: (ProviderDisplayModel, String?, String?) -> Unit, // 🔥 [ELITE] Ahora acepta clientCompanyId (deprecated) y branchId
     providerViewModel: ProviderViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
     beViewModel: BeBrainViewModel = hiltViewModel(),
@@ -79,14 +85,14 @@ fun ResultBusquedaCategoriaScreen(
     val activeProfileName by beViewModel.activeProfileName.collectAsStateWithLifecycle()
     val selectedProfileId by beViewModel.selectedProfileId.collectAsStateWithLifecycle()
 
-    val uiItems by providerViewModel.uiItems.collectAsStateWithLifecycle()
-    val isLoading by providerViewModel.isLoading.collectAsStateWithLifecycle()
+    val pagedItems = providerViewModel.pagedProviders.collectAsLazyPagingItems()
+    
     val showSubscribedOnly by providerViewModel.showSubscribedOnly.collectAsStateWithLifecycle()
     val activeRefinements by providerViewModel.activeRefinements.collectAsStateWithLifecycle()
     val sortByProximity by providerViewModel.sortByProximity.collectAsStateWithLifecycle()
     val userLocation by providerViewModel.userLocation.collectAsStateWithLifecycle()
 
-    val shortcuts by providerViewModel.shortcuts.collectAsStateWithLifecycle()
+    val favoriteIds by providerViewModel.favoriteProviderIds.collectAsStateWithLifecycle()
     val activeSortCriteria by providerViewModel.activeSortCriteria.collectAsStateWithLifecycle()
     val isGpsEnabled by ubicacionViewModel.isGpsEnabled.collectAsStateWithLifecycle()
 
@@ -105,7 +111,7 @@ fun ResultBusquedaCategoriaScreen(
         providerViewModel.onCategorySelected(decodedName) 
 
         activeAddress?.let { addr ->
-            providerViewModel.refreshData(decodedName, addr.postalCode)
+            providerViewModel.refreshData(decodedName, addr.codigoPostal)
         } ?: run {
             // Si no hay dirección, intentamos cargar localmente lo que haya (o esperar al rescate manual)
             providerViewModel.refreshData(decodedName, null)
@@ -118,12 +124,10 @@ fun ResultBusquedaCategoriaScreen(
     val onRefresh: () -> Unit = {
         scope.launch {
             isRefreshing = true
-            // Sincronización de categorías (siempre necesaria)
-           // categoryViewModel.syncCategoriesWithFirebase()
-
             // [MANDATO ELITE]: Pull-to-refresh ahora usa la sincronización forzada con throttling
             val decodedName = Uri.decode(categoryName)
-            providerViewModel.forceRefreshData(decodedName, activeAddress?.postalCode)
+            providerViewModel.forceRefreshData(decodedName, activeAddress?.codigoPostal)
+            pagedItems.refresh()
 
             delay(1000)
             isRefreshing = false
@@ -144,18 +148,19 @@ fun ResultBusquedaCategoriaScreen(
                 actionId == "refresh_gps" -> {
                     if (ubicacionViewModel.isGpsEnabled.value) {
                         ubicacionViewModel.ejecutarCalculoUbicacionGps(context) { pais, prov, loc, calle, num, cp, lat, lng ->
-                            val freshGpsAddress = AddressInfo(
+                            val freshGpsAddress = AddressUnico(
                                 id = "gps_current",
-                                companyOrUserName = "Mi Ubicación",
-                                branchName = "GPS Tracker",
-                                streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else "Ubicación detectada",
-                                locality = loc,
-                                province = prov,
-                                country = pais,
-                                postalCode = cp,
+                                ownerName = "Mi Ubicación",
+                                label = "GPS Tracker",
+                                calle = calle,
+                                numero = num,
+                                localidad = loc,
+                                provincia = prov,
+                                pais = pais,
+                                codigoPostal = cp,
                                 isCompany = false,
-                                lat = lat,
-                                lng = lng
+                                latitude = lat,
+                                longitude = lng
                             )
                             beViewModel.updateAddressFromGps(freshGpsAddress)
                         }
@@ -168,16 +173,17 @@ fun ResultBusquedaCategoriaScreen(
                 }
                 actionId.startsWith("manual_zip_") -> {
                     val manualZip = actionId.removePrefix("manual_zip_")
-                    val manualAddress = AddressInfo(
+                    val manualAddress = AddressUnico(
                         id = "manual_entry",
-                        companyOrUserName = "Ubicación Manual",
-                        branchName = "Rescate Táctico",
-                        streetAndNumber = "Zona CP $manualZip",
-                        locality = "Cargada por usuario",
-                        postalCode = manualZip,
+                        ownerName = "Ubicación Manual",
+                        label = "Rescate Táctico",
+                        calle = "Zona CP",
+                        numero = manualZip,
+                        localidad = "Cargada por usuario",
+                        codigoPostal = manualZip,
                         isCompany = false,
-                        lat = 0.0,
-                        lng = 0.0
+                        latitude = 0.0,
+                        longitude = 0.0
                     )
                     beViewModel.updateAddressFromGps(manualAddress)
                 }
@@ -185,20 +191,18 @@ fun ResultBusquedaCategoriaScreen(
         }
     }
 
-    // val currentActions by beViewModel.currentActions.collectAsStateWithLifecycle()
-
     ResultBusquedaCategoriaContent(
-        uiItems = uiItems,
+        pagedItems = pagedItems,
         allCategories = allCategories,
         categoryName = Uri.decode(categoryName),
-        isLoading = isLoading,
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         showSubscribedOnly = showSubscribedOnly,
         activeRefinements = activeRefinements,
         sortByProximity = sortByProximity,
         activeSortId = activeSortCriteria,
-        shortcuts = shortcuts,
+        shortcuts = emptyList(), 
+        favoriteIds = favoriteIds,
         userLocation = userLocation,
         user = userState,
         activeProfileName = activeProfileName,
@@ -212,7 +216,10 @@ fun ResultBusquedaCategoriaScreen(
         onGpsToggle = { ubicacionViewModel.toggleGps(context) },
         onProfileSelected = { beViewModel.selectProfile(it) },
         isGpsSystemEnabled = isGpsEnabled,
-        onManageShortcuts = { id, add -> providerViewModel.manageShortcut(id, add) },
+        onManageShortcuts = { id, add -> 
+            val provider = pagedItems.itemSnapshotList.items.filterIsInstance<ProviderUiItem.Provider>().find { it.service.id == id }?.service
+            providerViewModel.manageShortcut(id, "provider", add, provider?.title, provider?.photoUrl?.toString()) 
+        },
         isFilterSheetOpen = isFilterSheetOpen,
         onFilterSheetVisibilityChange = { isFilterSheetOpen = it }
     )
@@ -227,26 +234,26 @@ fun ResultBusquedaCategoriaScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResultBusquedaCategoriaContent(
-    uiItems: List<ProviderUiItem>, 
+    pagedItems: androidx.paging.compose.LazyPagingItems<ProviderUiItem>, 
     allCategories: List<CategoryEntity>,
     categoryName: String,
-    isLoading: Boolean,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     showSubscribedOnly: Boolean,
     activeRefinements: Set<String>,
     sortByProximity: Boolean,
-    activeSortId: List<String>, // Cambiado a List para multi-sort y orden real
+    activeSortId: List<String>, 
     shortcuts: List<FilterSortItem> = emptyList(),
+    favoriteIds: Set<String> = emptySet(),
     userLocation: UserLocation?,
     user: UserEntity?,
     activeProfileName: String,
     activeProfilePhoto: Any?,
-    activeAddress: AddressInfo?,
+    activeAddress: AddressUnico?,
     selectedProfileId: String? = null,
     onBack: () -> Unit,
-    onNavigateToProviderProfile: (String) -> Unit,
-    onNavigateToChat: (ProviderDisplayModel) -> Unit,
+    onNavigateToProviderProfile: (String, String?, String?) -> Unit,
+    onNavigateToChat: (ProviderDisplayModel, String?, String?) -> Unit, // 🔥 [ELITE] Ahora acepta clientCompanyId (deprecated) y branchId
     onTriggerAction: (String) -> Unit,
     onGpsToggle: () -> Unit,
     onProfileSelected: (String?) -> Unit = {},
@@ -255,12 +262,11 @@ fun ResultBusquedaCategoriaContent(
     isFilterSheetOpen: Boolean = false,
     onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
 ) {
-    val listState = rememberLazyListState()
+    val listState = rememberLazyGridState()
 
     // --- LÓGICA DE SCROLL Y COLAPSO DE TARJETAS (Elite V5 - Double Phase) ---
     var scrollAccumulator by remember { mutableFloatStateOf(0f) }
 
-    // 🔥 [ELITE] Lógica de Colapso Automático por Menú de Filtros
     val autoCollapseFraction by animateFloatAsState(
         targetValue = if (isFilterSheetOpen) 1f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
@@ -270,9 +276,8 @@ fun ResultBusquedaCategoriaContent(
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (isFilterSheetOpen) return Offset.Zero // 🔥 Bloquear scroll manual si el menú está abierto
+                if (isFilterSheetOpen) return Offset.Zero 
                 val delta = available.y
-                // Fase 1 (Filtros) + Fase 2 (ContextCard) + Fase 3 (Header)
                 val newScroll = (scrollAccumulator - delta).coerceIn(0f, 400f)
                 val consumed = scrollAccumulator - newScroll
                 scrollAccumulator = newScroll
@@ -281,16 +286,20 @@ fun ResultBusquedaCategoriaContent(
         }
     }
 
-    val filtersHideFraction = maxOf(scrollAccumulator / 80f, autoCollapseFraction).coerceIn(0f, 1f)
-    val contextHideFraction = maxOf((scrollAccumulator - 80f) / 80f, autoCollapseFraction).coerceIn(0f, 1f)
-    val collapseFraction = maxOf((scrollAccumulator - 160f) / 240f, autoCollapseFraction).coerceIn(0f, 1f)
+    val filtersHideFraction by remember {
+        derivedStateOf { maxOf(scrollAccumulator / 80f, autoCollapseFraction).coerceIn(0f, 1f) }
+    }
+    val contextHideFraction by remember {
+        derivedStateOf { maxOf((scrollAccumulator - 80f) / 80f, autoCollapseFraction).coerceIn(0f, 1f) }
+    }
+    val collapseFraction by remember {
+        derivedStateOf { maxOf((scrollAccumulator - 160f) / 240f, autoCollapseFraction).coerceIn(0f, 1f) }
+    }
     
-    // --- ESTADOS DE DIÁLOGOS (POPUPS) ---
     var showProfileDialog by remember { mutableStateOf(false) }
     var showLocationDialog by remember { mutableStateOf(false) }
     var showManualZipPopUp by remember { mutableStateOf(false) }
 
-    // --- Búsqueda de la categoría para el color de acento ---
     val selectedCategory = remember(allCategories, categoryName) {
         allCategories.find { it.name.equals(categoryName, ignoreCase = true) }
     }
@@ -299,7 +308,6 @@ fun ResultBusquedaCategoriaContent(
         else MaverickColors.NeonCyan
     }
 
-    // --- CONFIGURACIÓN DE FILTROS TÁCTICOS (Excluyendo Categorías) ---
     val filterDropdownItems: List<DropdownItemData> = remember {
         listOfNotNull(
             BeDictionary.Filters["filter_chat_sub"]?.copy(label = "Suscriptos VIP"),
@@ -335,7 +343,10 @@ fun ResultBusquedaCategoriaContent(
                 emoji = selectedCategory?.icon ?: "🔍",
                 collapseFraction = collapseFraction,
                 onBack = onBack,
-                accentColor = categoryColor
+                accentColor = categoryColor,
+                onInfoClick = { },
+                infoTitle = "RESULTADOS DE BÚSQUEDA",
+                infoDescription = "Aquí puedes encontrar a los mejores prestadores de la zona filtrados por cercanía, ranking y servicios específicos."
             )
         }
     ) { paddingValues ->
@@ -427,12 +438,12 @@ fun ResultBusquedaCategoriaContent(
                             activeProfileName = activeProfileName,
                             activeProfilePhoto = activeProfilePhoto,
                             mainAddress = activeAddress?.streetAndNumber ?: (userLocation?.locality ?: "Buscando..."),
-                            localityInfo = activeAddress?.let { "${it.locality}, CP ${it.postalCode}" } ?: "",
+                            localityInfo = activeAddress?.let { "${it.localidad}, CP ${it.codigoPostal}" } ?: "",
                             description = activeAddress?.let { addr ->
-                                if (!addr.companyOrUserName.isNullOrBlank() && addr.companyOrUserName != "Mi Ubicación") {
+                                if (addr.ownerName?.isNotBlank() == true && addr.ownerName != "Mi Ubicación") {
                                     buildString {
-                                        append(addr.companyOrUserName)
-                                        if (!addr.branchName.isNullOrBlank()) append(" - ${addr.branchName}")
+                                        append(addr.ownerName)
+                                        if (addr.label.isNotBlank()) append(" - ${addr.label}")
                                     }
                                 } else if (addr.id == "gps_current") "Mi Ubicación" else null
                             },
@@ -444,43 +455,52 @@ fun ResultBusquedaCategoriaContent(
                     }
 
                     Spacer(modifier = Modifier.height(16.dp * (1f - contextHideFraction)))
-                   // Spacer(modifier = Modifier.height(16.dp))
-                    // --- 4. LISTA DE RESULTADOS ELITE ---
+
+                    // --- 4. LISTA DE RESULTADOS ELITE (PAGINADA) ---
                     val hasActiveFilters = activeRefinements.isNotEmpty() || !showSubscribedOnly || !sortByProximity
                     
-                    ListaMoldeV2(
+                    ListaGridMoldeV2(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         titulo = "PROFESIONALES / EMPRESAS",
                         subtitulo = "LISTA DE RESULTADOS DE $categoryName",
-                        emoji = null,
-                        compactInfo = "${uiItems.count { it is ProviderUiItem.Provider }} Resultados",
-                        itemCount = uiItems.count { it is ProviderUiItem.Provider },
+                        itemCount = pagedItems.itemCount,
                         state = listState,
                         containerColor = MaverickColors.StealthGray,
                         accentColor = categoryColor,
-                        acciones = {
-                            if (hasActiveFilters) {
-                                BotonCabeceraAccion(
-                                    onClick = {
-                                        onTriggerAction("clear_refinements")
-                                        // También reseteamos filtros globales si es necesario
-                                        if (!showSubscribedOnly) onTriggerAction("toggle_subscribed")
-                                        if (!sortByProximity) onTriggerAction("toggle_proximity")
-                                    },
-                                    icon = Icons.Default.FilterAltOff,
-                                    color = MaverickColors.MagentaNeon
+                        columns = GridCells.Fixed(2),
+                        customMaxHeaderHeight = 64.dp,
+                        acciones = { fraction ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                if (hasActiveFilters) {
+                                    BotonCabeceraAccion(
+                                        onClick = {
+                                            onTriggerAction("clear_refinements")
+                                            if (!showSubscribedOnly) onTriggerAction("toggle_subscribed")
+                                            if (!sortByProximity) onTriggerAction("toggle_proximity")
+                                        },
+                                        icon = Icons.Default.FilterAltOff,
+                                        color = MaverickColors.MagentaNeon,
+                                        collapseFraction = fraction
+                                    )
+                                }
+
+                                BotonesCabecera.Filtro(
+                                    collapseFraction = fraction,
+                                    isActive = activeRefinements.isNotEmpty(),
+                                    onClick = { onFilterSheetVisibilityChange(!isFilterSheetOpen) }
                                 )
                             }
                         }
                     ) {
-                        if (isLoading && !isRefreshing) {
-                            items(5) {
-                                Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                        // [ELITE PERFORMANCE] Solo mostramos Shimmer si Room está realmente vacío
+                        if (pagedItems.loadState.refresh is LoadState.Loading && pagedItems.itemCount == 0) {
+                            items(6) {
+                                Box(modifier = Modifier.padding(vertical = 4.dp)) {
                                     ProviderCardShimmer()
                                 }
                             }
-                        } else if (uiItems.isEmpty()) {
-                            item {
+                        } else if (pagedItems.itemCount == 0 && pagedItems.loadState.refresh !is LoadState.Loading) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
                                 EmptyStateMessage(
                                     locality = userLocation?.locality,
                                     onManualZipClick = { showManualZipPopUp = true }
@@ -488,29 +508,56 @@ fun ResultBusquedaCategoriaContent(
                             }
                         }
 
-                        items(items = uiItems, key = { 
-                            when(it) {
-                                is ProviderUiItem.Header -> "h_${it.id}"
-                                is ProviderUiItem.Provider -> "p_${it.service.id}"
+                        // [ELITE PERFORMANCE] Keys estables vía itemKey para evitar re-composición masiva
+                        items(
+                            count = pagedItems.itemCount,
+                            key = pagedItems.itemKey { item -> 
+                                when(item) {
+                                    is ProviderUiItem.Header -> "h_${item.id}"
+                                    is ProviderUiItem.Provider -> "p_${item.service.id}"
+                                }
+                            },
+                            span = { index ->
+                                val item = pagedItems[index]
+                                if (item is ProviderUiItem.Header) GridItemSpan(maxLineSpan)
+                                else GridItemSpan(1)
                             }
-                        }) { item ->
-                            when (item) {
-                                is ProviderUiItem.Header -> {
-                                    ProximityDivider(
-                                        text = item.title, 
-                                        emoji = item.emoji, 
-                                        color = categoryColor
-                                    )
+                        ) { index ->
+                            pagedItems[index]?.let { item ->
+                                when(item) {
+                                    is ProviderUiItem.Header -> {
+                                        ProximityDivider(
+                                            text = item.title, 
+                                            emoji = item.emoji, 
+                                            color = categoryColor
+                                        )
+                                    }
+                                    is ProviderUiItem.Provider -> {
+                                        PrestadorBusinessCard(
+                                            provider = item.service,
+                                            user = user,
+                                            onClick = { onNavigateToProviderProfile(item.service.providerId, item.service.companyId, item.service.branchId) },
+                                            onChatClick = { sender -> 
+                                                // NAVEGACIÓN INTELIGENTE: Pasar remitente si se seleccionó
+                                                val clientCompanyId = if (sender != null && sender.id != "personal") sender.id else null
+                                                val clientBranchId = if (sender != null && sender.id != "personal") sender.branchId else null
+                                                onNavigateToChat(item.service, clientCompanyId, clientBranchId)
+                                            },
+                                            isShortcut = favoriteIds.contains(item.service.id),
+                                            onManageShortcut = { isAdd -> 
+                                                onManageShortcuts(item.service.id, isAdd)
+                                            },
+                                            modifier = Modifier.padding(vertical = 4.dp)
+                                        )
+                                    }
                                 }
-                                is ProviderUiItem.Provider -> {
-                                    PrestadorCardV3(
-                                        provider = item.service,
-                                        isCompact = false,
-                                        onClick = { onNavigateToProviderProfile(item.service.id) },
-                                        onChatClick = { onNavigateToChat(item.service) },
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth()
-                                    )
-                                }
+                            }
+                        }
+                        
+                        // Shimmer de carga al final (Append)
+                        if (pagedItems.loadState.append is LoadState.Loading) {
+                            items(2) {
+                                ProviderCardShimmer()
                             }
                         }
                     }
@@ -536,7 +583,7 @@ fun ResultBusquedaCategoriaContent(
     if (showLocationDialog) {
         LocationDialog(
             show = showLocationDialog,
-            availableAddresses = user?.toDomain()?.toAddressInfoList() ?: emptyList(),
+            availableAddresses = user?.personalAddresses ?: emptyList(),
             activeAddress = activeAddress,
             selectedProfileId = selectedProfileId,
             isGpsSystemEnabled = isGpsSystemEnabled,
@@ -693,31 +740,7 @@ fun EmptyStateMessage(
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun ResultBusquedaCategoriaScreenPreview() {
-    MyApplicationTheme {
-        ResultBusquedaCategoriaContent(
-            uiItems = emptyList(),
-            allCategories = emptyList(),
-            categoryName = "Informática",
-            isLoading = false,
-            isRefreshing = false,
-            onRefresh = {},
-            showSubscribedOnly = false,
-            activeRefinements = emptySet(),
-            sortByProximity = false,
-            activeSortId = emptyList(),
-            shortcuts = emptyList(),
-            userLocation = null,
-            user = null,
-            activeProfileName = "Invitado",
-            activeProfilePhoto = null,
-            activeAddress = null,
-            onBack = {},
-            onNavigateToProviderProfile = {},
-            onNavigateToChat = {},
-            onTriggerAction = {},
-            onGpsToggle = {}
-        )
-    }
+    // Nota: El preview necesita un mock de LazyPagingItems o envolverlo
 }
 
 

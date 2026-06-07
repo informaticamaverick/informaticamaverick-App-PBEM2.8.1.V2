@@ -8,60 +8,27 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.prestador.data.model.ServiceType
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import org.json.JSONArray
-import com.example.myapplication.prestador.data.model.ServicioFirebase
 
 private const val MAX_CATEGORIAS = 5
 
 data class CategoriaItem(val nombre: String, val icono: ImageVector)
 
-private val GRUPOS_CATEGORIAS = listOf(
-    "Servicios del Hogar" to listOf(
-        CategoriaItem("Plomería",                    Icons.Default.Water),
-        CategoriaItem("Electricista",                Icons.Default.ElectricBolt),
-        CategoriaItem("Carpintería",                 Icons.Default.Handyman),
-        CategoriaItem("Pintor de Obras",             Icons.Default.FormatPaint),
-        CategoriaItem("Albañil",                     Icons.Default.Construction),
-        CategoriaItem("Cerrajero",                   Icons.Default.Lock),
-        CategoriaItem("Gasista",                     Icons.Default.LocalFireDepartment),
-        CategoriaItem("Techista",                    Icons.Default.Roofing),
-        CategoriaItem("Herrero de Obra",             Icons.Default.Hardware),
-        CategoriaItem("Aire Acondicionado (Técnico)",Icons.Default.AcUnit)
-    ),
-    "Exteriores" to listOf(
-        CategoriaItem("Jardinería",        Icons.Default.Yard),
-        CategoriaItem("Limpieza Doméstica",Icons.Default.CleaningServices)
-    ),
-    "Tecnología y Profesionales" to listOf(
-        CategoriaItem("Informática (Técnico)",       Icons.Default.Computer),
-        CategoriaItem("Diseñador Gráfico",           Icons.Default.Brush),
-        CategoriaItem("Fotografía de Eventos",       Icons.Default.PhotoCamera),
-        CategoriaItem("Seguridad Electronica (Técnico)", Icons.Default.Security)
-    ),
-    "Eventos y Otros" to listOf(
-        CategoriaItem("Salon de Eventos",  Icons.Default.Celebration),
-        CategoriaItem("Gastronomía",       Icons.Default.Restaurant),
-        CategoriaItem("Mudanzas",          Icons.Default.LocalShipping),
-        CategoriaItem("Otro",              Icons.Default.Category)
-    )
-)
-
-private val TODAS_LAS_CATEGORIAS = GRUPOS_CATEGORIAS.flatMap { (_, items) -> items }
-
-
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun CategoriasSelector(
     categoriasJson: String,
     onCategoriasActualizadas: (String) -> Unit,
     serviceType: com.example.myapplication.prestador.data.model.ServiceType = com.example.myapplication.prestador.data.model.ServiceType.TECHNICAL,
-    serviciosFirebase: List<ServicioFirebase> = emptyList()
+    allCategories: List<CategoryEntity> = emptyList()
 ) {
     val colors = getPrestadorColors()
     var seleccionadas by remember(categoriasJson) {
@@ -71,11 +38,10 @@ fun CategoriasSelector(
 
     var busqueda by remember { mutableStateOf("") }
     var mostrarsugerencias by remember { mutableStateOf(false) }
-    val sugerencias = remember(busqueda, seleccionadas, serviciosFirebase) {
-        if (busqueda.isBlank()) emptyList<CategoriaItem>()
-        else serviciosFirebase
+    val sugerencias = remember(busqueda, seleccionadas, allCategories) {
+        if (busqueda.isBlank()) emptyList<CategoryEntity>()
+        else allCategories
             .filter { it.name.contains(busqueda, ignoreCase = true) && it.name !in seleccionadas }
-            .map { CategoriaItem(it.name, Icons.Default.Category) }
     }
 
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -140,16 +106,15 @@ fun CategoriasSelector(
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
                     Column {
-                        sugerencias.forEach { item ->
+                        sugerencias.take(6).forEach { cat ->
                             DropdownMenuItem(
-                                text = { Text(item.nombre, fontSize = 14.sp) },
+                                text = { Text(cat.name, fontSize = 14.sp) },
                                 leadingIcon = {
-                                    val emoji = serviciosFirebase.find { it.name == item.nombre }?.icon
-                                    if (!emoji.isNullOrBlank()) {
-                                        Text(text = emoji, fontSize = 16.sp)
+                                    if (cat.icon.isNotBlank()) {
+                                        Text(text = cat.icon, fontSize = 16.sp)
                                     } else {
                                         Icon(
-                                            imageVector = item.icono,
+                                            imageVector = Icons.Default.Category,
                                             contentDescription = null,
                                             tint = colors.primaryOrange,
                                             modifier = Modifier.size(20.dp)
@@ -157,7 +122,7 @@ fun CategoriasSelector(
                                     }
                                 },
                                 onClick = {
-                                    seleccionadas = seleccionadas + item.nombre
+                                    seleccionadas = seleccionadas + cat.name
                                     onCategoriasActualizadas(setToJsonArray(seleccionadas))
                                     busqueda = ""
                                     mostrarsugerencias = false
@@ -176,7 +141,7 @@ fun CategoriasSelector(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 seleccionadas.forEach { nombre ->
-                    val item = TODAS_LAS_CATEGORIAS.find { it.nombre == nombre }
+                    val catInfo = allCategories.find { it.name == nombre }
 
                     FilterChip(
                         selected = true,
@@ -186,17 +151,14 @@ fun CategoriasSelector(
                         },
                         label = { Text(text = nombre, fontSize = 12.sp)},
                         leadingIcon = {
-                            val emoji = serviciosFirebase.find { it.name == nombre }?.icon
-                            if (!emoji.isNullOrBlank()) {
-                                Text(text = emoji, fontSize = 14.sp)
+                            if (catInfo != null && catInfo.icon.isNotBlank()) {
+                                Text(text = catInfo.icon, fontSize = 14.sp)
                             } else {
-                                item?.let {
-                                    Icon(
-                                        imageVector = it.icono,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Category,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp)
+                                )
                             }
                         },
                         trailingIcon = {
@@ -204,13 +166,13 @@ fun CategoriasSelector(
                                 Icons.Default.Close,
                                 contentDescription = "Quitar",
                                 modifier = Modifier.size(14.dp)
-
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = colors.primaryOrange,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary
+                            selectedLabelColor = Color.White,
+                            selectedLeadingIconColor = Color.White,
+                            selectedTrailingIconColor = Color.White
                         )
                     )
                 }

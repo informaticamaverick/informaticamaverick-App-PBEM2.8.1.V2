@@ -239,8 +239,9 @@ fun BeAssistantSearchFab(
     )
     
     // Multiplicador para suavizar la detención de la flotación cuando la búsqueda está activa
+    // [MODIFICACIÓN MAVERICK]: Ahora forzamos a 0f para evitar el movimiento de subida y bajada
     val floatMultiplier by animateFloatAsState(
-        targetValue = if (isSearchActive) 0f else 1f,
+        targetValue = 0f,
         animationSpec = tween(durationMillis = 500),
         label = "FloatMultiplier"
     )

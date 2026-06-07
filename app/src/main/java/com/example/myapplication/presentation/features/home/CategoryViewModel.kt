@@ -1,9 +1,10 @@
 package com.example.myapplication.presentation.features.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.core.common.extensions.matchesSmart
 import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.core.utils.filtroDeTexto
 import com.example.myapplication.core.data.repository.CategoryRepository
 import com.example.myapplication.data.repository.ShortcutRepository
 import com.example.myapplication.data.local.entity.ShortcutEntity
@@ -21,16 +22,12 @@ import javax.inject.Inject
 
 /**
  * Modelo de datos para representar una agrupación de categorías.
- * Se define aquí por ser el dominio principal del Obrero de Categorías.
- * 
- * [OPTIMIZACIÓN: 'items' es opcional para permitir carga ligera (Bento inicial)
- * y carga pesada (Detalle) sin duplicar clases.
  */
 data class SuperCategory(
     val title: String,
     val icon: String,
-    val items: List<CategoryEntity> = emptyList(), // Opcional para carga ligera
-    val totalItems: Int = 0, // [NUEVO] Contador directo de SQLite
+    val items: List<CategoryEntity> = emptyList(),
+    val totalItems: Int = 0,
     val color: Long = 0xFF1A1F26,
     val isFavorite: Boolean = false,
     val hasFavoriteCategories: Boolean = false
@@ -38,21 +35,10 @@ data class SuperCategory(
 
 /**
  * --- CATEGORY VIEWMODEL (EL OBRERO DE CATEGORÍAS) ---
- * Encargado del "trabajo sucio": Filtrado, Ordenamiento, Agrupación y Búsqueda de Categorías.
- * Procesa los datos crudos del repositorio para entregarlos listos al Cerebro (BeBrain).
- */
-// ======================================================================================
-// --- SECCIÓN: CONFIGURACIÓN VISUAL (IDENTIDAD DE MARCA) ---
-// ======================================================================================
-
-/** 
- * [OBSOLETO]: Los colores ahora son persistentes en super_categories_table (Room).
- * Se mantiene temporalmente como fallback si fuera necesario, pero la UI prefiere
- * los colores inyectados desde el DAO.
  */
 object CategoryVisuals {
     fun getColorFor(superCategory: String?): Long {
-        return 0xFF1A1F26 // Gris oscuro genérico (Fallback)
+        return 0xFF1A1F26
     }
 }
 
@@ -60,82 +46,63 @@ object CategoryVisuals {
 @HiltViewModel
 class CategoryViewModel @Inject constructor(
     private val repository: CategoryRepository,
-    private val shortcutRepository: ShortcutRepository, // 🔥 [ELITE] Agregado para persistencia de shortcuts
+    private val shortcutRepository: ShortcutRepository,
     private val coordinator: AppActionCoordinator
 ) : ViewModel() {
 
-    // ======================================================================================
-    // --- 1. FUENTE DE DATOS: ENRIQUECIMIENTO DINÁMICO DE COLORES ---
-    // ======================================================================================
-    
     /** 
-     * Lista completa de categorías.
+     * [LEY #3.2 ON-DEMAND]: Fuente Maestra (Perezosa).
+     * Solo se activa bajo demanda cuando el usuario busca, para evitar cargar 500 objetos al inicio.
      */
-    val allCategories: StateFlow<List<CategoryEntity>> = repository.allCategories
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    private val _loadAllTrigger = MutableStateFlow(false)
+    val allCategories: StateFlow<List<CategoryEntity>> = _loadAllTrigger
+        .flatMapLatest { shouldLoad ->
+            if (shouldLoad) {
+                Log.d("CategoryViewModel", "🔍 [LAZY_LOAD] Disparando carga completa de categorías (Modo Búsqueda)")
+                repository.allCategories
+            } else {
+                flowOf(emptyList())
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val searchQuery = coordinator.globalSearchQuery
 
     /** 
-     * [NUEVO] METADATOS LIGEROS DE SUPERCATEGORÍAS:
-     * Fuente de datos optimizada para las tarjetas Bento. 
-     * [INTELIGENCIA] Reacciona al query debounced para evitar saturación.
+     * [ELITE METADATOS LIGEROS DE SUPERCATEGORÍAS:
+     * Fuente de datos optimizada para las tarjetas Bento (Ley #3.2 On-Demand Local).
      */
-    private val superCategoryMetadata: StateFlow<List<SuperCategory>> = coordinator.debouncedSearchQuery
-        .flatMapLatest { repository.getSuperCategoryMetadata() }
+    private val superCategoryMetadata: Flow<List<SuperCategory>> = repository.getSuperCategoryMetadata()
         .map { list ->
             list.map { meta ->
                 SuperCategory(
                     title = meta.title,
                     icon = meta.icon,
                     totalItems = meta.totalItems,
-                    color = meta.color, // 🔥 [ELITE] Color dinámico desde Room
+                    color = meta.color, 
                     isFavorite = false,
                     hasFavoriteCategories = meta.hasFavoriteCategories == 1
                 )
             }
         }
         .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    /** 
-     * NUEVO BÚSQUEDA INTELIGENTE (ELITE):
-     * Filtra las categorías en memoria usando algoritmos de normalización y matching difuso.
-     * Reacciona al query debounced y NORMALIZADO del coordinador para máxima fluidez.
-     */
-    private val dbSearchResults: StateFlow<List<CategoryEntity>> = combine(
-        allCategories,
-        coordinator.debouncedNormalizedSearchQuery
-    ) { all, normQuery ->
-        if (normQuery.isEmpty()) {
-            _isSearching.value = false
-            emptyList()
-        } else {
-            _isSearching.value = true
-            // Usamos matchesSmart con la query ya normalizada para ahorrar ciclos de CPU
-            val results = all.filter { it.name.matchesSmart(normQuery) }
-            _isSearching.value = false
-            results
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * NUEVO CARGA BAJO DEMANDA DE CATEGORÍAS (LAZY):
+     * [ELITE CARGA BAJO DEMANDA DE CATEGORÍAS (LAZY):
      * Solo carga las categorías reales cuando el usuario selecciona una supercategoría.
      */
     private val _selectedSuperTitle = MutableStateFlow<String?>(null)
     val selectedSuperCategoryItems: StateFlow<List<CategoryEntity>> = _selectedSuperTitle
         .flatMapLatest { title ->
             if (title == null) flowOf(emptyList())
-            else repository.getCategoriesBySuperCategory(title)
+            else {
+                Log.d("CategoryViewModel", "📦 [ON_DEMAND] Cargando rubros para supercategoría: $title")
+                repository.getCategoriesBySuperCategory(title)
+            }
         }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /**
-     * Alterna la carga perezosa de una supercategoría.
-     */
     fun selectSuperCategoryForDetail(title: String?) {
         _selectedSuperTitle.value = title
     }
@@ -143,124 +110,100 @@ class CategoryViewModel @Inject constructor(
     private val _activeSortFilters = MutableStateFlow<Set<String>>(setOf("view_bento", "sort_hot"))
     val activeSortFilters = _activeSortFilters.asStateFlow()
 
-    private val _isInitialLoading = MutableStateFlow(true)
-    val isInitialLoading = _isInitialLoading.asStateFlow()
-
-    private val _isSearching = MutableStateFlow(false)
-    val isSearching = _isSearching.asStateFlow()
 
     /**
-     * NUEVO LISTADO DE ACCESOS DIRECTOS ACTIVOS (REACTIVO - SSOT)
+     * [ELITE ESTADO DE BÚSQUEDA ACTIVA (Ley #4 Zero Friction)
+     * [FIX: Indica que se está esperando al debounce para evitar parpadeos.
      */
-    private val homeShortcuts: StateFlow<List<ShortcutEntity>> = shortcutRepository.getShortcutsByContext("home")
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val isSearching: StateFlow<Boolean> = combine(
+        coordinator.normalizedSearchQuery,
+        coordinator.debouncedNormalizedSearchQuery
+    ) { normalized, debounced ->
+        normalized.isNotEmpty() && normalized != debounced
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val homeShortcutIds: StateFlow<Set<String>> = homeShortcuts
+    /**
+     * [ELITE ACCESOS DIRECTOS (SSOT)
+     */
+    val homeShortcutIds: StateFlow<Set<String>> = shortcutRepository.getShortcutsByContext("home")
         .map { list -> list.map { it.targetId }.toSet() }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
-    // --- NUEVO: TRACKING DE OPCIONES RECIENTES (HOME ELITE) ---
     private val _recentOptionIds = MutableStateFlow<List<String>>(listOf("view_bento", "sort_hot", "view_grid", "sort_nombre_asc"))
     val recentOptionIds = _recentOptionIds.asStateFlow()
-
-    val searchQuery = coordinator.globalSearchQuery
 
     private val _hasMatches = MutableStateFlow(true)
     val hasMatches = _hasMatches.asStateFlow()
 
-    // ======================================================================================
-    // --- 2. TRABAJO SUCIO: PROCESAMIENTO DE CATEGORÍAS (ORDENAMIENTO Y BÚSQUEDA) ---
-    // ======================================================================================
-
     /** 
-     * CATEGORÍAS PROCESADAS: Aplica búsqueda y ordenamiento.
-     * OPTIMIZACIÓN: Ahora usa dbSearchResults cuando hay un query activo.
-     * [SSOT] Inyecta el estado de favoritos desde la tabla de shortcuts.
+     * [ELIT CATEGORÍAS PROCESADAS (Leyes #3.2 y #4)
+     * OPTIMIZACIÓN: Límite inteligente de 80 items para asegurar scroll a 60fps.
+     * [FIX: Sincronización perfecta entre tiempo real y debounce para evitar estados inconsistentes.
      */
     val sortedCategories: StateFlow<List<CategoryEntity>> = combine(
-        allCategories, dbSearchResults, _activeSortFilters, coordinator.debouncedSearchQuery, homeShortcutIds
-    ) { all, filtered, filters, query, shortcutIds ->
-        val source = if (query.isEmpty()) {
-            _hasMatches.value = true
-            all.sortedBy { it.name.lowercase() }
-        } else {
-            _hasMatches.value = filtered.isNotEmpty()
-            filtered
-        }
-        
-        // Enriquecemos con el estado real de favoritos de shortcuts
-        source.map { it.copy(isFavorite = shortcutIds.contains(it.name)) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // --- EXTENSIONES DE BÚSQUEDA (OBRERO) SE MOVIERON A SearchUtils.kt ---
-
-    /**
-     * SUPERCATEGORÍAS PROCESADAS: Agrupa las categorías filtradas por su tipo.
-     * OPTIMIZACIÓN: Ahora utiliza superCategoryMetadata como base ligera para evitar agrupamiento pesado en memoria.
-     * [SSOT] Sincronizado con la base de datos de shortcuts.
-     */
-    val superCategories: StateFlow<List<SuperCategory>> = combine(
-        superCategoryMetadata, 
-        dbSearchResults, 
+        allCategories, 
+        coordinator.normalizedSearchQuery,
+        coordinator.debouncedNormalizedSearchQuery, 
         _activeSortFilters, 
-        homeShortcutIds,
-        allCategories
-    ) { args ->
-        val metadata = args[0] as List<SuperCategory>
-        val searchResults = args[1] as List<CategoryEntity>
-        val filters = args[2] as Set<String>
-        val shortcutIds = args[3] as Set<String>
-        val allCats = args[4] as List<CategoryEntity>
+        homeShortcutIds
+    ) { all, realTime, debounced, filters, shortcutIds ->
+        // Si el usuario empieza a escribir, activamos el disparador de carga completa
+        if (realTime.isNotEmpty() && !_loadAllTrigger.value) {
+            _loadAllTrigger.value = true
+        }
+
+        // Si el tiempo real es diferente al debounced, estamos en medio de una escritura.
+
+        val source = if (debounced.isEmpty()) {
+            _hasMatches.value = true
+            all.take(80) 
+        } else {
+            // [AUDITORÍA]: Filtrado en memoria (Local-First) inmune a acentos y paréntesis
+            val matched = all.filter { it.name.filtroDeTexto(debounced) }
+            _hasMatches.value = matched.isNotEmpty()
+            matched
+        }
         
-        val isSearching = coordinator.debouncedSearchQuery.value.isNotEmpty()
-
-        // --- SECCIÓN: ENRIQUECIMIENTO Y AGRUPAMIENTO DE BÚSQUEDA ---
-        val enriched = metadata.map { meta ->
-            val itemsForThisSuper = if (isSearching) {
-                searchResults.filter { it.superCategory == meta.title }
-            } else {
-                emptyList()
-            }
-
-            // Calculamos si tiene categorías favoritas basadas en shortcuts
-            val hasFavs = allCats.any { it.superCategory == meta.title && shortcutIds.contains(it.name) }
-
-            meta.copy(
-                isFavorite = shortcutIds.contains(meta.title),
-                hasFavoriteCategories = hasFavs,
-                items = itemsForThisSuper.map { it.copy(isFavorite = shortcutIds.contains(it.name)) }
-            )
-        }
-
-        // --- SECCIÓN: ORDENAMIENTO DE SUPERCATEGORÍAS ---
-        val sortedResult = when {
-            filters.contains("sort_nombre_asc") -> enriched.sortedBy { it.title.lowercase() }
-            filters.contains("sort_nombre_desc") -> enriched.sortedByDescending { it.title.lowercase() }
-            filters.contains("sort_random") -> enriched.shuffled()
-            
-            // 🔥 [NUEVO] LÓGICA DE ORDENAMIENTO "MÁS USADOS / FAVORITOS" 🔥
-            filters.contains("sort_hot") -> {
-                enriched.sortedWith(
-                    compareByDescending<SuperCategory> { it.isFavorite }           // 1. Supercategorías favoritas
-                        .thenByDescending { it.hasFavoriteCategories }           // 2. Tienen categorías favoritas
-                        .thenBy { it.title.lowercase() }                          // 3. Orden alfabético (A-Z)
-                )
-            }
-
-            else -> enriched.sortedBy { it.title.lowercase() }
-        }
-        sortedResult
+        source.map { it.copy(isFavorite = shortcutIds.contains(it.name)) }
     }
     .flowOn(Dispatchers.Default)
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // ======================================================================================
-    // --- 4. ACCIONES Y COMANDOS DEL OBRERO ---
-    // ======================================================================================
+    /**
+     * [ELITE SUPERCATEGORÍAS PROCESADAS (Vista Bento)
+     * OPTIMIZACIÓN: Carga Shallow (Metadatos). Los items se cargan On-Demand en el detalle.
+     */
+    val superCategories: StateFlow<List<SuperCategory>> = combine(
+        superCategoryMetadata, 
+        _activeSortFilters, 
+        homeShortcutIds
+    ) { metadata, filters, shortcutIds ->
+        val enriched = metadata.map { it.copy(isFavorite = shortcutIds.contains(it.title)) }
+
+        when {
+            filters.contains("sort_nombre_asc") -> enriched.sortedBy { it.title.lowercase() }
+            filters.contains("sort_nombre_desc") -> enriched.sortedByDescending { it.title.lowercase() }
+            filters.contains("sort_random") -> enriched.shuffled()
+            filters.contains("sort_hot") -> {
+                enriched.sortedWith(
+                    compareByDescending<SuperCategory> { it.isFavorite }
+                        .thenByDescending { it.hasFavoriteCategories }
+                        .thenBy { it.title.lowercase() }
+                )
+            }
+            else -> enriched.sortedBy { it.title.lowercase() }
+        }
+    }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * NUEVO GESTIÓN DE ACCESOS DIRECTOS (PERSISTENCIA)
+     * [ELITE ESTADO DE CARGA (Ley #4 Zero Friction)
+     * [FIX]: Ahora depende de superCategories, ya que allCategories es perezosa.
      */
+    val isInitialLoading: StateFlow<Boolean> = superCategories.map { it.isEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     fun manageShortcut(context: String, targetId: String, type: String, isAdd: Boolean, label: String? = null, icon: String? = null) {
         viewModelScope.launch {
             if (isAdd) {
@@ -271,21 +214,16 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
-    /**
-     * NUEVO LISTADO DE ACCESOS DIRECTOS ACTIVOS (REACTIVO)
-     */
     fun getShortcuts(context: String): Flow<List<ShortcutEntity>> {
         return shortcutRepository.getShortcutsByContext(context)
     }
 
-    /** Alterna el estado de favorito de una categoría */
     fun toggleCategoryFavorite(category: CategoryEntity) {
         viewModelScope.launch {
             repository.insertOrUpdate(category.copy(isFavorite = !category.isFavorite))
         }
     }
 
-    /** Actualiza los filtros de ordenamiento y vista */
     fun toggleSortFilter(filterId: String) {
         val current = _activeSortFilters.value.toMutableSet()
         var added = false
@@ -309,7 +247,6 @@ class CategoryViewModel @Inject constructor(
         }
         _activeSortFilters.value = current
 
-        // Actualizar Recientes (Solo si se activó una opción nueva)
         if (added) {
             val recents = _recentOptionIds.value.toMutableList()
             recents.remove(filterId)
@@ -318,38 +255,20 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
-    /** Actualiza la consulta de búsqueda */
     fun updateSearchQuery(query: String) {
         coordinator.updateSearchQuery(query)
     }
 
-    /** Resetea todos los filtros a su estado inicial */
     fun clearFilters() {
         _activeSortFilters.value = setOf("view_bento", "sort_hot")
         coordinator.updateSearchQuery("")
     }
-
-    /** 
-     * [NUEVO] Genera el detalle informativo de la categoría 
-     * Conecta el badge de información con la descripción de la base de datos (Room).
-     */
+/**
     fun getCategoryDetail(category: CategoryEntity): String {
         return category.description.ifEmpty { " ${category.description}." }
     }
-
+*/
     init {
         // [POLÍTICA ZERO COSTO]: No se dispara sincronización remota.
-        // La base de datos se siembra localmente en BeBrainViewModel.
-        _isInitialLoading.value = false
     }
 }
-
-
-
-
-
-
-
-
-
-

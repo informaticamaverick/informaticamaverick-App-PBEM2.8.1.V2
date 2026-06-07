@@ -1,14 +1,18 @@
 package com.example.myapplication.prestador.data.local.entity
 
+/*
+ * ARCHIVO EN DESUSO
+ * Motivo: Se ha centralizado la fuente de verdad en los modelos del módulo :core.
+ * Las sucursales ahora se gestionan mediante BranchProvider definido en
+ * com.example.myapplication.core.domain.model.CompanyModelsProvider
+ */
+
+/*
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.ForeignKey
 import androidx.room.Index
 
-/**
- * Entidadd de base de datos: Sucursal
- * Guarda las sucursales del negocio del prestaor
- */
 @Entity(
     tableName = "sucursales",
     foreignKeys = [
@@ -34,7 +38,7 @@ data class SucursalEntity(
     //Direccion ( referencia a DireccionEntity)
     val direccionId: String? = null,
 
-    //Refrente de la sucursal (referencia a ReferenteEntity)
+    //Refrente de la sucursal (referente a ReferenteEntity)
     val referenteId: String? = null,
 
     val isActive: Boolean = true,
@@ -54,3 +58,4 @@ data class SucursalEntity(
     val updatedAt: Long = System.currentTimeMillis()
 
 )
+*/

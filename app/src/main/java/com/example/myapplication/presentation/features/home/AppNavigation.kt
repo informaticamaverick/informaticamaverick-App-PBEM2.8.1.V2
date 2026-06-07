@@ -41,7 +41,6 @@ import com.example.myapplication.presentation.components.*
 import com.example.myapplication.presentation.designsystem.components.*
 import com.example.myapplication.presentation.designsystem.components.MaverickColors.BentoDarkGlassBackground
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -62,8 +61,6 @@ import com.example.myapplication.presentation.registry.BeDictionaryConversation
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import android.Manifest
-import android.content.pm.PackageManager
 
 // ==================================================================================
 // --- SECCIÓN: RUTAS DE NAVEGACIÓN ---
@@ -71,13 +68,16 @@ import android.content.pm.PackageManager
 sealed class Screen(val route: String, val title: String) {
     object Home : Screen("home", "Inicio")
     object Presupuestos : Screen("presupuestos", "Presupuestos")
-    object Chat : Screen("chat?providerId={providerId}&companyId={companyId}&categoryId={categoryId}", "Chat") {
-        fun createRoute(providerId: String? = null, companyId: String? = null, categoryId: String? = null) = 
-            "chat?providerId=${providerId ?: ""}&companyId=${companyId ?: ""}&categoryId=${categoryId ?: ""}"
+    object Chat : Screen("chat?providerId={providerId}&branchId={branchId}&categoryId={categoryId}&clientBranchId={clientBranchId}", "Chat") {
+        fun createRoute(providerId: String? = null, branchId: String? = null, categoryId: String? = null, clientBranchId: String? = null) =
+            "chat?providerId=${providerId ?: ""}&branchId=${branchId ?: ""}&categoryId=${categoryId ?: ""}&clientBranchId=${clientBranchId ?: ""}"
     }
     object Calendar : Screen("calendar", "Calendario")
     object Promo : Screen("promo", "Promociones")
-    object PerfilPrestador : Screen("perfil_prestador/{providerId}", "Perfil del Prestador")
+    object PerfilPrestador : Screen("perfil_prestador/{providerId}?companyId={companyId}&branchId={branchId}", "Perfil del Prestador") {
+        fun createRoute(providerId: String, companyId: String? = null, branchId: String? = null) = 
+            "perfil_prestador/$providerId?companyId=${companyId ?: ""}&branchId=${branchId ?: ""}"
+    }
     object PerfilCliente : Screen("perfil_cliente", "Mi Perfil")
     object ResultBusqueda : Screen("result_busqueda/{category}", "Resultados de Búsqueda")
     object Fast : Screen("fast", "Maverick FAST")
@@ -128,6 +128,10 @@ fun AppNavigation(
     val isBeDragging by beAssistantViewModel.isDragging.collectAsStateWithLifecycle()
     val dynamicBeBottomPadding by beAssistantViewModel.beBottomPadding.collectAsStateWithLifecycle()
     val isToolbarStable by beAssistantViewModel.isToolbarStable.collectAsStateWithLifecycle()
+
+    // --- SUSCRIPCIÓN A FAVORITOS (PERSISTIDOS EN SHORTCUTS) ---
+    val favorites by providerViewModel.favoriteProviders.collectAsStateWithLifecycle()
+    val favoriteIds by providerViewModel.favoriteProviderIds.collectAsStateWithLifecycle()
 
     LaunchedEffect(toolboxKey) {
         beAssistantViewModel.notifyToolboxChanged()
@@ -182,6 +186,8 @@ fun AppNavigation(
         onMigrateCategories = { simulationViewModel.uploadCategoriesToFirestore() },
         activeConversationalMessage = activeConversationalMessage, 
         allCategories = categories,
+        favorites = favorites,
+        favoriteIds = favoriteIds,
         isBubbleMuted = isBubbleMuted,
         hasNewMessage = hasNewMessage,
         providerViewModel = providerViewModel,
@@ -211,6 +217,7 @@ fun AppNavigationContent(
     requestKeyboard: Boolean, 
     currentActions: List<BeSmallActionModel>,
     favorites: List<ProviderDisplayModel> = emptyList(),
+    favoriteIds: Set<String> = emptySet(),
     allCategories: List<CategoryEntity> = emptyList(),
     isBubbleMuted: Boolean = false,
     hasNewMessage: Boolean = false,
@@ -295,6 +302,7 @@ fun AppNavigationContent(
         requestKeyboard = requestKeyboard,
         currentActions = currentActions,
         favorites = favorites,
+        favoriteIds = favoriteIds,
         allCategories = allCategories,
         isBottomBarVisible = isBottomBarVisible,
         resetBePositionTrigger = resetBePositionTrigger,
@@ -327,12 +335,15 @@ fun AppNavigationContent(
                 beViewModel.onEasterEggLinkClick()     
             }
         },
+        onManageShortcut = { id, type, add, label, icon ->
+            providerViewModel.manageShortcut(id, type, add, label, icon)
+        },
         beViewModel = beViewModel,
         categoryViewModel = categoryViewModel,
         providerViewModel = providerViewModel,
         userViewModel = userViewModel,
         ubicacionObrero = ubicacionObrero
-        )
+    )
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -354,6 +365,7 @@ fun AppNavigationStateless(
     requestKeyboard: Boolean,
     currentActions: List<BeSmallActionModel>,
     favorites: List<ProviderDisplayModel> = emptyList(),
+    favoriteIds: Set<String> = emptySet(),
     allCategories: List<CategoryEntity> = emptyList(),
     isBottomBarVisible: Boolean,
     resetBePositionTrigger: Int,
@@ -382,6 +394,7 @@ fun AppNavigationStateless(
     onNextTip: () -> Unit,
     onPrevTip: () -> Unit,
     onBubbleActionClick: () -> Unit = {},
+    onManageShortcut: (String, String, Boolean, String?, String?) -> Unit = { _, _, _, _, _ -> },
     beViewModel: BeBrainViewModel? = null,
     categoryViewModel: CategoryViewModel? = null,
     providerViewModel: ProviderViewModel? = null,
@@ -442,41 +455,44 @@ fun AppNavigationStateless(
                     )
                 }
 
-                composable(
-                    route = Screen.Chat.route,
-                    arguments = listOf(
-                        navArgument("providerId") { type = NavType.StringType; nullable = true; defaultValue = null },
-                        navArgument("companyId") { type = NavType.StringType; nullable = true; defaultValue = null },
-                        navArgument("categoryId") { type = NavType.StringType; nullable = true; defaultValue = null }
-                    ),
-                    enterTransition = mainEnterTransition,
-                    exitTransition = mainExitTransition
-                ) { backStackEntry ->
-                    val providerId = backStackEntry.arguments?.getString("providerId")
-                    val companyId = backStackEntry.arguments?.getString("companyId")
-                    val categoryId = backStackEntry.arguments?.getString("categoryId")
-                    
-                    ChatScreen(
-                        onBack = { navController.popBackStack() }, 
-                        initialProviderId = providerId,
-                        initialCompanyId = companyId,
-                        initialCategoryId = categoryId,
-                        navController = navController, 
-                        beBrainViewModel = beViewModel ?: hiltViewModel(), 
-                        onInConversationChange = { isInConversation ->
-                            if (isInConversation) {
-                                beViewModel?.setHUDContext(HUDContext.CHAT_CONVERSATION)
-                            } else {
-                                beViewModel?.setHUDContext(HUDContext.CHAT)
-                            }
+                        composable(
+                            route = Screen.Chat.route,
+                            arguments = listOf(
+                                navArgument("providerId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                navArgument("branchId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                navArgument("categoryId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                                navArgument("clientBranchId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                            ),
+                            enterTransition = mainEnterTransition,
+                            exitTransition = mainExitTransition
+                        ) { backStackEntry ->
+                            val providerId = backStackEntry.arguments?.getString("providerId")
+                            val branchId = backStackEntry.arguments?.getString("branchId")
+                            val categoryId = backStackEntry.arguments?.getString("categoryId")
+                            val clientBranchId = backStackEntry.arguments?.getString("clientBranchId")
+                            
+                            ChatScreen(
+                                onBack = { navController.popBackStack() }, 
+                                initialProviderId = providerId,
+                                initialBranchId = branchId,
+                                initialCategoryId = categoryId,
+                                initialClientBranchId = clientBranchId,
+                                navController = navController, 
+                                beBrainViewModel = beViewModel ?: hiltViewModel(), 
+                                onInConversationChange = { isInConversation ->
+                                    if (isInConversation) {
+                                        beViewModel?.setHUDContext(HUDContext.CHAT_CONVERSATION)
+                                    } else {
+                                        beViewModel?.setHUDContext(HUDContext.CHAT)
+                                    }
+                                }
+                            )
                         }
-                    )
-                }
 
                 composable(route = Screen.Calendar.route, enterTransition = mainEnterTransition, exitTransition = mainExitTransition) { 
                     CalendarScreen(
                         onBack = { navController.popBackStack() },
-                        onChatClick = { pid -> navController.navigate("chat?providerId=$pid") },
+                        onChatClick = { pid -> navController.navigate(Screen.Chat.createRoute(providerId = pid)) },
                         onNavigateToProfile = { pid -> navController.navigate("perfil_prestador/$pid") }
                     ) 
                 }
@@ -497,6 +513,7 @@ fun AppNavigationStateless(
                     PerfilUsuarioScreen(
                         onNavigateBack = { navController.popBackStack() }, 
                         onLogout = onLogoutRequest, 
+                        onNavigateToSettings = { navController.navigate(Screen.Configuracion.route) },
                         beViewModel = beViewModel ?: hiltViewModel()
                     ) 
                 }
@@ -522,17 +539,46 @@ fun AppNavigationStateless(
                     ResultBusquedaCategoriaScreen(
                         categoryName = category, 
                         onBack = { navController.popBackStack() }, 
-                        onNavigateToProviderProfile = { pid -> navController.navigate("perfil_prestador/$pid") }, 
-                        onNavigateToChat = { service -> 
-                            navController.navigate("chat?providerId=${service.id}&companyId=${service.companyId ?: ""}&categoryId=${service.categoryId ?: ""}") 
+                        onNavigateToProviderProfile = { pid, cid, bid -> 
+                            navController.navigate(Screen.PerfilPrestador.createRoute(pid, cid, bid)) 
+                        }, 
+                        onNavigateToChat = { service, _, clientBranchId ->
+                            navController.navigate(Screen.Chat.createRoute(
+                                providerId = service.providerId,
+                                branchId = service.branchId,
+                                categoryId = category,
+                                clientBranchId = clientBranchId
+                            )) 
                         }, 
                         beViewModel = beViewModel ?: hiltViewModel()
                     )
                 }
 
-                composable(route = Screen.PerfilPrestador.route, arguments = listOf(navArgument("providerId") { type = NavType.StringType })) { backStackEntry ->
+                composable(
+                    route = Screen.PerfilPrestador.route, 
+                    arguments = listOf(
+                        navArgument("providerId") { type = NavType.StringType },
+                        navArgument("companyId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                        navArgument("branchId") { type = NavType.StringType; nullable = true; defaultValue = null }
+                    )
+                ) { backStackEntry ->
                     val providerId = backStackEntry.arguments?.getString("providerId") ?: ""
-                    PerfilPrestadorScreen(providerId = providerId, onBack = { navController.popBackStack() })
+                    val companyId = backStackEntry.arguments?.getString("companyId")
+                    val branchId = backStackEntry.arguments?.getString("branchId")
+
+                    PerfilPrestadorScreen(
+                        providerId = providerId,
+                        initialCompanyId = if (companyId.isNullOrBlank()) null else companyId,
+                        initialBranchId = if (branchId.isNullOrBlank()) null else branchId,
+                        onBack = { navController.popBackStack() },
+                        onNavigateToChat = { provider, _, bid ->
+                            navController.navigate(Screen.Chat.createRoute(
+                                providerId = provider.providerId,
+                                branchId = bid
+                            ))
+                        },
+                        beViewModel = beViewModel ?: hiltViewModel()
+                    )
                 }
 
                 composable(route = Screen.Fast.route) { FastScreen(navController = navController, bottomPadding = innerPadding) }
@@ -546,7 +592,7 @@ fun AppNavigationStateless(
                         viewModel = hiltViewModel(),
                         categoryViewModel = categoryViewModel ?: hiltViewModel(),
                         beBrainViewModel = beViewModel ?: hiltViewModel(),
-                        onChatClick = { pid, _ -> navController.navigate("chat?providerId=$pid") },
+                        onChatClick = { pid, _ -> navController.navigate(Screen.Chat.createRoute(providerId = pid)) },
                         onBack = { navController.popBackStack() },
                         bottomPadding = innerPadding
                     )
@@ -640,7 +686,7 @@ fun AppNavigationStateless(
                     onPrevTip = onPrevTip,
                     beBottomPadding = targetBePadding, 
                     onBubbleActionClick = onBubbleActionClick,
-                    onMenuOptionClick = { optionId -> },
+                    onMenuOptionClick = { _ -> },
                     isToolbarStable = isToolbarStable,
                     beBrainViewModel = beViewModel
                     )
@@ -655,7 +701,15 @@ fun AppNavigationStateless(
                 .align(Alignment.CenterEnd)
                 .zIndex(610f)
         ) {
-            FavoritesPanel(navController, favorites) { beViewModel?.setFavoritesPanelVisible(false) }
+            FavoritesPanel(
+                navController = navController,
+                favorites = favorites,
+                onClose = { beViewModel?.setFavoritesPanelVisible(false) },
+                onManageShortcut = { id, type, add, label, icon ->
+                    onManageShortcut(id, type, add, label, icon)
+                },
+                favoriteIds = favoriteIds
+            )
         }
 
         if (showFavoritesPanel) {
@@ -932,6 +986,7 @@ fun AppNavigationPreview() {
             requestKeyboard = false,
             currentActions = listOf(BeSmallActionModel("fast", Icons.Default.FlashOn, "Fast", emoji = "⚡", isDefault = true)),
             favorites = emptyList(),
+            favoriteIds = emptySet(),
             allCategories = listOf(
             ),
             isBottomBarVisible = true,
@@ -958,4 +1013,3 @@ fun AppNavigationPreview() {
         )
     }
 }
-

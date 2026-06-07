@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -22,6 +23,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -52,82 +55,89 @@ fun NotificacionesScreen(
 
     val grupos = remember(notificaciones) { agruparPorFecha(notificaciones) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colors.backgroundColor)
-    ) {
-        // HEADER
-        Box(
+    Scaffold(contentWindowInsets = WindowInsets(0)) { paddingValues ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(colors.primaryOrange, colors.primaryOrangeDark)
-                    ),
-                    shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp)
-                )
-                .padding(top = 48.dp, start = 8.dp, end = 16.dp, bottom = 24.dp)
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(colors.backgroundColor)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            // HEADER
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(4.dp, RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                    .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color(0xFFFF7043),
+                                0.45f to Color(0xFFFF9E80),
+                                1.0f to Color(0xFFFFCCBC)
+                            )
+                        )
+                    )
+                    .padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 20.dp)
             ) {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(
-                        Icons.Default.ArrowBackIosNew,
-                        contentDescription = "Volver",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Notificaciones",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = if (unreadCount > 0) "$unreadCount sin leer" else "Todo al día ✓",
-                        fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.85f)
-                    )
-                }
-                if (unreadCount > 0) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = Color.White.copy(alpha = 0.2f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = Color(0xFF3D1100)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Notificaciones",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF3D1100)
+                        )
+                        Text(
+                            text = if (unreadCount > 0) "$unreadCount sin leer" else "Todo al día ✓",
+                            fontSize = 13.sp,
+                            color = Color(0xFF5D2000).copy(alpha = 0.85f)
+                        )
+                    }
+                    if (unreadCount > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color.White.copy(alpha = 0.45f)
                         ) {
-                            IconButton(
-                                onClick = { viewModel.marcarTodasLeidas() },
-                                modifier = Modifier.size(36.dp)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    Icons.Default.DoneAll,
-                                    contentDescription = "Marcar todas leidas",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
+                                IconButton(
+                                    onClick = { viewModel.marcarTodasLeidas() },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.DoneAll,
+                                        contentDescription = "Marcar todas leidas",
+                                        tint = Color(0xFF3D1100),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                Text(
+                                    text = if (unreadCount > 99) "99+" else "$unreadCount",
+                                    color = Color(0xFF3D1100),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(end = 10.dp)
                                 )
                             }
-                            Text(
-                                text = if (unreadCount > 99) "99+" else "$unreadCount",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                modifier = Modifier.padding(end = 10.dp)
-                            )
                         }
                     }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(14.dp))
+
+            Spacer(modifier = Modifier.height(14.dp))
 
         // FILTROS CHIPS
         LazyRow(
@@ -224,8 +234,9 @@ fun NotificacionesScreen(
                 item { Spacer(Modifier.height(16.dp)) }
             }
         }
-    }
-}
+        } // fin Column
+    } // fin Scaffold lambda
+} // fin NotificacionesScreen
 
 // EMPTY STATE
 @Composable

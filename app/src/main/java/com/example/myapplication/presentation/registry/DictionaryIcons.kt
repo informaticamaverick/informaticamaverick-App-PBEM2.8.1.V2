@@ -26,6 +26,7 @@ object MaverickIcons {
     val Add = Icons.Rounded.Add
     val Refresh = Icons.Rounded.Refresh
     val Filter = Icons.Rounded.FilterAlt
+    val FilterList = Icons.Rounded.FilterList
     val FilterOff = Icons.Rounded.FilterAltOff
     val Sort = Icons.AutoMirrored.Rounded.Sort
     val History = Icons.Rounded.History

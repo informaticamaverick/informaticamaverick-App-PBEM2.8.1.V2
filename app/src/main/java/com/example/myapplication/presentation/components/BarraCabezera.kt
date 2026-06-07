@@ -1,6 +1,5 @@
 package com.example.myapplication.presentation.components
 
-// === IMPORTS ===
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -38,12 +38,9 @@ import com.example.myapplication.presentation.designsystem.components.MaverickCo
 import com.example.myapplication.presentation.designsystem.components.shakeClick
 import com.example.myapplication.presentation.designsystem.components.AutoSizeText
 
-// === SECCIÓN: COMPONENTE PRINCIPAL ===
-
 /**
  * Barra de Encabezado Maverick V5 (ELITE HUD).
- * Estilo: Obsidian Glass, Luminous Borders, Technical HUD components.
- * Optimizada para transiciones fluidas y estética de élite.
+ * Fragmentada para máximo rendimiento JIT.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,204 +62,26 @@ fun BarraCabezera(
 ) {
     var showInfoDialog by remember { mutableStateOf(false) }
 
-    // --- CÁLCULOS DINÁMICOS (LERP) ---
-    // Interpolación lineal entre estado expandido y colapsado
-    val backButtonSize = lerp(42.dp, 34.dp, collapseFraction)
-    val emojiFontSize = lerp(60.sp, 34.sp, collapseFraction)
-    val emojiEndPadding = lerp(16.dp, 0.dp, collapseFraction)
-
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(CutCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
             .background(backgroundBrush)
-            .drawBehind {
-                // 1. EFECTO DE PROFUNDIDAD SUPERIOR
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent),
-                        startY = 0f,
-                        endY = 85.dp.toPx()
-                    )
-                )
-
-                // --- INTEGRACIÓN HUD ELITE (Dibujo técnico) ---
-                val strokeWidth = 1.2.dp.toPx()
-                val cornerSize = 16.dp.toPx()
-
-                // Formatura del borde HUD (Base del componente)
-                val path = Path().apply {
-                    moveTo(0f, size.height - cornerSize)
-                    lineTo(cornerSize, size.height)
-                    lineTo(size.width - cornerSize, size.height)
-                    lineTo(size.width, size.height - cornerSize)
-                }
-
-                // A. RESPLANDOR DE IDENTIDAD (Ambient Glow estilo V2) - COMENTADO POR REQUERIMIENTO
-                /*
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(accentColor.copy(alpha = 0.08f), Color.Transparent),
-                        center = Offset(40.dp.toPx(), size.height / 2),
-                        radius = size.width / 2
-                    ),
-                    center = Offset(40.dp.toPx(), size.height / 2),
-                    radius = size.width / 2
-                )
-                */
-
-                // B. EFECTO GLOW CENTRAL BASE - COMENTADO POR REQUERIMIENTO
-                /*
-                drawRect(
-                    brush = Brush.radialGradient(
-                        colors = listOf(accentColor.copy(alpha = 0.15f), Color.Transparent),
-                        center = Offset(size.width / 2, size.height),
-                        radius = size.width / 1.5f
-                    ),
-                    alpha = 0.4f
-                )
-                */
-
-                // C. LUMINOSIDAD GRADIENTE MAVERICK (Borde neón dinámico)
-                val borderGradient = Brush.horizontalGradient(
-                    0.0f to accentColor.copy(alpha = 0.05f),
-                    0.2f to accentColor,
-                    0.5f to MaverickColors.ElectricCyan,
-                    0.8f to accentColor,
-                    1.0f to accentColor.copy(alpha = 0.05f)
-                )
-
-                // D. LÍNEA SÓLIDA PRINCIPAL
-                drawPath(
-                    path = path,
-                    brush = borderGradient,
-                    style = Stroke(
-                        width = strokeWidth,
-                        cap = StrokeCap.Round
-                    )
-                )
-
-                // E. GLOW TENUE ADAPTATIVO (Resplandor de borde)
-                drawPath(
-                    path = path,
-                    brush = borderGradient,
-                    style = Stroke(
-                        width = strokeWidth * 3f,
-                        cap = StrokeCap.Round
-                    ),
-                    alpha = 0.12f
-                )
-            }
+            .drawBehind { drawBarraCabezeraEffects(accentColor) }
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                // Altura dinámica del contenido interno según el colapso
-                .height(80.dp * (1f - (collapseFraction * 0.4f))) 
-        ) {
-            // --- EMOJI DE FONDO (Diseño reactivo) ---
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(end = emojiEndPadding)
-                    .graphicsLayer { 
-                        alpha = 1f 
-                    },
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Text(
-                    text = emoji,
-                    fontSize = emojiFontSize
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // --- BOTÓN VOLVER (Estilo Táctico) ---
-                Box(
-                    modifier = Modifier
-                        .size(backButtonSize)
-                        .clip(CutCornerShape(8.dp))
-                        .background(Color.White.copy(alpha = 0.05f))
-                        .border(1.dp, borderColor, CutCornerShape(8.dp))
-                        .shakeClick { onBack() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = MaverickIcons.Back,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.size(lerp(20.dp, 18.dp, collapseFraction))
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    // --- SUBTÍTULO E INFO ICON (Data técnica) ---
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        if (collapseFraction < 0.6f) {
-                            Text(
-                                text = subtitle.uppercase(),
-                                style = CyberTypography.MonospaceData.copy(
-                                    color = accentColor.copy(alpha = 0.85f),
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 2.sp
-                                ),
-                                modifier = Modifier.graphicsLayer { alpha = 1f - (collapseFraction * 2.5f).coerceIn(0f, 1f) }
-                            )
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            // ICONO DE INFO (Tactical Alert)
-                            Box(
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .graphicsLayer { alpha = 1f - (collapseFraction * 2.5f).coerceIn(0f, 1f) }
-                                    .shakeClick {
-                                        if (onInfoClick != null) onInfoClick() else showInfoDialog = true 
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("❗", fontSize = 11.sp)
-                            }
-                        }
-                    }
-
-                    // --- TÍTULO PRINCIPAL (AutoSize) ---
-                    AutoSizeText(
-                        text = title.uppercase(),
-                        maxLines = 2,
-                        textAlign = TextAlign.Start,
-                        style = CyberTypography.TitleTech.copy(
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 0.5.sp,
-                            lineHeight = 20.sp
-                        )
-                    )
-                }
-
-                // --- ESPACIADOR DE SIMETRÍA ELIMINADO PARA ALINEACIÓN IZQUIERDA ---
-            }
-        }
+        BarraCabezeraContent(
+            title = title,
+            subtitle = subtitle,
+            emoji = emoji,
+            onBack = onBack,
+            onInfoClick = onInfoClick,
+            collapseFraction = collapseFraction,
+            accentColor = accentColor,
+            borderColor = borderColor,
+            onShowDialog = { showInfoDialog = true }
+        )
     }
 
-    // DIÁLOGO INFORMATIVO MAVERICK ELITE
     if (showInfoDialog) {
         MaverickInfoDialog(
             title = infoTitle,
@@ -272,11 +91,161 @@ fun BarraCabezera(
     }
 }
 
-// === SECCIÓN: COMPONENTES DE APOYO ===
+@Composable
+private fun BarraCabezeraContent(
+    title: String,
+    subtitle: String,
+    emoji: String,
+    onBack: () -> Unit,
+    onInfoClick: (() -> Unit)?,
+    collapseFraction: Float,
+    accentColor: Color,
+    borderColor: Color,
+    onShowDialog: () -> Unit
+) {
+    val backButtonSize = lerp(42.dp, 34.dp, collapseFraction)
+    val emojiFontSize = lerp(60.sp, 34.sp, collapseFraction)
+    val emojiEndPadding = lerp(16.dp, 0.dp, collapseFraction)
 
-/**
- * MaverickInfoDialog: Diálogo informativo con estética técnica.
- */
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .height(80.dp * (1f - (collapseFraction * 0.4f))) 
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = emojiEndPadding)
+                .graphicsLayer { 
+                    // Restauramos la transparencia dinámica para el efecto HUD
+                    alpha = (1f - collapseFraction).coerceIn(0.2f, 1f) 
+                },
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Text(text = emoji, fontSize = emojiFontSize)
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(backButtonSize)
+                    .clip(CutCornerShape(8.dp))
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .border(1.dp, borderColor, CutCornerShape(8.dp))
+                    .shakeClick { onBack() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = MaverickIcons.Back,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(lerp(20.dp, 18.dp, collapseFraction))
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.Start
+            ) {
+                if (collapseFraction < 0.6f) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Start
+                    ) {
+                        Text(
+                            text = subtitle.uppercase(),
+                            style = CyberTypography.MonospaceData.copy(
+                                color = accentColor.copy(alpha = 0.85f),
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 2.sp
+                            ),
+                            modifier = Modifier.graphicsLayer { alpha = 1f - (collapseFraction * 2.5f).coerceIn(0f, 1f) }
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .graphicsLayer { alpha = 1f - (collapseFraction * 2.5f).coerceIn(0f, 1f) }
+                                .shakeClick {
+                                    if (onInfoClick != null) onInfoClick() else onShowDialog()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("❗", fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                AutoSizeText(
+                    text = title.uppercase(),
+                    maxLines = 2,
+                    textAlign = TextAlign.Start,
+                    style = CyberTypography.TitleTech.copy(
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp,
+                        lineHeight = 20.sp
+                    )
+                )
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawBarraCabezeraEffects(accentColor: Color) {
+    drawRect(
+        brush = Brush.verticalGradient(
+            colors = listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent),
+            startY = 0f,
+            endY = 85.dp.toPx()
+        )
+    )
+
+    val strokeWidth = 1.2.dp.toPx()
+    val cornerSize = 16.dp.toPx()
+
+    val path = Path().apply {
+        moveTo(0f, size.height - cornerSize)
+        lineTo(cornerSize, size.height)
+        lineTo(size.width - cornerSize, size.height)
+        lineTo(size.width, size.height - cornerSize)
+    }
+
+    val borderGradient = Brush.horizontalGradient(
+        0.0f to accentColor.copy(alpha = 0.05f),
+        0.2f to accentColor,
+        0.5f to MaverickColors.ElectricCyan,
+        0.8f to accentColor,
+        1.0f to accentColor.copy(alpha = 0.05f)
+    )
+
+    drawPath(
+        path = path,
+        brush = borderGradient,
+        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+    )
+
+    drawPath(
+        path = path,
+        brush = borderGradient,
+        style = Stroke(width = strokeWidth * 3f, cap = StrokeCap.Round),
+        alpha = 0.12f
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MaverickInfoDialog(
@@ -307,7 +276,6 @@ fun MaverickInfoDialog(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Header Icon
                 Box(
                     modifier = Modifier
                         .size(50.dp)
@@ -321,7 +289,6 @@ fun MaverickInfoDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Title
                 Text(
                     text = title.uppercase(),
                     style = CyberTypography.TitleTech.copy(
@@ -333,7 +300,6 @@ fun MaverickInfoDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Divider neón sutil
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(0.4f)
@@ -347,7 +313,6 @@ fun MaverickInfoDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Description
                 Text(
                     text = description,
                     style = CyberTypography.BodyCyber.copy(
@@ -360,7 +325,6 @@ fun MaverickInfoDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Button Close
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -385,8 +349,6 @@ fun MaverickInfoDialog(
     }
 }
 
-// === SECCIÓN: PREVIEWS ===
-
 @Preview(showBackground = true, backgroundColor = 0xFF05070A)
 @Composable
 fun BarraCabezeraV5Preview() {
@@ -395,12 +357,11 @@ fun BarraCabezeraV5Preview() {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         BarraCabezera(
-            title = "Calendario de Actividades Elite y Gestión de Recursos Maverick",
+            title = "Calendario de Actividades Elite",
             subtitle = "Agenda de compromisos",
             emoji = "🗓️",
             onBack = {},
-            collapseFraction = 0f,
-            infoDescription = "Gestiona tus citas y eventos con la precisión Maverick."
+            collapseFraction = 0f
         )
         
         BarraCabezera(

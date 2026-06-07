@@ -20,11 +20,11 @@ import com.example.myapplication.core.utils.ImageUtils
 import com.example.myapplication.presentation.registry.BeDictionary
 import com.example.myapplication.presentation.registry.MaverickIcons
 import dagger.hilt.android.qualifiers.ApplicationContext
-import com.example.myapplication.core.common.extensions.prepareForSearch
-import com.example.myapplication.core.common.extensions.wordStartsWithSmart
-import com.example.myapplication.core.common.extensions.normalizeForTopic
+import com.example.myapplication.core.utils.prepareForSearch
+import com.example.myapplication.core.utils.wordStartsWithSmart
+import com.example.myapplication.core.utils.normalizeForTopic
 import dagger.hilt.android.lifecycle.HiltViewModel
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.presentation.global.HUDContext
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -169,6 +169,11 @@ class BudgetViewModel @Inject constructor(
     // 2. DATOS FILTRADOS Y ORDENADOS (Elite SSOT)
     // ==========================================================
     val allTenders: StateFlow<List<TenderEntity>> = repository.allTenders
+        .map { tenders ->
+            val currentUserId = auth.currentUser?.uid ?: "user_demo_66"
+            tenders.filter { it.clientId == currentUserId }
+        }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
@@ -208,7 +213,9 @@ class BudgetViewModel @Inject constructor(
             BeDictionary.Filters["filter_tender_closed"],
             BeDictionary.Filters["filter_tender_awarded"]
         ) + tenderCats
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }
+    .flowOn(Dispatchers.Default)
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val sortDropdownItems: StateFlow<List<DropdownItemData>> = flowOf(
         listOfNotNull(
@@ -248,7 +255,8 @@ class BudgetViewModel @Inject constructor(
         coordinator.activeFilters,
         _activeSortCriteria,
         budgetStats,
-        coordinator.currentHUDContext
+        coordinator.currentHUDContext,
+        coordinator.selectedProfileId
     ) { args: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val tenders = args[0] as List<TenderEntity>
@@ -260,12 +268,27 @@ class BudgetViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val statsMap = args[4] as Map<String, TenderStats>
         val context = args[5] as HUDContext
+        val profileId = args[6] as String?
 
         var list = if (query.isNotEmpty()) {
             val normalized = query.prepareForSearch()
             tenders.filter { it.title.wordStartsWithSmart(normalized) }
         } else {
             tenders
+        }
+
+        // --- FILTRADO POR PERFIL (SSOT) ---
+        list = if (profileId == null) {
+            // Perfil Personal: Tenders sin nombre de empresa (o donde el usuario es el emisor personal)
+            list.filter { it.companyName == null }
+        } else {
+            // Perfil de Empresa: Tenders emitidos por esa empresa
+            // [TODO ELITE]: En el futuro, usar companyId para mayor precisión.
+            // Por ahora, usamos el ID del perfil que el coordinador sincroniza (que coincide con el ownerId).
+            // Pero como TenderEntity no tiene companyId, intentamos buscar por nombre si es posible,
+            // o asumimos que el repositorio ya nos dio solo los del usuario.
+            // [FIX TEMPORAL]: Si hay un profileId, filtramos por companyName no nulo.
+            list.filter { it.companyName != null }
         }
 
         val catFilters = activeFilters.filter { it.startsWith("cat_") }.map { it.removePrefix("cat_") }
@@ -315,11 +338,13 @@ class BudgetViewModel @Inject constructor(
 
         list = list.sortedWith(comparator.thenByDescending { it.dateTimestamp })
         
+        val isTenderContext = context == HUDContext.BUDGETS_TENDERS || context == HUDContext.BUDGETS
+
         if (query.isNotEmpty() && list.isEmpty()) {
-            if (context == HUDContext.BUDGETS_TENDERS) coordinator.setHasMatches(false)
+            if (isTenderContext) coordinator.setHasMatches(false)
             tenders.sortedByDescending { it.dateTimestamp }
         } else {
-            if (context == HUDContext.BUDGETS_TENDERS) coordinator.setHasMatches(true)
+            if (isTenderContext) coordinator.setHasMatches(true)
             list
         }
     }
@@ -523,7 +548,7 @@ class BudgetViewModel @Inject constructor(
         requiresPaymentMethod: Boolean,
         requiresWorkGuarantee: Boolean,
         requiresProviderDoc: Boolean,
-        location: AddressInfo?,
+        location: AddressUnico?,
         imageUrls: List<String> = emptyList()
     ) {
         viewModelScope.launch {
@@ -532,16 +557,16 @@ class BudgetViewModel @Inject constructor(
             
             val addr = location?.streetAndNumber
             val num = "" // El número ya está en streetAndNumber
-            val loc = location?.locality
+            val loc = location?.localidad
             val type = if (location?.id == "gps_current") "GPS" else if (location?.isCompany == true) "BUSINESS" else "PERSONAL"
 
-            val compName = if (location?.isCompany == true) location.companyOrUserName else null
-            val branchName = if (location?.isCompany == true) location.branchName else null
+            val compName = if (location?.isCompany == true) location.ownerName else null
+            val branchName = if (location?.isCompany == true) location.label else null
             
-            val finalPostalCode = location?.postalCode
+            val finalPostalCode = location?.codigoPostal
 
             val clientDisplayName = if (location?.isCompany == true) {
-                location.companyOrUserName
+                location.ownerName
             } else {
                 "${currentUser?.name ?: ""} ${currentUser?.lastName ?: ""}".trim().ifEmpty { currentUser?.displayName }
             }
@@ -593,6 +618,9 @@ class BudgetViewModel @Inject constructor(
             )
 
             repository.createNewTender(newTender)
+
+            // 🔥 [ELITE] Suscripción on-demand al topic de la zona para esta licitación
+            coordinator.syncZoneTopic(cleanCp)
 
             repository.sendTopicNotification(
                 topic = matchKey,

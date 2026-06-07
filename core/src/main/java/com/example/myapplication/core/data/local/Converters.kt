@@ -1,25 +1,21 @@
 package com.example.myapplication.core.data.local
 
 import androidx.room.TypeConverter
-import com.example.myapplication.core.data.local.entity.*
 import com.example.myapplication.core.domain.model.*
+import com.example.myapplication.core.data.local.entity.*
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
 /**
  * --- CONVERSORES DE TIPOS (ROOM) ---
- * Esta clase le enseña a Room cómo guardar objetos complejos (listas, enums, clases personalizadas)
- * convirtiéndolos a texto JSON y viceversa. Es fundamental para que el módulo compartido
- * pueda persistir estructuras como presupuestos y perfiles de usuario.
+ * [ELITE v5.1]: Soporte para AddressUnico y estructuras jerárquicas cliente/prestador.
  */
 class Converters {
     private val gson = Gson()
 
-    // --- 1. LISTAS DE TEXTO (STRING) ---
+    // --- 1. LISTAS DE TEXTO ---
     @TypeConverter
-    fun fromStringList(value: List<String>?): String {
-        return gson.toJson(value ?: emptyList<String>())
-    }
+    fun fromStringList(value: List<String>?): String = gson.toJson(value ?: emptyList<String>())
 
     @TypeConverter
     fun toStringList(value: String?): List<String> {
@@ -27,11 +23,26 @@ class Converters {
         return gson.fromJson(value, listType) ?: emptyList()
     }
 
-    // --- 2. MODELOS DE USUARIO Y CLIENTE ---
+    // --- 2. ADDRESS UNICO ---
     @TypeConverter
-    fun fromCompanyClientList(value: List<CompanyClient>?): String {
-        return gson.toJson(value ?: emptyList<CompanyClient>())
+    fun fromAddressUnico(value: AddressUnico?): String? = gson.toJson(value)
+
+    @TypeConverter
+    fun toAddressUnico(value: String?): AddressUnico? = gson.fromJson(value, AddressUnico::class.java)
+
+    @TypeConverter
+    fun fromAddressUnicoList(value: List<AddressUnico>?): String = gson.toJson(value ?: emptyList<AddressUnico>())
+
+    @TypeConverter
+    fun toAddressUnicoList(value: String?): List<AddressUnico> {
+        if (value.isNullOrEmpty()) return emptyList()
+        val listType = object : TypeToken<List<AddressUnico>>() {}.type
+        return gson.fromJson(value, listType) ?: emptyList()
     }
+
+    // --- 3. MODELOS DE USUARIO / CLIENTE ---
+    @TypeConverter
+    fun fromCompanyClientList(value: List<CompanyClient>?): String = gson.toJson(value ?: emptyList<CompanyClient>())
 
     @TypeConverter
     fun toCompanyClientList(value: String?): List<CompanyClient> {
@@ -40,45 +51,9 @@ class Converters {
         return gson.fromJson(value, listType) ?: emptyList()
     }
 
+    // --- 4. MODELOS DE PRESTADOR ---
     @TypeConverter
-    fun fromAddressClientList(value: List<AddressClient>?): String {
-        return gson.toJson(value ?: emptyList<AddressClient>())
-    }
-
-    @TypeConverter
-    fun toAddressClientList(value: String?): List<AddressClient> {
-        if (value.isNullOrEmpty()) return emptyList()
-        val listType = object : TypeToken<List<AddressClient>>() {}.type
-        return gson.fromJson(value, listType) ?: emptyList()
-    }
-
-    // --- 3. MODELOS DE PRESTADOR ---
-    @TypeConverter
-    fun fromAddressProvider(value: AddressProvider?): String? {
-        return gson.toJson(value)
-    }
-
-    @TypeConverter
-    fun toAddressProvider(value: String?): AddressProvider? {
-        return gson.fromJson(value, AddressProvider::class.java)
-    }
-
-    @TypeConverter
-    fun fromAddressProviderList(value: List<AddressProvider>?): String {
-        return gson.toJson(value ?: emptyList<AddressProvider>())
-    }
-
-    @TypeConverter
-    fun toAddressProviderList(value: String?): List<AddressProvider> {
-        if (value.isNullOrEmpty()) return emptyList()
-        val listType = object : TypeToken<List<AddressProvider>>() {}.type
-        return gson.fromJson(value, listType) ?: emptyList()
-    }
-
-    @TypeConverter
-    fun fromCompanyProviderList(value: List<CompanyProvider>?): String {
-        return gson.toJson(value ?: emptyList<CompanyProvider>())
-    }
+    fun fromCompanyProviderList(value: List<CompanyProvider>?): String = gson.toJson(value ?: emptyList<CompanyProvider>())
 
     @TypeConverter
     fun toCompanyProviderList(value: String?): List<CompanyProvider> {
@@ -87,11 +62,9 @@ class Converters {
         return gson.fromJson(value, listType) ?: emptyList()
     }
 
-    // --- 4. MODELOS DE PRESUPUESTO ---
+    // --- 5. MODELOS DE PRESUPUESTO ---
     @TypeConverter
-    fun fromBudgetItemList(value: List<BudgetItem>?): String {
-        return gson.toJson(value ?: emptyList<BudgetItem>())
-    }
+    fun fromBudgetItemList(value: List<BudgetItem>?): String = gson.toJson(value ?: emptyList<BudgetItem>())
 
     @TypeConverter
     fun toBudgetItemList(value: String?): List<BudgetItem> {
@@ -101,9 +74,7 @@ class Converters {
     }
 
     @TypeConverter
-    fun fromBudgetServiceList(value: List<BudgetService>?): String {
-        return gson.toJson(value ?: emptyList<BudgetService>())
-    }
+    fun fromBudgetServiceList(value: List<BudgetService>?): String = gson.toJson(value ?: emptyList<BudgetService>())
 
     @TypeConverter
     fun toBudgetServiceList(value: String?): List<BudgetService> {
@@ -113,9 +84,7 @@ class Converters {
     }
 
     @TypeConverter
-    fun fromBudgetFeeList(value: List<BudgetProfessionalFee>?): String {
-        return gson.toJson(value ?: emptyList<BudgetProfessionalFee>())
-    }
+    fun fromBudgetFeeList(value: List<BudgetProfessionalFee>?): String = gson.toJson(value ?: emptyList<BudgetProfessionalFee>())
 
     @TypeConverter
     fun toBudgetFeeList(value: String?): List<BudgetProfessionalFee> {
@@ -125,9 +94,7 @@ class Converters {
     }
 
     @TypeConverter
-    fun fromBudgetMiscList(value: List<BudgetMiscExpense>?): String {
-        return gson.toJson(value ?: emptyList<BudgetMiscExpense>())
-    }
+    fun fromBudgetMiscList(value: List<BudgetMiscExpense>?): String = gson.toJson(value ?: emptyList<BudgetMiscExpense>())
 
     @TypeConverter
     fun toBudgetMiscList(value: String?): List<BudgetMiscExpense> {
@@ -137,9 +104,7 @@ class Converters {
     }
 
     @TypeConverter
-    fun fromBudgetTaxList(value: List<BudgetTax>?): String {
-        return gson.toJson(value ?: emptyList<BudgetTax>())
-    }
+    fun fromBudgetTaxList(value: List<BudgetTax>?): String = gson.toJson(value ?: emptyList<BudgetTax>())
 
     @TypeConverter
     fun toBudgetTaxList(value: String?): List<BudgetTax> {
@@ -148,7 +113,7 @@ class Converters {
         return gson.fromJson(value, listType) ?: emptyList()
     }
 
-    // --- 5. ENUMS ---
+    // --- 6. ENUMS ---
     @TypeConverter
     fun fromMessageType(value: MessageType): String = value.name
 
@@ -168,4 +133,10 @@ class Converters {
 
     @TypeConverter
     fun toVisitStatus(value: String): VisitStatus = enumValueOf<VisitStatus>(value)
+
+    @TypeConverter
+    fun fromBudgetStatus(value: BudgetStatus): String = value.name
+
+    @TypeConverter
+    fun toBudgetStatus(value: String): BudgetStatus = enumValueOf<BudgetStatus>(value)
 }

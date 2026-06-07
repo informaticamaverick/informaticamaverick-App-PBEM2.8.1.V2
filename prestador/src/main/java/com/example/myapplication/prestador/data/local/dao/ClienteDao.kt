@@ -1,12 +1,17 @@
 package com.example.myapplication.prestador.data.local.dao
 
+/*
+ * ARCHIVO EN DESUSO
+ * Motivo: Se ha centralizado la fuente de verdad en el modelo User del módulo :core.
+ */
+
+/*
 import androidx.room.*
 import com.example.myapplication.prestador.data.local.entity.ClienteEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ClienteDao {
-    
     @Query("SELECT * FROM clientes ORDER BY nombre ASC")
     fun getAllClientes(): Flow<List<ClienteEntity>>
     
@@ -46,3 +51,4 @@ interface ClienteDao {
     @Query("SELECT COUNT(*) FROM clientes")
     suspend fun countClientes(): Int
 }
+*/

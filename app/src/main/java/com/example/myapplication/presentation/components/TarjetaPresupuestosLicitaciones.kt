@@ -126,6 +126,7 @@ fun LicitacionFolderPremium(
     awardedProviderName: String? = null,
     awardedBudgetId: String? = null,
     awardedProviderPhotoUrl: String? = null,
+    awardedProviderThumbnail: String? = null, // [ELITE v5.4]
     onLongClick: () -> Unit = {},
     onViewDetails: () -> Unit = {},
     onClick: () -> Unit
@@ -425,7 +426,7 @@ fun LicitacionFolderPremium(
                         Box(modifier = Modifier.size(40.dp)) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data(awardedProviderPhotoUrl)
+                                    .data(awardedProviderThumbnail ?: awardedProviderPhotoUrl) // [ELITE v5.4]
                                     .crossfade(true)
                                     .size(120, 120)
                                     .build(),
@@ -755,7 +756,7 @@ fun TarjetaPresupuestoA4Document(
                         ) {
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
-                                    .data(budget.providerPhotoUrl)
+                                    .data(budget.providerThumbnail ?: budget.providerPhotoUrl) // [ELITE v5.4]
                                     .crossfade(true)
                                     .size(60, 60)
                                     .build(),

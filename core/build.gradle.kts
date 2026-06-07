@@ -45,7 +45,11 @@ dependencies {
     // Room - Persistencia Local
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.paging)
     ksp(libs.androidx.room.compiler)
+
+    // Paging
+    implementation(libs.androidx.paging.common)
 
     // Firebase - Sincronización en Tiempo Real
     implementation(platform(libs.firebase.bom))
@@ -70,4 +74,7 @@ dependencies {
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
+
+    // Multimedia & Image Processing
+    implementation(libs.androidx.exifinterface)
 }

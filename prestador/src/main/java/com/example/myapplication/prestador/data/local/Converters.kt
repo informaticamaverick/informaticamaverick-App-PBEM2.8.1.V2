@@ -1,10 +1,12 @@
 package com.example.myapplication.prestador.data.local
 
 import androidx.room.TypeConverter
-import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.domain.model.CompanyProvider
 import com.example.myapplication.core.domain.model.BranchProvider
 import com.example.myapplication.core.domain.model.EmployeeProvider
+import com.example.myapplication.core.domain.model.CompanyClient
+import com.example.myapplication.core.domain.model.MessageType
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
@@ -29,24 +31,24 @@ class Converters {
 
     // --- SECCIÓN: MODELOS DE DIRECCIÓN ---
     @TypeConverter
-    fun fromAddressProvider(value: AddressProvider?): String? {
+    fun fromAddressUnico(value: AddressUnico?): String? {
         return gson.toJson(value)
     }
 
     @TypeConverter
-    fun toAddressProvider(value: String?): AddressProvider? {
-        return gson.fromJson(value, AddressProvider::class.java)
+    fun toAddressUnico(value: String?): AddressUnico? {
+        return gson.fromJson(value, AddressUnico::class.java)
     }
 
     @TypeConverter
-    fun fromAddressProviderList(value: List<AddressProvider>?): String {
-        return gson.toJson(value ?: emptyList<AddressProvider>())
+    fun fromAddressUnicoList(value: List<AddressUnico>?): String {
+        return gson.toJson(value ?: emptyList<AddressUnico>())
     }
 
     @TypeConverter
-    fun toAddressProviderList(value: String?): List<AddressProvider> {
+    fun toAddressUnicoList(value: String?): List<AddressUnico> {
         if (value.isNullOrEmpty()) return emptyList()
-        val listType = object : TypeToken<List<AddressProvider>>() {}.type
+        val listType = object : TypeToken<List<AddressUnico>>() {}.type
         return gson.fromJson(value, listType) ?: emptyList()
     }
 
@@ -61,5 +63,27 @@ class Converters {
         if (value.isNullOrEmpty()) return emptyList()
         val listType = object : TypeToken<List<CompanyProvider>>() {}.type
         return gson.fromJson(value, listType) ?: emptyList()
+    }
+
+    // --- SECCIÓN: MODELOS DE USUARIO / CLIENTE ---
+    @TypeConverter
+    fun fromCompanyClientList(value: List<CompanyClient>?): String {
+        return gson.toJson(value ?: emptyList<CompanyClient>())
+    }
+
+    @TypeConverter
+    fun toCompanyClientList(value: String?): List<CompanyClient> {
+        if (value.isNullOrEmpty()) return emptyList()
+        val listType = object : TypeToken<List<CompanyClient>>() {}.type
+        return gson.fromJson(value, listType) ?: emptyList()
+    }
+
+    // --- SECCIÓN: ENUMS COMPARTIDOS ---
+    @TypeConverter
+    fun fromMessageType(value: MessageType): String = value.name
+
+    @TypeConverter
+    fun toMessageType(value: String): MessageType {
+        return try { MessageType.valueOf(value) } catch (e: Exception) { MessageType.TEXT }
     }
 }

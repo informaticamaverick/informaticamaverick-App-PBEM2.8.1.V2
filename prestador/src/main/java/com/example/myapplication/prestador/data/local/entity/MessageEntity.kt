@@ -1,3 +1,4 @@
+/*
 package com.example.myapplication.prestador.data.local.entity
 
 import androidx.room.Entity
@@ -6,8 +7,11 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 
 /**
- * Entidad de mensaje individual en la base de datos
+ * --- OBSOLETO (MAVERICK ELITE v4.0) ---
+ * Esta clase ha sido inactivada en favor de com.example.myapplication.core.data.local.entity.MessageEntity.
+ * Se mantiene comentada por referencia histórica según auditoría.
  */
+/*
 @Entity(
     tableName = "messages",
     foreignKeys = [
@@ -103,3 +107,5 @@ data class MessageEntity(
     val replyToContent: String? = null,
     val replyToSenderName: String? = null
 )
+*/
+*/

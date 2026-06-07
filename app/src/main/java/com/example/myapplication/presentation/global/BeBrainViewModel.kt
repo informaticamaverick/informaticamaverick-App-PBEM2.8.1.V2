@@ -1,6 +1,6 @@
 package com.example.myapplication.presentation.global
 
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
@@ -14,6 +14,7 @@ import com.example.myapplication.core.database.TokenManager
 import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.data.local.entity.UserEntity
 import com.example.myapplication.core.data.repository.*
+import com.example.myapplication.core.utils.ImageUtils
 import com.example.myapplication.data.repository.ShortcutRepository
 import com.example.myapplication.presentation.components.*
 import com.example.myapplication.presentation.features.home.CategoryVisuals
@@ -36,9 +37,9 @@ import javax.inject.Inject
 class BeBrainViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
-    private val tokenManager: TokenManager,
+   // private val tokenManager: TokenManager,
     private val chatRepository: ChatRepository,
-    private val budgetRepository: BudgetRepository,
+   // private val budgetRepository: BudgetRepository,
     private val categoryRepository: CategoryRepository,
     private val shortcutRepository: ShortcutRepository,
     private val categorySeeder: com.example.myapplication.core.data.local.seed.CategorySeeder,
@@ -100,21 +101,44 @@ class BeBrainViewModel @Inject constructor(
     val userState: StateFlow<UserEntity?> = userRepository.userProfile
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    // 🔥 [ELITE v8.8] CONTEO DE NO LEÍDOS POR IDENTIDAD (SSOT)
+    // Centraliza la lógica de badges para que BeBrain sepa qué perfil tiene actividad.
+    val identityUnreadCounts: StateFlow<Map<String, Int>> = userState.flatMapLatest { user ->
+        val uid = user?.id ?: authRepository.getCurrentUser()?.uid ?: ""
+        if (uid.isEmpty()) flowOf(emptyMap())
+        else combine(
+            chatRepository.getActiveChatSummaries(uid),
+            chatRepository.getUnreadCountsPerChat(uid),
+            userRepository.userProfile.map { it?.companies ?: emptyList() }.distinctUntilChanged()
+        ) { summaries, unreadCounts, companies ->
+            val unreadMap = unreadCounts.associate { it.chatId to it.count }
+            val counts = mutableMapOf<String, Int>()
+            
+            summaries.forEach { summary ->
+                val count = unreadMap[summary.chatId] ?: 0
+                if (count == 0) return@forEach
+                
+                val sBranchId = summary.branchId?.takeIf { it.isNotBlank() && it != "none" }
+                val sCompanyId = summary.companyId?.takeIf { it.isNotBlank() && it != "none" }
+
+                if (sBranchId == null && sCompanyId == null) {
+                    counts["personal"] = (counts["personal"] ?: 0) + count
+                } else {
+                    companies.forEach { company ->
+                        val belongs = sCompanyId == company.id || company.branches.any { it.id == sBranchId }
+                        if (belongs) {
+                            counts[company.id] = (counts[company.id] ?: 0) + count
+                        }
+                    }
+                }
+            }
+            counts
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     val hasChatNotifications: StateFlow<Boolean> = totalUnreadCount
         .map { it > 0 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    val unreadCountsMap: StateFlow<Map<String, Int>> = userRepository.userProfile
-        .flatMapLatest { user: UserEntity? ->
-            if (user != null) chatRepository.getUnreadCountsPerChat(user.id)
-            else flowOf(emptyList())
-        }
-        .map { list -> list.associateBy({ it.chatId }, { it.count }) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
-
-    val targetUserName: StateFlow<String> = userState
-        .map { it?.displayName ?: "Usuario Maverick" }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Usuario Maverick")
 
     // --- NUEVO: PERFIL ACTIVO (USUARIO O EMPRESA) ---
     val selectedProfileId: StateFlow<String?> = coordinator.selectedProfileId
@@ -123,32 +147,42 @@ class BeBrainViewModel @Inject constructor(
      * Nombre que debe mostrar la cabecera (Usuario o Empresa activa).
      */
     val activeProfileName: StateFlow<String> = combine(userState, selectedProfileId) { user, profileId ->
-        if (profileId == null || user == null) {
+        if (user == null) return@combine "Usuario"
+        val domainUser = user.toDomain()
+        if (profileId == null) {
             // Perfil Personal: Prioridad DisplayName -> Nombre Completo -> Email
-            user?.displayName?.ifBlank { null } 
-                ?: user?.getFullName()?.ifBlank { null } 
-                ?: user?.email?.substringBefore("@") 
-                ?: "Usuario"
+            domainUser.displayName.ifBlank {
+                domainUser.fullName.ifBlank {
+                    domainUser.email.substringBefore("@")
+                }
+            }
         } else {
-            // Perfil de Empresa
-            user.companies.find { it.id == profileId }?.name 
-                ?: user.displayName.ifBlank { user.getFullName() }
+            // Perfil de Empresa / Sucursal
+            // Buscamos en todas las sucursales de todas las empresas del usuario
+            val branch = user.companies.flatMap { it.branches }.find { it.id == profileId }
+            branch?.name ?: user.companies.find { it.id == profileId }?.name
+                ?: domainUser.displayName.ifBlank { domainUser.fullName }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Cargando...")
 
     /**
-     * Foto procesada (URL o ByteArray) que debe mostrar la cabecera.
+     * Foto procesada (URL o ByteArray/Base64) que debe mostrar la cabecera.
+     * [ELITE v5.5]: Prioriza thumbnails y usa caché de decodificación.
      */
     val activeProfilePhoto: StateFlow<Any?> = combine(userState, selectedProfileId) { user, profileId ->
         if (user == null) return@combine null
-        val domainUser = user.toDomain()
         
-        if (profileId == null) {
-            domainUser.profileImage
+        val source = if (profileId == null) {
+            // Perfil Personal: Thumbnail -> PhotoUrl
+            user.profileThumbnail?.takeIf { it.isNotBlank() } ?: user.photoUrl
         } else {
-            val company = domainUser.companies.find { it.id == profileId }
-            company?.profileImage ?: domainUser.profileImage
+            // Perfil de Empresa / Sucursal: Thumbnail -> PhotoUrl Empresa -> PhotoUrl Usuario
+            val company = user.companies.find { it.id == profileId || it.branches.any { b -> b.id == profileId } }
+            company?.thumbnailBase64?.takeIf { it.isNotBlank() }
+                ?: company?.photoUrl 
+                ?: user.photoUrl
         }
+        ImageUtils.processImageSource(source)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun selectProfile(profileId: String?) {
@@ -160,10 +194,9 @@ class BeBrainViewModel @Inject constructor(
     // ======================================================================================
     private val _initialNavTarget = MutableStateFlow(InitialNavTarget.CHECKING)
     val initialNavTarget: StateFlow<InitialNavTarget> = _initialNavTarget.asStateFlow()
-
+/**
     private val _isFirstTime = MutableStateFlow(tokenManager.isFirstTime())
-    val isFirstTime: StateFlow<Boolean> = _isFirstTime.asStateFlow()
-
+*/
     fun performInitialAuthCheck() {
         viewModelScope.launch {
             // [OPTIMIZACIÓN MAVERICK]: Eliminamos delay artificial de 2s. 
@@ -187,12 +220,12 @@ class BeBrainViewModel @Inject constructor(
             }
         }
     }
-
+/**
     fun completeFirstTime() {
         tokenManager.setFirstTimeCompleted()
         _isFirstTime.value = false
     }
-
+*/
     // ======================================================================================
     // --- SECTOR 3: UBICACIÓN Y CLIMA (Elite SSOT) ---
     // ======================================================================================
@@ -201,22 +234,22 @@ class BeBrainViewModel @Inject constructor(
     val weatherDescription: StateFlow<String> = coordinator.weatherDescription
     
     val locationName: StateFlow<String> = coordinator.activeAddress.map { 
-        it?.locality ?: "Actualizando..." 
+        it?.localidad ?: "Actualizando..."
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Actualizando...")
 
     val selectedAddressId: StateFlow<String?> = coordinator.selectedAddressId
 
-    val availableAddressInfos: StateFlow<List<AddressInfo>> = coordinator.availableAddressInfos
+    val availableAddressInfos: StateFlow<List<AddressUnico>> = coordinator.availableAddressInfos
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val activeAddress: StateFlow<AddressInfo?> = coordinator.activeAddress
+    val activeAddress: StateFlow<AddressUnico?> = coordinator.activeAddress
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun selectAddress(addressId: String) {
         coordinator.selectAddress(addressId)
     }
 
-    fun updateAddressFromGps(address: AddressInfo) {
+    fun updateAddressFromGps(address: AddressUnico) {
         coordinator.updateAddressFromGps(address)
     }
 
@@ -248,10 +281,8 @@ class BeBrainViewModel @Inject constructor(
     val showFavoritesPanel: StateFlow<Boolean> = _showFavoritesPanel.asStateFlow()
 
     private val _isResultadoVisible = MutableStateFlow(false)
-    val isResultadoVisible: StateFlow<Boolean> = _isResultadoVisible.asStateFlow()
 
     private val _isUIBlocked = MutableStateFlow(false)
-    val isUIBlocked: StateFlow<Boolean> = _isUIBlocked.asStateFlow()
 
     fun toggleWeatherDetails() { _showWeatherDetails.value = !_showWeatherDetails.value }
     fun setWeatherDetailsVisible(visible: Boolean) { _showWeatherDetails.value = visible }
@@ -273,9 +304,6 @@ class BeBrainViewModel @Inject constructor(
     // --- SECTOR 5: BÚSQUEDA Y FILTROS (Elite SSOT) ---
     // ======================================================================================
     val searchQuery: StateFlow<String> = coordinator.globalSearchQuery
-    val normalizedQuery: StateFlow<String> = coordinator.normalizedSearchQuery
-    val debouncedQuery: StateFlow<String> = coordinator.debouncedSearchQuery
-    val debouncedNormalizedQuery: StateFlow<String> = coordinator.debouncedNormalizedSearchQuery
     val activeFilters: StateFlow<Set<String>> = coordinator.activeFilters
 
     private val _isSearchActive = MutableStateFlow(false)
@@ -291,9 +319,17 @@ class BeBrainViewModel @Inject constructor(
 
     fun updateSearchQuery(query: String) {
         coordinator.updateSearchQuery(query)
-        val context = currentContext.value
-        if (query.isNotEmpty() && !_isUIBlocked.value && (context == HUDContext.HOME || context == HUDContext.BUDGETS || context == HUDContext.BUDGETS_TENDERS || context == HUDContext.BUDGETS_DIRECT || context == HUDContext.TENDER_DETAILS)) {
-            _isResultadoVisible.value = true
+        
+        // [ELITE PERFORMANCE] La visibilidad se decide por el estado del query debounced
+        // para evitar parpadeos y micro-tirones durante la escritura rápida.
+        viewModelScope.launch {
+            if (query.isNotEmpty() && !_isUIBlocked.value) {
+                // Pequeño delay para esperar al frame de animación de la barra
+                delay(50) 
+                _isResultadoVisible.value = true
+            } else if (query.isEmpty()) {
+                _isResultadoVisible.value = false
+            }
         }
     }
 
@@ -368,6 +404,7 @@ class BeBrainViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+ /**
     val dynamicCategories: StateFlow<List<ControlItem>> = combine(
         currentContext, categoryRepository.allCategories, budgetRepository.allTenders, budgetRepository.allBudgets
     ) { context, allCats, tenders, budgets ->
@@ -392,6 +429,8 @@ class BeBrainViewModel @Inject constructor(
             ) 
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+*/
+
 
     fun clearFilters() {
         coordinator.updateSearchQuery("")
@@ -402,15 +441,6 @@ class BeBrainViewModel @Inject constructor(
         _isResultadoVisible.value = false
         if (_beState.value == BeState.NOTIFICATION_READY) _beState.value = BeState.IDLE
         triggerAction("clear_filters")
-    }
-
-    fun clearSpecificFilters(prefixes: List<String>) {
-        val current = coordinator.activeFilters.value.toMutableSet()
-        val toRemove = current.filter { filterId -> prefixes.any { filterId.startsWith(it) } }
-        if (toRemove.isNotEmpty()) {
-            current.removeAll(toRemove.toSet())
-            coordinator.updateFilters(current)
-        }
     }
 
     fun toggleFilter(filterId: String) {
@@ -434,7 +464,6 @@ class BeBrainViewModel @Inject constructor(
     val isMultiSelectionActive: StateFlow<Boolean> = _isMultiSelectionActive.asStateFlow()
 
     private val _selectedItemIds = MutableStateFlow<Set<String>>(emptySet())
-    val selectedItemIds: StateFlow<Set<String>> = _selectedItemIds.asStateFlow()
 
     fun triggerAction(actionId: String) { 
         viewModelScope.launch { 
@@ -497,7 +526,7 @@ class BeBrainViewModel @Inject constructor(
         }
     }
 
-    fun syncMultiSelection(active: Boolean, selectedIds: Set<String> = emptySet()) {
+    fun syncMultiSelection(active: Boolean) {
         if (currentContext.value == HUDContext.HOME && !active) { 
             _isMultiSelectionActive.value = false
             _selectedItemIds.value = emptySet()
@@ -513,17 +542,6 @@ class BeBrainViewModel @Inject constructor(
         updateActionsForContext(currentContext.value)
         updateToolboxKey()
     }
-
-    fun toggleMultiSelection() {
-        val newState = !_isMultiSelectionActive.value
-        _isMultiSelectionActive.value = newState
-        if (newState) _showBeTools.value = true else { _selectedItemIds.value = emptySet(); _showBeTools.value = true }
-        updateActionsForContext(currentContext.value); updateToolboxKey()
-    }
-
-    fun toggleItemSelection(id: String) { val current = _selectedItemIds.value.toMutableSet(); if (!current.add(id)) current.remove(id); _selectedItemIds.value = current; updateActionsForContext(currentContext.value) }
-    
-    fun selectAllItems(ids: List<String>) { _selectedItemIds.value = ids.toSet(); updateActionsForContext(currentContext.value) }
 
     private fun updateActionsForContext(context: HUDContext) {
         val actions = mutableListOf<BeSmallActionModel>()
@@ -637,7 +655,8 @@ class BeBrainViewModel @Inject constructor(
                         delay((6000..15000).random().toLong())
                         if (_beMessages.value.isNotEmpty() && coordinator.globalSearchQuery.value.isEmpty()) {
                             _currentTipIndex.value = _beMessages.value.indices.random()
-                            _beState.value = BeState.NOTIFICATION_READY
+                            // [MODIFICACIÓN MAVERICK]: Eliminamos el cambio automático a NOTIFICATION_READY 
+                            // para que no salte ni se mueva solo. Se queda en IDLE hasta que el usuario interactúe.
                         }
                     }
                     BeState.NOTIFICATION_READY -> { delay(12000); if (_beState.value == BeState.NOTIFICATION_READY) _beState.value = BeState.IDLE }
@@ -691,7 +710,6 @@ class BeBrainViewModel @Inject constructor(
     val requestKeyboard = _requestKeyboard.asStateFlow()
 
     private val _categorySelectionEvent = MutableSharedFlow<CategoryEntity>()
-    val categorySelectionEvent = _categorySelectionEvent.asSharedFlow()
 
     fun onBeClick() { 
         if (_isBeDormido.value) {
@@ -742,10 +760,6 @@ class BeBrainViewModel @Inject constructor(
         _hasNewMessage.value = false
     }
 
-    fun setHasNewMessage(hasNew: Boolean) {
-        _hasNewMessage.value = hasNew
-    }
-
     fun openKeyboard() { _requestKeyboard.value = true }
     fun closeKeyboard() { _requestKeyboard.value = false }
 
@@ -767,7 +781,8 @@ class BeBrainViewModel @Inject constructor(
             currentRoute.startsWith("chat") -> HUDContext.CHAT
             currentRoute == "calendar" || currentRoute.startsWith("calendar") -> HUDContext.CALENDAR
             currentRoute == "perfil_cliente" || currentRoute.startsWith("perfil_cliente") -> HUDContext.PROFILE
-            currentRoute.startsWith("perfil_prestador") || currentRoute.startsWith("result_busqueda") -> HUDContext.SEARCH_RESULTS
+            currentRoute.startsWith("perfil_prestador") -> HUDContext.PROFILE_PRESTADOR
+            currentRoute.startsWith("result_busqueda") -> HUDContext.SEARCH_RESULTS
             currentRoute == "crear_licitacion" -> HUDContext.BUDGETS_TENDERS
             currentRoute == "fast" || currentRoute.startsWith("fast") -> HUDContext.FAST
             currentRoute == "promo" || currentRoute.startsWith("promo") -> HUDContext.PROMO
@@ -834,32 +849,11 @@ class BeBrainViewModel @Inject constructor(
     // --- SECTOR 10: RESILIENCIA Y CONECTIVIDAD (MAVERICK CORE) ---
     // ======================================================================================
     private val _isOffline = MutableStateFlow(false)
-    val isOffline: StateFlow<Boolean> = _isOffline.asStateFlow()
 
-    val isWifiEnabled = coordinator.isWifiEnabled
-    val isCellularEnabled = coordinator.isCellularEnabled
     val isGpsEnabled = coordinator.isGpsEnabled
-
-    private val _isChatConnected = MutableStateFlow(false)
-    val isChatConnected = _isChatConnected.asStateFlow()
 
     private val _showProviderSimDialog = MutableStateFlow(false)
     val showProviderSimDialog: StateFlow<Boolean> = _showProviderSimDialog.asStateFlow()
-
-    fun setChatConnected(connected: Boolean) {
-        _isChatConnected.value = connected
-    }
-
-    fun setOfflineStatus(offline: Boolean) {
-        if (_isOffline.value == offline) return
-        _isOffline.value = offline
-        if (offline) {
-            _beState.value = BeState.TALKING
-            _currentTipIndex.value = 0
-        } else {
-            _beState.value = BeState.NOTIFICATION_READY
-        }
-    }
 
     fun setShowProviderSimDialog(visible: Boolean) { _showProviderSimDialog.value = visible }
 

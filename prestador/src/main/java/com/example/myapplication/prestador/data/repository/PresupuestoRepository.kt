@@ -1,12 +1,13 @@
 package com.example.myapplication.prestador.data.repository
 
-import com.example.myapplication.prestador.data.local.dao.ClienteDao
+import com.example.myapplication.core.data.local.dao.UserDao
 import com.example.myapplication.prestador.data.local.dao.PresupuestoDao
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.prestador.data.local.entity.PlantillaPresupuestoEntity
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 import com.example.myapplication.prestador.data.local.dao.PlantillaPresupuestoDao
@@ -25,10 +26,10 @@ interface PresupuestoRepository {
     suspend fun getTotalGanancias(prestadorId: String): Double
     suspend fun getGananciasDesde(prestadorId: String, fromDate: String): Double
 
-    // Clientes
-    fun getAllClientes(): Flow<List<ClienteEntity>>
-    suspend fun getClienteById(id: String): ClienteEntity?
-    suspend fun insertCliente(cliente: ClienteEntity)
+    // Clientes (Delegado a Core)
+    fun getAllClientes(): Flow<List<User>>
+    suspend fun getClienteById(id: String): User?
+    suspend fun insertCliente(cliente: User)
 
     // Plantillas
     fun getAllPlantillas(): Flow<List<PlantillaPresupuestoEntity>>
@@ -40,7 +41,7 @@ interface PresupuestoRepository {
 @Singleton
 class RoomPresupuestoRepository @Inject constructor(
     private val presupuestoDao: PresupuestoDao,
-    private val clienteDao: ClienteDao,
+    private val userDao: UserDao,
     private val plantillaDao: PlantillaPresupuestoDao
 ) : PresupuestoRepository {
     
@@ -80,14 +81,14 @@ class RoomPresupuestoRepository @Inject constructor(
     override suspend fun getGananciasDesde(prestadorId: String, fromDate: String): Double =
         presupuestoDao.getGananciasDesde(prestadorId, fromDate) ?: 0.0
     
-    override fun getAllClientes(): Flow<List<ClienteEntity>> =
-        clienteDao.getAllClientes()
+    override fun getAllClientes(): Flow<List<User>> =
+        userDao.getAllUsers().map { it.map { e -> e.toDomain() } }
     
-    override suspend fun getClienteById(id: String): ClienteEntity? =
-        clienteDao.getClienteById(id).firstOrNull()
+    override suspend fun getClienteById(id: String): User? =
+        userDao.getUserByIdFlow(id).firstOrNull()?.toDomain()
     
-    override suspend fun insertCliente(cliente: ClienteEntity) =
-        clienteDao.insertCliente(cliente)
+    override suspend fun insertCliente(cliente: User) =
+        userDao.insertOrUpdateUser(com.example.myapplication.core.data.local.entity.UserEntity.fromDomain(cliente))
 
 
     //PLANTILLAS

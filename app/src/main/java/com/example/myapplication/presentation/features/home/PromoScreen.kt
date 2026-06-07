@@ -124,17 +124,18 @@ fun PromoScreen(
 
     // --- SUSCRIPCIÓN A LOS OBREROS (SSOT) ---
     // Consumimos el flujo unificado de servicios filtrados por la búsqueda global del asistente.
-    val unifiedServices by viewModel.unifiedServices.collectAsStateWithLifecycle()
+    //val unifiedServices by viewModel.unifiedServices.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-
+/**
     PromoScreenContent(
-        services = unifiedServices,
+       // services = unifiedServices,
         isLoading = isLoading,
         onBack = onBack,
         navController = navController,
         bottomPadding = bottomPadding,
         beViewModel = beViewModel
     )
+    */
 }
 
 // ==========================================================================================

@@ -269,18 +269,7 @@ fun ChatPresupuestoRecibidosScreenContent(
 
         if (budgetForA4Preview != null && providerForA4Preview != null) {
             BudgetPreviewPDFDialog(
-                prestador = ProviderEntity(
-                    id = providerForA4Preview.uid,
-                    email = providerForA4Preview.email,
-                    phoneNumber = providerForA4Preview.phoneNumber,
-                    displayName = providerForA4Preview.displayName,
-                    name = providerForA4Preview.name,
-                    lastName = providerForA4Preview.lastName,
-                    matricula = providerForA4Preview.matricula,
-                    profesion = providerForA4Preview.profesion,
-                    categories = providerForA4Preview.categories,
-                    createdAt = 0L
-                ),
+                prestador = ProviderEntity.fromDomain(providerForA4Preview),
                 budget = budgetForA4Preview,
                 onDismiss = onCloseBudgetA4Preview,
                 onEnviar = null,

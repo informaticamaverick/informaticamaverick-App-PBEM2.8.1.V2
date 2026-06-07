@@ -1,5 +1,20 @@
 package com.example.myapplication.prestador.data.migration
 
+/*
+ * --- ARCHIVO DESACTIVADO (PROTOCOL MAVERICK ELITE) ---
+ * Motivo: Violación de la Ley #2 (Metodología Costo Zero) y Ley #4 (Ley de Inmediatez).
+ *
+ * Análisis:
+ * 1. Realiza lecturas proactivas a Firebase en el arranque ('docRef.get().await()'),
+ *    generando costos de red y latencia innecesarios para el 99% de las sesiones.
+ * 2. La limpieza de datos debe ser gestionada por los Mappers del Core (Lectura)
+ *    o mediante procesos de mantenimiento manuales en la consola de Firebase.
+ * 3. Se prefiere un inicio de App instantáneo sobre una limpieza de nube síncrona.
+ *
+ * Si se requiere reactivar, mover esta lógica a un Background Worker en el módulo :core.
+ */
+
+/*
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -14,6 +29,7 @@ object FirestoreMigration {
     private const val KEY_V2_DONE = "migration_v2_done"
     private const val KEY_V3_DONE = "migration_v3_done"
     private const val KEY_V4_DONE = "migration_v4_done"
+    private const val KEY_V5_DONE = "migration_v5_done"
     private const val TAG = "FirestoreMigration"
 
     suspend fun runIfNeeded(context: Context, firestore: FirebaseFirestore, uid: String) {
@@ -21,6 +37,7 @@ object FirestoreMigration {
         runV2IfNeeded(context, firestore, uid)
         runV3IfNeeded(context, firestore, uid)
         runV4IfNeeded(context, firestore, uid)
+        runV5IfNeeded(context, firestore, uid)
     }
 
     // V1: elimina "roles", mueve "modalidad" a raíz, borra root-level imageBase64
@@ -237,4 +254,40 @@ object FirestoreMigration {
             Log.e(TAG, "Error en migración v4", e)
         }
     }
+
+    // V5: [PERFECCIÓN] Elimina redundancias (servicios vs categories, ubicacion vs personalAddresses)
+    //     y remueve array de companies del root document (se usan subcolecciones).
+    private suspend fun runV5IfNeeded(context: Context, firestore: FirebaseFirestore, uid: String) {
+        val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_V5_DONE, false)) return
+
+        try {
+            val docRef = firestore.collection("providers").document(uid)
+            val doc = docRef.get().await()
+
+            if (!doc.exists()) {
+                prefs.edit().putBoolean(KEY_V5_DONE, true).apply()
+                return
+            }
+
+            val deletes = mutableMapOf<String, Any>()
+            if (doc.contains("servicios")) deletes["servicios"] = FieldValue.delete()
+            if (doc.contains("ubicacion")) deletes["ubicacion"] = FieldValue.delete()
+            if (doc.contains("companies")) deletes["companies"] = FieldValue.delete()
+            
+            // Si el campo raíz de email/displayName existe y ya está en 'perfil', lo limpiamos
+            // Nota: Mantenemos 'displayName' y 'email' en raíz para facilitar búsquedas y reportes rápidos.
+            // Solo borramos si el usuario ya tiene la estructura de 'perfil'.
+
+            if (deletes.isNotEmpty()) {
+                docRef.update(deletes).await()
+                Log.d(TAG, "Migración v5 aplicada: ${deletes.keys}")
+            }
+
+            prefs.edit().putBoolean(KEY_V5_DONE, true).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error en migración v5", e)
+        }
+    }
 }
+*/

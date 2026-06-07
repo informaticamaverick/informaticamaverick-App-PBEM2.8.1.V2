@@ -3,8 +3,7 @@ package com.example.myapplication.core.utils
 import android.content.Context
 import android.location.Geocoder
 import android.location.LocationManager
-import com.example.myapplication.core.domain.model.AddressClient
-import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.AddressUnico
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -13,12 +12,56 @@ import kotlin.math.*
 /**
  * --- MAVERICK GEO UTILS (PREMIUM ENTERPRISE EDITION) ---
  * Centraliza la inteligencia geográfica del ecosistema Maverick.
- * Utiliza el motor de Google Maps (Geocoder) con lógica de discriminación
- * avanzada para Argentina (CPA, Localidades, Departamentos).
  */
 object MaverickGeoUtils {
 
     private const val EARTH_RADIUS_KM = 6371.0
+    private const val BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+
+    /**
+     * Genera un Geohash (Standard Base32) para una coordenada.
+     * [ELITE]: Permite búsquedas por radio y proximidad en Firestore sin queries pesadas.
+     * @param precision Longitud del hash (por defecto 9 para ~4.8m de precisión).
+     */
+    fun computeGeohash(lat: Double, lng: Double, precision: Int = 9): String {
+        val latRange = doubleArrayOf(-90.0, 90.0)
+        val lngRange = doubleArrayOf(-180.0, 180.0)
+        var isEven = true
+        var bit = 0
+        var ch = 0
+        val geohash = StringBuilder()
+
+        while (geohash.length < precision) {
+            val mid: Double
+            if (isEven) {
+                mid = (lngRange[0] + lngRange[1]) / 2
+                if (lng > mid) {
+                    ch = ch or (1 shl (4 - bit))
+                    lngRange[0] = mid
+                } else {
+                    lngRange[1] = mid
+                }
+            } else {
+                mid = (latRange[0] + latRange[1]) / 2
+                if (lat > mid) {
+                    ch = ch or (1 shl (4 - bit))
+                    latRange[0] = mid
+                } else {
+                    latRange[1] = mid
+                }
+            }
+
+            isEven = !isEven
+            if (bit < 4) {
+                bit++
+            } else {
+                geohash.append(BASE32[ch])
+                bit = 0
+                ch = 0
+            }
+        }
+        return geohash.toString()
+    }
 
     /**
      * Mapa de Provincias para normalización de CPA (Código Postal Argentino).
@@ -67,29 +110,22 @@ object MaverickGeoUtils {
     }
 
     /**
-     * [REVERSE GEOCODING]: Obtiene dirección PREMIUM a partir de coordenadas.
-     * Implementa lógica de discriminación de CPA (Ej: T4000) y jerarquía administrativa.
+     * [REVERSE GEOCODING]: Obtiene AddressUnico a partir de coordenadas.
      */
     suspend fun getAddressFromCoordinates(
         context: Context,
         lat: Double,
         lng: Double
-    ): AddressClient? = withContext(Dispatchers.IO) {
+    ): AddressUnico? = withContext(Dispatchers.IO) {
         try {
             val geocoder = Geocoder(context, Locale.getDefault())
-            
             @Suppress("DEPRECATION")
             val addresses = geocoder.getFromLocation(lat, lng, 1)
 
             if (!addresses.isNullOrEmpty()) {
                 val a = addresses[0]
                 val province = a.adminArea ?: ""
-                val rawZip = a.postalCode ?: ""
-                
-                // Normalización de CPA (Premium Argentina)
-                val cleanZip = normalizeCPA(province, rawZip)
-                
-                // Discriminación inteligente Ciudad/Localidad/Barrio
+                val cleanZip = normalizeCPA(province, a.postalCode ?: "")
                 val locality = a.locality ?: a.subLocality ?: a.subAdminArea ?: ""
 
                 // Intento robusto de obtener el número de la dirección
@@ -107,7 +143,7 @@ object MaverickGeoUtils {
                     streetName = fullLine.split(",").firstOrNull()?.replace(streetNumber, "")?.trim() ?: ""
                 }
 
-                AddressClient(
+                AddressUnico(
                     calle = streetName,
                     numero = streetNumber,
                     localidad = locality,
@@ -125,12 +161,12 @@ object MaverickGeoUtils {
     }
 
     /**
-     * [FORWARD GEOCODING]: Traduce texto a coordenadas y desglose PREMIUM.
+     * [FORWARD GEOCODING]: Traduce texto a coordenadas y desglose AddressUnico.
      */
     suspend fun getAddressFromText(
         context: Context,
         addressText: String
-    ): AddressClient? = withContext(Dispatchers.IO) {
+    ): AddressUnico? = withContext(Dispatchers.IO) {
         try {
             val geocoder = Geocoder(context, Locale.getDefault())
             @Suppress("DEPRECATION")
@@ -139,13 +175,8 @@ object MaverickGeoUtils {
             if (!addresses.isNullOrEmpty()) {
                 val a = addresses[0]
                 val province = a.adminArea ?: ""
-                val rawZip = a.postalCode ?: ""
+                val cleanZip = normalizeCPA(province, a.postalCode ?: "")
                 val locality = a.locality ?: a.subLocality ?: a.subAdminArea ?: ""
-                
-                // Normalización de CPA
-                val cleanZip = normalizeCPA(province, rawZip)
-
-                // Lógica robusta para calle y número (igual que en Reverse Geocoding)
                 val streetNumber = a.subThoroughfare ?: a.featureName?.filter { it.isDigit() } ?: ""
                 var streetName = a.thoroughfare ?: ""
                 
@@ -158,7 +189,7 @@ object MaverickGeoUtils {
                     streetName = fullLine.split(",").firstOrNull()?.replace(streetNumber, "")?.trim() ?: ""
                 }
 
-                AddressClient(
+                AddressUnico(
                     calle = streetName,
                     numero = streetNumber,
                     localidad = locality,
@@ -176,40 +207,20 @@ object MaverickGeoUtils {
     }
 
     /**
-     * Convierte un AddressClient a AddressProvider para interoperabilidad.
-     */
-    fun clientToProvider(a: AddressClient): AddressProvider = AddressProvider(
-        id = a.id, calle = a.calle, numero = a.numero, localidad = a.localidad,
-        provincia = a.provincia, pais = a.pais, codigoPostal = a.codigoPostal,
-        latitude = a.latitude, longitude = a.longitude, label = a.label
-    )
-
-    /**
-     * Convierte un AddressProvider a AddressClient para interoperabilidad.
-     */
-    fun providerToClient(a: AddressProvider): AddressClient = AddressClient(
-        id = a.id, calle = a.calle, numero = a.numero, localidad = a.localidad,
-        provincia = a.provincia, pais = a.pais, codigoPostal = a.codigoPostal,
-        latitude = a.latitude, longitude = a.longitude, label = a.label
-    )
-
-    /**
      * Normaliza el código postal al formato CPA (Letra + 4 dígitos).
      * Ejemplo: "4000" en "Tucumán" -> "T4000"
      */
     private fun normalizeCPA(province: String, rawZip: String): String {
-
         if (rawZip.isBlank()) return ""
-        
+
         // Si ya tiene el formato CPA (Letra + Números), lo devolvemos limpio
         if (rawZip.length >= 5 && rawZip[0].isLetter() && rawZip[1].isDigit()) {
             return rawZip.uppercase()
         }
-        
+
         // Si son solo números, buscamos la letra de la provincia
         val provinceKey = province.lowercase(Locale.ROOT).trim()
         val letter = PROVINCE_MAP[provinceKey]
-        
         return if (letter != null && rawZip.all { it.isDigit() }) {
             "$letter$rawZip"
         } else {
@@ -217,4 +228,3 @@ object MaverickGeoUtils {
         }
     }
 }
-

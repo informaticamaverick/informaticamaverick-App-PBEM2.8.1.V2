@@ -8,120 +8,113 @@ import java.util.UUID
 
 /**
  * --- USER DATA MAPPER (COMPARTIDO) ---
- * Centraliza la conversión de perfiles de usuario desde Firestore a Room.
- * Garantiza que tanto la App Cliente como la App Prestador visualicen los mismos datos de perfil.
+ * [ELITE v5.1]: Limpieza de metadatos de prestador y soporte para AddressUnico.
  */
 object UserDataMapper {
 
     fun fromFirestore(doc: DocumentSnapshot): UserEntity? {
-        if (!doc.exists()) return null
         return try {
-            val data = doc.data ?: return null
-            val perfil = data["perfil"] as? Map<*, *> ?: emptyMap<String, Any>()
+            if (!doc.exists()) return null
 
-            // Función auxiliar para búsqueda inteligente (Root o Perfil)
-            fun getDeepString(key: String): String? {
-                return (perfil[key] as? String) ?: (data[key] as? String)
+            val perfil = doc.get("perfil") as? Map<*, *> ?: emptyMap<String, Any>()
+            val companiesRaw = doc.get("companies") as? List<*> ?: emptyList<Any>()
+            
+            val mappedCompanies = companiesRaw.mapNotNull { it as? Map<*, *> }.map { c ->
+                val branchesRaw = c["branches"] as? List<*> ?: emptyList<Any>()
+                val mappedBranches = branchesRaw.mapNotNull { it as? Map<*, *> }.map { b ->
+                    val addr = b["address"] as? Map<*, *> ?: emptyMap<String, Any>()
+                    val repsRaw = b["representatives"] as? List<*> ?: emptyList<Any>()
+                    val mappedReps = repsRaw.mapNotNull { it as? Map<*, *> }.map { r ->
+                        RepresentativeClient(
+                            id = r["id"] as? String ?: UUID.randomUUID().toString(),
+                            nombre = r["nombre"] as? String ?: "",
+                            apellido = r["apellido"] as? String ?: "",
+                            cargo = r["cargo"] as? String ?: "",
+                            photoUrl = r["photoUrl"] as? String,
+                            thumbnailBase64 = r["thumbnailBase64"] as? String
+                        )
+                    }
+
+                    BranchClient(
+                        id = b["id"] as? String ?: UUID.randomUUID().toString(),
+                        name = b["name"] as? String ?: "",
+                        description = b["description"] as? String ?: "",
+                        workingHours = b["workingHours"] as? String ?: "",
+                        isMainBranch = b["isMainBranch"] as? Boolean ?: false,
+                        address = AddressUnico(
+                            id = addr["id"] as? String ?: UUID.randomUUID().toString(),
+                            calle = addr["calle"] as? String ?: "",
+                            numero = addr["numero"] as? String ?: "",
+                            piso = addr["piso"] as? String ?: "",
+                            departamento = addr["departamento"] as? String ?: "",
+                            localidad = addr["localidad"] as? String ?: "",
+                            provincia = addr["provincia"] as? String ?: "",
+                            pais = addr["pais"] as? String ?: "Argentina",
+                            codigoPostal = addr["codigoPostal"] as? String ?: "",
+                            latitude = (addr["latitude"] as? Number)?.toDouble() ?: 0.0,
+                            longitude = (addr["longitude"] as? Number)?.toDouble() ?: 0.0,
+                            label = addr["label"] as? String ?: ""
+                        ),
+                        representatives = mappedReps
+                    )
+                }
+
+                CompanyClient(
+                    id = c["id"] as? String ?: UUID.randomUUID().toString(),
+                    name = c["name"] as? String ?: "",
+                    razonSocial = c["razonSocial"] as? String ?: "",
+                    cuit = c["cuit"] as? String ?: "",
+                    email = c["email"] as? String ?: "",
+                    phoneNumber = c["phoneNumber"] as? String ?: "",
+                    photoUrl = c["photoUrl"] as? String,
+                    thumbnailBase64 = c["thumbnailBase64"] as? String,
+                    branches = mappedBranches
+                )
             }
 
-            fun getDeepBoolean(key: String, default: Boolean = false): Boolean {
-                return (perfil[key] as? Boolean) ?: (data[key] as? Boolean) ?: default
-            }
-
-            // Mapeo de Direcciones
-            val addressesRaw = (data["personalAddresses"] ?: perfil["personalAddresses"]) as? List<*> ?: emptyList<Any>()
+            val addressesRaw = doc.get("personalAddresses") as? List<*> ?: emptyList<Any>()
             val mappedAddresses = addressesRaw.mapNotNull { it as? Map<*, *> }.map { a ->
-                AddressClient(
+                AddressUnico(
                     id = a["id"] as? String ?: UUID.randomUUID().toString(),
                     calle = a["calle"] as? String ?: "",
                     numero = a["numero"] as? String ?: "",
+                    piso = a["piso"] as? String ?: "",
+                    departamento = a["departamento"] as? String ?: "",
                     localidad = a["localidad"] as? String ?: "",
                     provincia = a["provincia"] as? String ?: "",
                     pais = a["pais"] as? String ?: "Argentina",
                     codigoPostal = a["codigoPostal"] as? String ?: "",
                     latitude = (a["latitude"] as? Number)?.toDouble() ?: 0.0,
                     longitude = (a["longitude"] as? Number)?.toDouble() ?: 0.0,
-                    label = a["label"] as? String ?: "Dirección"
-                )
-            }
-
-            // Mapeo de Empresas
-            val companiesRaw = (data["companies"] ?: perfil["companies"] ?: data["empresas"] ?: perfil["empresas"]) as? List<*> ?: emptyList<Any>()
-            val mappedCompanies = companiesRaw.mapNotNull { it as? Map<*, *> }.map { c ->
-                val branchesRaw = (c["branches"] ?: c["sucursales"]) as? List<*> ?: emptyList<Any>()
-                val mappedBranches = branchesRaw.mapNotNull { it as? Map<*, *> }.map { b ->
-                    BranchClient(
-                        id = b["id"] as? String ?: UUID.randomUUID().toString(),
-                        name = b["name"] as? String ?: b["nombre"] as? String ?: "",
-                        isMainBranch = b["isMainBranch"] as? Boolean ?: b["principal"] as? Boolean ?: false,
-                        address = (b["address"] ?: b["direccion"])?.let { adrRaw ->
-                            val adr = adrRaw as? Map<*, *> ?: emptyMap<String, Any>()
-                            AddressClient(
-                                id = adr["id"] as? String ?: UUID.randomUUID().toString(),
-                                calle = adr["calle"] as? String ?: "",
-                                numero = adr["numero"] as? String ?: "",
-                                localidad = adr["localidad"] as? String ?: "",
-                                provincia = adr["provincia"] as? String ?: "",
-                                pais = adr["pais"] as? String ?: "Argentina",
-                                codigoPostal = adr["codigoPostal"] as? String ?: "",
-                                latitude = (adr["latitude"] as? Number)?.toDouble() ?: 0.0,
-                                longitude = (adr["longitude"] as? Number)?.toDouble() ?: 0.0,
-                                label = adr["label"] as? String ?: ""
-                            )
-                        } ?: AddressClient(),
-                        representatives = (b["representatives"] ?: b["representantes"])?.let { repsRaw ->
-                            (repsRaw as? List<*>)?.mapNotNull { it as? Map<*, *> }?.map { r ->
-                                RepresentativeClient(
-                                    id = r["id"] as? String ?: UUID.randomUUID().toString(),
-                                    nombre = r["nombre"] as? String ?: "",
-                                    apellido = r["apellido"] as? String ?: "",
-                                    cargo = r["cargo"] as? String ?: "",
-                                    photoUrl = r["photoUrl"] as? String ?: r["imageUrl"] as? String
-                                )
-                            }
-                        } ?: emptyList()
-                    )
-                }
-
-                CompanyClient(
-                    id = c["id"] as? String ?: UUID.randomUUID().toString(),
-                    name = c["name"] as? String ?: c["nombre"] as? String ?: "",
-                    razonSocial = c["razonSocial"] as? String ?: "",
-                    cuit = c["cuit"] as? String ?: "",
-                    email = c["email"] as? String ?: "",
-                    phoneNumber = c["phoneNumber"] as? String ?: "",
-                    photoUrl = c["photoUrl"] as? String ?: c["imageUrl"] as? String,
-                    bannerImageUrl = c["bannerImageUrl"] as? String ?: c["bannerUrl"] as? String,
-                    branches = mappedBranches
+                    label = a["label"] as? String ?: ""
                 )
             }
 
             UserEntity(
                 id = doc.id,
-                email = getDeepString("email") ?: "",
-                name = getDeepString("name") ?: getDeepString("nombre") ?: "",
-                lastName = getDeepString("lastName") ?: getDeepString("apellido") ?: "",
-                displayName = getDeepString("displayName") ?: "",
-                phoneNumber = getDeepString("phoneNumber") ?: getDeepString("telefono") ?: "",
-                bio = getDeepString("bio") ?: "",
-                photoUrl = getDeepString("photoUrl") ?: getDeepString("imageUrl") ?: getDeepString("photo"),
-                bannerImageUrl = getDeepString("bannerImageUrl") ?: getDeepString("bannerUrl"),
-                additionalEmails = ((data["additionalEmails"] ?: perfil["additionalEmails"]) as? List<*>)?.map { it.toString() } ?: emptyList(),
-                additionalPhones = ((data["additionalPhones"] ?: perfil["additionalPhones"]) as? List<*>)?.map { it.toString() } ?: emptyList(),
+                email = (perfil["email"] as? String) ?: doc.getString("email") ?: "",
+                displayName = doc.getString("displayName") ?: "",
+                name = (perfil["name"] as? String) ?: doc.getString("name") ?: "",
+                lastName = (perfil["lastName"] as? String) ?: doc.getString("lastName") ?: "",
+                phoneNumber = (perfil["phoneNumber"] as? String) ?: doc.getString("phoneNumber") ?: "",
+                bio = (perfil["bio"] as? String) ?: doc.getString("bio") ?: "",
+                photoUrl = (perfil["photoUrl"] as? String) ?: doc.getString("photoUrl"),
+                profileThumbnail = (perfil["profileThumbnail"] as? String) ?: doc.getString("profileThumbnail"),
                 personalAddresses = mappedAddresses,
-                hasCompanyProfile = getDeepBoolean("hasCompanyProfile"),
+                hasCompanyProfile = doc.getBoolean("hasCompanyProfile") ?: false,
                 companies = mappedCompanies,
-                isOnline = getDeepBoolean("isOnline"),
-                isSubscribed = getDeepBoolean("isSubscribed"),
-                isVerified = (perfil["isVerified"] as? Boolean) ?: (data["isVerified"] as? Boolean) ?: (perfil["verificado"] as? Boolean) ?: (data["verificado"] as? Boolean) ?: false,
-                notificationsEnabled = getDeepBoolean("notificationsEnabled"),
-                isPublicProfile = getDeepBoolean("isPublicProfile"),
-                isProfileComplete = getDeepBoolean("isProfileComplete"),
-                rating = (data["rating"] as? Number ?: perfil["rating"] as? Number)?.toFloat() ?: 0f,
-                favoriteProviderIds = ((data["favoriteProviderIds"] ?: perfil["favoriteProviderIds"]) as? List<*>)?.map { it.toString() } ?: emptyList(),
-                latitude = (data["latitude"] as? Number ?: perfil["latitude"] as? Number)?.toDouble() ?: 0.0,
-                longitude = (data["longitude"] as? Number ?: perfil["longitude"] as? Number)?.toDouble() ?: 0.0,
-                createdAt = (data["createdAt"] as? Number ?: perfil["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                isOnline = doc.getBoolean("isOnline") ?: false,
+                isSubscribed = doc.getBoolean("isSubscribed") ?: false,
+                isVerified = doc.getBoolean("isVerified") ?: false,
+                notificationsEnabled = doc.getBoolean("notificationsEnabled") ?: true,
+                isPublicProfile = doc.getBoolean("isPublicProfile") ?: false,
+                isProfileComplete = doc.getBoolean("isProfileComplete") ?: false,
+                rating = (doc.get("rating") as? Number)?.toFloat() ?: 0f,
+                favoriteProviderIds = (doc.get("favoriteProviderIds") as? List<*>)?.map { it.toString() } ?: emptyList(),
+                latitude = (doc.get("latitude") as? Number)?.toDouble() ?: 0.0,
+                longitude = (doc.get("longitude") as? Number)?.toDouble() ?: 0.0,
+                createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
+                updatedAt = doc.getLong("updatedAt") ?: System.currentTimeMillis()
             )
         } catch (e: Exception) {
             Log.e("UserDataMapper", "Error mapeando Usuario ${doc.id}: ${e.message}")

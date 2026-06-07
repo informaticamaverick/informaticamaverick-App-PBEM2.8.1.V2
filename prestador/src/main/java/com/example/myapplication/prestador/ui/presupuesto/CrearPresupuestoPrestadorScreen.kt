@@ -1,6 +1,5 @@
 ﻿package com.example.myapplication.prestador.ui.presupuesto
 
-import android.R
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
@@ -39,18 +38,18 @@ import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoConf
 import androidx.compose.runtime.collectAsState
 import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.profile.ProfileState
-import com.example.myapplication.prestador.viewmodel.profile.DireccionViewModel
-import com.example.myapplication.prestador.viewmodel.profile.DireccionUiState
-import com.example.myapplication.prestador.utils.formatInline
 import com.example.myapplication.prestador.utils.toPrestadorProfile
+import com.example.myapplication.prestador.utils.displayCompanyOrFullName
+import com.example.myapplication.prestador.utils.displayAddress
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clip
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.prestador.data.ChatData
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
+// import com.example.myapplication.prestador.data.local.entity.ClienteEntity  <-- ELIMINADO: Usar User de :core
 import kotlinx.coroutines.launch
 import com.example.myapplication.prestador.ui.presupuesto.sheets.*
 import com.example.myapplication.prestador.ui.presupuesto.components.*
@@ -80,53 +79,24 @@ fun CrearPresupuestoPrestadorScreen(
     onBack: () -> Unit = {},
     viewModel: PresupuestoViewModel = hiltViewModel(),
     editProfileViewModel: EditProfileViewModel = hiltViewModel(),
-    configViewModel: PresupuestoConfigViewModel = hiltViewModel(),
-    // direccionViewModel: DireccionViewModel = hiltViewModel() // ARCHIVO REDUNDANTE
+    configViewModel: PresupuestoConfigViewModel = hiltViewModel()
 ) {
     val colors = getPrestadorColors()
     val profileState by editProfileViewModel.profileState.collectAsState()
-    val businessEntity by editProfileViewModel.businessEntity.collectAsState()
     val presupuestoConfig by configViewModel.config.collectAsState()
-    // val consultorioUiState by direccionViewModel.consultorioState.collectAsState() // SSOT: Usar profileState
 
     val isProviderProfessional: Boolean = (profileState as? ProfileState.Success)?.provider?.serviceType
         .equals("PROFESSIONAL", ignoreCase = true)
     val provider = (profileState as? ProfileState.Success)?.provider
 
-    // =========================================================================
-    // SECCIÓN: CARGA DE DATOS (SSOT)
-    // Se comenta la carga via DireccionViewModel por ser redundante.
-    // Los datos ya vienen embebidos en el objeto Provider.
-    // =========================================================================
-    /*
-    LaunchedEffect(isProviderProfessional, provider?.id) {
-        if (isProviderProfessional && !provider?.id.isNullOrBlank()) {
-            direccionViewModel.loadConsultorioDireccion(provider!!.id)
-        }
-    }
-    */
+    val businessEntity = provider?.companies?.firstOrNull()
 
-    // val consultorioDireccion = (consultorioUiState as? DireccionUiState.Success)?.direccion
-    // val consultorioDisplayAddress = consultorioDireccion?.formatInline().orEmpty()
-    
-    // Obtener la dirección del consultorio directamente del modelo jerárquico
-    val consultorioDisplayAddress = provider?.address?.fullString().orEmpty()
+    val providerDisplayName = provider?.displayCompanyOrFullName(businessEntity) ?: ""
 
-    val providerDisplayName = when {
-        provider?.tieneEmpresa == true && !provider.nombreEmpresa.isNullOrBlank() -> provider.nombreEmpresa!!
-        provider?.tieneEmpresa == true && !businessEntity?.nombreNegocio.isNullOrBlank() -> businessEntity!!.nombreNegocio
-        else -> "${provider?.name.orEmpty()} ${provider?.apellido.orEmpty()}".trim()
-    }
-    val providerDisplayAnddress = when {
-        isProviderProfessional && consultorioDisplayAddress.isNotBlank() -> consultorioDisplayAddress
-        provider?.tieneEmpresa == true && !businessEntity?.direccion.isNullOrBlank() -> businessEntity!!.direccion
-        provider?.tieneEmpresa == true && !provider.direccionEmpresa.isNullOrBlank() -> provider.direccionEmpresa!!
-        provider?.turnosEnLocal == true && !provider.direccionLocal.isNullOrBlank() -> provider.direccionLocal!!
-        provider?.address != null -> provider.address?.fullString().orEmpty()
-        else -> ""
-    }
-    // --- SECCIÓN: OBTENCIÓN DE DATOS DEL PRESTADOR ---
-    // Se utiliza el modelo real ProviderEntity proveniente del ViewModel
+    val providerDisplayAddress = provider?.displayAddress(businessEntity) ?: ""
+
+    // --- SECCIÓN: OBTENCIÓN DE DATOS DEL PRESTADOR (SSOT) ---
+    // Se utiliza el modelo real Provider proveniente del núcleo core
     val prestador = remember(provider) {
         provider?.toPrestadorProfile(businessEntity)
     }
@@ -255,7 +225,6 @@ fun CrearPresupuestoPrestadorScreen(
 
     val clientFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
-    val coroutineScope= rememberCoroutineScope()
 
     val serviceTypeForChat = provider?.serviceType ?: if (isProviderProfessional) "PROFESSIONAL"
     else "TECHNICAL"
@@ -618,11 +587,10 @@ fun CrearPresupuestoPrestadorScreen(
                                                     clienteQuery = conv.userName
 
                                                     //Asegurar que exista en room (como un Budgetchatsheet)
-
                                                     viewModel.insertCliente(
-                                                        ClienteEntity(
-                                                            id = conv.userId,
-                                                            nombre = conv.userName
+                                                        User(
+                                                            uid = conv.userId,
+                                                            name = conv.userName
                                                         )
                                                     )
 
@@ -1154,7 +1122,7 @@ fun CrearPresupuestoPrestadorScreen(
                     clientName = clienteNombre,
                     clientAddress = clienteDireccion.ifBlank { null },
                     providerName = providerDisplayName,
-                    providerAddress = providerDisplayAnddress,
+                    providerAddress = providerDisplayAddress,
                     isProfessional = isProviderProfessional,
                     presupuestoNumero = pendingPresupuesto?.numeroPresupuesto ?: "",
                     category = selectedBudgetCategory,
@@ -1170,7 +1138,7 @@ fun CrearPresupuestoPrestadorScreen(
                     onDismissRequest = { sheetType = null },
                     properties = DialogProperties(usePlatformDefaultWidth = false)
                 ) {
-            val view = androidx.compose.ui.platform.LocalView.current
+                    val view = androidx.compose.ui.platform.LocalView.current
                     DisposableEffect(view) {
                         val window = (view.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
                         if (window != null) {
@@ -1302,11 +1270,11 @@ fun CrearPresupuestoPrestadorScreen(
                             clientes = clientes,
                             selectedClienteId = selectedClienteId,
                             onSelectCliente = { c ->
-                                selectedClienteId = c.id
-                                clienteNombre = c.nombre
-                                clienteEmail = c.email.orEmpty()
-                                clienteTelefono = c.telefono.orEmpty()
-                                clienteDireccion = c.direccion.orEmpty()
+                                selectedClienteId = c.uid
+                                clienteNombre = c.name
+                                clienteEmail = c.email
+                                clienteTelefono = c.phoneNumber
+                                clienteDireccion = c.mainAddress?.fullString().orEmpty()
                                 sheetType = null
                             },
                             onClose = { sheetType = null }

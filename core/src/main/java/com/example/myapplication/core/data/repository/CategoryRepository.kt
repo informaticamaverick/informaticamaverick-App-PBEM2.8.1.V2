@@ -1,38 +1,28 @@
 package com.example.myapplication.core.data.repository
 
-import android.util.Log
 import com.example.myapplication.core.data.local.dao.CategoryDao
 import com.example.myapplication.core.data.local.dao.SuperCategoryLight
 import com.example.myapplication.core.data.local.entity.CategoryEntity
-import com.example.myapplication.core.data.remote.CategoryFirestoreDto
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * --- REPOSITORIO DE CATEGORÍAS (COMPARTIDO) ---
- * Gestiona el catálogo maestro de servicios (ej: Plomería, Gas, etc).
- * Ambas apps usan este repositorio para obtener la lista oficial de rubros
- * sincronizada desde la colección "Servicios" en Firestore.
+ * [LEY #6: SOBERANÍA LOCAL]
+ * Este repositorio gestiona el catálogo maestro de servicios de forma 100% OFFLINE.
+ * No tiene conexión con Firebase para evitar costos y latencia.
  */
 @Singleton
 class CategoryRepository @Inject constructor(
-    private val categoryDao: CategoryDao,
-    private val firestore: FirebaseFirestore
+    private val categoryDao: CategoryDao
 ) {
-    private val TAG = "CategoryRepository"
-
-    // --- SECCIÓN 1: OBSERVABLES ---
+    // --- SECCIÓN 1: LECTURA REACTIVA (ROOM ONLY) ---
 
     val allCategories: Flow<List<CategoryEntity>> = categoryDao.getAllCategories()
     
     fun getSuperCategoryMetadata(): Flow<List<SuperCategoryLight>> = 
         categoryDao.getSuperCategoryMetadata()
-
-    fun getFilteredSuperCategoryMetadata(query: String): Flow<List<SuperCategoryLight>> =
-        categoryDao.getSuperCategoryMetadata() // Por ahora retorno todo, Room no filtra grupos fácilmente con LIKE en el mismo query de agregación sin subqueries pesados
 
     fun searchCategories(query: String): Flow<List<CategoryEntity>> =
         categoryDao.searchCategories(query)
@@ -40,18 +30,17 @@ class CategoryRepository @Inject constructor(
     fun getCategoriesBySuperCategory(superCategory: String): Flow<List<CategoryEntity>> =
         categoryDao.getCategoriesBySuperCategory(superCategory)
 
+    // --- SECCIÓN 2: GESTIÓN LOCAL ---
+
     suspend fun insertOrUpdate(category: CategoryEntity) {
         categoryDao.insertOrUpdate(category)
     }
 
-    // --- SECCIÓN 2: SINCRONIZACIÓN ---
-
     /**
-     * [POLÍTICA ZERO COSTO]: Sincronización remota desactivada.
-     * El catálogo de servicios se gestiona localmente vía CategorySeeder.
+     * [OBSOLETO]: Las categorías ya no se sincronizan con Firebase.
+     * Se mantiene solo la firma vacía para compatibilidad si otros módulos la llaman.
      */
     suspend fun syncWithFirebase() {
-        Log.d(TAG, "Sincronización remota omitida. Usando base de datos local pre-sembrada.")
-        // Se mantiene el método para no romper firmas, pero sin lógica de red.
+        // No-op: Cumpliendo Ley #6
     }
 }

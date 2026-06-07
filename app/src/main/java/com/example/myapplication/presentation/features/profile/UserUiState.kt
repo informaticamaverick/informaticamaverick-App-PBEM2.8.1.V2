@@ -1,13 +1,11 @@
 package com.example.myapplication.presentation.features.profile
 
-import com.example.myapplication.core.domain.model.AddressClient
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.domain.model.CompanyClient
 
 /**
  * --- USER UI STATE (SSOT) ---
- * 
- * Representa el estado de la identidad del usuario en todo el sistema.
- * Alineado con la nueva estructura de UserEntity y leyes de Costo Zero.
+ * [ELITE v5.1]: Alineado con la nueva anatomía unificada (Costo Zero).
  */
 data class UserUiState(
     val uid: String = "",
@@ -19,21 +17,21 @@ data class UserUiState(
     val password: String = "", // Solo para validaciones o re-autenticación
     val bio: String = "",
     val photoUrl: String = "",
-    val coverPhotoUrl: String = "",
+    val profileThumbnail: String = "", // [LEY #3] Carga instantánea
     
-    // --- CAMPOS TEMPORALES PARA FORMULARIO DE DIRECCIÓN (CompleteProfile) ---
+    // --- CAMPOS TEMPORALES PARA FORMULARIO ---
     val address: String = "",
     val city: String = "",
     val state: String = "",
     val zipCode: String = "",
 
-    // --- ESTRUCTURAS DE DATOS SEGÚN NUEVA UserEntity ---
-    val personalAddresses: List<AddressClient> = emptyList(),
+    // --- ESTRUCTURAS DE DATOS UNIFICADAS ---
+    val personalAddresses: List<AddressUnico> = emptyList(),
     val additionalEmails: List<String> = emptyList(),
     val additionalPhones: List<String> = emptyList(),
     
-    // --- GESTIÓN DE EMPRESAS ---
-    val isEmpresa: Boolean = false, // Vinculado a hasCompanyProfile
+    // --- GESTIÓN DE EMPRESAS (Sin categorías) ---
+    val isEmpresa: Boolean = false, 
     val companies: List<CompanyClient> = emptyList(),
 
     // --- ESTADOS Y BANDERAS ---
@@ -61,5 +59,6 @@ data class UserUiState(
     // ==========================================
     // SECCIÓN NUEVA: MODO EDICIÓN
     // ==========================================
-    val isEditMode: Boolean = false
+    val isEditMode: Boolean = false,
+    val selectedProfileId: String? = null
 )

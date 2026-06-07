@@ -2,8 +2,8 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
-import com.example.myapplication.prestador.data.repository.ClienteRepository
+import com.example.myapplication.core.domain.model.User
+import com.example.myapplication.core.data.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,17 +13,17 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ClienteViewModel @Inject constructor(
-    private val repository: ClienteRepository
+    private val repository: UserRepository
 ) : ViewModel() {
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _cliente = MutableStateFlow<ClienteEntity?>(null)
-    val cliente: StateFlow<ClienteEntity?> = _cliente.asStateFlow()
+    private val _cliente = MutableStateFlow<User?>(null)
+    val cliente: StateFlow<User?> = _cliente.asStateFlow()
 
-    private val _clientes = MutableStateFlow<List<ClienteEntity>>(emptyList())
-    val clientes: StateFlow<List<ClienteEntity>> = _clientes.asStateFlow()
+    private val _clientes = MutableStateFlow<List<User>>(emptyList())
+    val clientes: StateFlow<List<User>> = _clientes.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
@@ -35,7 +35,7 @@ class ClienteViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                repository.getClienteById(clienteId).collect { cliente ->
+                repository.getUserById(clienteId).collect { cliente ->
                     _cliente.value = cliente
                 }
             } catch (e: Exception) {
@@ -50,7 +50,7 @@ class ClienteViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                repository.getAllClientes().collect { clientes ->
+                repository.getAllUsers().collect { clientes ->
                     _clientes.value = clientes
                 }
             } catch (e: Exception) {
@@ -61,28 +61,14 @@ class ClienteViewModel @Inject constructor(
         }
     }
 
-    fun saveCliente(cliente: ClienteEntity) {
+    fun saveCliente(cliente: User) {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                repository.saveCliente(cliente)
+                repository.syncUserWithFirebase(cliente)
                 _successMessage.value = "Cliente guardado exitosamente"
             } catch (e: Exception) {
                 _errorMessage.value = "Error al guardar cliente: ${e.message}"
-            } finally {
-                _isLoading.value = false
-            }
-        }
-    }
-
-    fun updateCliente(cliente: ClienteEntity) {
-        viewModelScope.launch {
-            try {
-                _isLoading.value = true
-                repository.updateCliente(cliente)
-                _successMessage.value = "Cliente actualizado exitosamente"
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al actualizar cliente: ${e.message}"
             } finally {
                 _isLoading.value = false
             }
@@ -93,8 +79,10 @@ class ClienteViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                repository.deleteCliente(clienteId)
-                _successMessage.value = "Cliente eliminado exitosamente"
+                // El repositorio de usuarios no debería permitir borrar a otros de Firebase
+                // Pero podemos limpiar el cache local si fuera necesario.
+                // repository.clearLocalUser() // Esto limpia el perfil propio
+                _successMessage.value = "Funcionalidad de borrado limitada por seguridad"
             } catch (e: Exception) {
                 _errorMessage.value = "Error al eliminar cliente: ${e.message}"
             } finally {
@@ -107,7 +95,7 @@ class ClienteViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                repository.searchClientesByNombre(nombre).collect { clientes ->
+                repository.searchUsers(nombre).collect { clientes ->
                     _clientes.value = clientes
                 }
             } catch (e: Exception) {

@@ -8,6 +8,7 @@ import com.example.myapplication.core.domain.model.AppointmentStatus
 import com.example.myapplication.core.domain.model.Provider
 import com.example.myapplication.core.data.repository.AppointmentRepository
 import com.example.myapplication.core.data.repository.CalendarRepository
+import com.example.myapplication.core.ChatIdHelper
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -115,12 +116,15 @@ class AppointmentViewModel @Inject constructor(
                     // --- 🏗️ SECCIÓN: SINCRONIZACIÓN CON CALENDARIO LOCAL (SMART SAVE) ---
                     // Delegamos toda la lógica al Smart Repository para asegurar normalización.
                     try {
+                        // 🔥 [CORRECCIÓN ELITE] Extraer el UID real del prestador del ChatId
+                        val realProviderId = ChatIdHelper.extractOtherParticipantId(chatId, auth.currentUser?.uid ?: "")
+                        
                         calendarRepository.saveSmartEvent(
                             id = messageId,
                             rawDate = date,
                             rawTime = time,
                             title = title ?: "Cita confirmada",
-                            providerId = appointmentId, // Vinculación
+                            providerId = realProviderId, // <-- Vinculación real al Prestador
                             providerName = providerName,
                             providerPhotoUrl = providerPhotoUrl,
                             categoryId = categoryName

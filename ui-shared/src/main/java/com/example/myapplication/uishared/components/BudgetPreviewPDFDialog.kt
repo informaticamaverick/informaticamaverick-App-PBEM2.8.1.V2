@@ -498,7 +498,7 @@ fun FooterTotalRow(label: String, value: String) {
 fun PreviewWinnerBudget() {
     MaterialTheme {
         val prestadorTest = ProviderEntity(
-            id = "test", email = "soporte@maverick.com", phoneNumber = "123456",
+            id = "test", providerId = "test", email = "soporte@maverick.com", phoneNumber = "123456",
             displayName = "Maverick S.A.", name = "Maximiliano", lastName = "Nanterne",
             categories = listOf("Seguridad"), matricula = "MAT-001",
             createdAt = 0L

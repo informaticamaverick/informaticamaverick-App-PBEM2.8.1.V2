@@ -1,22 +1,18 @@
 package com.example.myapplication.presentation.features.chat
 
-import com.example.myapplication.core.domain.model.AddressInfo
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.core.data.local.entity.BudgetEntity
-import com.example.myapplication.core.data.local.entity.MessageEntity
-import com.example.myapplication.core.data.local.entity.TenderEntity
-import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.domain.model.MessageType
 import com.example.myapplication.core.domain.model.Provider
 import com.example.myapplication.core.data.repository.ChatRepository
 import com.example.myapplication.core.data.repository.BudgetRepository
 import com.example.myapplication.core.data.repository.ProviderRepository
-import com.example.myapplication.presentation.components.DayAvailability
-import com.example.myapplication.presentation.components.TimeSlot
+import com.example.myapplication.core.data.local.entity.*
+import com.example.myapplication.core.data.remote.CalendarMapper
 import com.example.myapplication.core.ChatIdHelper
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -26,6 +22,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.example.myapplication.core.utils.ImageUtils
+import com.example.myapplication.core.utils.AudioUtils
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.map
 import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.*
@@ -41,26 +44,32 @@ data class ChatMessageUiModel(
     val categoryEmoji: String? = null
 )
 
+// Los modelos DayAvailability y TimeSlot se consumen desde CalendarMapper
+typealias DayAvailability = CalendarMapper.DayAvailability
+typealias TimeSlot = CalendarMapper.TimeSlot
+
 data class BookingUiState(
     val availableDays: List<DayAvailability> = emptyList(),
     val selectedDay: DayAvailability? = null,
     val slots: List<TimeSlot> = emptyList(),
     val selectedTime: String? = null,
-    val selectedAddress: com.example.myapplication.core.domain.model.AddressInfo? = null
+    val selectedAddress: com.example.myapplication.core.domain.model.AddressUnico? = null
 )
 
 data class ChatUiState(
-    val messages: List<ChatMessageUiModel> = emptyList(),
+    val messages: List<ChatMessageUiModel> = emptyList(), // Legacy support if needed
+    val pagingMessages: Flow<PagingData<ChatMessageUiModel>> = emptyFlow(),
     val isRecording: Boolean = false,
     val isProviderTyping: Boolean = false,
     val isProviderOnline: Boolean = false,
     val selectedBudget: BudgetEntity? = null,
-    val providerPhotoUrl: String? = null,
+    val isFetchingFullBudget: Boolean = false, // 🔥 [NUEVO] Para ONDEMAND
     val activeProvider: Provider? = null,
     val confirmedInviteIds: Set<String> = emptySet(),
     val allCategories: List<CategoryEntity> = emptyList(),
     val bookingUiState: BookingUiState = BookingUiState(),
-    val replyingToMessage: MessageEntity? = null
+    val replyingToMessage: MessageEntity? = null,
+    val activeBranchId: String? = null   // 🔥 Contexto del prestador
 )
 
 sealed class ChatUiEvent {
@@ -77,7 +86,7 @@ class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
     private val budgetRepository: BudgetRepository,
     private val providerRepository: ProviderRepository,
-    auth: FirebaseAuth
+    private val auth: FirebaseAuth
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -94,41 +103,59 @@ class ChatViewModel @Inject constructor(
 
     private var currentChatId: String = ""
     private val currentUserId = auth.currentUser?.uid ?: ""
-    private var activeCompanyId: String? = null
+    private var activeBranchId: String? = null
     private var activeCategoryId: String? = null
+    private var clientBranchId: String? = null 
+    private var clientCompanyId: String? = null // 🔥 [NUEVO v7.9] Contexto corporativo local
+
+    // 🔥 [NUEVO] Contexto de navegación multi-empresa
+    private val _currentContextId = MutableStateFlow<String?>(null) // companyId o branchId
+    val currentContextId = _currentContextId.asStateFlow()
 
     private var onlineStatusListener: ValueEventListener? = null
+    private var typingTimeoutJob: kotlinx.coroutines.Job? = null
 
     fun initialize(
         chatId: String, 
-        companyId: String? = null, 
+        companyId: String? = null, // Deprecated v6
+        branchId: String? = null,
+        clientCompanyId: String? = null, 
+        clientBranchId: String? = null, 
         categoryId: String? = null,
         initialProvider: Provider? = null,
         categories: List<CategoryEntity> = emptyList()
     ) {
-        if (currentChatId == chatId) return
-        currentChatId = chatId
-        activeCompanyId = companyId
-        activeCategoryId = categoryId
+        if (currentChatId == chatId && this.clientBranchId == clientBranchId) return
 
-        _uiState.update { it.copy(allCategories = categories) }
+        currentChatId = chatId
+        activeBranchId = branchId
+        activeCategoryId = categoryId
+        this.clientBranchId = clientBranchId
+        this.clientCompanyId = clientCompanyId 
+
+        Log.d("ChatViewModel", "🚀 Inicializando Chat: $chatId | MyBranch: $clientBranchId | RemoteBranch: $branchId")
+
+        _uiState.update { it.copy(
+            allCategories = categories,
+            activeBranchId = branchId
+        ) }
 
         initialProvider?.let { p ->
-            val decoratedProvider = providerRepository.decorateProvider(p, companyId)
+            val decoratedProvider = providerRepository.decorateProvider(p, null) // No usamos companyId para decoración
             _uiState.update { it.copy(activeProvider = decoratedProvider) }
         } ?: viewModelScope.launch {
             // Si no viene el provider, intentamos recuperarlo del repositorio
             val otherId = ChatIdHelper.extractOtherParticipantId(chatId, currentUserId)
             val p = providerRepository.getProviderById(otherId)
             p?.let {
-                val decoratedProvider = providerRepository.decorateProvider(it, companyId)
+                val decoratedProvider = providerRepository.decorateProvider(it, null)
                 _uiState.update { it.copy(activeProvider = decoratedProvider) }
             } ?: run {
                 // Si no está en Room, forzamos un fetch remoto
                 providerRepository.fetchAndSyncProviderDetail(otherId)
                 val remoteP = providerRepository.getProviderById(otherId)
                 remoteP?.let {
-                    val decoratedProvider = providerRepository.decorateProvider(it, companyId)
+                    val decoratedProvider = providerRepository.decorateProvider(it, null)
                     _uiState.update { it.copy(activeProvider = decoratedProvider) }
                 }
             }
@@ -139,35 +166,54 @@ class ChatViewModel @Inject constructor(
 
         chatRepository.startListening(chatId)
 
-        viewModelScope.launch {
-            chatRepository.getMessages(chatId).collect { messages ->
-                val confirmedIds = messages
-                    .filter { it.type == MessageType.APPOINTMENT_RECEIPT }
-                    .mapNotNull { it.calendarInviteMessageId }
-                    .toSet()
+        // 🔥 [ELITE v4] REFACTOR A PAGING 3
+        val pagingFlow = chatRepository.getMessagesPaging(chatId)
+            .map { pagingData ->
+                pagingData.map { msg ->
+                    // 🔥 [FIX v8.0] Verificación de integridad del mensaje cargado
+                    if (msg.content.isBlank() && msg.type == MessageType.TEXT) {
+                        Log.w("ChatViewModel", "⚠️ Mensaje vacío detectado en UI: ${msg.id} | ChatId: ${msg.chatId}")
+                    }
 
-                val uiMessages = messages.map { msg ->
-                    val budgetId = if (msg.type == MessageType.BUDGET) {
-                        msg.relatedId ?: msg.id
+                    val bId = if (msg.type == MessageType.BUDGET) msg.relatedId ?: msg.id else null
+                    val budget = if (msg.type == MessageType.BUDGET && !msg.budgetDataJson.isNullOrBlank()) {
+                        com.example.myapplication.core.data.remote.ChatMessageMapper.parseBudgetSummaryFromJson(
+                            msg.budgetDataJson!!,
+                            bId ?: msg.id
+                        )
                     } else null
-                    val budget = budgetId?.let { budgetRepository.getBudgetById(it) }
                     
+                    val categoryMap = _uiState.value.allCategories.associateBy { it.name }
                     val catName = budget?.category ?: msg.categoryId
-                    val emoji = _uiState.value.allCategories.find { it.name == catName }?.icon
+                    val emoji = categoryMap[catName]?.icon
                     
                     ChatMessageUiModel(msg, budget, emoji)
                 }
-                _uiState.update { it.copy(
-                    messages = uiMessages,
-                    confirmedInviteIds = confirmedIds
-                ) }
             }
-        }
+            .cachedIn(viewModelScope)
 
+        _uiState.update { it.copy(pagingMessages = pagingFlow) }
+
+        // [LEGACY SYNC] Mantenemos confirmedInviteIds escuchando el flujo normal si es necesario, 
+        // o lo extraemos de los metadatos del chat. Por ahora, para Paging, 
+        // el estado de 'confirmed' se puede derivar en la UI o mediante un Flow separado.
+        
         val providerId = ChatIdHelper.extractOtherParticipantId(chatId, currentUserId)
         viewModelScope.launch {
             chatRepository.observeTypingStatus(chatId, providerId).collect { isTyping ->
                 _uiState.update { it.copy(isProviderTyping = isTyping) }
+                
+                // 🔥 [ELITE v8.6] Timeout de seguridad para estado "Escribiendo"
+                // Evita que el prestador quede perpetuamente en typing si se desconecta.
+                if (isTyping) {
+                    typingTimeoutJob?.cancel()
+                    typingTimeoutJob = viewModelScope.launch {
+                        delay(8000) // 8 segundos de gracia
+                        _uiState.update { it.copy(isProviderTyping = false) }
+                    }
+                } else {
+                    typingTimeoutJob?.cancel()
+                }
             }
         }
     }
@@ -175,6 +221,7 @@ class ChatViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         chatRepository.stopListening()
+        typingTimeoutJob?.cancel()
         
         onlineStatusListener?.let {
             val providerId = ChatIdHelper.extractOtherParticipantId(currentChatId, currentUserId)
@@ -216,24 +263,65 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun sendImage(uri: Uri) {
+    fun sendImage(uri: Uri, context: Context) {
         val replyToMessage = uiState.value.replyingToMessage
         viewModelScope.launch {
-            val message = createMessage(MessageType.IMAGE, "[Imagen]", replyToMessage)
-            chatRepository.sendMessage(message.copy(imageUrl = uri.toString()))
-            _events.emit(ChatUiEvent.MessageSent)
+            // 🔥 [ELITE] Compresión y Thumbnail en hilo secundario para no bloquear la UI
+            val result = withContext(Dispatchers.Default) {
+                val compressed = ImageUtils.compressElite(context, uri)
+                val thumb = ImageUtils.generateThumbnailBase64(context, uri)
+                compressed to thumb
+            }
+
+            val compressedBytes = result.first
+            val thumbnail = result.second
+
+            if (compressedBytes != null) {
+                // 1. Guardar archivo físico local para el emisor (Blindaje de Room)
+                val fileName = "IMG_SENT_${System.currentTimeMillis()}"
+                val localPath = ImageUtils.saveBytesToFile(context, compressedBytes, fileName)
+
+                // 2. Preparar el Base64 (Solo para el viaje a Firebase)
+                val base64 = ImageUtils.bytesToBase64(compressedBytes)
+
+                // 3. Construir mensaje
+                // 🔥 [ELITE] Room Shielding: Guardamos "[Imagen]" en content para Room,
+                // pero enviamos el Base64 a Firebase.
+                val message = createMessage(MessageType.IMAGE, "[Imagen]", replyToMessage).copy(
+                    imageLocalPath = localPath,
+                    thumbnailBase64 = thumbnail
+                )
+
+                // 4. Enviar (ChatRepository.sendMessage guardará en Room)
+                chatRepository.sendMessage(message, base64)
+
+                _events.emit(ChatUiEvent.MessageSent)
+            } else {
+                _events.emit(ChatUiEvent.ShowError("No se pudo procesar la imagen"))
+            }
+
             if (replyToMessage != null) setReplyMessage(null)
         }
     }
 
-    fun sendAudio(path: String) {
+    fun sendAudio(path: String, duration: Int) {
         val replyToMessage = uiState.value.replyingToMessage
         viewModelScope.launch {
-            val message = createMessage(MessageType.AUDIO, "[Audio]", replyToMessage).copy(
-                imageUrl = path
-            )
-            chatRepository.sendMessage(message)
-            _events.emit(ChatUiEvent.MessageSent)
+            val audioFile = java.io.File(path)
+            if (audioFile.exists()) {
+                // [SEGURIDAD ELITE]: Leer en fragmentos IO. 
+                // AAC @ 32kbps x 60s ≈ 240KB. Es seguro leerlo completo para audios de 1 min.
+                val bytes = withContext(Dispatchers.IO) { audioFile.readBytes() }
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                
+                // 🔥 [ELITE] Room Shielding: Guardamos "[Audio]" en content para Room
+                val message = createMessage(MessageType.AUDIO, "[Audio]", replyToMessage).copy(
+                    audioLocalPath = path,
+                    durationSeconds = duration
+                )
+                chatRepository.sendMessage(message, base64)
+                _events.emit(ChatUiEvent.MessageSent)
+            }
             if (replyToMessage != null) setReplyMessage(null)
         }
     }
@@ -258,7 +346,9 @@ class ChatViewModel @Inject constructor(
             val message = createMessage(MessageType.BUDGET_REQUEST, problem, replyToMessage).copy(
                 latitude = lat,
                 longitude = lng,
-                locationAddress = address
+                locationAddress = address,
+                budgetRequestDescription = problem,
+                budgetRequestClientAddress = address
             )
             chatRepository.sendMessage(message)
             _events.emit(ChatUiEvent.MessageSent)
@@ -273,7 +363,7 @@ class ChatViewModel @Inject constructor(
                 appointmentDate = date,
                 appointmentTime = time,
                 appointmentStatus = "PENDING",
-                appointmentType = type,
+                appointmentType = type ?: "TECHNICAL_VISIT",
                 providerAddress = address
             )
             chatRepository.sendMessage(message)
@@ -285,7 +375,7 @@ class ChatViewModel @Inject constructor(
     fun startRecording(context: Context) {
         viewModelScope.launch {
             try {
-                val audioFile = java.io.File(context.cacheDir, "record_${System.currentTimeMillis()}.3gp")
+                val audioFile = java.io.File(context.cacheDir, "record_${System.currentTimeMillis()}${AudioUtils.getRecommendedExtension()}")
                 audioFilePath = audioFile.absolutePath
 
                 mediaRecorder = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
@@ -294,10 +384,7 @@ class ChatViewModel @Inject constructor(
                     @Suppress("DEPRECATION")
                     android.media.MediaRecorder()
                 }.apply {
-                    setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
-                    setOutputFormat(android.media.MediaRecorder.OutputFormat.THREE_GPP)
-                    setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AMR_NB)
-                    setAudioEncodingBitRate(12200)
+                    AudioUtils.configureEliteRecorder(this)
                     setOutputFile(audioFilePath)
                     prepare()
                     start()
@@ -319,7 +406,7 @@ class ChatViewModel @Inject constructor(
             while (_uiState.value.isRecording) {
                 delay(1000)
                 _recordingTime.value += 1
-                if (_recordingTime.value >= 60) {
+                if (_recordingTime.value >= 60) { // 🔥 [ELITE] Límite de 1 minuto
                     stopRecordingAndSend()
                     break
                 }
@@ -349,7 +436,7 @@ class ChatViewModel @Inject constructor(
         audioFilePath = null
 
         if (path != null && duration > 0) {
-            sendAudio(path)
+            sendAudio(path, duration)
         }
     }
 
@@ -368,8 +455,10 @@ class ChatViewModel @Inject constructor(
 
     fun onBudgetClicked(budgetId: String) {
         viewModelScope.launch {
+            // 🔥 [ELITE ONDEMAND] Carga profunda del presupuesto solo al hacer click
+            _uiState.update { it.copy(isFetchingFullBudget = true) }
             val budget = budgetRepository.getBudgetById(budgetId)
-            _uiState.update { it.copy(selectedBudget = budget) }
+            _uiState.update { it.copy(selectedBudget = budget, isFetchingFullBudget = false) }
         }
     }
 
@@ -383,12 +472,40 @@ class ChatViewModel @Inject constructor(
 
     fun markAsRead() {
         viewModelScope.launch {
-            chatRepository.markChatAsRead(currentChatId, currentUserId)
+            chatRepository.markMessagesAsRead(currentChatId, currentUserId)
         }
     }
 
     fun setReplyMessage(message: MessageEntity?) {
         _uiState.update { it.copy(replyingToMessage = message) }
+    }
+
+    /**
+     * [ELITE v4] Cambia el contexto del chat (Personal -> Sucursal).
+     * Esto regenera el ChatID y reinicia la escucha.
+     */
+    fun switchChatContext(branchId: String?) {
+        val provider = uiState.value.activeProvider ?: return
+        val newChatId = ChatIdHelper.generateChatId(
+            uid1 = currentUserId, 
+            uid2 = provider.uid, 
+            b1 = clientBranchId, 
+            b2 = branchId
+        )
+        
+        if (newChatId == currentChatId) return
+
+        // Limpiar recursos anteriores
+        chatRepository.stopListening()
+        
+        // Inicializar nuevo contexto
+        initialize(
+            chatId = newChatId,
+            branchId = branchId,
+            categoryId = activeCategoryId,
+            initialProvider = provider,
+            categories = uiState.value.allCategories
+        )
     }
 
     fun sendTenderInvitation(tender: TenderEntity) {
@@ -408,8 +525,8 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    fun openBookingDialog(message: MessageEntity, availableAddresses: List<com.example.myapplication.core.domain.model.AddressInfo>) {
-        val days = parseAvailabilityJson(message.availabilityJson ?: "[]")
+    fun openBookingDialog(message: MessageEntity, availableAddresses: List<com.example.myapplication.core.domain.model.AddressUnico>) {
+        val days = CalendarMapper.parseAvailabilityJson(message.availabilityJson ?: "[]")
         _uiState.update { it.copy(
             bookingUiState = BookingUiState(
                 availableDays = days,
@@ -436,7 +553,7 @@ class ChatViewModel @Inject constructor(
         ) }
     }
 
-    fun onAddressSelected(address: com.example.myapplication.core.domain.model.AddressInfo) {
+    fun onAddressSelected(address: com.example.myapplication.core.domain.model.AddressUnico) {
         _uiState.update { it.copy(
             bookingUiState = it.bookingUiState.copy(selectedAddress = address)
         ) }
@@ -445,95 +562,18 @@ class ChatViewModel @Inject constructor(
     private fun updateSlotsForSelectedDay(bookedSlotsJson: String) {
         val state = _uiState.value.bookingUiState
         val day = state.selectedDay ?: return
-        val booked = parseBookedSlotsJson(bookedSlotsJson)
-        val slots = generateSlotsFromAvailability(day, booked)
+        val booked = CalendarMapper.parseBookedSlotsJson(bookedSlotsJson)
+        val slots = CalendarMapper.generateSlotsFromAvailability(day, booked)
         _uiState.update { it.copy(
             bookingUiState = it.bookingUiState.copy(slots = slots)
         ) }
     }
 
-    private fun parseAvailabilityJson(json: String): List<DayAvailability> {
-        val list = mutableListOf<DayAvailability>()
-        try {
-            val array = JSONArray(json)
-            val dateFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                val dateStr = obj.getString("date")
-                val startTimeStr = obj.getString("startTime")
-                val endTimeStr = obj.getString("endTime")
-                val duration = obj.getInt("durationMinutes")
-                
-                val date = dateFormatter.parse(dateStr)
-                if (date != null) {
-                    list.add(DayAvailability(
-                        date = date,
-                        startTime = startTimeStr,
-                        endTime = endTimeStr,
-                        slotDurationMinutes = duration
-                    ))
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return list.sortedBy { it.date }
-    }
-
-    private fun parseBookedSlotsJson(json: String): List<Pair<String, String>> {
-        val list = mutableListOf<Pair<String, String>>()
-        try {
-            val array = JSONArray(json)
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                val dateStr = obj.getString("date")
-                val timeStr = obj.getString("time")
-                list.add(dateStr to timeStr)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return list
-    }
-
-    private fun generateSlotsFromAvailability(avail: DayAvailability, booked: List<Pair<String, String>>): List<TimeSlot> {
-        val slots = mutableListOf<TimeSlot>()
-        val timeSdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val dateSdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val dateKey = dateSdf.format(avail.date)
-        
-        if (avail.slotDurationMinutes <= 0) return emptyList()
-
-        try {
-            var current = timeSdf.parse(avail.startTime)
-            val end = timeSdf.parse(avail.endTime)
-            
-            if (current != null && end != null) {
-                val calendar = Calendar.getInstance()
-                while (true) {
-                    val currentTime = current!!
-                    calendar.time = currentTime
-                    val next = Calendar.getInstance().apply {
-                        time = currentTime
-                        add(Calendar.MINUTE, avail.slotDurationMinutes)
-                    }.time
-                    
-                    if (next.after(end)) break
-                    
-                    val currentTimeStr = timeSdf.format(current)
-                    val isOccupied = booked.any { it.first == dateKey && it.second == currentTimeStr }
-                    slots.add(TimeSlot(time = currentTimeStr, isOccupied = isOccupied))
-                    current = next
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return slots
-    }
-
     private fun createMessage(type: MessageType, content: String, replyTo: MessageEntity? = null): MessageEntity {
+        // 🔥 [ELITE v8.0] SYMMETRIC ROOM TAGGING (SSOT)
+        // Ya no confiamos solo en la extracción del ID del chat. 
+        // Usamos la identidad inyectada en el initialize() para marcar el mensaje.
+        
         return MessageEntity(
             id = UUID.randomUUID().toString(),
             chatId = currentChatId,
@@ -541,8 +581,24 @@ class ChatViewModel @Inject constructor(
             receiverId = ChatIdHelper.extractOtherParticipantId(currentChatId, currentUserId),
             type = type,
             content = content,
-            companyId = activeCompanyId,
+            
+            // --- BLOQUE DE IDENTIDAD ELITE v8.0 ---
+            senderBranchId = clientBranchId, 
+            senderCompanyId = clientCompanyId,
+            receiverBranchId = activeBranchId, 
+            receiverCompanyId = null,
+            
+            // [SOBERANÍA LOCAL]: Tags de filtrado para Room
+            localBranchId = clientBranchId,
+            localCompanyId = clientCompanyId,
+            remoteBranchId = activeBranchId,
+            remoteCompanyId = null,
+
+            // Compatibilidad legacy (Sincronización Firebase)
+            branchId = clientBranchId,
+            companyId = clientCompanyId,
             categoryId = activeCategoryId,
+
             appointmentType = if (type == MessageType.VISIT) "TECHNICAL_VISIT" else null,
             replyToId = replyTo?.id,
             replyToContent = replyTo?.let { getReplyPreviewText(it) },

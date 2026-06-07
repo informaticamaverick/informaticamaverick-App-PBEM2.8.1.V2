@@ -1,3 +1,5 @@
+
+/**
 package com.example.myapplication.prestador.data.repository
 
 import com.example.myapplication.prestador.data.local.entity.SucursalEntity
@@ -95,3 +97,4 @@ class SucursalFirestoreSync @Inject constructor(
         }
     }
 }
+*/

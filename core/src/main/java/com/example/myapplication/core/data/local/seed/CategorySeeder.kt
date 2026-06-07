@@ -26,18 +26,24 @@ class CategorySeeder @Inject constructor(
 ) {
     private val TAG = "CategorySeeder"
     private val FILE_NAME = "seed_data.json"
+    private val PREF_NAME = "category_seed_prefs"
+    private val KEY_LAST_SEED_VERSION = "last_seed_version"
+    private val CURRENT_SEED_VERSION = 1 // Incrementar para forzar un re-sembrado en actualizaciones
 
     /**
-     * Realiza el sembrado si las tablas están vacías.
-     * Retorna TRUE si se realizó el sembrado, FALSE si ya había datos.
+     * Realiza el sembrado si es la primera vez o ha cambiado la versión de datos.
+     * Retorna TRUE si se realizó el sembrado, FALSE si se omitió.
      */
     suspend fun seedIfNeeded(): Boolean = withContext(Dispatchers.IO) {
         try {
-            val categoryCount = categoryDao.getCount()
-            val superCategoryCount = superCategoryDao.getCount()
+            val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            val lastVersion = prefs.getInt(KEY_LAST_SEED_VERSION, 0)
+            
+            // Fallback de seguridad: Si Room está vacío, siempre sembramos
+            val isDbEmpty = categoryDao.getCount() == 0 || superCategoryDao.getCount() == 0
 
-            if (categoryCount == 0 || superCategoryCount == 0) {
-                Log.d(TAG, "🌱 Iniciando sembrado local de categorías...")
+            if (lastVersion < CURRENT_SEED_VERSION || isDbEmpty) {
+                Log.d(TAG, "🌱 Iniciando sembrado local (Versión: $CURRENT_SEED_VERSION)...")
                 
                 val jsonString = context.assets.open(FILE_NAME).bufferedReader().use { it.readText() }
                 val seedData = Gson().fromJson(jsonString, SeedData::class.java)
@@ -68,6 +74,9 @@ class CategorySeeder @Inject constructor(
                     )
                 }
                 categoryDao.insertAll(catEntities)
+
+                // Guardar versión actual para no repetir en el próximo arranque
+                prefs.edit().putInt(KEY_LAST_SEED_VERSION, CURRENT_SEED_VERSION).apply()
 
                 Log.d(TAG, "✅ Sembrado completado: ${superEntities.size} grupos y ${catEntities.size} rubros.")
                 return@withContext true

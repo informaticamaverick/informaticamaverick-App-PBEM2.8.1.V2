@@ -1,6 +1,6 @@
 package com.example.myapplication.presentation.features.home
 
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
@@ -115,18 +115,19 @@ fun FastScreen(
             if (actionId == "refresh_gps") {
                 if (ubicacionViewModel.isGpsEnabled.value) {
                     ubicacionViewModel.ejecutarCalculoUbicacionGps(context) { pais, prov, loc, calle, num, cp, lat, lng ->
-                        val freshGpsAddress = AddressInfo(
+                        val freshGpsAddress = AddressUnico(
                             id = "gps_current",
-                            companyOrUserName = "Mi Ubicación",
-                            branchName = "GPS Tracker",
-                            streetAndNumber = if (calle.isNotBlank()) "$calle $num".trim() else "Ubicación detectada",
-                            locality = loc,
-                            province = prov,
-                            country = pais,
-                            postalCode = cp,
+                            ownerName = "Mi Ubicación",
+                            label = "GPS Tracker",
+                            calle = calle,
+                            numero = num,
+                            localidad = loc,
+                            provincia = prov,
+                            pais = pais,
+                            codigoPostal = cp,
                             isCompany = false,
-                            lat = lat,
-                            lng = lng
+                            latitude = lat,
+                            longitude = lng
                         )
                         beViewModel.updateAddressFromGps(freshGpsAddress)
                     }
@@ -184,8 +185,8 @@ fun FastScreenContent(
     isSearching: Boolean,
     searchFinished: Boolean,
     searchResults: List<ProviderWithDistance>,
-    activeAddress: AddressInfo?,
-    availableAddresses: List<AddressInfo>,
+    activeAddress: AddressUnico?,
+    availableAddresses: List<AddressUnico>,
     user: UserEntity?,
     activeProfileName: String,
     activeProfilePhoto: Any?,
@@ -198,7 +199,7 @@ fun FastScreenContent(
     beSearchCategories: List<CategoryEntity>,
     filters: FastFilterState,
     shortcuts: List<FilterSortItem> = emptyList(),
-    onAddressSelected: (AddressInfo) -> Unit,
+    onAddressSelected: (AddressUnico) -> Unit,
     onUpdateGps: () -> Unit,
     onGpsToggle: () -> Unit = {},
     onProfileSelected: (String?) -> Unit,
@@ -235,8 +236,8 @@ fun FastScreenContent(
             isSearching = isSearching,
             searchFinished = searchFinished,
             results = searchResults,
-            userLat = activeAddress?.lat ?: -26.8310,
-            userLon = activeAddress?.lng ?: -65.2045,
+            userLat = activeAddress?.latitude ?: -26.8310,
+            userLon = activeAddress?.longitude ?: -65.2045,
             scale = radarScale,
             onScaleChange = { radarScale = (radarScale * it).coerceIn(0.5f, 3f) },
             onProviderClick = { selectedProviderOnRadar = it }
@@ -263,7 +264,7 @@ fun FastScreenContent(
                 activeProfileName = activeProfileName,
                 activeProfilePhoto = activeProfilePhoto,
                 mainAddress = activeAddress?.streetAndNumber ?: "SELECCIONAR UBICACIÓN",
-                localityInfo = activeAddress?.locality ?: "ESCANEANDO...",
+                localityInfo = activeAddress?.localidad ?: "ESCANEANDO...",
                 description = if (activeAddress?.id == "gps_current") "GPS_LIVE" else if (activeAddress?.isCompany == true) "NETWORK_HQ" else "STATION_HOME",
                 isGpsActive = isGpsActive,
                 onUserClick = { showProfilePopup = true },
@@ -463,7 +464,16 @@ fun FastScreenContent(
                             onChatClick = {
                                 selectedProviderOnRadar = null
                                 val service = providerData.service
-                                navController.navigate("chat?providerId=${service.id}&companyId=${service.companyId ?: ""}&categoryId=${service.categoryId ?: ""}")
+                                navController.navigate(Screen.Chat.createRoute(
+                                    providerId = service.providerId,
+                                   // companyId = service.companyId,
+                                    branchId = service.branchId,
+                                    categoryId = selectedCategory?.name ?: service.categories.firstOrNull()
+                                ))
+                            },
+                            isShortcut = shortcuts.any { it.id == providerData.service.id },
+                            onManageShortcut = { isAdd -> 
+                                onManageShortcuts(providerData.service.id, isAdd)
                             }
                         )
                         

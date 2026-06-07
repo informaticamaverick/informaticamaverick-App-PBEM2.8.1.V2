@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.WorkInfo
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.prestador.data.repository.PresupuestoRepository
 import com.example.myapplication.prestador.di.ApplicationScope
 import com.example.myapplication.prestador.utils.NotificationHelper
@@ -44,7 +44,7 @@ class PresupuestoViewModel @Inject constructor(
                 initialValue = emptyList()
             )
 
-    val clientes: StateFlow<List<ClienteEntity>> =
+    val clientes: StateFlow<List<User>> =
         repository.getAllClientes()
             .stateIn(
                 scope = viewModelScope,
@@ -68,7 +68,7 @@ class PresupuestoViewModel @Inject constructor(
         viewModelScope.launch { repository.insertPresupuesto(presupuesto) }
     }
 
-    fun insertCliente(cliente: com.example.myapplication.prestador.data.local.entity.ClienteEntity) {
+    fun insertCliente(cliente: User) {
         viewModelScope.launch { repository.insertCliente(cliente) }
     }
 
@@ -359,6 +359,7 @@ class PresupuestoViewModel @Inject constructor(
     fun toggleSelection(id: String) {
         _selectedIds.update { current ->
             if (current.contains(id)) current - id else current + id
+
         }
     }
 

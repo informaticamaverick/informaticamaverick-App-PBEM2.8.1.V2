@@ -213,37 +213,11 @@ fun ConfiguracionDrawerOverlay(
 
                     Spacer(Modifier.height(4.dp))
 
-                    // ── CUENTA ────────────────────────────────────────
-                    DrawerSectionLabel("Cuenta")
-                    DrawerItem(Icons.Default.Logout, Color(0xFFF57C00), "Cerrar sesión", "Salir de tu cuenta") {
-                        mostrarDialogCerrarSesion = true
-                    }
 
                     Spacer(Modifier.height(32.dp))
                 }
             }
         }
-    }
-
-    // Diálogo cerrar sesión
-    if (mostrarDialogCerrarSesion) {
-        AlertDialog(
-            onDismissRequest = { mostrarDialogCerrarSesion = false },
-            containerColor = colors.surfaceColor,
-            icon = { Icon(Icons.Default.Logout, null, tint = colors.primaryOrange) },
-            title = { Text("¿Cerrar sesión?", color = colors.textPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("Vas a salir de tu cuenta en este dispositivo.", color = colors.textSecondary) },
-            confirmButton = {
-                TextButton(onClick = { mostrarDialogCerrarSesion = false; onDismiss(); onSignOut() }) {
-                    Text("Cerrar sesión", color = colors.primaryOrange, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostrarDialogCerrarSesion = false }) {
-                    Text("Cancelar", color = colors.textSecondary)
-                }
-            }
-        )
     }
 }
 

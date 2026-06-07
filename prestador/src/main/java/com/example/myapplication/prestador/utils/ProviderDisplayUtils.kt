@@ -1,11 +1,10 @@
 package com.example.myapplication.prestador.utils
 
-import com.example.myapplication.prestador.data.local.entity.BusinessEntity
-import com.example.myapplication.prestador.data.local.entity.DireccionEntity
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
+import com.example.myapplication.core.domain.model.CompanyProvider
+import com.example.myapplication.core.domain.model.Provider
 
 // =================================================================================
-// --- SECCIÓN: MODELO DE UI REAL (REEMPLAZO DE PPrestadorProfileFalso) ---
+// --- SECCIÓN: MODELO DE UI REAL ---
 // =================================================================================
 
 data class PrestadorProfile(
@@ -13,7 +12,6 @@ data class PrestadorProfile(
     val name: String,
     val lastName: String,
     val profileImageUrl: String?,
-    val bannerImageUrl: String?,
     val rating: Float,
     val services: List<String>,
     val companyName: String?,
@@ -23,7 +21,6 @@ data class PrestadorProfile(
     val doesHomeVisits: Boolean,
     val hasPhysicalLocation: Boolean,
     val works24h: Boolean,
-    val galleryImages: List<String>,
     val isFavorite: Boolean,
     val isVerified: Boolean,
     val isOnline: Boolean,
@@ -31,46 +28,38 @@ data class PrestadorProfile(
 )
 
 // =================================================================================
-// --- SECCIÓN: UTILIDADES DE FORMATEO (DIRECCIONES) ---
-// =================================================================================
-
-fun DireccionEntity.formatInline(): String {
-    val calleNumero = listOfNotNull(calle?.takeIf { it.isNotBlank() }, numero?.takeIf { it.isNotBlank() })
-        .joinToString(" ")
-        .trim()
-    val locProv = listOfNotNull(localidad?.takeIf { it.isNotBlank() }, provincia?.takeIf { it.isNotBlank() })
-        .joinToString(", ")
-        .trim()
-    val cp = codigoPostal?.takeIf { it.isNotBlank() }
-
-    return listOfNotNull(
-        calleNumero.takeIf { it.isNotBlank() },
-        locProv.takeIf { it.isNotBlank() },
-        cp
-    ).joinToString(" • ").trim()
-}
-
-// =================================================================================
 // --- SECCIÓN: UTILIDADES DE DISPLAY (TEXTO) ---
 // =================================================================================
 
-fun ProviderEntity.displayCompanyOrFullName(business: BusinessEntity? = null): String {
-    val company = nombreEmpresa?.takeIf { it.isNotBlank() }
-        ?: business?.nombreNegocio?.takeIf { it.isNotBlank() }
+/**
+ * Obtiene el nombre a mostrar (Empresa o Nombre Completo) según la configuración.
+ * [SSOT]: Usa priorizarEmpresa del núcleo core.
+ */
+fun Provider.displayCompanyOrFullName(company: CompanyProvider? = null): String {
+    val selectedCompany = company ?: companies.firstOrNull()
+    val companyName = selectedCompany?.name?.takeIf { it.isNotBlank() }
 
-    if (tieneEmpresa && company != null) return company
+    if (priorizarEmpresa && companyName != null) return companyName
 
-    val fullName = (name + " " + apellido).trim()
+    val fullName = (name + " " + lastName).trim()
     return fullName.ifBlank { "Prestador" }
 }
 
-fun ProviderEntity.displayAddress(business: BusinessEntity? = null): String {
+/**
+ * Obtiene la dirección a mostrar según la configuración.
+ * [SSOT]: Usa AddressUnico y jerarquía de sucursales.
+ */
+fun Provider.displayAddress(company: CompanyProvider? = null): String {
+    val selectedCompany = company ?: companies.firstOrNull()
+    
     return when {
-        tieneEmpresa && business != null && business.direccion.isNotBlank() -> business.direccion
-        tieneEmpresa && !direccionEmpresa.isNullOrBlank() -> direccionEmpresa!!
-        turnosEnLocal && !direccionLocal.isNullOrBlank() -> direccionLocal!!
-        address != null -> address!!.fullString()
-        else -> ""
+        priorizarEmpresa && selectedCompany != null -> {
+            // Si prioriza empresa, buscamos la dirección de la primera sucursal o de la empresa
+            selectedCompany.branches.firstOrNull()?.address?.fullString() 
+                ?: address?.fullString() 
+                ?: ""
+        }
+        else -> address?.fullString() ?: ""
     }
 }
 
@@ -79,31 +68,30 @@ fun ProviderEntity.displayAddress(business: BusinessEntity? = null): String {
 // =================================================================================
 
 /**
- * Convierte ProviderEntity (datos reales) al modelo de visualización oficial.
+ * Convierte Provider (modelo de dominio Core) al modelo de visualización oficial.
+ * [LEY #1]: Pantallas tontas consumen este modelo simplificado.
  */
-fun ProviderEntity.toPrestadorProfile(business: BusinessEntity? = null): PrestadorProfile {
-    val company = nombreEmpresa?.takeIf { it.isNotBlank() }
-        ?: business?.nombreNegocio?.takeIf { it.isNotBlank() }
+fun Provider.toPrestadorProfile(company: CompanyProvider? = null): PrestadorProfile {
+    val selectedCompany = company ?: companies.firstOrNull()
+    val companyName = selectedCompany?.name?.takeIf { it.isNotBlank() }
 
     return PrestadorProfile(
-        id = id,
+        id = uid,
         name = name.ifBlank { "Prestador" },
-        lastName = apellido,
-        profileImageUrl = imageUrl,
-        bannerImageUrl = bannerImageUrl,
+        lastName = lastName,
+        profileImageUrl = photoUrl,
         rating = rating,
         services = categories,
-        companyName = company,
-        address = displayAddress(business),
+        companyName = companyName,
+        address = displayAddress(company),
         email = email,
         phone = phoneNumber,
-        doesHomeVisits = vaDomicilio,
-        hasPhysicalLocation = turnosEnLocal || (tieneEmpresa && (!direccionEmpresa.isNullOrBlank() || (business != null && business.direccion.isNotBlank()))),
-        works24h = atencionUrgencias,
-        galleryImages = galleryImages,
-        isFavorite = favorito,
-        isVerified = verificado,
+        doesHomeVisits = doesHomeVisits,
+        hasPhysicalLocation = hasPhysicalLocation || (priorizarEmpresa && selectedCompany != null),
+        works24h = works24h,
+        isFavorite = isFavorite,
+        isVerified = isVerified,
         isOnline = isOnline,
-        isSubscribed = suscripto
+        isSubscribed = isSubscribed
     )
 }

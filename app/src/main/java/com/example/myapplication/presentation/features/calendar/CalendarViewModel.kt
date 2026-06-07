@@ -3,7 +3,7 @@ package com.example.myapplication.presentation.features.calendar
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.data.local.entity.CalendarEventEntity
-import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.core.data.local.entity.TenderEntity // Placeholder if needed
 import com.example.myapplication.core.data.local.entity.EventType
 import com.example.myapplication.core.data.local.entity.VisitStatus
 import com.example.myapplication.presentation.global.AppActionCoordinator
@@ -133,7 +133,8 @@ class CalendarViewModel @Inject constructor(
         appActionCoordinator.globalSelectedCategory,
         activeFilters,
         _showPastEvents,
-        _activeSortCriteria
+        _activeSortCriteria,
+        appActionCoordinator.selectedProfileId
     ) { args ->
         val events = args[0] as List<CalendarEventEntity>
         val searchQuery = args[1] as String
@@ -141,11 +142,19 @@ class CalendarViewModel @Inject constructor(
         val filters = args[3] as Set<String>
         val showPast = args[4] as Boolean
         val sortCriteria = args[5] as List<String>
+        val profileId = args[6] as String?
 
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         val todayStr = dateFormat.format(Date())
 
         var result = events
+
+        // --- FILTRADO POR PERFIL (SSOT) ---
+        // [FIX ELITE]: Por ahora, si no hay campo en la entidad, mostramos todo.
+        // El profileId se recibe para futura implementación de filtrado multi-identidad.
+        if (profileId != null) {
+            // Log.d("CalendarVM", "Filtrando por perfil: $profileId")
+        }
 
         if (!showPast) {
             result = result.filter { it.date >= todayStr }

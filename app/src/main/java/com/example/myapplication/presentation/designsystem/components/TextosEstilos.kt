@@ -25,15 +25,18 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import androidx.compose.foundation.rememberScrollState
@@ -104,26 +107,23 @@ object MaverickStyle {
 
 
 // ==========================================================================================
-// --- SECCIÓN 1: UTILIDADES Y EXTENSIONES ---
+// --- SECCIÓN 1: UTILIDADES Y EXTENSIONES UI ---
 // ==========================================================================================
 
 /**
- * Función para limpiar textos, arreglar mayúsculas/minúsculas y opcionalmente quitar acentos.
+ * Extensión para aplicar un estilo ultra-compacto eliminando paddings internos
+ * de Android y ajustando la altura de línea al mínimo (1.em).
+ * Ideal para tarjetas pequeñas o layouts Bento.
  */
-fun String.formatearTexto(quitarAcentos: Boolean = false): String {
-    if (this.isBlank()) return this
-
-    // Convierte a minúsculas y capitaliza la primera letra
-    val textoFormateado = this.lowercase().replaceFirstChar {
-        if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
-    }
-    // Si se requiere, elimina acentos y diacríticos
-    return if (quitarAcentos) {
-        val normalizado = Normalizer.normalize(textoFormateado, Normalizer.Form.NFD)
-        "\\p{InCombiningDiacriticalMarks}+".toRegex().replace(normalizado, "")
-    } else {
-        textoFormateado
-    }
+fun TextStyle.asCompact(): TextStyle {
+    return this.copy(
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+        lineHeightStyle = LineHeightStyle(
+            alignment = LineHeightStyle.Alignment.Center,
+            trim = LineHeightStyle.Trim.Both
+        ),
+        lineHeight = 1.em
+    )
 }
 
 // ==========================================================================================

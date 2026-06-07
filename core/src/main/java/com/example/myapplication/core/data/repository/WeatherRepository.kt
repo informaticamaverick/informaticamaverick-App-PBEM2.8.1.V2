@@ -18,18 +18,40 @@ class WeatherRepository @Inject constructor(
             if (response.isSuccessful) {
                 val data = response.body()
                 data?.let {
+                    val dailyForecast = it.daily.time.mapIndexed { index, time ->
+                        DayForecast(
+                            dayName = getDayName(time),
+                            emoji = getWeatherEmoji(it.daily.weathercode[index]),
+                            tempMax = "${it.daily.temperature_2m_max[index].toInt()}°",
+                            tempMin = "${it.daily.temperature_2m_min[index].toInt()}°"
+                        )
+                    }
+
                     WeatherData(
                         temperature = "${it.current.temperature_2m.toInt()}°C",
                         weatherEmoji = getWeatherEmoji(it.current.weathercode),
                         weatherDescription = getWeatherDescription(it.current.weathercode),
                         windSpeed = "${it.current.windspeed_10m.toInt()} km/h",
                         humidity = "${it.current.relativehumidity_2m}%",
-                        cityName = "Lat: ${String.format("%.2f", lat)}"
+                        cityName = "Lat: ${String.format(java.util.Locale.US, "%.2f", lat)}",
+                        forecast = dailyForecast
                     )
                 }
             } else null
         } catch (e: Exception) {
             null
+        }
+    }
+
+    private fun getDayName(dateStr: String): String {
+        return try {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val date = sdf.parse(dateStr)
+            val displaySdf = java.text.SimpleDateFormat("EEE", java.util.Locale.forLanguageTag("es-AR"))
+            val day = displaySdf.format(date!!)
+            day.replaceFirstChar { it.uppercase() }
+        } catch (e: Exception) {
+            "Hoy"
         }
     }
 
@@ -84,5 +106,13 @@ data class WeatherData(
     val weatherDescription: String,
     val windSpeed: String,
     val humidity: String,
-    val cityName: String
+    val cityName: String,
+    val forecast: List<DayForecast> = emptyList()
+)
+
+data class DayForecast(
+    val dayName: String,
+    val emoji: String,
+    val tempMax: String,
+    val tempMin: String
 )

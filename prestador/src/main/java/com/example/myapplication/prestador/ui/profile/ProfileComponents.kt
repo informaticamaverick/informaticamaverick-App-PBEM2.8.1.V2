@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.myapplication.core.domain.model.CompanyProvider
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import java.util.UUID
@@ -220,4 +222,53 @@ fun ProfileInfoRow(
             )
         }
     }
+}
+
+@Composable
+fun SavedToast(colors: PrestadorColors) {
+    Surface(
+        modifier = Modifier.zIndex(99f),
+        shape = RoundedCornerShape(16.dp),
+        color = colors.surfaceElevated,
+        shadowElevation = 12.dp
+    ) {
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Text("Cambios guardados", fontWeight = FontWeight.Bold, color = colors.textPrimary)
+        }
+    }
+}
+
+@Composable
+fun DiscardChangesDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("¿Descartar cambios?") },
+        text = { Text("Tenés cambios sin guardar. ¿Deseas descartarlos?") },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Descartar", color = Color.Red) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Seguir editando") } }
+    )
+}
+
+@Composable
+fun LogoutConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Cerrar sesión") },
+        text = { Text("¿Seguro que deseas salir?") },
+        confirmButton = { Button(onClick = onConfirm) { Text("Salir") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+@Composable
+fun PriorizarEmpresaDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Perfil de empresa") },
+        text = { Text("¿Deseas mostrar la empresa como tu perfil principal?") },
+        confirmButton = { Button(onClick = onConfirm) { Text("Sí") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("No por ahora") } }
+    )
 }

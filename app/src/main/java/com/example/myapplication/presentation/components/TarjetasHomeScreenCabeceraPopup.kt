@@ -37,7 +37,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import coil.compose.AsyncImage
 import com.example.myapplication.core.data.local.entity.UserEntity
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.presentation.features.home.Screen
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
@@ -164,7 +164,7 @@ fun MaverickQRDisplay(
 
             // --- DATOS DEL PERFIL ---
             AsyncImage(
-                model = activeProfilePhoto ?: user.profileImage,
+                model = activeProfilePhoto ?: user.photoUrl,
                 contentDescription = null,
                 modifier = Modifier
                     .size(70.dp)
@@ -235,7 +235,7 @@ fun UserProfilePopup(
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             val activeName = if (isPersonalProfile) user.fullName else user.companies.find { it.id == selectedProfileId }?.name ?: user.displayName
-            val activePhoto = if (isPersonalProfile) user.profileImage else user.companies.find { it.id == selectedProfileId }?.profileImage ?: user.profileImage
+            val activePhoto = if (isPersonalProfile) user.profileThumbnail ?: user.photoUrl else user.companies.find { it.id == selectedProfileId }?.thumbnailBase64 ?: user.photoUrl
             
             MaverickQRDisplay(
                 user = user,
@@ -290,7 +290,11 @@ fun UserProfilePopup(
         val activeCompany = remember(user, selectedProfileId) { user.companies.find { it.id == selectedProfileId } }
         val activeName = remember(user, isPersonalProfile, activeCompany) { if (isPersonalProfile) user.fullName else activeCompany?.name ?: user.displayName }
         val activeEmail = remember(user, isPersonalProfile, activeCompany) { if (isPersonalProfile) user.email else activeCompany?.email ?: user.email }
-        val activePhoto = remember(user, isPersonalProfile, activeCompany) { if (isPersonalProfile) user.profileImage else activeCompany?.profileImage ?: user.profileImage }
+        val activePhoto = remember(user, isPersonalProfile, activeCompany) { 
+            val source = if (isPersonalProfile) user.profileThumbnail ?: user.photoUrl 
+            else activeCompany?.thumbnailBase64 ?: activeCompany?.photoUrl ?: user.photoUrl
+            com.example.myapplication.core.utils.ImageUtils.processImageSource(source)
+        }
 
         // ==================================================================================
         // --- SECCIÓN 1: PERFIL ACTIVO (VISTA CENTRAL DINÁMICA) ---
@@ -371,13 +375,19 @@ fun UserProfilePopup(
             
             // 1. Si no estamos en el perfil personal, lo agregamos como opción
             if (!isPersonalProfile) {
-                list.add(ProfileBubbleData(null, user.fullName, user.profileImage, false))
+                // [ELITE v5.2] Prioridad Thumbnail
+                val personalPhotoSource = user.profileThumbnail?.takeIf { it.isNotBlank() } ?: user.photoUrl
+                val personalPhoto = com.example.myapplication.core.utils.ImageUtils.processImageSource(personalPhotoSource)
+                list.add(ProfileBubbleData(null, user.fullName, personalPhoto, false))
             }
             
             // 2. Agregamos todas las empresas EXCEPTO la que está activa
             user.companies.forEach { company ->
                 if (isPersonalProfile || company.id != selectedProfileId) {
-                    list.add(ProfileBubbleData(company.id, company.name, company.profileImage, false))
+                    // [ELITE v5.2] Prioridad Thumbnail de empresa
+                    val companyPhotoSource = company.thumbnailBase64?.takeIf { it.isNotBlank() } ?: company.photoUrl ?: user.photoUrl
+                    val companyPhoto = com.example.myapplication.core.utils.ImageUtils.processImageSource(companyPhotoSource)
+                    list.add(ProfileBubbleData(company.id, company.name, companyPhoto, false))
                 }
             }
             list
@@ -548,12 +558,12 @@ private fun ProfileBubbleSwitch(
  */
 @Composable
 fun LocationPopup(
-    availableAddresses: List<AddressInfo>,
+    availableAddresses: List<AddressUnico>,
     onClose: () -> Unit,
     onRefresh: () -> Unit,
-    onLocationSelected: (AddressInfo) -> Unit,
+    onLocationSelected: (AddressUnico) -> Unit,
     onGpsToggle: () -> Unit,
-    activeAddress: AddressInfo?,
+    activeAddress: AddressUnico?,
     selectedProfileId: String? = null,
     isGpsSystemEnabled: Boolean = true // Detecta si el GPS de Android está ON/OFF
 ) {
@@ -647,9 +657,9 @@ fun LocationPopup(
                             )
                             val detailText = buildString {
                                 if (activeAddress.isCompany) {
-                                    append("${activeAddress.companyOrUserName} - ${activeAddress.branchName} | ")
+                                    append("${activeAddress.ownerName} - ${activeAddress.label} | ")
                                 }
-                                append("${activeAddress.locality}, ${activeAddress.province} [CP: ${activeAddress.postalCode}]")
+                                append("${activeAddress.localidad}, ${activeAddress.provincia} [CP: ${activeAddress.codigoPostal}]")
                             }
                             Text(
                                 text = detailText.uppercase(),
@@ -753,7 +763,7 @@ fun LocationPopup(
                         alpha = if (isPersonalActive) 1f else 0.5f,
                         children = personal.map { addr ->
                             FileNode(
-                                name = "${addr.streetAndNumber} (${addr.locality})",
+                                name = "${addr.streetAndNumber} (${addr.localidad})",
                                 isDirectory = false,
                                 icon = Icons.Default.Home,
                                 tint = if (isPersonalActive) cyberCyan else Color.Gray
@@ -766,17 +776,17 @@ fun LocationPopup(
                     nodes.add(FileNode(
                         name = "Business Network",
                         isDirectory = true,
-                        children = companies.groupBy { it.companyOrUserName }.map { (companyName, branches) ->
+                        children = companies.groupBy { it.ownerName }.map { (companyName, branches) ->
                             val companyId = branches.firstOrNull()?.ownerId
                             val isCompanyActive = selectedProfileId != null && selectedProfileId == companyId
                             
                             FileNode(
-                                name = companyName,
+                                name = companyName ?: "EMPRESA",
                                 isDirectory = true,
                                 alpha = if (isCompanyActive) 1f else 0.5f,
                                 children = branches.map { branch ->
                                     FileNode(
-                                        name = "${branch.branchName}: ${branch.streetAndNumber} CP:${branch.postalCode}",
+                                        name = "${branch.label}: ${branch.streetAndNumber} CP:${branch.codigoPostal}",
                                         isDirectory = false,
                                         icon = Icons.Default.Business,
                                         tint = if (isCompanyActive) CPCyberColors.ElectricPurple else Color.Gray
@@ -794,8 +804,8 @@ fun LocationPopup(
                 onNodeClick = { node ->
                     if (!node.isDirectory) {
                         val selected = availableAddresses.find { addr ->
-                            val personalName = "${addr.streetAndNumber} (${addr.locality})"
-                            val companyName = "${addr.branchName}: ${addr.streetAndNumber} CP:${addr.postalCode}"
+                            val personalName = "${addr.streetAndNumber} (${addr.localidad})"
+                            val companyName = "${addr.label}: ${addr.streetAndNumber} CP:${addr.codigoPostal}"
                             node.name == personalName || node.name == companyName
                         }
                         selected?.let { onLocationSelected(it) }
@@ -1085,13 +1095,13 @@ fun ProfileDialog(
 @Composable
 fun LocationDialog(
     show: Boolean,
-    availableAddresses: List<AddressInfo>,
-    activeAddress: AddressInfo?,
+    availableAddresses: List<AddressUnico>,
+    activeAddress: AddressUnico?,
     selectedProfileId: String? = null,
     isGpsSystemEnabled: Boolean = true,
     onRefresh: () -> Unit,
     onGpsToggle: () -> Unit,
-    onLocationSelected: (AddressInfo) -> Unit,
+    onLocationSelected: (AddressUnico) -> Unit,
     onDismiss: () -> Unit
 ) {
     if (show) {
@@ -1266,17 +1276,18 @@ fun UserProfilePopupPreview() {
 @Preview(showBackground = true, backgroundColor = 0xFF0D1117)
 @Composable
 fun LocationPopupPreview() {
-    val mockAddress = AddressInfo(
+    val mockAddress = AddressUnico(
         id = "gps_current",
-        companyOrUserName = "Juan",
-        branchName = "GPS",
-        streetAndNumber = "Calle Falsa 123",
-        locality = "San Miguel de Tucumán",
-        province = "Tucumán",
-        postalCode = "T4000",
+        ownerName = "Juan",
+        label = "GPS",
+        calle = "Calle Falsa",
+        numero = "123",
+        localidad = "San Miguel de Tucumán",
+        provincia = "Tucumán",
+        codigoPostal = "T4000",
         isCompany = false,
-        lat = -26.8,
-        lng = -65.2
+        latitude = -26.8,
+        longitude = -65.2
     )
 
     MyApplicationTheme {

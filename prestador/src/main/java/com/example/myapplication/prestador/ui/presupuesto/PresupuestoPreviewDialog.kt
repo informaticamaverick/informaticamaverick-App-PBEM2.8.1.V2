@@ -38,7 +38,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
+import com.example.myapplication.core.domain.model.Provider
 import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoConfigViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import java.time.LocalDate
@@ -51,7 +51,7 @@ import java.io.FileOutputStream
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun BudgetPreviewPDFDialog(
-    prestador: ProviderEntity,
+    prestador: Provider,
     items: List<BudgetItem>,
     services: List<BudgetService>,
     professionalFees: List<BudgetProfessionalFee>,
@@ -371,7 +371,7 @@ fun BudgetPreviewPDFDialog(
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun A4HeaderSection(
-    prestador: ProviderEntity,
+    prestador: Provider,
     providerName: String = "",
     presupuestoNumero: String = "",
     isProfessional: Boolean = false
@@ -400,7 +400,7 @@ fun A4HeaderSection(
             Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
-                    providerName.ifBlank { "${prestador.name} ${prestador.apellido}" }.uppercase(),
+                    providerName.ifBlank { "${prestador.name} ${prestador.lastName}" }.uppercase(),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Black,
                     color = Slate800,
@@ -452,7 +452,7 @@ fun A4HeaderSection(
 }
 
 @Composable
-fun A4ClientInfoSection(prestador: ProviderEntity,
+fun A4ClientInfoSection(prestador: Provider,
                         clientName: String = "",
                         clientCompany: String? = null,
                         clientAddress: String? = null,
@@ -464,18 +464,18 @@ fun A4ClientInfoSection(prestador: ProviderEntity,
                         providerEmail: String = "",
                         category: String = "") {
     // Nombre a mostrar: empresa si tiene, sino nombre completo
-    val tieneEmpresa = prestador.tieneEmpresa && !prestador.nombreEmpresa.isNullOrBlank()
-    val displayName = if (tieneEmpresa) {
-        prestador.nombreEmpresa!!
+    val selectedCompany = prestador.companies.firstOrNull()
+    val displayName = if (prestador.priorizarEmpresa && selectedCompany != null) {
+        selectedCompany.name
     } else {
-        providerName.ifBlank { "${prestador.name} ${prestador.apellido}".trim() }
+        providerName.ifBlank { "${prestador.name} ${prestador.lastName}".trim() }
     }
-    val displayPhone = providerPhone.ifBlank { prestador.phone }
+    val displayPhone = providerPhone.ifBlank { prestador.phoneNumber }
     val displayEmail = providerEmail.ifBlank { prestador.email }
-    val displayAddress = if (tieneEmpresa) {
-        prestador.direccionEmpresa ?: providerAddress.ifBlank { prestador.direccionLocal ?: "" }
+    val displayAddress = if (prestador.priorizarEmpresa && selectedCompany != null) {
+        selectedCompany.branches.firstOrNull()?.address?.fullString() ?: prestador.address?.fullString() ?: providerAddress
     } else {
-        providerAddress.ifBlank { prestador.direccionLocal ?: "" }
+        providerAddress.ifBlank { prestador.address?.fullString() ?: "" }
     }
 
     Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)) {
@@ -488,9 +488,9 @@ fun A4ClientInfoSection(prestador: ProviderEntity,
                 color = Slate800,
                 lineHeight = 14.sp
             )
-            if (tieneEmpresa) {
+            if (prestador.priorizarEmpresa && selectedCompany != null) {
                 // Modo empresa: razón social + CUIT + dirección empresa
-                val cuit = prestador.cuitEmpresa?.takeIf { it.isNotBlank() }
+                val cuit = selectedCompany.cuit.takeIf { it.isNotBlank() } ?: prestador.cuilCuit
                 if (cuit != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -522,7 +522,7 @@ fun A4ClientInfoSection(prestador: ProviderEntity,
                     Text(category.uppercase(), fontSize = 9.sp, color = Slate600, lineHeight = 11.sp)
                 }
             }
-            if (prestador.tieneMatricula) {
+            if (!prestador.matricula.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(Icons.Default.Badge, null, tint = Slate400, modifier = Modifier.size(10.dp).padding(top = 1.dp))
@@ -532,6 +532,23 @@ fun A4ClientInfoSection(prestador: ProviderEntity,
                         color = Slate600,
                         lineHeight = 11.sp
                     )
+                }
+            }
+            
+            // Teléfono y Email del prestador
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (displayPhone.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.Phone, null, tint = Slate400, modifier = Modifier.size(10.dp))
+                        Text(displayPhone, fontSize = 9.sp, color = Slate600)
+                    }
+                }
+                if (displayEmail.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Default.Email, null, tint = Slate400, modifier = Modifier.size(10.dp))
+                        Text(displayEmail, fontSize = 9.sp, color = Slate600)
+                    }
                 }
             }
         }
@@ -739,8 +756,8 @@ fun A4FooterSection(
 @Preview(showBackground = true, widthDp = 460, heightDp = 680, name = "Vista Previa Presupuesto A4")
 @Composable
 private fun PreviewBudgetDialog() {
-    val prestadorEjemplo = ProviderEntity(
-        id = "preview",
+    val prestadorEjemplo = Provider(
+        uid = "preview",
         email = "juan@ejemplo.com",
         phoneNumber = "1122334455",
         displayName = "Juan Pérez",

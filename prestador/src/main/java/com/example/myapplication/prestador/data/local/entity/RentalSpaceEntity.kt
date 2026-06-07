@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 
 /**
  * Entidad para espacios de alquiler (canchas, salones, estudios, etc.)

@@ -1,8 +1,9 @@
 package com.example.myapplication.presentation.components
 
-import android.content.Intent
-import android.media.MediaPlayer
+import android.os.Build
 import android.net.Uri
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -16,6 +17,7 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
@@ -41,6 +43,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.myapplication.core.data.local.entity.MessageEntity
+import com.example.myapplication.core.utils.ImageUtils
 import com.example.myapplication.core.data.local.entity.BudgetEntity
 import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.domain.model.MessageType
@@ -48,355 +51,529 @@ import com.example.myapplication.presentation.features.chat.ChatThread
 import com.example.myapplication.presentation.designsystem.theme.AppColors
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.designsystem.theme.getThemeColors
+import com.example.myapplication.presentation.designsystem.components.MaverickTypography
+import com.example.myapplication.presentation.registry.MaverickIcons
 import kotlinx.coroutines.delay
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.text.BasicTextField
 import java.text.SimpleDateFormat
 import java.util.*
 
-// --- SECCIÓN: INTERACCIÓN PREMIUM (SWIPE TO REPLY) ---
+// --- SECCIÓN: INTERACCIÓN Y ANIMACIÓN ---
 
+/**
+ * SwipeToReplyWrapper: Contenedor que permite deslizar un mensaje para responder.
+ * Inspirado en Telegram/WhatsApp.
+ */
 @Composable
 fun SwipeToReplyWrapper(
     onReply: () -> Unit,
     content: @Composable () -> Unit
 ) {
     var offsetX by remember { mutableFloatStateOf(0f) }
-    val maxOffset = 150f
-    val threshold = 120f
-    
+    val maxSwipe = 150f
+    val haptic = LocalHapticFeedback.current
+    var isTriggered by remember { mutableStateOf(false) }
+
     val animatedOffsetX by animateFloatAsState(
         targetValue = offsetX,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "SwipeReplyAnimation"
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow),
+        label = "swipe_offset"
     )
-    
-    val haptic = LocalHapticFeedback.current
-    var hasTriggeredHaptic by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .pointerInput(Unit) {
                 detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        val nextX = (offsetX + dragAmount).coerceIn(0f, maxSwipe)
+                        offsetX = nextX
+                        
+                        if (offsetX >= maxSwipe * 0.7f && !isTriggered) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            isTriggered = true
+                        } else if (offsetX < maxSwipe * 0.7f && isTriggered) {
+                            isTriggered = false
+                        }
+                    },
                     onDragEnd = {
-                        if (offsetX >= threshold) onReply()
+                        if (isTriggered) onReply()
                         offsetX = 0f
-                        hasTriggeredHaptic = false
+                        isTriggered = false
                     },
                     onDragCancel = {
                         offsetX = 0f
-                        hasTriggeredHaptic = false
-                    },
-                    onHorizontalDrag = { change, dragAmount ->
-                        // Solo deslizar hacia la derecha (valor positivo)
-                        val newOffset = (offsetX + dragAmount).coerceIn(0f, maxOffset)
-                        offsetX = newOffset
-                        
-                        if (offsetX >= threshold && !hasTriggeredHaptic) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            hasTriggeredHaptic = true
-                        }
+                        isTriggered = false
                     }
                 )
             }
     ) {
-        // Icono de Respuesta Detrás
-        val iconAlpha = (offsetX / threshold).coerceIn(0f, 1f)
-        val iconScale = lerp(0.5f, 1.2f, iconAlpha)
-        
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 16.dp)
-                .size(40.dp)
-                .graphicsLayer {
-                    alpha = iconAlpha
-                    scaleX = iconScale
-                    scaleY = iconScale
-                }
-                .background(Color.White.copy(alpha = 0.1f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Reply,
-                contentDescription = null,
-                tint = Color(0xFF22D3EE),
-                modifier = Modifier.size(20.dp)
-            )
+        // Icono de respuesta con animación de escala y opacidad
+        val progress = (offsetX / (maxSwipe * 0.7f)).coerceIn(0f, 1f)
+        val iconScale = if (isTriggered) 1.2f else progress
+        val iconAlpha = progress
+
+        if (offsetX > 10f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 16.dp)
+                    .graphicsLayer {
+                        scaleX = iconScale
+                        scaleY = iconScale
+                        alpha = iconAlpha
+                    }
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Reply,
+                    contentDescription = null,
+                    tint = if (isTriggered) Color(0xFF22D3EE) else Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
 
-        // Contenido Principal (Burbuja)
-        Box(
-            modifier = Modifier.offset { IntOffset(animatedOffsetX.toInt(), 0) }
-        ) {
+        Box(modifier = Modifier.offset { IntOffset(animatedOffsetX.toInt(), 0) }) {
             content()
         }
     }
 }
 
-private fun lerp(start: Float, stop: Float, fraction: Float): Float {
+fun lerp(start: Float, stop: Float, fraction: Float): Float {
     return (1 - fraction) * start + fraction * stop
 }
 
 @Composable
 fun ReplyPreviewBar(
     message: MessageEntity,
-    onCancelReply: () -> Unit,
-    appColors: AppColors
+    onCancel: () -> Unit,
+    colors: AppColors
 ) {
-    val maverickBlue = Color(0xFF2197F5)
-    
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        color = appColors.surfaceColor.copy(alpha = 0.95f),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surfaceColor,
+        border = BorderStroke(width = 1.dp, color = Color.White.copy(alpha = 0.05f))
     ) {
         Row(
             modifier = Modifier
-                .padding(12.dp)
+                .padding(8.dp)
                 .height(IntrinsicSize.Min),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Barra de acento vertical
             Box(
                 modifier = Modifier
-                    .fillMaxHeight()
                     .width(4.dp)
+                    .fillMaxHeight()
                     .clip(RoundedCornerShape(2.dp))
-                    .background(maverickBlue)
+                    .background(Color(0xFF22D3EE))
             )
             
-            Spacer(Modifier.width(12.dp))
-            
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
+            ) {
                 Text(
-                    text = "Respondiendo a...",
+                    text = if (message.senderId == "current") "Tú" else "Prestador",
                     style = MaterialTheme.typography.labelSmall,
-                    color = maverickBlue,
-                    fontWeight = FontWeight.Black
+                    color = Color(0xFF22D3EE),
+                    fontWeight = FontWeight.Bold
                 )
-                
-                val previewText = when (message.type) {
-                    MessageType.IMAGE -> "🖼️ Imagen"
-                    MessageType.AUDIO -> "🎤 Audio"
-                    MessageType.BUDGET -> "📄 Presupuesto"
-                    MessageType.LOCATION -> "📍 Ubicación"
-                    MessageType.VISIT -> "🗓️ Turno"
-                    else -> message.content
-                }
-                
                 Text(
-                    text = previewText,
+                    text = message.content,
                     style = MaterialTheme.typography.bodySmall,
-                    color = appColors.textPrimaryColor.copy(alpha = 0.7f),
+                    color = Color.White.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            
-            IconButton(
-                onClick = onCancelReply,
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    Icons.Default.Close,
-                    contentDescription = "Cancelar",
-                    tint = appColors.textSecondaryColor,
-                    modifier = Modifier.size(16.dp)
-                )
+
+            IconButton(onClick = onCancel) {
+                Icon(Icons.Default.Close, null, tint = Color.Gray, modifier = Modifier.size(18.dp))
             }
         }
     }
 }
 
-// --- SECCIÓN: CABECERA Y ENTRADA (DUMB COMPONENTS) ---
+// --- SECCIÓN: INDICADORES ---
 
 @Composable
-fun ChatHeader(
-    providerName: String,
-    providerPhoto: String?,
+fun TypingIndicator() {
+    Row(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(3) { index ->
+            BouncingDot(delay = index * 200)
+        }
+    }
+}
+
+@Composable
+private fun BouncingDot(delay: Int) {
+    val infiniteTransition = rememberInfiniteTransition(label = "dots")
+    val dy by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(400, delayMillis = delay),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dy"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(6.dp)
+            .offset { IntOffset(0, dy.dp.roundToPx()) }
+            .clip(CircleShape)
+            .background(Color(0xFF22D3EE).copy(alpha = 0.6f))
+    )
+}
+
+// --- SECCIÓN: CABECERAS ---
+
+@Composable
+fun TelegramStyleChatHeader(
+    title: String,
+    photoUrl: Any?,
     isOnline: Boolean,
     onBack: () -> Unit,
     appColors: AppColors,
-    isProviderTyping: Boolean = false
+    isFilterActive: Boolean = false,
+    collapseFraction: Float = 0f,
+    onInfoClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {}
 ) {
+    val height = lerp(80.dp, 64.dp, collapseFraction)
+    val avatarSize = lerp(48.dp, 36.dp, collapseFraction)
+    val titleSize = lerp(18.sp, 15.sp, collapseFraction)
+
     Surface(
-        color = appColors.surfaceColor,
-        tonalElevation = 4.dp,
-        shadowElevation = 8.dp
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height),
+        color = appColors.surfaceColor.copy(alpha = 0.95f),
+        tonalElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .fillMaxSize()
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = appColors.textPrimaryColor)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
             }
 
-            Spacer(Modifier.width(4.dp))
-
-            // Avatar del Prestador
             Box(contentAlignment = Alignment.BottomEnd) {
-                Surface(
-                    modifier = Modifier.size(42.dp),
-                    shape = CircleShape,
-                    color = appColors.backgroundColor
-                ) {
-                    if (providerPhoto != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(providerPhoto)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "Foto de perfil",
-                            modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Person, null, tint = appColors.textSecondaryColor)
-                        }
+                AsyncImage(
+                    model = photoUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(avatarSize)
+                        .clip(CircleShape)
+                        .background(Color.Gray.copy(alpha = 0.2f)),
+                    contentScale = ContentScale.Crop
+                )
+                if (isOnline) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(appColors.surfaceColor)
+                            .padding(2.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(Color(0xFF22C55E)))
                     }
                 }
-                
-                // Indicador Online
-                if (isOnline) {
-                    Surface(
-                        modifier = Modifier.size(12.dp).border(2.dp, appColors.surfaceColor, CircleShape),
-                        shape = CircleShape,
-                        color = Color(0xFF10B981)
-                    ) {}
-                }
             }
 
-            Spacer(Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
+                    .clickable { onInfoClick() }
+            ) {
                 Text(
-                    text = providerName,
-                    style = MaterialTheme.typography.titleMedium,
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = titleSize),
+                    color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    color = appColors.textPrimaryColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                
-                if (isProviderTyping) {
-                    Text(
-                        text = "escribiendo...",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF10B981),
-                        fontWeight = FontWeight.Bold
-                    )
-                } else if (isOnline) {
-                    Text(
-                        text = "En línea",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = appColors.textSecondaryColor
-                    )
-                }
+                Text(
+                    text = if (isOnline) "En línea" else "Visto por última vez recientemente",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isOnline) Color(0xFF22D3EE) else Color.Gray
+                )
             }
 
-            IconButton(onClick = { /* Info del prestador */ }) {
-                Icon(Icons.Default.Info, contentDescription = "Información", tint = appColors.textSecondaryColor)
+            Row {
+                IconButton(onClick = onSearchClick) { Icon(Icons.Default.Search, null, tint = Color.White) }
+                IconButton(onClick = onDeleteClick) { Icon(Icons.Default.MoreVert, null, tint = Color.White) }
             }
         }
     }
 }
 
 @Composable
-fun MessageInputBar(
-    inputText: String,
-    onInputChange: (String) -> Unit,
-    onSendMessage: (String) -> Unit,
-    appColors: AppColors,
-    onAttachMenuToggle: () -> Unit,
-    onCameraClick: () -> Unit,
-    onAudioClick: () -> Unit,
-    onCancelAudio: () -> Unit,
-    isRecordingAudio: Boolean = false
+fun ElitePillAction(
+    text: String,
+    emoji: String,
+    onClick: () -> Unit
 ) {
     Surface(
+        modifier = Modifier
+            .height(36.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White.copy(alpha = 0.05f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(text = emoji, fontSize = 14.sp)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = text.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun EliteHeaderAction(
+    icon: String,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Text(text = icon, fontSize = 20.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = label.uppercase(),
+            fontSize = 8.sp,
+            color = Color.White.copy(alpha = 0.6f),
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+fun lerp(start: Dp, stop: Dp, fraction: Float): Dp {
+    return start + (stop - start) * fraction
+}
+
+@Composable
+fun ChatHeader(
+    title: String,
+    photoUrl: Any?,
+    isOnline: Boolean,
+    onBack: () -> Unit,
+    appColors: AppColors,
+    isFilterActive: Boolean = false,
+    onInfoClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {},
+    onDeleteClick: () -> Unit = {},
+    onCalendarClick: () -> Unit = {},
+    onBudgetClick: () -> Unit = {},
+    onLocationClick: () -> Unit = {},
+    onMoreClick: () -> Unit = {},
+    isPersonalProfile: Boolean = true
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
         color = appColors.surfaceColor,
-        tonalElevation = 8.dp,
-        modifier = Modifier.fillMaxWidth()
+        tonalElevation = 4.dp
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White)
+                }
+
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    AsyncImage(
+                        model = photoUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.Gray.copy(alpha = 0.2f)),
+                        contentScale = ContentScale.Crop
+                    )
+                    if (isOnline) {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(appColors.surfaceColor)
+                                .padding(2.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(Color(0xFF22C55E)))
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp)
+                        .clickable { onInfoClick() }
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (isOnline) "Online" else "Desconectado",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isOnline) Color(0xFF22D3EE) else Color.Gray
+                    )
+                }
+
+                Row {
+                    IconButton(onClick = onSearchClick) { Icon(Icons.Default.Search, null, tint = Color.White) }
+                    IconButton(onClick = onMoreClick) { Icon(Icons.Default.MoreVert, null, tint = Color.White) }
+                }
+            }
+            
+            // Acciones Rápidas (Elite)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                EliteHeaderAction("📅", "Agenda", onCalendarClick)
+                EliteHeaderAction("💰", "Presupuesto", onBudgetClick)
+                EliteHeaderAction("📍", "Dirección", onLocationClick)
+                EliteHeaderAction("📞", "Llamar", {})
+            }
+            
+            HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+        }
+    }
+}
+
+// --- SECCIÓN: ENTRADA ---
+
+@Composable
+fun MessageInputBar(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onSend: (String) -> Unit,
+    appColors: AppColors,
+    onAttachmentClick: () -> Unit,
+    onMicClick: () -> Unit,
+    onLocationClick: () -> Unit = {},
+    onCameraClick: () -> Unit = {},
+    isRecording: Boolean = false,
+    recordingTime: Int = 0
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = appColors.surfaceColor,
+        tonalElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-                .navigationBarsPadding(),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(8.dp)
+                .navigationBarsPadding()
+                .imePadding(),
+            verticalAlignment = Alignment.Bottom
         ) {
-            if (!isRecordingAudio) {
-                IconButton(onClick = onAttachMenuToggle) {
-                    Text("📎", fontSize = 24.sp)
-                }
-                
-                IconButton(onClick = onCameraClick) {
-                    Icon(Icons.Default.PhotoCamera, null, tint = appColors.textSecondaryColor)
-                }
+            IconButton(onClick = onAttachmentClick) {
+                Icon(Icons.Default.Add, null, tint = Color(0xFF22D3EE))
+            }
 
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    color = appColors.backgroundColor,
-                    shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.dp, appColors.textSecondaryColor.copy(alpha = 0.2f))
-                ) {
-                    TextField(
-                        value = inputText,
-                        onValueChange = onInputChange,
-                        placeholder = { Text("Escribe un mensaje...", fontSize = 14.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = appColors.accentBlue
-                        ),
-                        maxLines = 4
-                    )
-                }
-            } else {
-                // UI de Grabación de Audio
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 4.dp),
+                color = Color.White.copy(alpha = 0.05f),
+                shape = RoundedCornerShape(24.dp)
+            ) {
                 Row(
-                    modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Mic, null, tint = Color.Red, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Grabando audio...", color = appColors.textPrimaryColor, fontSize = 14.sp)
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onCancelAudio) {
-                        Text("CANCELAR", color = Color.Red, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    if (isRecording) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.Red))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Grabando... ${recordingTime}s",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White
+                            )
+                        }
+                    } else {
+                        BasicTextField(
+                            value = value,
+                            onValueChange = onValueChange,
+                            modifier = Modifier.weight(1f),
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
+                            cursorBrush = SolidColor(Color(0xFF22D3EE)),
+                            decorationBox = { innerTextField ->
+                                Box {
+                                    if (value.isEmpty()) {
+                                        Text("Escribe un mensaje...", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    innerTextField()
+                                }
+                            }
+                        )
+                        IconButton(onClick = onCameraClick, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Default.PhotoCamera, null, tint = Color.Gray)
+                        }
                     }
                 }
             }
 
-            Spacer(Modifier.width(4.dp))
-
-            Box(
+            val isNotEmpty = value.isNotBlank()
+            IconButton(
+                onClick = { if (isNotEmpty) onSend(value) else onMicClick() },
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(if (inputText.isBlank() && !isRecordingAudio) appColors.backgroundColor else appColors.accentBlue)
-                    .clickable {
-                        if (inputText.isNotBlank()) onSendMessage(inputText)
-                        else onAudioClick()
-                    },
-                contentAlignment = Alignment.Center
+                    .background(if (isNotEmpty) Color(0xFF22D3EE) else Color.Transparent)
             ) {
                 Icon(
-                    imageVector = if (inputText.isNotBlank()) Icons.AutoMirrored.Filled.Send else if (isRecordingAudio) Icons.Default.Done else Icons.Default.Mic,
-                    contentDescription = "Enviar",
-                    tint = if (inputText.isBlank() && !isRecordingAudio) appColors.textSecondaryColor else Color.White,
-                    modifier = Modifier.size(24.dp)
+                    imageVector = if (isNotEmpty) Icons.AutoMirrored.Filled.Send else Icons.Default.Mic,
+                    contentDescription = null,
+                    tint = if (isNotEmpty) Color(0xFF0F172A) else Color(0xFF22D3EE)
                 )
             }
         }
@@ -405,124 +582,119 @@ fun MessageInputBar(
 
 @Composable
 fun AttachmentOptionsMenu(
-    onDismiss: () -> Unit,
-    onImageClick: () -> Unit,
-    onLocationClick: () -> Unit,
-    onInviteClick: () -> Unit,
-    onBudgetRequestClick: () -> Unit = {}
+    onGallery: () -> Unit,
+    onCamera: () -> Unit,
+    onLocation: () -> Unit,
+    onBudget: () -> Unit,
+    onAppointment: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         color = Color(0xFF1E293B),
-        tonalElevation = 16.dp,
-        shadowElevation = 12.dp
+        shape = RoundedCornerShape(24.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                AttachmentItem("🖼️", "Galería", Color(0xFF3B82F6), onImageClick)
-                AttachmentItem("📍", "Ubicación", Color(0xFF10B981), onLocationClick)
-                AttachmentItem("📝", "Solicitud", Color(0xFF2197F5), onBudgetRequestClick)
-                AttachmentItem("⚖️", "Invitar", Color(0xFF8B5CF6), onInviteClick)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                AttachmentItem("Galería", "🖼️", Color(0xFF818CF8), onGallery)
+                AttachmentItem("Cámara", "📸", Color(0xFFF472B6), onCamera)
+                AttachmentItem("Ubicación", "📍", Color(0xFF4ADE80), onLocation)
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                AttachmentItem("Presupuesto", "💰", Color(0xFFFBBF24), onBudget)
+                AttachmentItem("Agenda", "📅", Color(0xFF22D3EE), onAppointment)
+                AttachmentItem("Documento", "📄", Color(0xFF94A3B8), {})
             }
         }
     }
 }
 
 @Composable
-private fun AttachmentItem(emoji: String, label: String, color: Color, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onClick() }.padding(8.dp)) {
-        Surface(modifier = Modifier.size(50.dp), shape = CircleShape, color = color.copy(alpha = 0.2f)) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(emoji, fontSize = 24.sp)
-            }
+fun AttachmentItem(label: String, emoji: String, color: Color, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(color.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = emoji, fontSize = 24.sp)
         }
-        Spacer(Modifier.height(4.dp))
-        Text(label, fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color.White)
     }
 }
 
 @Composable
-fun DateSeparator(timestamp: Long, appColors: AppColors) {
+fun DateSeparator(timestamp: Long, colors: AppColors) {
+    val locale = LocalConfiguration.current.locales[0]
     val dateText = remember(timestamp) {
-        val now = Calendar.getInstance()
-        val msgDate = Calendar.getInstance().apply { timeInMillis = timestamp }
-        
-        when {
-            now.get(Calendar.YEAR) == msgDate.get(Calendar.YEAR) &&
-            now.get(Calendar.DAY_OF_YEAR) == msgDate.get(Calendar.DAY_OF_YEAR) -> "Hoy"
-            
-            now.get(Calendar.YEAR) == msgDate.get(Calendar.YEAR) &&
-            now.get(Calendar.DAY_OF_YEAR) - 1 == msgDate.get(Calendar.DAY_OF_YEAR) -> "Ayer"
-            
-            else -> SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(timestamp))
-        }
+        val sdf = SimpleDateFormat("EEEE, d 'de' MMMM", locale)
+        sdf.format(Date(timestamp)).replaceFirstChar { it.uppercase() }
     }
 
-    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Surface(
-            color = appColors.surfaceColor.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(12.dp)
+            color = Color.White.copy(alpha = 0.05f),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
         ) {
             Text(
                 text = dateText,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = appColors.textSecondaryColor
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray,
+                fontWeight = FontWeight.Bold
             )
         }
     }
 }
 
-// --- SECCIÓN: BURBUJAS BASE (TEXTO, IMAGEN, AUDIO, UBICACIÓN) ---
+// --- SECCIÓN: MENSAJES ---
 
 @Composable
 fun QuotedMessage(
-    replyToSenderName: String?,
-    replyToContent: String?,
+    sender: String?,
+    content: String?,
     appColors: AppColors,
     modifier: Modifier = Modifier
 ) {
-    if (replyToSenderName == null || replyToContent == null) return
-
-    val maverickBlue = Color(0xFF2197F5)
-    
     Surface(
-        color = Color.Black.copy(alpha = 0.15f),
-        shape = RoundedCornerShape(8.dp),
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 6.dp)
+            .padding(bottom = 4.dp),
+        color = Color.Black.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(8.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .padding(8.dp)
-                .height(IntrinsicSize.Min)
-        ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
             Box(
                 modifier = Modifier
+                    .width(3.dp)
                     .fillMaxHeight()
-                    .width(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(maverickBlue)
+                    .background(Color(0xFF22D3EE))
             )
-            
-            Spacer(Modifier.width(10.dp))
-            
-            Column {
+            Column(modifier = Modifier.padding(8.dp)) {
                 Text(
-                    text = replyToSenderName,
-                    fontSize = 12.sp,
-                    color = maverickBlue,
-                    fontWeight = FontWeight.Black,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = sender ?: "Usuario",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF22D3EE),
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = replyToContent,
-                    fontSize = 13.sp,
-                    color = appColors.textPrimaryColor.copy(alpha = 0.7f),
+                    text = content ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.6f),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -536,169 +708,144 @@ fun MessageBubble(
     message: MessageEntity,
     appColors: AppColors,
     isFromMe: Boolean,
+    onReply: () -> Unit = {},
     budget: BudgetEntity? = null,
     categoryEmoji: String? = null,
-    allCategories: List<CategoryEntity> = emptyList(), // 🔥 [NUEVO] Para resolución dinámica
-    onReply: () -> Unit = {}, // 🔥 [NUEVO]
+    allCategories: List<CategoryEntity> = emptyList(),
+    onAcceptBudget: () -> Unit = {},
+    onRejectBudget: () -> Unit = {},
+    onBudgetClick: (BudgetEntity) -> Unit = {},
+    onAcceptAppointment: (String) -> Unit = {},
+    onRejectAppointment: () -> Unit = {},
+    onRescheduleAppointment: () -> Unit = {},
+    isRepliable: Boolean = true,
     onImageClick: () -> Unit = {},
     onCalendarClick: () -> Unit = {},
     onAddressClick: (String) -> Unit = {},
-    onAcceptAppointment: () -> Unit = {},
-    onRejectAppointment: () -> Unit = {},
     isEnabled: Boolean = true
 ) {
-    when (message.type) {
-        MessageType.TEXT -> EnhancedMessageBubble(message, isFromMe, appColors, onReply = onReply)
-        MessageType.IMAGE -> ImageMessageBubble(message, appColors, isFromMe, onReply = onReply, onImageClick = onImageClick)
-        MessageType.LOCATION -> LocationMessageBubble(message, appColors, isFromMe, onReply = onReply)
-        MessageType.VISIT -> {
-            val isTechnical = message.appointmentType == "TECHNICAL_VISIT"
-            if (isTechnical) {
-                TechnicalVisitProposalBubble(
-                    message = message, 
-                    isMe = isFromMe, 
-                    appColors = appColors, 
-                    categoryEmoji = categoryEmoji,
-                    onReply = onReply,
-                    onAccept = onAcceptAppointment, 
-                    onReject = onRejectAppointment
-                )
-            } else {
-                LocalAppointmentProposalBubble(
-                    message = message, 
-                    isMe = isFromMe, 
-                    appColors = appColors, 
-                    categoryEmoji = categoryEmoji,
-                    onReply = onReply,
-                    onAccept = onAcceptAppointment, 
-                    onReject = onRejectAppointment
-                )
-            }
-        }
-        MessageType.BUDGET -> BudgetBubble(
-            message = message, 
-            budget = budget, 
-            isMe = isFromMe, 
-            appColors = appColors, 
-            categoryEmoji = categoryEmoji,
-            onReply = onReply, // 🔥 [NUEVO]
-            onClick = {}
-        )
-        MessageType.BUDGET_REQUEST -> BudgetRequestBubble(
-            message = message, 
-            isMe = isFromMe, 
-            appColors = appColors,
-            onReply = onReply // 🔥 [NUEVO]
-        )
-        MessageType.CALENDAR_INVITE -> CalendarInviteBubble(
-            message = message, 
-            isMe = isFromMe, 
-            appColors = appColors, 
-            isEnabled = isEnabled,
-            onReply = onReply,
-            onClick = onCalendarClick
-        )
-        MessageType.AUDIO -> {
-            AudioMessageBubble(
-                message = message,
-                appColors = appColors, 
-                isFromMe = isFromMe,
-                onReply = onReply
-            )
-        }
-        MessageType.APPOINTMENT_RECEIPT -> {
-            if (message.receiptIsTechnician == true) {
-                TechnicalVisitReceiptBubble(
-                    message = message, 
-                    isMe = isFromMe, 
-                    appColors = appColors, 
-                    allCategories = allCategories, 
-                    onReply = onReply,
-                    onCalendarClick = onCalendarClick, 
-                    onAddressClick = onAddressClick
-                )
-            } else {
-                StandardAppointmentReceiptBubble(
-                    message = message, 
-                    isMe = isFromMe, 
-                    appColors = appColors, 
-                    allCategories = allCategories, 
-                    onReply = onReply,
-                    onCalendarClick = onCalendarClick, 
-                    onAddressClick = onAddressClick
-                )
-            }
-        }
-        else -> EnhancedMessageBubble(message, isFromMe, appColors, onReply = onReply)
+    val bubbleColor = if (isFromMe) Color(0xFF1E293B) else Color(0xFF334155)
+    val alignment = if (isFromMe) Alignment.CenterEnd else Alignment.CenterStart
+    val shape = if (isFromMe) {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 2.dp)
+    } else {
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 2.dp, bottomEnd = 16.dp)
     }
-}
 
-@Composable
-fun EnhancedMessageBubble(message: MessageEntity, isMe: Boolean, appColors: AppColors, senderPhotoUrl: String? = null, onReply: () -> Unit = {}) {
-    val borderColor = if (isMe) Color(0xFF10B981) else Color(0xFF22D3EE)
-    
+    val locale = LocalConfiguration.current.locales[0]
+
     SwipeToReplyWrapper(onReply = onReply) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            contentAlignment = alignment
         ) {
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.padding(horizontal = if (isMe) 8.dp else 0.dp)
-            ) {
-                if (!isMe && senderPhotoUrl != null) {
-                    AsyncImage(
-                        model = senderPhotoUrl,
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp).clip(CircleShape).padding(end = 4.dp)
-                    )
-                }
-                
+            Column(horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start) {
                 Surface(
-                    color = if (isMe) appColors.accentBlue else appColors.surfaceColor,
-                    shape = RoundedCornerShape(
-                        topStart = 16.dp, 
-                        topEnd = 16.dp, 
-                        bottomStart = if (isMe) 16.dp else 2.dp, 
-                        bottomEnd = if (isMe) 2.dp else 16.dp
-                    ),
-                    border = BorderStroke(0.5.dp, borderColor),
-                    tonalElevation = if (isMe) 0.dp else 2.dp,
-                    modifier = Modifier.widthIn(max = 280.dp)
+                    color = bubbleColor,
+                    shape = shape,
+                    modifier = Modifier.widthIn(max = 280.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
                 ) {
-                    Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                        Column {
-                            if (message.replyToId != null) {
-                                QuotedMessage(
-                                    replyToSenderName = message.replyToSenderName,
-                                    replyToContent = message.replyToContent,
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        // Si es respuesta a otro mensaje
+                        if (message.replyToId != null) {
+                            QuotedMessage(
+                                sender = message.replyToSenderName,
+                                content = message.replyToContent,
+                                appColors = appColors
+                            )
+                        }
+
+                        when (message.type) {
+                            MessageType.TEXT -> {
+                                Text(
+                                    text = message.content,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White
+                                )
+                            }
+                            MessageType.IMAGE -> {
+                                ImageMessageBubble(message, appColors, isFromMe, onClick = onImageClick)
+                            }
+                            MessageType.LOCATION -> {
+                                LocationMessageBubble(message, appColors, isFromMe, onClick = {
+                                    message.locationAddress?.let { onAddressClick(it) }
+                                })
+                            }
+                            MessageType.AUDIO -> {
+                                AudioMessageBubble(message, appColors, isFromMe)
+                            }
+                            MessageType.BUDGET_REQUEST -> {
+                                BudgetRequestBubble(
+                                    message = message,
+                                    isMe = isFromMe,
                                     appColors = appColors
                                 )
                             }
-                            Text(
-                                text = message.content,
-                                color = if (isMe) Color.White else appColors.textPrimaryColor,
-                                fontSize = 15.sp,
-                                modifier = Modifier.padding(bottom = 4.dp, end = 40.dp) // Espacio para la hora
-                            )
+                            MessageType.BUDGET -> {
+                                if (budget != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    BudgetBubble(
+                                        message = message,
+                                        budget = budget,
+                                        isMe = isFromMe,
+                                        appColors = appColors,
+                                        onClick = { onBudgetClick(budget) }
+                                    )
+                                }
+                            }
+                            MessageType.VISIT -> {
+                                TechnicalVisitProposalBubble(
+                                    message = message,
+                                    isMe = isFromMe,
+                                    appColors = appColors,
+                                    onAccept = { onAcceptAppointment(message.id) },
+                                    onReject = onRejectAppointment
+                                )
+                            }
+                            MessageType.CALENDAR_INVITE -> {
+                                CalendarInviteBubble(
+                                    message = message,
+                                    isMe = isFromMe,
+                                    appColors = appColors,
+                                    isEnabled = isEnabled,
+                                    onClick = onCalendarClick
+                                )
+                            }
+                            MessageType.SYSTEM -> {
+                                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = message.content,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.Gray,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                            else -> {
+                                Text(text = message.content, color = Color.Gray)
+                            }
                         }
-                        
+
                         Row(
-                            modifier = Modifier.align(Alignment.BottomEnd),
+                            modifier = Modifier.align(Alignment.End),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            val timeStr = remember(message.timestamp) {
+                                SimpleDateFormat("HH:mm", locale).format(Date(message.timestamp))
+                            }
                             Text(
-                                text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = (if (isMe) Color.White else appColors.textSecondaryColor).copy(alpha = 0.6f)
+                                text = timeStr,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                color = Color.Gray
                             )
-                            if (isMe) {
-                                Spacer(Modifier.width(2.dp))
+                            if (isFromMe) {
+                                Spacer(Modifier.width(4.dp))
                                 Icon(
-                                    imageVector = if (message.isRead) Icons.Default.DoneAll else Icons.Default.Done,
+                                    imageVector = if (message.isRead) MaverickIcons.DoneAll else MaverickIcons.Update,
                                     contentDescription = null,
-                                    tint = if (message.isRead) Color(0xFF22D3EE) else Color.White.copy(alpha = 0.6f),
+                                    tint = if (message.isRead) Color(0xFF22D3EE) else Color.Gray,
                                     modifier = Modifier.size(12.dp)
                                 )
                             }
@@ -711,453 +858,249 @@ fun EnhancedMessageBubble(message: MessageEntity, isMe: Boolean, appColors: AppC
 }
 
 @Composable
-fun ImageMessageBubble(message: MessageEntity, appColors: AppColors, isFromMe: Boolean, onReply: () -> Unit = {}, onImageClick: () -> Unit) {
-    val model = remember(message.content, message.imageUrl) {
-        val path = message.imageUrl
-        when {
-            !path.isNullOrBlank() -> if (path.startsWith("/")) "file://$path" else path
-            message.content.startsWith("http") -> message.content
-            else -> null
-        }
-    }
-    val borderColor = if (isFromMe) Color(0xFF10B981) else Color(0xFF22D3EE)
-
-    SwipeToReplyWrapper(onReply = onReply) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = if (isFromMe) 8.dp else 0.dp), 
-            horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
-        ) {
-            Surface(
-                color = appColors.surfaceColor,
-                shape = RoundedCornerShape(
-                    topStart = 16.dp, 
-                    topEnd = 16.dp, 
-                    bottomStart = if (isFromMe) 16.dp else 2.dp, 
-                    bottomEnd = if (isFromMe) 2.dp else 16.dp
-                ),
-                border = BorderStroke(0.5.dp, borderColor),
-                tonalElevation = 2.dp,
-                modifier = Modifier.widthIn(max = 240.dp).clickable { onImageClick() }
-            ) {
-                Column(modifier = Modifier.padding(4.dp)) {
-                    if (message.replyToId != null) {
-                        QuotedMessage(
-                            replyToSenderName = message.replyToSenderName,
-                            replyToContent = message.replyToContent,
-                            appColors = appColors,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                    if (model != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(model)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = "Imagen",
-                            modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(12.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(modifier = Modifier.fillMaxWidth().height(180.dp).background(Color.Gray.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Image, null, tint = appColors.textSecondaryColor)
-                        }
-                    }
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp, end = 4.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Text(
-                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.textSecondaryColor.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun LocationMessageBubble(message: MessageEntity, appColors: AppColors, isFromMe: Boolean, onReply: () -> Unit = {}) {
-    val context = LocalContext.current
-    val lat = message.latitude ?: 0.0
-    val lng = message.longitude ?: 0.0
-    val emeraldColor = Color(0xFF10B981) // Esmeralda Maverick
-    val borderColor = if (isFromMe) Color(0xFF10B981) else Color(0xFF22D3EE)
-    
-    SwipeToReplyWrapper(onReply = onReply) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = if (isFromMe) 8.dp else 0.dp), 
-            horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
-        ) {
-            Surface(
-                color = appColors.surfaceColor,
-                shape = RoundedCornerShape(
-                    topStart = 16.dp, 
-                    topEnd = 16.dp, 
-                    bottomStart = if (isFromMe) 16.dp else 2.dp, 
-                    bottomEnd = if (isFromMe) 2.dp else 16.dp
-                ),
-                border = BorderStroke(0.5.dp, borderColor),
-                tonalElevation = 2.dp,
-                modifier = Modifier.widthIn(max = 260.dp).clickable {
-                    val gmmIntentUri = Uri.parse("geo:$lat,$lng?q=$lat,$lng")
-                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                    context.startActivity(mapIntent)
-                }
-            ) {
-                Column {
-                    if (message.replyToId != null) {
-                        QuotedMessage(
-                            replyToSenderName = message.replyToSenderName,
-                            replyToContent = message.replyToContent,
-                            appColors = appColors,
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
-                    // Header PREMIUM Ubicación
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(emeraldColor.copy(alpha = 0.15f))
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("📍", fontSize = 18.sp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "Ubicación Compartida", 
-                            fontWeight = FontWeight.Black, 
-                            color = Color.White, 
-                            fontSize = 14.sp,
-                            letterSpacing = 0.5.sp
-                        )
-                    }
-
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        // DIRECCIÓN PRIMERO CON EMOJI
-                        Row(verticalAlignment = Alignment.Top) {
-                            Text("📍", fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = message.locationAddress ?: "Coordenadas GPS", 
-                                fontSize = 13.sp, 
-                                color = Color.White,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        
-                        Spacer(Modifier.height(12.dp))
-
-                        // TARJETA VER EN MAPA ABAJO CON EMOJI DE MAPA A COLOR
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(100.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.05f))
-                                .border(1.dp, emeraldColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("🗺️", fontSize = 32.sp) // Emoji de mapa a color
-                                Spacer(Modifier.height(4.dp))
-                                Text("VER EN MAPA", color = emeraldColor, fontSize = 11.sp, fontWeight = FontWeight.Black)
-                            }
-                        }
-                        
-                        Text(
-                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                            modifier = Modifier.align(Alignment.End).padding(top = 8.dp),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = appColors.textSecondaryColor.copy(alpha = 0.4f)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AudioMessageBubble(
+fun EnhancedMessageBubble(
     message: MessageEntity,
-    appColors: AppColors,
     isFromMe: Boolean,
-    onReply: () -> Unit = {}
+    appColors: AppColors,
+    onReply: () -> Unit
 ) {
-    val audioPath =
-        if (message.content == "[Audio]" && !message.imageUrl.isNullOrBlank()) message.imageUrl else message.content
-    val duration = message.durationSeconds ?: 0
-    val timestamp = message.timestamp
-    var isPlaying by remember { mutableStateOf(false) }
-    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
-    var currentPosition by remember { mutableIntStateOf(0) }
-    val borderColor = if (isFromMe) Color(0xFF10B981) else Color(0xFF22D3EE)
+    MessageBubble(
+        message = message,
+        appColors = appColors,
+        isFromMe = isFromMe,
+        onReply = onReply
+    )
+}
 
-    val displayDuration = if (duration > 0) duration else 0
-    val minutes = displayDuration / 60
-    val seconds = displayDuration % 60
-    val durationText = String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 
-    DisposableEffect(audioPath) {
-        onDispose {
-            mediaPlayer?.release()
-            mediaPlayer = null
-        }
-    }
 
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            mediaPlayer?.let { currentPosition = it.currentPosition }
-            delay(200)
-        }
-    }
 
-    SwipeToReplyWrapper(onReply = onReply) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = if (isFromMe) 8.dp else 0.dp),
-            horizontalAlignment = if (isFromMe) Alignment.End else Alignment.Start
-        ) {
-            Surface(
-                color = if (isFromMe) appColors.accentBlue else appColors.surfaceColor,
-                shape = RoundedCornerShape(
-                    topStart = 24.dp,
-                    topEnd = 24.dp,
-                    bottomStart = if (isFromMe) 24.dp else 4.dp,
-                    bottomEnd = if (isFromMe) 4.dp else 24.dp
-                ),
-                border = BorderStroke(0.5.dp, borderColor),
-                tonalElevation = 2.dp,
-                modifier = Modifier.widthIn(min = 200.dp, max = 260.dp)
-            ) {
-                Column {
-                    if (message.replyToId != null) {
-                        QuotedMessage(
-                            replyToSenderName = message.replyToSenderName,
-                            replyToContent = message.replyToContent,
-                            appColors = appColors,
-                            modifier = Modifier.padding(top = 8.dp, start = 12.dp, end = 12.dp)
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = {
-                                if (isPlaying) {
-                                    mediaPlayer?.pause()
-                                    isPlaying = false
-                                } else {
-                                    if (mediaPlayer == null) {
-                                        try {
-                                            mediaPlayer = MediaPlayer().apply {
-                                                setDataSource(audioPath)
-                                                prepare()
-                                                setOnCompletionListener {
-                                                    isPlaying = false
-                                                    currentPosition = 0
-                                                }
-                                            }
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
-                                    }
-                                    mediaPlayer?.start()
-                                    isPlaying = true
-                                }
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = if (isFromMe) Color.White else Color(0xFF22D3EE)
-                            )
-                        }
-
-                        Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                            LinearProgressIndicator(
-                                progress = { if (isPlaying && mediaPlayer != null && mediaPlayer!!.duration > 0) currentPosition.toFloat() / mediaPlayer!!.duration else 0f },
-                                modifier = Modifier.fillMaxWidth().height(4.dp),
-                                color = if (isFromMe) Color.White else Color(0xFF22D3EE),
-                                trackColor = (if (isFromMe) Color.White else appColors.textSecondaryColor).copy(
-                                    alpha = 0.2f
-                                ),
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    durationText,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isFromMe) Color.White.copy(alpha = 0.8f) else appColors.textSecondaryColor
-                                )
-                                Text(
-                                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(
-                                        Date(
-                                            timestamp
-                                        )
-                                    ),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isFromMe) Color.White.copy(alpha = 0.8f) else appColors.textSecondaryColor
-                                )
-                            }
-                        }
-
-                        Icon(
-                            Icons.Default.Mic,
-                            null,
-                            tint = (if (isFromMe) Color.White else appColors.textSecondaryColor).copy(
-                                alpha = 0.5f
-                            ),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
+@Composable
+fun ChatThreadSkeleton() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.05f))
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.4f)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.White.copy(alpha = 0.05f))
+            )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.White.copy(alpha = 0.03f))
+            )
         }
     }
 }
-
-// --- SECCIÓN: OTROS COMPONENTES ---
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun UnifiedChatListItem(
     thread: ChatThread,
-        unreadCount: Int,
-        isSelected: Boolean,
-        isMultiSelectMode: Boolean,
-        onClick: () -> Unit,
-        onLongClick: () -> Unit,
-        onAvatarClick: () -> Unit
+    unreadCount: Int,
+    isSelected: Boolean,
+    isMultiSelectMode: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onAvatarClick: () -> Unit,
+    modifier: Modifier = Modifier 
+) {
+    val backgroundColor = if (isSelected) Color(0xFF22D3EE).copy(alpha = 0.08f) else Color.Transparent
+    val profileImage = remember(thread.photoUrl) { ImageUtils.processImageSource(thread.photoUrl) }
+    
+    val locale = LocalConfiguration.current.locales[0]
+    val timeStr = remember(thread.lastTimestamp) {
+        val sdf = SimpleDateFormat("HH:mm", locale)
+        sdf.format(Date(thread.lastTimestamp))
+    }
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        color = backgroundColor
     ) {
-        val provider = thread.provider
-        val backgroundColor = if (isSelected) Color(0xFF1E293B) else Color.Transparent
-
-        Surface(
+        Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = onClick,
-                    onLongClick = onLongClick
-                ),
-            color = backgroundColor
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Avatar
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    Surface(
+            // 1. AVATAR CON GLOW DE ESTADO (Elite Telegram Style)
+            Box(contentAlignment = Alignment.BottomEnd) {
+                Surface(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clickable { onAvatarClick() }
+                        .border(
+                            width = 1.dp,
+                            brush = if (thread.isOnline) 
+                                Brush.sweepGradient(listOf(Color(0xFF22D3EE), Color(0xFF818CF8), Color(0xFF22D3EE)))
+                                else SolidColor(Color.White.copy(alpha = 0.1f)),
+                            shape = CircleShape
+                        ),
+                    shape = CircleShape,
+                    color = Color.Black
+                ) {
+                    if (profileImage != null) {
+                        AsyncImage(
+                            model = profileImage,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Icon(MaverickIcons.Person, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                        }
+                    }
+                }
+                
+                // Indicador Online vibrante
+                if (thread.isOnline) {
+                    Box(
                         modifier = Modifier
-                            .size(56.dp)
-                            .clickable { onAvatarClick() },
-                        shape = CircleShape,
-                        color = Color.Gray.copy(alpha = 0.2f)
+                            .size(14.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF0F172A))
+                            .padding(2.dp)
                     ) {
-                        val photoUrl = provider.photoUrl
-
-                        if (!photoUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = photoUrl,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize()
-                                    .background(Color.Gray.copy(alpha = 0.1f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.Person,
-                                    null,
-                                    tint = Color.Gray.copy(alpha = 0.5f)
-                                )
-                            }
-                        }
+                        Box(modifier = Modifier.fillMaxSize().clip(CircleShape).background(Color(0xFF4ADE80)))
                     }
+                }
 
-                    if (isMultiSelectMode) {
-                        SelectionIndicator(
-                            isSelected = isSelected,
-                            modifier = Modifier.size(20.dp).offset(x = 4.dp, y = 4.dp)
+                if (isMultiSelectMode) {
+                    ChatSelectionIndicator(
+                        isSelected = isSelected,
+                        modifier = Modifier.size(20.dp).offset(x = 4.dp, y = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(16.dp))
+
+            // 2. INFO DEL CHAT (Cuerpo Central)
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = thread.displayName.uppercase(),
+                        style = MaverickTypography.HeaderTitle.copy(
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.5.sp,
+                            color = if (unreadCount > 0) Color.White else Color.White.copy(alpha = 0.9f)
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    if (thread.isVerified) {
+                        Icon(
+                            imageVector = MaverickIcons.Verified,
+                            contentDescription = "Verificado",
+                            tint = Color(0xFF22D3EE),
+                            modifier = Modifier.padding(start = 4.dp).size(14.dp)
                         )
                     }
                 }
 
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.height(2.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    val displayName = provider.displayName
+                Text(
+                    text = thread.lastMessage,
+                    style = MaverickTypography.BodyText.copy(
+                        fontSize = 12.sp,
+                        color = if (unreadCount > 0) Color.White.copy(alpha = 0.7f) else Color.Gray,
+                        fontWeight = if (unreadCount > 0) FontWeight.SemiBold else FontWeight.Normal
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        if (provider.isVerified) {
-                            Spacer(Modifier.width(4.dp))
-                            Icon(
-                                Icons.Default.Verified,
-                                null,
-                                tint = Color(0xFF2197F5),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-
-                    if (thread.lastMessage.isNotEmpty()) {
-                        Text(
-                            text = thread.lastMessage,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.Gray.copy(alpha = 0.7f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                }
+            // 3. METADATOS (Derecha - Hora y Badge)
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxHeight().padding(vertical = 2.dp)
+            ) {
+                Text(
+                    text = timeStr,
+                    style = TextStyle(
+                        fontFamily = FontFamily.SansSerif,
+                        fontSize = 10.sp,
+                        color = if (unreadCount > 0) Color(0xFF22D3EE) else Color.Gray,
+                        fontWeight = if (unreadCount > 0) FontWeight.Bold else FontWeight.Normal
+                    )
+                )
 
                 if (unreadCount > 0) {
                     Surface(
-                        color = Color(0xFF2197F5),
-                        shape = CircleShape,
-                        modifier = Modifier.size(24.dp)
+                        color = Color(0xFF22D3EE),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.padding(top = 6.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = unreadCount.toString(),
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold
+                        Text(
+                            text = unreadCount.toString(),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = TextStyle(
+                                fontFamily = FontFamily.SansSerif,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFF0F172A)
                             )
-                        }
+                        )
                     }
+                } else {
+                    // Indicador de "Visto" sutil (Double Check Style)
+                    Icon(
+                        imageVector = MaverickIcons.DoneAll,
+                        contentDescription = "Leído",
+                        tint = Color(0xFF22D3EE).copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
     }
+}
 
+@Composable
+fun ChatSelectionIndicator(isSelected: Boolean, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = if (isSelected) Color(0xFF22D3EE) else Color.Black.copy(alpha = 0.5f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            if (isSelected) {
+                Icon(Icons.Default.Check, null, tint = Color(0xFF0F172A), modifier = Modifier.size(12.dp))
+            }
+        }
+    }
+}
 
 @Composable
 fun ImageZoomDialog(
@@ -1165,152 +1108,119 @@ fun ImageZoomDialog(
     onDismiss: () -> Unit
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
-        var offset by remember { mutableStateOf(Offset.Zero) }
-        val state = rememberTransformableState { zoomChange, offsetChange, _ ->
-            scale *= zoomChange
-            offset += offsetChange
-        }
-
-        Dialog(
-            onDismissRequest = onDismiss,
-            properties = androidx.compose.ui.window.DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Black.copy(alpha = 0.95f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onDoubleTap = {
-                                    scale = if (scale > 1f) 1f else 2f
-                                    offset = Offset.Zero
-                                }
-                            )
-                        }
-                ) {
-                    AsyncImage(
-                        model = message.imageUrl ?: message.content,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer(
-                                scaleX = maxOf(1f, scale),
-                                scaleY = maxOf(1f, scale),
-                                translationX = offset.x,
-                                translationY = offset.y
-                            )
-                            .transformable(state = state),
-                        contentScale = ContentScale.Fit
-                    )
-
-                    // Botón de cierre superior
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .align(Alignment.TopEnd)
-                            .padding(16.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Close, null, tint = Color.White)
-                    }
-                }
-            }
-        }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 5f)
+        offset += panChange
     }
 
-
-// --- SECCIÓN DE VISTAS PREVIAS (PREVIEWS) ---
-
-@Preview(showBackground = true, name = "Mensajes de Texto")
-@Composable
-fun MessageBubblePreview() {
-    val appColors = getThemeColors()
-    val message = MessageEntity(
-        id = "1",
-        chatId = "c1",
-        senderId = "p1",
-        receiverId = "user1",
-        type = MessageType.TEXT,
-        content = "Hola, ¿cómo estás? Te envío el presupuesto solicitado para la reparación.",
-        timestamp = System.currentTimeMillis()
-    )
-    MyApplicationTheme {
-        Column(
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(appColors.backgroundColor)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
         ) {
-            MessageBubble(message = message, appColors = appColors, isFromMe = false)
-            MessageBubble(message = message.copy(senderId = "user1", receiverId = "p1", content = "¡Hola! Perfecto, lo reviso ahora mismo."), appColors = appColors, isFromMe = true)
+            val imageSource = remember(message.imageUrl, message.imageLocalPath) {
+                ImageUtils.processImageSource(message.imageLocalPath ?: message.imageUrl)
+            }
+            
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageSource)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = scale,
+                        scaleY = scale,
+                        translationX = offset.x,
+                        translationY = offset.y
+                    )
+                    .transformable(transformableState),
+                contentScale = ContentScale.Fit
+            )
+
+            // Close button overlay
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 48.dp, end = 16.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Cerrar",
+                    tint = Color.White
+                )
+            }
         }
     }
 }
 
-@Preview(showBackground = true, name = "Burbujas Multimedia")
-@Composable
-fun MediaBubblesPreview() {
-    val appColors = getThemeColors()
-    val now = System.currentTimeMillis()
-    
-    val imageMsg = MessageEntity(
-        id = "m1",
-        chatId = "c1",
-        senderId = "u1",
-        receiverId = "p1",
-        type = MessageType.IMAGE,
-        content = "Imagen adjunta",
-        imageUrl = "https://picsum.photos/400/300",
-        timestamp = now
-    )
-    
-    val audioMsg = MessageEntity(
-        id = "m2",
-        chatId = "c1",
-        senderId = "p1",
-        receiverId = "u1",
-        type = MessageType.AUDIO,
-        content = "[Audio]",
-        durationSeconds = 42,
-        timestamp = now
-    )
-    
-    val locationMsg = MessageEntity(
-        id = "m3",
-        chatId = "c1",
-        senderId = "u1",
-        receiverId = "p1",
-        type = MessageType.LOCATION,
-        content = "Ubicación compartida",
-        latitude = -26.8241,
-        longitude = -65.2226,
-        locationAddress = "Av. Sarmiento 1100, San Miguel de Tucumán",
-        timestamp = now
-    )
+// --- PREVIEWS ---
 
+@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
+@Composable
+fun MessageBubblePreview() {
     MyApplicationTheme {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(appColors.backgroundColor)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            ImageMessageBubble(message = imageMsg, appColors = appColors, isFromMe = true, onImageClick = {})
-            AudioMessageBubble(
-                message = audioMsg,
-                appColors = appColors, 
+        Column(modifier = Modifier.padding(16.dp)) {
+            MessageBubble(
+                message = MessageEntity(
+                    id = "m1", chatId = "c1", senderId = "s1", receiverId = "r1", 
+                    type = MessageType.TEXT, content = "Hola, ¿cómo estás?",
+                    timestamp = System.currentTimeMillis(), status = "SENT"
+                ),
+                appColors = getThemeColors(),
                 isFromMe = false
             )
-            LocationMessageBubble(message = locationMsg, appColors = appColors, isFromMe = true)
+            MessageBubble(
+                message = MessageEntity(
+                    id = "m2", chatId = "c1", senderId = "current", receiverId = "r1", 
+                    type = MessageType.TEXT, content = "Todo bien, ¿y tú?",
+                    timestamp = System.currentTimeMillis(), isRead = true, status = "READ"
+                ),
+                appColors = getThemeColors(),
+                isFromMe = true
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
+@Composable
+fun MediaBubblesPreview() {
+    MyApplicationTheme {
+        Column(modifier = Modifier.padding(16.dp)) {
+            MessageBubble(
+                message = MessageEntity(
+                    id = "m3", chatId = "c1", senderId = "s1", receiverId = "r1",
+                    type = MessageType.LOCATION, content = "", locationAddress = "Av. Siempre Viva 742",
+                    timestamp = System.currentTimeMillis(), status = "SENT"
+                ),
+                appColors = getThemeColors(),
+                isFromMe = false
+            )
+            Spacer(Modifier.height(8.dp))
+            MessageBubble(
+                message = MessageEntity(
+                    id = "m4", chatId = "c1", senderId = "current", receiverId = "r1",
+                    type = MessageType.AUDIO, content = "", durationSeconds = 45,
+                    timestamp = System.currentTimeMillis(), status = "SENT"
+                ),
+                appColors = getThemeColors(),
+                isFromMe = true
+            )
         }
     }
 }

@@ -1,8 +1,8 @@
 package com.example.myapplication.presentation.registry
 
 import androidx.compose.ui.graphics.Color
-import com.example.myapplication.core.common.extensions.matchesSmart
-import com.example.myapplication.core.common.extensions.prepareForSearch
+import com.example.myapplication.core.utils.matchesSmart
+import com.example.myapplication.core.utils.prepareForSearch
 import com.example.myapplication.presentation.components.BeMessage
 import com.example.myapplication.presentation.components.BeEmotion
 

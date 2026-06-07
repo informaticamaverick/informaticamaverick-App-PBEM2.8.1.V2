@@ -2,8 +2,8 @@
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.prestador.data.repository.ProviderRepository
+import com.example.myapplication.core.data.local.entity.ProviderEntity
+import com.example.myapplication.core.data.repository.ProviderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +35,7 @@ class ProviderViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                repository.getProviderById(providerId).collect { provider ->
+                repository.getProviderFlowById(providerId).collect { provider ->
                     _provider.value = provider
                 }
             } catch (e: Exception) {
@@ -50,7 +50,7 @@ class ProviderViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                repository.getAllProviders().collect { providers ->
+                repository.getAllProvidersEntity().collect { providers ->
                     _providers.value = providers
                 }
             } catch (e: Exception) {

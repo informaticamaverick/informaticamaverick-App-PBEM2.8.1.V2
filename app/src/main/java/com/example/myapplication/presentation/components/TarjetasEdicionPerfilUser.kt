@@ -1,5 +1,7 @@
 package com.example.myapplication.presentation.components
 
+import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -30,7 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.myapplication.presentation.features.home.UbicacionClimaViewModel
-import com.example.myapplication.core.domain.model.AddressClient
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.domain.model.BranchClient
 import com.example.myapplication.core.domain.model.CompanyClient
 import com.example.myapplication.core.domain.model.RepresentativeClient
@@ -89,13 +91,8 @@ fun ProfileEditSheetOrchestrator(
                     EditRepresentativeSheetContent(
                         representative = mode.representative,
                         onSave = { updatedRep ->
-                            val currentReps = mode.branch.representatives.toMutableList()
-                            val idx = currentReps.indexOfFirst { it.id == updatedRep.id }
-                            if (idx != -1) currentReps[idx] = updatedRep else currentReps.add(updatedRep)
-                            val updatedBranch = mode.branch.copy(representatives = currentReps)
-                            val updatedBranches = mode.company.branches.map { if(it.id == updatedBranch.id) updatedBranch else it }
-                            val currentCompanies = uiState.companies.map { if(it.id == mode.company.id) mode.company.copy(branches = updatedBranches) else it }
-                            viewModel.updateCompanies(currentCompanies)
+                            val photoUri = updatedRep.photoUrl?.let { if (it.startsWith("content://") || it.startsWith("file://")) Uri.parse(it) else null }
+                            viewModel.saveRepresentative(mode.company, mode.branch, updatedRep, photoUri)
                             onClose()
                         },
                         onClose = onClose,
@@ -115,11 +112,18 @@ fun ProfileEditSheetOrchestrator(
                 }
                 is EditMode.PersonalAddress -> {
                     EditAddressSheetContent(
-                        address = mode.address ?: AddressClient(),
+                        address = mode.address ?: AddressUnico(),
                         onSave = { updated ->
+                            Log.d("ProfileEdit", "📍 [SAVE_ADDRESS] Nueva dirección: ${updated.calle} ${updated.numero}")
                             val current = uiState.personalAddresses.toMutableList()
                             val idx = current.indexOfFirst { it.id == updated.id }
-                            if (idx != -1) current[idx] = updated else current.add(updated)
+                            if (idx != -1) {
+                                current[idx] = updated
+                                Log.d("ProfileEdit", "📍 [SAVE_ADDRESS] Dirección existente actualizada.")
+                            } else {
+                                current.add(updated)
+                                Log.d("ProfileEdit", "📍 [SAVE_ADDRESS] Nueva dirección añadida a la lista.")
+                            }
                             viewModel.updatePersonalAddresses(current)
                             onClose()
                         },
@@ -130,10 +134,8 @@ fun ProfileEditSheetOrchestrator(
                     EditCompanySheetContent(
                         company = mode.company,
                         onSave = { updated ->
-                            val current = uiState.companies.toMutableList()
-                            val idx = current.indexOfFirst { it.id == updated.id }
-                            if (idx != -1) current[idx] = updated else current.add(updated)
-                            viewModel.updateCompanies(current)
+                            val photoUri = updated.photoUrl?.let { if (it.startsWith("content://") || it.startsWith("file://")) Uri.parse(it) else null }
+                            viewModel.saveCompany(updated, photoUri)
                             onClose()
                         },
                         onClose = onClose
@@ -335,14 +337,16 @@ fun EliteTextField(
  */
 @Composable
 fun EditAddressSheetContent(
-    address: AddressClient,
-    onSave: (AddressClient) -> Unit,
+    address: AddressUnico,
+    onSave: (AddressUnico) -> Unit,
     onClose: () -> Unit,
     ubicacionViewModel: UbicacionClimaViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     var calle by remember { mutableStateOf(address.calle) }
     var numero by remember { mutableStateOf(address.numero) }
+    var piso by remember { mutableStateOf(address.piso) }
+    var departamento by remember { mutableStateOf(address.departamento) }
     var localidad by remember { mutableStateOf(address.localidad) }
     var provincia by remember { mutableStateOf(address.provincia) }
     var pais by remember { mutableStateOf(address.pais) }
@@ -359,9 +363,9 @@ fun EditAddressSheetContent(
         onClose = onClose,
         onSave = {
             onSave(address.copy(
-                calle = calle, numero = numero, localidad = localidad,
-                provincia = provincia, pais = pais, codigoPostal = codigoPostal,
-                label = label, latitude = latitude, longitude = longitude
+                calle = calle, numero = numero, piso = piso, departamento = departamento,
+                localidad = localidad, provincia = provincia, pais = pais, 
+                codigoPostal = codigoPostal, label = label, latitude = latitude, longitude = longitude
             ))
         },
         canSave = isFormValid
@@ -459,9 +463,14 @@ fun EditAddressSheetContent(
                 Spacer(Modifier.height(12.dp))
                 
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Box(Modifier.weight(0.35f)) { EliteTextField(value = numero, onValueChange = { numero = it }, label = "Nº", emoji = "🔢") }
-                    Box(Modifier.weight(0.65f)) { EliteTextField(value = localidad, onValueChange = { localidad = it }, label = "Ciudad", emoji = "🏙️") }
+                    Box(Modifier.weight(0.25f)) { EliteTextField(value = numero, onValueChange = { numero = it }, label = "Nº", emoji = "🔢") }
+                    Box(Modifier.weight(0.25f)) { EliteTextField(value = piso, onValueChange = { piso = it }, label = "Piso") }
+                    Box(Modifier.weight(0.5f)) { EliteTextField(value = departamento, onValueChange = { departamento = it }, label = "Depto") }
                 }
+                
+                Spacer(Modifier.height(12.dp))
+
+                EliteTextField(value = localidad, onValueChange = { localidad = it }, label = "Ciudad", emoji = "🏙️")
                 
                 Spacer(Modifier.height(12.dp))
                 
@@ -574,13 +583,40 @@ fun EditCompanySheetContent(
     var cuit by remember { mutableStateOf(company.cuit) }
     var email by remember { mutableStateOf(company.email) }
     var razonSocial by remember { mutableStateOf(company.razonSocial) }
+    var photoUrl by remember { mutableStateOf(company.photoUrl) }
+
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        photoUrl = uri?.toString()
+    }
 
     EliteSheetLayout(
         title = "Negocio",
         emoji = "🏢",
         onClose = onClose,
-        onSave = { onSave(company.copy(name = name, cuit = cuit, email = email, razonSocial = razonSocial)) }
+        onSave = { onSave(company.copy(name = name, cuit = cuit, email = email, razonSocial = razonSocial, photoUrl = photoUrl)) }
     ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(0.05f))
+                    .border(2.dp, PremiumAccent, CircleShape)
+                    .clickable { photoLauncher.launch("image/*") },
+                contentAlignment = Alignment.Center
+            ) {
+                if (photoUrl != null) {
+                    AsyncImage(model = photoUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else {
+                    Icon(Icons.Default.Business, null, modifier = Modifier.size(50.dp), tint = Color.Gray)
+                }
+                Box(modifier = Modifier.align(Alignment.BottomEnd).size(28.dp).background(PremiumAccent, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.PhotoCamera, null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+
         EliteSectionHeader("Identidad")
         EliteTextField(value = name, onValueChange = { name = it }, label = "Nombre Fantasía", emoji = "🏢")
         Spacer(Modifier.height(12.dp))
@@ -662,7 +698,7 @@ fun EditSingleContactSheetContent(
 fun PreviewPremiumAddressSheet() {
     MyApplicationTheme(darkTheme = true) {
         EditAddressSheetContent(
-            address = AddressClient(calle = "9 de Julio", numero = "123", localidad = "Tucumán", codigoPostal = "4000", latitude = -26.0, longitude = -65.0),
+            address = AddressUnico(calle = "9 de Julio", numero = "123", localidad = "Tucumán", codigoPostal = "4000", latitude = -26.0, longitude = -65.0),
             onSave = {},
             onClose = {}
         )

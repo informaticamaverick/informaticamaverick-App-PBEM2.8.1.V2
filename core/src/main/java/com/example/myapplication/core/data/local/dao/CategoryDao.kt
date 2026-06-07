@@ -30,7 +30,7 @@ interface CategoryDao {
     @Query("DELETE FROM categories_table")
     suspend fun deleteAll()
 
-    @Query("SELECT * FROM categories_table WHERE name LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%'")
+    @Query("SELECT * FROM categories_table WHERE name LIKE :query || '%' OR name LIKE '% ' || :query || '%' LIMIT 100")
     fun searchCategories(query: String): Flow<List<CategoryEntity>>
 
     @Query("SELECT * FROM categories_table WHERE superCategory = :superCategory ORDER BY name ASC")

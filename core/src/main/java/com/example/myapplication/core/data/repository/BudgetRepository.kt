@@ -39,6 +39,9 @@ class BudgetRepository @Inject constructor(
     suspend fun getBudgetById(budgetId: String): BudgetEntity? =
         budgetDao.getBudgetById(budgetId)
 
+    suspend fun getBudgetsByIds(budgetIds: List<String>): List<BudgetEntity> =
+        budgetDao.getBudgetsByIds(budgetIds)
+
     /**
      * Obtiene solo las licitaciones abiertas.
      */

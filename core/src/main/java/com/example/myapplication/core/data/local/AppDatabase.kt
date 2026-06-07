@@ -21,7 +21,7 @@ import com.example.myapplication.core.data.local.entity.*
         MessageEntity::class,
         CalendarEventEntity::class
     ],
-    version = 3,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

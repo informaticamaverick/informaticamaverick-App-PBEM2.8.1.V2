@@ -1,7 +1,7 @@
 package com.example.myapplication.prestador.data.repository
 
-import com.example.myapplication.prestador.data.local.dao.DireccionDao
-import com.example.myapplication.prestador.data.local.entity.DireccionEntity
+//import com.example.myapplication.prestador.data.local.dao.DireccionDao
+//import com.example.myapplication.prestador.data.local.entity.DireccionEntity
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton

@@ -1,4 +1,7 @@
-﻿package com.example.myapplication.prestador.viewmodel.oportunidades
+﻿
+/**
+
+package com.example.myapplication.prestador.viewmodel.oportunidades
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -6,9 +9,9 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.prestador.data.local.dao.AvailabilityScheduleDao
-import com.example.myapplication.prestador.data.local.dao.ClienteDao
-import com.example.myapplication.prestador.data.local.dao.ProviderDao
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
+import com.example.myapplication.core.data.local.dao.UserDao
+import com.example.myapplication.core.data.local.dao.ProviderDao
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.prestador.data.model.OportunidadItem
 import com.example.myapplication.prestador.data.repository.OportunidadesRepository
 import com.google.android.gms.location.LocationServices
@@ -24,7 +27,7 @@ import kotlin.math.*
 @HiltViewModel
 class OportunidadesViewModel @Inject constructor(
     application: Application,
-    private val clienteDao: ClienteDao,
+    private val userDao: UserDao,
     private val availabilityScheduleDao: AvailabilityScheduleDao,
     private val providerDao: ProviderDao,
     private val oportunidadesRepository: OportunidadesRepository
@@ -39,8 +42,8 @@ class OportunidadesViewModel @Inject constructor(
     private val _mensajeAceptar = MutableStateFlow<String?>(null)
     val mensajeAceptar: StateFlow<String?> = _mensajeAceptar
 
-    private val _clientes = MutableStateFlow<List<ClienteEntity>>(emptyList())
-    val clientes: StateFlow<List<ClienteEntity>> = _clientes
+    private val _clientes = MutableStateFlow<List<User>>(emptyList())
+    val clientes: StateFlow<List<User>> = _clientes
 
     private val colaSolicitudes = ArrayDeque<OportunidadItem>()
     private val _nuevaSolicitud = MutableStateFlow<OportunidadItem?>(null)
@@ -87,7 +90,9 @@ class OportunidadesViewModel @Inject constructor(
     init {
         if (_conectadoFast.value) iniciarListenerTiempoReal()
         viewModelScope.launch {
-            clienteDao.getAllClientes().collect { _clientes.value = it }
+            userDao.getAllUsers().collect { entities -> 
+                _clientes.value = entities.map { it.toDomain() } 
+            }
         }
     }
 
@@ -250,19 +255,19 @@ class OportunidadesViewModel @Inject constructor(
     fun limpiarMensaje() { _mensajeAceptar.value = null }
 
     @SuppressLint("MissingPermission")
-    fun crearSolicitudFast(cliente: ClienteEntity, titulo: String, urgente: Boolean) {
+    fun crearSolicitudFast(cliente: User, titulo: String, urgente: Boolean) {
         viewModelScope.launch {
             try {
                 val location = fusedLocation.lastLocation.await()
                 oportunidadesRepository.crearSolicitud(
                     titulo = titulo,
-                    clienteNombre = cliente.nombre,
-                    clienteId = cliente.id,
+                    clienteNombre = cliente.fullName,
+                    clienteId = cliente.uid,
                     lat = location?.latitude ?: -26.82,
                     lng = location?.longitude ?: -65.21,
                     urgente = urgente
                 )
-                _mensajeAceptar.value = "Solicitud creada para ${cliente.nombre}"
+                _mensajeAceptar.value = "Solicitud creada para ${cliente.fullName}"
                 cargarOportunidades()
             } catch (e: Exception) {
                 _mensajeAceptar.value = "Error: ${e.message}"
@@ -278,3 +283,4 @@ class OportunidadesViewModel @Inject constructor(
         return r * 2 * atan2(sqrt(a), sqrt(1 - a))
     }
 }
+ */

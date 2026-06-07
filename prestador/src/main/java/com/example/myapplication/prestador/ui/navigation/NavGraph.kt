@@ -42,7 +42,7 @@ fun PrestadorNavGraph(
             dashboardNavGraph(navController)
             configNavGraph(navController)
             profileNavGraph(navController)
-            chatNavGraph(navController)
+            // chatNavGraph(navController) // Integrado en Dashboard
             presupuestoNavGraph(navController)
             promotionNavGraph(navController)
             clienteNavGraph(navController)

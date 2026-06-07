@@ -10,8 +10,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.data.local.entity.CategoryEntity
-import com.example.myapplication.core.common.extensions.wordStartsWithSmart
-import com.example.myapplication.core.common.extensions.prepareForSearch
+import com.example.myapplication.core.utils.wordStartsWithSmart
+import com.example.myapplication.core.utils.prepareForSearch
+import com.example.myapplication.core.utils.filtroDeTexto
 import com.example.myapplication.presentation.components.CompactCategoryCard
 import com.example.myapplication.presentation.components.SheetEmergenteVertical
 import com.example.myapplication.presentation.designsystem.components.*
@@ -130,8 +131,8 @@ fun SuperCategoryDetailsPanelContent(
                     if (searchQuery.isEmpty()) {
                         items
                     } else {
-                        val normQuery = searchQuery.prepareForSearch()
-                        items.filter { it.name.wordStartsWithSmart(normQuery) }.sortedBy { it.name.lowercase() }
+                        // [FIX]: Usamos filtroDeTexto para una búsqueda más permisiva y precisa
+                        items.filter { it.name.filtroDeTexto(searchQuery) }.sortedBy { it.name.lowercase() }
                     }
                 }
 

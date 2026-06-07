@@ -45,20 +45,21 @@ object CoreModule {
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+        val dbName = if (context.packageName.contains("prestador")) {
+            "maverick_prestador.db"
+        } else {
+            "maverick_app.db"
+        }
         return Room.databaseBuilder(
             context,
             AppDatabase::class.java,
-            "maverick_shared.db"
+            dbName
         ).fallbackToDestructiveMigration().build()
     }
 
     @Provides
     @Singleton
     fun provideUserDao(db: AppDatabase): UserDao = db.userDao()
-
-    @Provides
-    @Singleton
-    fun provideProviderDao(db: AppDatabase): ProviderDao = db.providerDao()
 
     @Provides
     @Singleton
@@ -71,6 +72,10 @@ object CoreModule {
     @Provides
     @Singleton
     fun provideBudgetDao(db: AppDatabase): BudgetDao = db.budgetDao()
+
+    @Provides
+    @Singleton
+    fun provideProviderDao(db: AppDatabase): ProviderDao = db.providerDao()
 
     @Provides
     @Singleton
@@ -115,16 +120,17 @@ object CoreModule {
     @Provides
     @Singleton
     fun provideProviderRepository(
+        @ApplicationContext context: Context,
         providerDao: ProviderDao,
-        firestore: FirebaseFirestore
-    ): ProviderRepository = ProviderRepository(providerDao, firestore)
+        firestore: FirebaseFirestore,
+        auth: FirebaseAuth
+    ): ProviderRepository = ProviderRepository(context, providerDao, firestore, auth)
 
     @Provides
     @Singleton
     fun provideCategoryRepository(
-        categoryDao: CategoryDao,
-        firestore: FirebaseFirestore
-    ): CategoryRepository = CategoryRepository(categoryDao, firestore)
+        categoryDao: CategoryDao
+    ): CategoryRepository = CategoryRepository(categoryDao)
 
     @Provides
     @Singleton

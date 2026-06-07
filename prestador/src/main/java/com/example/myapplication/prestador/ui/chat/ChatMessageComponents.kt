@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -510,11 +511,16 @@ fun ImageMessageContent(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Image,
+                            imageVector = Icons.Default.VisibilityOff,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = 0.7f)
                         )
-                        Text("Imagen no disponible", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                        Text(
+                            "Este archivo multimedia ya no está disponible en la nube (Ley #8)", 
+                            color = Color.White.copy(alpha = 0.7f), 
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
                     }
                 }
             }

@@ -7,7 +7,7 @@ import com.example.myapplication.prestador.data.repository.AvailabilityScheduleF
 import com.example.myapplication.prestador.data.repository.AvailabilityScheduleRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.example.myapplication.prestador.data.repository.SucursalFirestoreSync
+//import com.example.myapplication.prestador.data.repository.SucursalFirestoreSync
 
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.first
@@ -25,7 +25,7 @@ class AvailabilityViewModel @Inject constructor(
     private val auth: FirebaseAuth,
     private val savedStateHandle: SavedStateHandle,
     private val firestore: FirebaseFirestore,
-    private val sucursalSync: SucursalFirestoreSync
+    //private val sucursalSync: SucursalFirestoreSync
 ) : ViewModel() {
 
     // Usa owner_id de los args de navegación si está disponible (empresa/sucursal),
@@ -240,12 +240,12 @@ class AvailabilityViewModel @Inject constructor(
             .get().await()
 
         branchesSnapshot.documents.forEach { branchDoc ->
-            sucursalSync.updateHorarioField(
-                providerId = prestadorUid,
-                companyId = companyId,
-                branchId = branchDoc.id,
-                horario = horarioTexto
-            )
+           // sucursalSync.updateHorarioField(
+             //   providerId = prestadorUid,
+             //   companyId = companyId,
+             //   branchId = branchDoc.id,
+             //   horario = horarioTexto
+            //)
         }
         android.util.Log.d("HORARIO_SYNC", "✅ Campo horario actualizado en ${branchesSnapshot.size()} sucursales. companyId=$companyId")
     }

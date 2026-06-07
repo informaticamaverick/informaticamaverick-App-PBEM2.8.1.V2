@@ -1,4 +1,6 @@
-﻿package com.example.myapplication.prestador.viewmodel.profile
+﻿/*
+
+package com.example.myapplication.prestador.viewmodel.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -136,3 +138,4 @@ class DireccionViewModel @Inject constructor(
         _actionState.value = DireccionActionState.Idle
     }
 }
+*/

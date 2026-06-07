@@ -29,7 +29,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.room.util.TableInfo
 //import com.example.myapplication.prestador.data.PPrestadorProfileFalso
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
+import com.example.myapplication.core.domain.model.User
+import com.example.myapplication.core.domain.model.Provider
+import com.example.myapplication.core.domain.model.AddressUnico
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
 import com.example.myapplication.prestador.data.model.Message
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
@@ -63,11 +66,11 @@ fun BudgetChatSheet(
     val presupuestoConfig by configViewModel.config.collectAsState()
     val currencySymbol = when (presupuestoConfig.moneda) { "USD" -> "US$"; else -> "$" }
     val profileState by editProfileViewModel.profileState.collectAsState()
-    val businessEntity by editProfileViewModel.businessEntity.collectAsState()
+    val provider = (profileState as? ProfileState.Success)?.provider
+    val businessEntity = provider?.companies?.firstOrNull()
 
     // --- SECCIÓN: OBTENCIÓN DE DATOS REALES DEL PERFIL ---
     val isProfessional = (profileState as? ProfileState.Success) ?.provider?.serviceType.equals("PROFESSIONAL", ignoreCase = true) == true
-    val provider = ( profileState as? ProfileState.Success)?.provider
     
     // Usar utilidades de visualización para datos reales
     val providerDisplayName = provider?.displayCompanyOrFullName(businessEntity) ?: "Prestador"
@@ -84,7 +87,7 @@ fun BudgetChatSheet(
     val taxes = remember { mutableStateListOf<BudgetTax>() }
 
     // --- DATOS DEL CLIENTE ---
-    var clienteData by remember { mutableStateOf<ClienteEntity?>(null) }
+    var clienteData by remember { mutableStateOf<User?>(null) }
     var overrideClientAddress by remember { mutableStateOf(initialClientAddress) }
     LaunchedEffect(Unit) {
         android.util.Log.d("DEBUG_ADDRESS", "🏠 BudgetChatSheet init | initialClientAddress = '$initialClientAddress' | overrideClientAddress = '$overrideClientAddress'")
@@ -95,7 +98,7 @@ fun BudgetChatSheet(
     LaunchedEffect(userId) {
         if (userId.isNotBlank())  {
             clienteData = viewModel.getClienteById(userId)
-            android.util.Log.d("DEBUG_ADDRESS", "👤 clienteData loaded | direccion = '${clienteData?.direccion}' | overrideClientAddress = '$overrideClientAddress'")
+            android.util.Log.d("DEBUG_ADDRESS", "👤 clienteData loaded | direccion = '${clienteData?.mainAddress?.fullString()}' | overrideClientAddress = '$overrideClientAddress'")
         }
     }
 
@@ -315,13 +318,13 @@ fun BudgetChatSheet(
                             color = colors.textSecondary
                         )
                         Text(
-                            userName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.textPrimary
-                        )
-                        val displayAddr = overrideClientAddress?.takeIf { it.isNotBlank() }
-                            ?: clienteData?.direccion?.takeIf { it.isNotBlank() }
+                    text = userName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary
+                )
+                val displayAddr = overrideClientAddress?.takeIf { it.isNotBlank() }
+                    ?: clienteData?.mainAddress?.fullString()?.takeIf { it.isNotBlank() }
                         if (displayAddr != null) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -334,7 +337,7 @@ fun BudgetChatSheet(
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Text(
-                                    displayAddr,
+                                    text = displayAddr ?: "Sin dirección",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = colors.textSecondary
                                 )
@@ -1016,11 +1019,11 @@ fun BudgetChatSheet(
         if (prestadorReal != null) {
             BudgetPreviewPDFDialog(
                 prestador = prestadorReal,
-                items = items,
-                services = services,
-                professionalFees = professionalFees,
-                miscExpenses = miscExpenses,
-                taxes = taxes,
+                items = items.toList(),
+                services = services.toList(),
+                professionalFees = professionalFees.toList(),
+                miscExpenses = miscExpenses.toList(),
+                taxes = taxes.toList(),
                 grandTotal = grandTotal,
                 subtotal = subtotal,
                 taxAmount = itemsTaxTotal + taxesSubtotal,
@@ -1039,18 +1042,18 @@ fun BudgetChatSheet(
                     coroutineScope.launch {
                         if (clienteData == null) {
                             viewModel.insertCliente(
-                                ClienteEntity(
-                                    id = userId,
-                                    nombre = userName,
-                                    email = "",
-                                    telefono = "",
-                                    direccion = overrideClientAddress?.takeIf { it.isNotBlank() } ?: ""
+                                User(
+                                    uid = userId,
+                                    name = userName,
+                                    personalAddresses = listOf(AddressUnico(calle = overrideClientAddress ?: ""))
                                 )
                             )
                             kotlinx.coroutines.delay(100)
-                        } else if (!overrideClientAddress.isNullOrBlank() && clienteData?.direccion.isNullOrBlank()) {
+                        } else if (!overrideClientAddress.isNullOrBlank() && clienteData?.mainAddress?.fullString().isNullOrBlank()) {
                             // Si ya existe pero sin dirección, actualizarla con la que llegó del request
-                            viewModel.insertCliente(clienteData!!.copy(direccion = overrideClientAddress))
+                            viewModel.insertCliente(clienteData!!.copy(
+                                personalAddresses = listOf(AddressUnico(calle = overrideClientAddress!!))
+                            ))
                             kotlinx.coroutines.delay(100)
                         }
                         viewModel.insertPresupuesto(pres)
@@ -1061,7 +1064,7 @@ fun BudgetChatSheet(
                 },
                 clientName = userName,
                 clientAddress = overrideClientAddress?.takeIf { it.isNotBlank() }
-                    ?: clienteData?.direccion?.takeIf { it.isNotBlank() },
+                    ?: (clienteData?.mainAddress?.fullString()?.takeIf { it.isNotBlank() } ?: "Sin dirección"),
                 category = selectedBudgetCategory,
                 validezDias = validity.toIntOrNull() ?: 15
             )

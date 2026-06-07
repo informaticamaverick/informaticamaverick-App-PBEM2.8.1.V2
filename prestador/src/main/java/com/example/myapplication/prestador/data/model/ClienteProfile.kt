@@ -1,5 +1,12 @@
 package com.example.myapplication.prestador.data.model
 
+/* 
+ * ARCHIVO EN DESUSO
+ * Motivo: Se ha centralizado la fuente de verdad en com.example.myapplication.core.domain.model.User
+ * Por favor, utilizar el modelo de dominio User del módulo :core en lugar de ClienteProfile.
+ */
+
+/*
 data class ClienteProfile(
     val clientId: String = "",
     val name: String = "",
@@ -9,7 +16,6 @@ data class ClienteProfile(
     val phoneNumber: String = "",
     val bio: String = "",
     val photoUrl: String? = null,
-    val bannerImageUrl: String? = null,
     val isVerified: Boolean = false,
     val isOnline: Boolean = false,
     val isSubscribed: Boolean = false,
@@ -51,7 +57,6 @@ data class ClienteEmpresa(
     val email: String = "",
     val phoneNumber: String = "",
     val photoUrl: String? = null,
-    val bannerImageUrl: String? = null,
     val branches: List<ClienteSucursal> = emptyList()
 )
 
@@ -62,3 +67,4 @@ data class ClienteSucursal(
     val galleryImages: List<String> = emptyList(),
     val address: ClienteDireccion = ClienteDireccion()
 )
+*/

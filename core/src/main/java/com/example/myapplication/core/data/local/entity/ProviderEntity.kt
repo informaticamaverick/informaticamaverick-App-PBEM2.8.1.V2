@@ -1,39 +1,50 @@
 package com.example.myapplication.core.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.domain.model.CompanyProvider
 import com.example.myapplication.core.domain.model.Provider
 
 /**
  * --- ENTIDAD DE PRESTADOR (ROOM) ---
- * Almacena el perfil completo de un prestador en la base de datos local.
- * Esto permite búsquedas rápidas ("Costo Cero") sin consultar siempre a Firebase.
+ * [ELITE v5.1]: Usa AddressUnico y mantiene metadatos de búsqueda.
  */
-@Entity(tableName = "provider_profile")
+@Entity(
+    tableName = "provider_profile",
+    indices = [Index(value = ["providerId"])] // [LEY #4] Optimización para Ley Pareja
+)
 data class ProviderEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey val id: String, // ID único del punto de servicio (ej: uid_branchId)
+    val providerId: String,    // UID real del prestador (para agrupamiento Ley Pareja)
 
-    // --- DATOS DE CONTACTO ---
-    val email: String,
-    val alternateEmail: String? = null,
-    val emails: List<String> = emptyList(),
-    val phoneNumber: String,
-    val additionalPhones: List<String> = emptyList(),
+    // --- MULTIMEDIA ---
+    val photoUrl: String? = null,
+    val profileThumbnail: String? = null, // [LEY #3]
 
     // --- DATOS DEL PROFESIONAL ---
     val displayName: String,
     val name: String,
     val lastName: String,
     val matricula: String? = null,
-    val titulo: String? = null,
+    val profesion: String? = null,
     val cuilCuit: String? = null,
-    val profesion: String? = null, // [SSOT: Agregado para unificación prestador]
-    val addresses: List<AddressProvider> = emptyList(),
-    val address: AddressProvider? = null,
+    val description: String = "",
 
-    // --- CAPACIDADES ---
+    // --- CONTACTO ---
+    val email: String,
+    val emails: List<String> = emptyList(),
+    val phoneNumber: String,
+
+    // --- UBICACIONES ---
+    val addresses: List<AddressUnico> = emptyList(),
+    val address: AddressUnico? = null,
+
+    // --- ESTRUCTURA EMPRESARIAL ---
+    val companies: List<CompanyProvider> = emptyList(),
+
+    // --- CAPACIDADES (FILTROS) ---
     val doesService: Boolean = false,
     val doesProduct: Boolean = false,
     val works24h: Boolean = false,
@@ -41,68 +52,51 @@ data class ProviderEntity(
     val doesHomeVisits: Boolean = false,
     val doesShipping: Boolean = false,
     val acceptsAppointments: Boolean = false,
-    val trabajaConOtros: Boolean = false, // [SSOT: Agregado para unificación prestador]
+    val trabajaConOtros: Boolean = false,
 
     // --- ESTADOS ---
     val isSubscribed: Boolean = false,
     val isVerified: Boolean = false,
-    val isFavorite: Boolean = false,
     val isOnline: Boolean = false,
+    val isFavorite: Boolean = false,
+    val priorizarEmpresa: Boolean = false,
+
 
     // --- VALORACIÓN Y CATEGORÍAS ---
     val rating: Float = 0f,
     val workingHours: String = "",
     val categories: List<String> = emptyList(),
-    val description: String = "",
+    val serviceType: String? = null,
+    val fullAddress: String? = null, // [ELITE] Dirección pre-formateada
+    val geohash: String? = null, // [ELITE] Para proximidad
 
-    // --- PERFIL EMPRESARIAL ---
-    val companies: List<CompanyProvider> = emptyList(),
-    val hasCompanyProfile: Boolean = false,
-    val priorizarEmpresa: Boolean = false,
-
-    // --- MULTIMEDIA ---
-    val photoUrl: String? = null,
-    val bannerImageUrl: String? = null,
-    val galleryImages: List<String> = emptyList(),
-    val favoriteProviderIds: List<String> = emptyList(),
-    val serviceType: String = "PROFESSIONAL", // [SSOT: Agregado para unificación prestador]
-    val createdAt: Long
+    // --- METADATOS ELITE ---
+    val latitude: Double = 0.0, // Denormalizado para búsqueda rápida
+    val longitude: Double = 0.0, // Denormalizado para búsqueda rápida
+    val lastSyncTimestamp: Long = 0L,
+    val createdAt: Long = System.currentTimeMillis()
 ) {
     /**
      * Mapea la entidad de Room al modelo de Dominio puro.
-     * [ELITE SSOT]: Procesa las imágenes para consumo directo en UI.
      */
     fun toDomain(): Provider {
-        val processedCompanies = companies.map { company ->
-            company.copy(
-                profileImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(company.photoUrl),
-                bannerImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(company.bannerImageUrl),
-                branches = company.branches.map { branch ->
-                    branch.copy(
-                        employees = branch.employees.map { emp ->
-                            emp.copy(profileImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(emp.photoUrl))
-                        }
-                    )
-                }
-            )
-        }
-
         return Provider(
-            uid = id,
-            email = email,
-            alternateEmail = alternateEmail,
-            emails = emails,
-            phoneNumber = phoneNumber,
-            additionalPhones = additionalPhones,
+            uid = providerId, // [ELITE] Recuperamos el UID real del prestador
+            photoUrl = photoUrl,
+            profileThumbnail = profileThumbnail,
             displayName = displayName,
             name = name,
             lastName = lastName,
             matricula = matricula,
             profesion = profesion,
-            titulo = titulo,
             cuilCuit = cuilCuit,
+            description = description,
+            email = email,
+            emails = emails,
+            phoneNumber = phoneNumber,
             addresses = addresses,
-            address = address,
+            address = address?.copy(latitude = latitude, longitude = longitude) ?: address,
+            companies = companies,
             doesService = doesService,
             doesProduct = doesProduct,
             works24h = works24h,
@@ -113,22 +107,14 @@ data class ProviderEntity(
             trabajaConOtros = trabajaConOtros,
             isSubscribed = isSubscribed,
             isVerified = isVerified,
-            isFavorite = isFavorite,
             isOnline = isOnline,
+            isFavorite = isFavorite,
+            priorizarEmpresa = priorizarEmpresa,
             rating = rating,
             workingHours = workingHours,
             categories = categories,
-            description = description,
-            companies = processedCompanies,
-            hasCompanyProfile = hasCompanyProfile,
-            priorizarEmpresa = priorizarEmpresa,
-            photoUrl = photoUrl,
-            bannerImageUrl = bannerImageUrl,
-            profileImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(photoUrl),
-            bannerImage = com.example.myapplication.core.utils.ImageUtils.processImageSource(bannerImageUrl),
-            galleryImages = galleryImages,
-            favoriteProviderIds = favoriteProviderIds,
             serviceType = serviceType,
+            lastSyncTimestamp = lastSyncTimestamp,
             createdAt = createdAt
         )
     }
@@ -139,20 +125,22 @@ data class ProviderEntity(
          */
         fun fromDomain(p: Provider): ProviderEntity = ProviderEntity(
             id = p.uid,
-            email = p.email,
-            alternateEmail = p.alternateEmail,
-            emails = p.emails,
-            phoneNumber = p.phoneNumber,
-            additionalPhones = p.additionalPhones,
+            providerId = p.uid, // Por defecto coinciden
+            photoUrl = p.photoUrl,
+            profileThumbnail = p.profileThumbnail,
             displayName = p.displayName,
             name = p.name,
             lastName = p.lastName,
             matricula = p.matricula,
             profesion = p.profesion,
-            titulo = p.titulo,
             cuilCuit = p.cuilCuit,
+            description = p.description,
+            email = p.email,
+            emails = p.emails,
+            phoneNumber = p.phoneNumber,
             addresses = p.addresses,
             address = p.address,
+            companies = p.companies,
             doesService = p.doesService,
             doesProduct = p.doesProduct,
             works24h = p.works24h,
@@ -163,20 +151,17 @@ data class ProviderEntity(
             trabajaConOtros = p.trabajaConOtros,
             isSubscribed = p.isSubscribed,
             isVerified = p.isVerified,
-            isFavorite = p.isFavorite,
             isOnline = p.isOnline,
+            isFavorite = p.isFavorite,
+            priorizarEmpresa = p.priorizarEmpresa,
             rating = p.rating,
             workingHours = p.workingHours,
             categories = p.categories,
-            description = p.description,
-            companies = p.companies,
-            hasCompanyProfile = p.hasCompanyProfile,
-            priorizarEmpresa = p.priorizarEmpresa,
-            photoUrl = p.photoUrl,
-            bannerImageUrl = p.bannerImageUrl,
-            galleryImages = p.galleryImages,
-            favoriteProviderIds = p.favoriteProviderIds,
             serviceType = p.serviceType,
+            fullAddress = p.address?.fullString(),
+            latitude = p.address?.latitude ?: 0.0,
+            longitude = p.address?.longitude ?: 0.0,
+            lastSyncTimestamp = p.lastSyncTimestamp,
             createdAt = p.createdAt
         )
     }

@@ -36,7 +36,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import java.util.UUID
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.prestador.ui.presupuesto.components.*
 import com.example.myapplication.prestador.ui.presupuesto.*
 
@@ -1633,9 +1633,9 @@ fun ClientDetailsSheetContent(
 
 @Composable
 fun ClientPickerSheetContent(
-    clientes: List<ClienteEntity>,
+    clientes: List<User>,
     selectedClienteId: String?,
-    onSelectCliente: (ClienteEntity) -> Unit,
+    onSelectCliente: (User) -> Unit,
     onClose: () -> Unit
 ) {
     val colors = getPrestadorColors()
@@ -1645,9 +1645,10 @@ fun ClientPickerSheetContent(
         val q = query.trim().lowercase()
         if (q.isBlank()) clientes
         else clientes.filter { c ->
-            c.nombre.lowercase().contains(q) ||
-                (c.email ?: "").lowercase().contains(q) ||
-                (c.telefono ?: "").lowercase().contains(q)
+            c.name.lowercase().contains(q) ||
+                c.lastName.lowercase().contains(q) ||
+                c.email.lowercase().contains(q) ||
+                c.phoneNumber.lowercase().contains(q)
         }
     }
 
@@ -1713,8 +1714,8 @@ fun ClientPickerSheetContent(
                     .heightIn(max = 420.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filtered, key = { it.id }) { cliente ->
-                    val isSelected = cliente.id == selectedClienteId
+                items(filtered, key = { it.uid }) { cliente ->
+                    val isSelected = cliente.uid == selectedClienteId
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
@@ -1724,15 +1725,15 @@ fun ClientPickerSheetContent(
                         onClick = { onSelectCliente(cliente) }
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text(cliente.nombre, color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
+                            Text(cliente.fullName, color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
                             val line2 = listOfNotNull(
-                                cliente.telefono?.takeIf { it.isNotBlank() },
-                                cliente.email?.takeIf { it.isNotBlank() }
+                                cliente.phoneNumber.takeIf { it.isNotBlank() },
+                                cliente.email.takeIf { it.isNotBlank() }
                             ).joinToString(" • ")
                             if (line2.isNotBlank()) {
                                 Text(line2, color = colors.textSecondary, style = MaterialTheme.typography.bodySmall)
                             }
-                            val addr = cliente.direccion?.takeIf { it.isNotBlank() }
+                            val addr = cliente.mainAddress?.fullString()?.takeIf { it.isNotBlank() }
                             if (addr != null) {
                                 Text(addr, color = colors.textSecondary, style = MaterialTheme.typography.bodySmall)
                             }

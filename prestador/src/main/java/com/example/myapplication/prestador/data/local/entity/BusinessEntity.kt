@@ -1,14 +1,18 @@
 package com.example.myapplication.prestador.data.local.entity
 
+/*
+ * ARCHIVO EN DESUSO
+ * Motivo: Se ha centralizado la fuente de verdad en los modelos del módulo :core.
+ * Las empresas ahora se gestionan mediante CompanyProvider y la estructura unificada
+ * definida en com.example.myapplication.core.domain.model.CompanyModelsProvider
+ */
+
+/*
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-
-/**
- * Entidad de base de datos: Business (negocio)
- * Guarda la información del negocio del prestador
- */
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 
 @Entity(
     tableName = "business",
@@ -62,3 +66,4 @@ data class BusinessEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+*/

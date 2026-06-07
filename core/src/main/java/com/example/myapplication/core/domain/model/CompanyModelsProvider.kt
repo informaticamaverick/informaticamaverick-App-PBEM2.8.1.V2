@@ -5,38 +5,32 @@ import java.util.UUID
 /**
  * --- MODELOS DE EMPRESA Y SUCURSALES (LADO PRESTADOR) ---
  * Estructura jerárquica para representar la organización de un prestador profesional.
+ * [ELITE v5.1]: Mantiene categorías y flags de servicio para búsqueda.
  */
 
-/**
- * Modelo de Empresa Profesional.
- */
 data class CompanyProvider(
     val id: String = UUID.randomUUID().toString(),
-    val name: String = "", // Nombre de fantasía
+    val name: String = "",
     val razonSocial: String = "",
+    val description: String = "",
     val cuit: String = "",
     val email: String = "",
-    val description: String = "",
     val rating: Float = 0f,
     val photoUrl: String? = null,
-    val bannerImageUrl: String? = null,
-    val profileImage: Any? = null,
-    val bannerImage: Any? = null,
+    val thumbnailBase64: String? = null, // [LEY #3]
     val categories: List<String> = emptyList(),
     val isVerified: Boolean = false,
     val branches: List<BranchProvider> = emptyList()
 )
 
-/**
- * Modelo de Sucursal Profesional.
- */
 data class BranchProvider(
     val id: String = UUID.randomUUID().toString(),
-    val name: String = "", 
-    val address: AddressProvider = AddressProvider(),
-    val workingHours: String = "",
-    val employees: List<EmployeeProvider> = emptyList(),
-    val galleryImages: List<String> = emptyList(),
+    val name: String = "",
+    val description: String = "",
+    val workingHours: String = "", 
+    val address: AddressUnico = AddressUnico(),
+
+    // Flags de servicio (Esenciales para el buscador del Cliente)
     val doesService: Boolean = false,
     val doesProduct: Boolean = false,
     val works24h: Boolean = false,
@@ -44,18 +38,15 @@ data class BranchProvider(
     val doesHomeVisits: Boolean = false,
     val doesShipping: Boolean = false,
     val acceptsAppointments: Boolean = false,
+    
+    val team: List<EmployeeProvider> = emptyList(),
     val rating: Float = 0f
 )
 
-/**
- * Modelo de Empleado o Miembro del Equipo.
- */
 data class EmployeeProvider(
     val id: String = UUID.randomUUID().toString(),
     val name: String = "",
     val lastName: String = "",
-    val position: String = "", // Rol (Ej: Referente, Técnico)
-    val detail: String = "",
-    val photoUrl: String? = null,
-    val profileImage: Any? = null
+    val position: String = "",
+    val detail: String = ""
 )

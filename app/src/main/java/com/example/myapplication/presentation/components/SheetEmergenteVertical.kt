@@ -81,12 +81,13 @@ fun SheetEmergenteVertical(
     val density = LocalDensity.current
     var screenHeight by remember { mutableFloatStateOf(0f) }
     
-    // Estados de anclaje (en píxeles desde el tope)
-    val hiddenAnchor = screenHeight
-    val partialAnchor = screenHeight * 0.4f // 60% visible
-    val fullAnchor = with(density) { topOffset.toPx() }
+    // 🔥 [OPTIMIZACIÓN MAVERICK]: Usamos derivedStateOf para que los anclajes se recalculen 
+    // eficientemente solo cuando screenHeight cambie, sin disparar recomposiciones masivas.
+    val hiddenAnchor by remember { derivedStateOf { screenHeight } }
+    val partialAnchor by remember { derivedStateOf { screenHeight * 0.4f } }
+    val fullAnchor by remember { derivedStateOf { with(density) { topOffset.toPx() } } }
 
-    // Offset actual animado usando Animatable para control total
+    // Offset actual animado
     val animatableOffset = remember { Animatable(3000f) }
     var isInitialized by remember { mutableStateOf(false) }
 
@@ -94,19 +95,18 @@ fun SheetEmergenteVertical(
     var lastVisible by remember { mutableStateOf(isVisible) }
     var isActuallyAnimatingOut by remember { mutableStateOf(false) }
 
-    // [SSOT VISIBILIDAD] Determinamos si la sheet debe estar en la composición.
-    // Combinamos el estado actual, el backup de animación y la detección instantánea de salida (evita el gap de 1 frame).
     val shouldBeComposed = isVisible || isActuallyAnimatingOut || (lastVisible && !isVisible)
 
     // Sincronización con isVisible y screenHeight
     LaunchedEffect(isVisible, screenHeight) {
         if (screenHeight > 0) {
-            // Si es la primera vez que conocemos el alto, posicionamos en el fondo sin animar
             if (!isInitialized) {
-                // Forzamos el snap al alto real capturado
                 animatableOffset.snapTo(screenHeight)
                 isInitialized = true
-                android.util.Log.d("MAVERICK_HUD", "[$title] HUD Initialized at screenHeight: $screenHeight")
+                // Log movido a un hilo secundario para no bloquear el arranque
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    android.util.Log.d("MAVERICK_HUD", "[$title] HUD Initialized at screenHeight: $screenHeight")
+                }
             }
 
             // Detectamos si estamos iniciando una animación de salida deliberada

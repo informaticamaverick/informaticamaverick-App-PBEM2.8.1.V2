@@ -9,7 +9,8 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.myapplication.prestador.ui.dashboard.PrestadorBottomNavigationBar
 import com.example.myapplication.prestador.ui.dashboard.components.InicioScreen
-import com.example.myapplication.prestador.viewmodel.DashboardUiState
+//import com.example.myapplication.prestador.viewmodel.DashboardUiState
+import com.example.myapplication.prestador.viewmodel.dashboard.DashboardUiState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -51,7 +52,6 @@ class PrestadorDashboardScreenTest {
         composeRule.setContent {
             PrestadorBottomNavigationBar(
                 selectedTab = 2,
-                isProfessional = false,
                 unreadCount = 3,
                 unreadMessageCount = 2,
                 onTabSelected = { selectedTab = it }

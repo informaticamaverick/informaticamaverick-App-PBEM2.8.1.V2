@@ -63,14 +63,14 @@ La aplicación utiliza una política de **Costo Cero** en multimedia, evitando e
 ## 🛠️ 4. PROCEDIMIENTOS TÉCNICOS ESPECÍFICOS
 
 ### Cómo Eliminar Conversaciones
-*   **Función:** `deleteChats(chatIds: List<String>)`
+*   **Función:** `deleteConversations(chatIds: List<String>)`
 *   **Proceso:** 
     1.  `chatDao.deleteMessagesByChatIds(ids)` (Limpia Room).
     2.  `database.reference.child("chats").child(id).removeValue()` (Limpia RTDB).
     3.  `firestore.collection("chats").document(id).update("participants", FieldValue.arrayRemove(myUid))` (Salida silenciosa de Firestore).
 
 ### Cómo Marcar como Leído
-*   **Función:** `markChatAsRead(chatId, myUserId)`
+*   **Función:** `markMessagesAsRead(chatId, myUserId)`
 *   **Acción:** Actualiza Room localmente y envía un `setValue(true)` al campo `isRead` en el nodo del mensaje en RTDB.
 
 ---

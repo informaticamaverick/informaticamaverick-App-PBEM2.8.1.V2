@@ -1,3 +1,4 @@
+/**
 package com.example.myapplication.prestador.data.local.dao
 
 import androidx.room.*
@@ -25,3 +26,4 @@ interface DireccionDao {
     suspend fun deleteDireccionesByReferencia(referenciaId: String)
 
 }
+*/

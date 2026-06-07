@@ -35,6 +35,7 @@ data class TenderEntity(
     val awardedProviderName: String? = null,
     val awardedBudgetId: String? = null,
     val awardedProviderPhotoUrl: String? = null,
+    val awardedProviderThumbnail: String? = null, // [ELITE v5.4]
 
     // Cláusulas
     val requiresVisit: Boolean = false,
@@ -78,6 +79,7 @@ data class BudgetEntity(
     val providerName: String,
     val providerCompanyName: String? = null,
     val providerPhotoUrl: String? = null,
+    val providerThumbnail: String? = null, // [ELITE v5.4]
 
     // Contenido del presupuesto (se guardan como JSON mediante Converters)
     val items: List<BudgetItem> = emptyList(),

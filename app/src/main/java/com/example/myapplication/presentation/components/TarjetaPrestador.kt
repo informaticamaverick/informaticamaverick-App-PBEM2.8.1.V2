@@ -10,7 +10,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -28,10 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -41,13 +39,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -57,7 +59,12 @@ import com.example.myapplication.data.model.ProviderDisplayModel
 
 import com.example.myapplication.presentation.designsystem.components.BentoActionButton
 import com.example.myapplication.presentation.designsystem.components.PremiumDividerV3
+import com.example.myapplication.presentation.designsystem.components.MenuTacticoBe
+import com.example.myapplication.presentation.designsystem.components.AutoSizeText
+import com.example.myapplication.presentation.designsystem.components.asCompact
+import com.example.myapplication.presentation.designsystem.components.*
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import com.example.myapplication.core.data.local.entity.UserEntity
 
 /**
  * Clase de utilidad para representar los datos de un Badge con estado activo/inactivo.
@@ -159,6 +166,8 @@ fun PrestadorCardV3(
     onClick: () -> Unit,
     onChatClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isShortcut: Boolean = false,
+    onManageShortcut: (Boolean) -> Unit = {},
     isCompact: Boolean = false,
     // --- VARIABLES DE TAMAÑO DE LETRA ---
     titleFontSize: TextUnit = 12.sp,
@@ -182,8 +191,6 @@ fun PrestadorCardV3(
     horizontalSpacingAvatarInfo: Dp = 8.dp
 ) {
     // --- SECCIÓN: ANIMACIÓN DE ALTURA ---
-    // [OPTIMIZACIÓN]: Se usa un valor estático si no es necesario animar para reducir carga en scroll
-    // [MODIFICACIÓN]: Se aumentó el tamaño de 56.dp a 74.dp para evitar que el avatar se encoja en modo compacto
     val animatedHeight by animateDpAsState(
         targetValue = if (isCompact) 74.dp else 235.dp,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
@@ -193,6 +200,8 @@ fun PrestadorCardV3(
     // --- SECCIÓN: PALETA DE COLORES Y CONFIGURACIÓN ---
     val maverickBlue = Color(0xFF22D3EE)
     val haptic = LocalHapticFeedback.current
+    var showContextMenu by remember { mutableStateOf(false) }
+    var touchOffset by remember { mutableStateOf(Offset.Zero) }
 
     val maverickPurple = Color(0xFF9B51E0)
     val darkCardBg = Color(0xFF1A1F26)
@@ -205,7 +214,9 @@ fun PrestadorCardV3(
             .height(animatedHeight)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onLongPress = {
+                    onLongPress = { offset ->
+                        touchOffset = offset
+                        showContextMenu = true
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
                     onTap = { onClick() }
@@ -228,12 +239,11 @@ fun PrestadorCardV3(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(modifier = Modifier.size(avatarSize)) {
-                        // [OPTIMIZACIÓN COIL]: Se añade control de tamaño para evitar lag en scroll
                         AsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(provider.photoUrl)
                                 .crossfade(true)
-                                .size(150, 150) // Limita el tamaño de decodificación
+                                .size(150, 150)
                                 .build(),
                             contentDescription = null,
                             modifier = Modifier
@@ -273,17 +283,27 @@ fun PrestadorCardV3(
                             color = Color.White,
                             fontSize = titleFontSize,
                             fontWeight = FontWeight.ExtraBold,
-                            maxLines = 2,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             lineHeight = 10.sp
                         )
 
-                        // --- Fila de Estado: [LEER DEL MODELO] Pre-calculado ---
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                            Text(text = provider.typeEmoji, fontSize = statusEmojiSize)
+                        // [ELITE] Tag de Identidad (Empresa vs Sucursal vs Personal)
+                        val identityLabel = when {
+                            provider.branchId != null -> "📍 Sucursal: ${provider.branchName}"
+                            provider.companyId != null -> "🏢 Empresa"
+                            else -> "👨‍🔧 Profesional"
+                        }
+                        Text(
+                            text = identityLabel,
+                            color = maverickBlue,
+                            fontSize = (addressFontSize.value + 1).sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
 
-                            Spacer(Modifier.width(16.dp))
-
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(10.dp))
                             Text(
                                 text = " ${"%.1f".format(provider.rating)}", 
@@ -298,19 +318,9 @@ fun PrestadorCardV3(
                 if (!isCompact) {
                     PremiumDividerV3(maverickPurple, verticalPadding = verticalPaddingBetweenSections)
 
-                    // --- SECCIÓN: INFO (Sucursal/Ubicación + Dirección) ---
                     Column(modifier = Modifier.fillMaxWidth().padding(top = 1.dp)) {
                         Text(
-                            text = provider.branchName ?: "Dirección", 
-                            color = maverickBlue,
-                            fontSize = branchFontSize,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                           modifier = Modifier.padding(top = 0.dp),
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = provider.displayAddress ?: "", 
+                            text = provider.displayAddress ?: "Ubicación",
                             color = Color.Gray,
                             fontSize = addressFontSize,
                             maxLines = 2,
@@ -322,12 +332,10 @@ fun PrestadorCardV3(
 
                     PremiumDividerV3(maverickPurple, verticalPadding = verticalPaddingBetweenSections)
 
-                    // --- SECCIÓN: FOOTER (Badges Expandidos + Botón Chat Bento) ---
                     Column(
                         modifier = Modifier.fillMaxWidth().weight(1f),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        // --- Grid de Badges: [LEER DEL MODELO] Pre-calculado ---
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             provider.badgeList.chunked(4).forEach { rowBadges ->
                                 Row(
@@ -341,7 +349,6 @@ fun PrestadorCardV3(
                             }
                         }
 
-                        // --- Botón de Mensaje: BentoActionButton Premium ---
                         BentoActionButton(
                             text = "MENSAJE",
                             emoji = "💬",
@@ -357,6 +364,20 @@ fun PrestadorCardV3(
                     }
                 }
             }
+
+            // --- MENU TACTICO BE (AL ESTILO SUPERCATEGORIA) ---
+            MenuTacticoBe(
+                isVisible = showContextMenu,
+                onDismissRequest = { showContextMenu = false },
+                onAction = {
+                    onManageShortcut(!isShortcut)
+                    showContextMenu = false
+                },
+                touchOffset = touchOffset,
+                emotion = if (isShortcut) BeEmotion.SAD else BeEmotion.HAPPY,
+                actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
+                actionIconEmoji = "📌"
+            )
         }
     }
 }
@@ -393,240 +414,13 @@ fun PrestadorCardV3Preview() {
                 ),
                 onClick = {},
                 onChatClick = {},
-
+                isShortcut = false,
+                onManageShortcut = {}
             )
         }
     }
 }
 
-// ==========================================================================================
-// ---------- TARJETA PRESTADOR MODERN (BENTO & GLASS STYLE) -------------------------------
-// ==========================================================================================
-
-/**
- * PRESTADOR CARD MODERN: Inspirada en el diseño de tarjetas de Google Play Games y
- * los widgets de iOS. Utiliza una estructura de "Bento" refinada.
- */
-@Composable
-fun PrestadorCardModern(
-    provider: com.example.myapplication.data.model.ProviderDisplayModel,
-    onClick: () -> Unit,
-    onChatClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val haptic = LocalHapticFeedback.current
-    val accentColor = Color(0xFF22D3EE) // Maverick Blue
-    val cardBg = Color(0xFF1A1F26)      // Dark Surface
-
-    Surface(
-        modifier = modifier
-            .width(165.dp)
-            .height(250.dp)
-            .clickable {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onClick()
-            },
-        shape = RoundedCornerShape(28.dp), // Esquinas muy redondeadas (Estilo iOS/M3)
-        color = cardBg,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-        shadowElevation = 10.dp
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // --- DECORACIÓN: Gradiente de fondo sutil (Glow) ---
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .offset(x = 110.dp, y = (-30).dp)
-                    .background(accentColor.copy(alpha = 0.12f), CircleShape)
-            )
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp)
-            ) {
-                // --- CABECERA: Avatar Flotante + Rating Pill ---
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Box {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(provider.photoUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(54.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .border(1.5.dp, Color.White.copy(0.15f), RoundedCornerShape(18.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        if (provider.isOnline) {
-                            Box(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .align(Alignment.TopStart)
-                                    .offset((-3).dp, (-3).dp)
-                                    .background(Color(0xFF34D399), CircleShape)
-                                    .border(2.dp, cardBg, CircleShape)
-                            )
-                        }
-                    }
-
-                    // Rating Pill (Estilo Google Maps/Play)
-                    Row(
-                        modifier = Modifier
-                            .clip(CircleShape)
-                            .background(Color.White.copy(0.1f))
-                            .padding(horizontal = 7.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(11.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text(
-                            text = provider.rating.toString(),
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                // --- CUERPO: Títulos con jerarquía visual ---
-                Text(
-                    text = provider.title,
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = provider.typeLabel.uppercase(),
-                    color = accentColor.copy(alpha = 0.8f),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.8.sp
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                // --- BENTO TILE: Ubicación (Contenedor traslúcido) ---
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.04f))
-                        .border(0.5.dp, Color.White.copy(0.08f), RoundedCornerShape(16.dp))
-                        .padding(10.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.Center) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Storefront, null, tint = accentColor, modifier = Modifier.size(12.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = provider.branchName ?: "Disponible",
-                                color = Color.White.copy(0.9f),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = provider.displayAddress ?: "",
-                            color = Color.Gray,
-                            fontSize = 9.sp,
-                            lineHeight = 11.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // --- FOOTER: Botones de Acción Modernos ---
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Botón Círculo Chat (Estilo iOS)
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(0.08f))
-                            .clickable { onChatClick() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("💬", fontSize = 16.sp)
-                    }
-
-                    // Botón Principal (Pill Shape - Estilo Material You)
-                    Surface(
-                        onClick = onClick,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp),
-                        shape = CircleShape,
-                        color = accentColor
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "VER MÁS",
-                                color = Color.Black,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==========================================================================================
-// ---------- PREVIEW MODERN ----------------------------------------------------------------
-// ==========================================================================================
-
-@Preview(showBackground = true, backgroundColor = 0xFF0A0E14)
-@Composable
-fun PrestadorCardModernPreview() {
-    MyApplicationTheme {
-        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            PrestadorCardModern(
-                provider = com.example.myapplication.data.model.ProviderDisplayModel(
-                    id = "2",
-                    title = "Nexus Solutions",
-                    subtitle = "Soporte Técnico IT",
-                    photoUrl = "https://picsum.photos/seed/tech/200/200",
-                    rating = 4.8,
-                    isVerified = true,
-                    isOnline = true,
-                    type = com.example.myapplication.data.model.ProviderType.COMPANY,
-                    typeEmoji = "🚀",
-                    typeLabel = "Socio Tecnológico",
-                    badgeList = listOf(),
-                    isSubscribed = true,
-                    branchName = "Silicon Valley",
-                    displayAddress = "Palo Alto, California, US"
-                ),
-                onClick = {},
-                onChatClick = {}
-            )
-        }
-    }
-}
 // ==========================================================================================
 // ---------- SECCIÓN: COLORES ESTILO TAILWIND ----------------------------------------------
 // ==========================================================================================
@@ -1044,10 +838,12 @@ fun ServiceCardPreview() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PrestadorCardV4(
-    provider: com.example.myapplication.data.model.ProviderDisplayModel,
+    provider: ProviderDisplayModel,
     onClick: () -> Unit,
     onChatClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isShortcut: Boolean = false,
+    onManageShortcut: (Boolean) -> Unit = {},
     isCompact: Boolean = false,
     
     // --- VARIABLES DE TAMAÑO ---
@@ -1056,6 +852,8 @@ fun PrestadorCardV4(
     badgeSize: Dp = 24.dp
 ) {
     val haptic = LocalHapticFeedback.current
+    var showContextMenu by remember { mutableStateOf(false) }
+    var touchOffset by remember { mutableStateOf(Offset.Zero) }
     
     // Animación de altura similar a V3 pero con valores ajustados al nuevo diseño
     val animatedHeight by animateDpAsState(
@@ -1070,7 +868,11 @@ fun PrestadorCardV4(
             .height(animatedHeight)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onLongPress = { offset ->
+                        touchOffset = offset
+                        showContextMenu = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
                     onTap = { onClick() }
                 )
             },
@@ -1079,157 +881,173 @@ fun PrestadorCardV4(
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
         border = BorderStroke(1.dp, Slate100)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp)
-        ) {
-            // --- CABECERA: Avatar con Glow y Online Status ---
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(12.dp)
             ) {
-                Box {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(provider.photoUrl)
-                            .crossfade(true)
-                            .size(150, 150)
-                            .build(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(avatarSize)
-                            .clip(CircleShape)
-                            .border(2.dp, Blue50, CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                    
-                    // Indicador Online (Elena Style)
-                    if (provider.isOnline) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(14.dp)
-                                .background(Green500, CircleShape)
-                                .border(2.dp, Color.White, CircleShape)
-                        )
-                    }
-                }
-
-                if (!isCompact) {
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        // Rating Pill Compacto
-                        Row(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(Blue50)
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Star, null, tint = Yellow400, modifier = Modifier.size(10.dp))
-                            Text(
-                                text = "%.1f".format(provider.rating),
-                                color = Blue600,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // --- TÍTULOS Y SUBTÍTULOS ---
-            Text(
-                text = provider.title,
-                color = Slate800,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = if (isCompact) 1 else 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 16.sp
-            )
-            
-            Text(
-                text = provider.typeLabel,
-                color = Blue600,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium
-            )
-
-            if (!isCompact) {
-                Spacer(Modifier.height(10.dp))
-                
-                // --- SECCIÓN BENTO: Ubicación y Badges ---
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
+                // --- CABECERA: Avatar con Glow y Online Status ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Ubicación traslúcida
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Slate50)
-                            .padding(8.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocationOn, null, tint = Slate400, modifier = Modifier.size(12.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = provider.displayAddress ?: "Ubicación",
-                                color = Slate600,
-                                fontSize = 9.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    // Grid de Badges Estilo Elena
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        provider.badgeList.take(4).forEach { badge ->
+                    Box {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(provider.photoUrl)
+                                .crossfade(true)
+                                .size(150, 150)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(avatarSize)
+                                .clip(CircleShape)
+                                .border(2.dp, Blue50, CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                        
+                        // Indicador Online (Elena Style)
+                        if (provider.isOnline) {
                             Box(
                                 modifier = Modifier
-                                    .size(badgeSize)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (badge.isActive) Blue50 else Slate50)
-                                    .border(0.5.dp, if (badge.isActive) Blue100 else Slate200, RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
+                                    .align(Alignment.TopEnd)
+                                    .size(14.dp)
+                                    .background(Green500, CircleShape)
+                                    .border(2.dp, Color.White, CircleShape)
+                            )
+                        }
+                    }
+
+                    if (!isCompact) {
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            // Rating Pill Compacto
+                            Row(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(Blue50)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Icon(Icons.Default.Star, null, tint = Yellow400, modifier = Modifier.size(10.dp))
                                 Text(
-                                    text = if (badge.isActive) badge.icon else "•",
-                                    fontSize = 12.sp,
-                                    color = if (badge.isActive) Blue600 else Slate400
+                                    text = "%.1f".format(provider.rating),
+                                    color = Blue600,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black
                                 )
                             }
                         }
                     }
                 }
 
-                // --- BOTÓN DE ACCIÓN PREMIUM ---
-                Button(
-                    onClick = onChatClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(36.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Blue600),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("MENSAJE", fontSize = 10.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.height(8.dp))
+
+                // --- TÍTULOS Y SUBTÍTULOS ---
+                Text(
+                    text = provider.title,
+                    color = Slate800,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = if (isCompact) 1 else 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 16.sp
+                )
+                
+                Text(
+                    text = provider.typeLabel,
+                    color = Blue600,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                if (!isCompact) {
+                    Spacer(Modifier.height(10.dp))
+                    
+                    // --- SECCIÓN BENTO: Ubicación y Badges ---
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        // Ubicación traslúcida
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Slate50)
+                                .padding(8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.LocationOn, null, tint = Slate400, modifier = Modifier.size(12.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = provider.displayAddress ?: "Ubicación",
+                                    color = Slate600,
+                                    fontSize = 9.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        // Grid de Badges Estilo Elena
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            provider.badgeList.take(4).forEach { badge ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(badgeSize)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (badge.isActive) Blue50 else Slate50)
+                                        .border(0.5.dp, if (badge.isActive) Blue100 else Slate200, RoundedCornerShape(8.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (badge.isActive) badge.icon else "•",
+                                        fontSize = 12.sp,
+                                        color = if (badge.isActive) Blue600 else Slate400
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // --- BOTÓN DE ACCIÓN PREMIUM ---
+                    Button(
+                        onClick = onChatClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Blue600),
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("MENSAJE", fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
                 }
             }
+
+            // --- MENU TACTICO BE ---
+            MenuTacticoBe(
+                isVisible = showContextMenu,
+                onDismissRequest = { showContextMenu = false },
+                onAction = {
+                    onManageShortcut(!isShortcut)
+                    showContextMenu = false
+                },
+                touchOffset = touchOffset,
+                emotion = if (isShortcut) BeEmotion.SAD else BeEmotion.HAPPY,
+                actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
+                actionIconEmoji = "📌"
+            )
         }
     }
 }
@@ -1238,297 +1056,460 @@ fun PrestadorCardV4(
 // ---------- PREVIEW V4 --------------------------------------------------------------------
 // ==========================================================================================
 
-@Preview(showBackground = true, backgroundColor = 0xFFF1F5F9)
-@Composable
-fun PrestadorCardV4Preview() {
-    MyApplicationTheme {
-        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            PrestadorCardV4(
-                provider = com.example.myapplication.data.model.ProviderDisplayModel(
-                    id = "4",
-                    title = "Elena Rodríguez",
-                    subtitle = "Diseño de Interiores",
-                    photoUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&auto=format&fit=crop",
-                    rating = 4.9,
-                    isVerified = true,
-                    isOnline = true,
-                    type = com.example.myapplication.data.model.ProviderType.INDIVIDUAL,
-                    typeEmoji = "🎨",
-                    typeLabel = "Diseñadora Premium",
-                    badgeList = listOf(
-                        com.example.myapplication.data.model.BadgeDisplayData("24h", "🕒", "24hs", true),
-                        com.example.myapplication.data.model.BadgeDisplayData("loc", "🏪", "Local", true),
-                        com.example.myapplication.data.model.BadgeDisplayData("visit", "🚚", "Envío", true),
-                        com.example.myapplication.data.model.BadgeDisplayData("date", "📅", "Cita", false)
-                    ),
-                    isSubscribed = true,
-                    branchName = "Madrid Centro",
-                    displayAddress = "Calle Mayor 1, Madrid"
-                ),
-                onClick = {},
-                onChatClick = {}
-            )
-        }
-    }
-}
-
 // ==========================================================================================
-// ---------- PRESTADOR CARD V5 (CANVAS LUXURY - HOLOGRAPHIC EDITION) -----------------------
+// ---------- PRESTADOR BUSINESS CARD (V5 - PROFESSIONAL) -----------------------------------
 // ==========================================================================================
 
-/**
- * PRESTADOR CARD V5: El pináculo visual.
- * CANVAS: Utiliza técnicas de dibujo personalizadas para efectos de iridiscencia,
- * bordes de cristal y profundidad dinámica.
+    /**
+ * PRESTADOR BUSINESS CARD V5: Una tarjeta de presentación profesional (Business Card).
+ * DISEÑO: Layout horizontal, estilo "Maverick Dark Premium".
+ * OPTIMIZACIÓN: Ultra-compacta, conectada al SSOT y funcional.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PrestadorCardV5(
-    provider: com.example.myapplication.data.model.ProviderDisplayModel,
+fun PrestadorBusinessCard(
+    provider: ProviderDisplayModel,
+    user: UserEntity?, // 🔥 [ELITE] Necesario para selección de remitente
     onClick: () -> Unit,
-    onChatClick: () -> Unit,
+    onChatClick: (SenderProfile?) -> Unit, // 🔥 [ELITE] Ahora pasa el remitente seleccionado
     modifier: Modifier = Modifier,
-    isCompact: Boolean = false,
+    isShortcut: Boolean = false,
+    onManageShortcut: (Boolean) -> Unit = {}
 ) {
+    val maverickBlue = Color(0xFF22D3EE)
+    val maverickPurple = Color(0xFF9B51E0)
+    val darkCardBg = Color(0xFF1A1F26)
+
     val haptic = LocalHapticFeedback.current
-    val accentColor = Blue600
-    
-    // --- ANIMACIONES DE CANVAS ---
-    val infiniteTransition = rememberInfiniteTransition(label = "HolographicTransition")
-    val shimmerOffset by infiniteTransition.animateFloat(
-        initialValue = -1.5f,
-        targetValue = 2.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ShimmerOffset"
-    )
+    var showContextMenu by remember { mutableStateOf(false) }
+    var touchOffset by remember { mutableStateOf(Offset.Zero) }
 
-    val animatedHeight by animateDpAsState(
-        targetValue = if (isCompact) 85.dp else 285.dp, // Ligeramente más alta para el glow
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
-        label = "CardHeightV5Animation"
-    )
+    // --- NUEVO: GESTIÓN DE REMITENTE INTELIGENTE ---
+    var showSenderSelector by remember { mutableStateOf(false) }
+    val senderProfiles = remember(user) { getAvailableSenderProfiles(user) }
 
-    Box(
+    fun handleChatAction() {
+        if (senderProfiles.size > 1) {
+            showSenderSelector = true
+        } else {
+            onChatClick(senderProfiles.firstOrNull())
+        }
+    }
+
+    ElevatedCard(
         modifier = modifier
-            .width(160.dp)
-            .height(animatedHeight)
+            .width(170.dp) 
+            .height(110.dp) // Altura ajustada
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onLongPress = { haptic.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onLongPress = { offset ->
+                        touchOffset = offset
+                        showContextMenu = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
                     onTap = { onClick() }
                 )
             }
+            .border(0.5.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(12.dp)),
+        shape = RoundedCornerShape(12.dp), 
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = darkCardBg,
+            contentColor = Color.White
+        ),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 12.dp)
     ) {
-        // 1. CAPA: Dynamic Glow Behind (Canvas)
-        Canvas(modifier = Modifier.matchParentSize()) {
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(accentColor.copy(0.15f), Color.Transparent),
-                    center = Offset(size.width * 0.5f, size.height * 0.2f),
-                    radius = size.width * 0.8f
-                ),
-                radius = size.width * 0.8f,
-                center = Offset(size.width * 0.5f, size.height * 0.2f)
-            )
-        }
+        Box(modifier = Modifier.fillMaxSize()) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawCircle(
+                    brush = Brush.radialGradient(listOf(maverickBlue.copy(0.1f), Color.Transparent)),
+                    radius = size.maxDimension * 0.8f,
+                    center = Offset(size.width * 0.9f, size.height * 0.1f)
+                )
+            }
 
-        // 2. CAPA: El Cuerpo de la Tarjeta (M3 Surface)
-        Surface(
-            modifier = Modifier.fillMaxSize().padding(4.dp),
-            shape = RoundedCornerShape(28.dp),
-            color = Color.White,
-            shadowElevation = 12.dp,
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                
-                // 3. CAPA: Iridescent Overlay (Canvas + BlendMode)
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    val colors = listOf(
-                        Color(0xFFB9FFEA).copy(alpha = 0.15f), // Mint
-                        Color(0xFFFFB9F5).copy(alpha = 0.15f), // Pink
-                        Color(0xFFB5C7FF).copy(alpha = 0.15f), // Blue
-                        Color(0xFFB9FFEA).copy(alpha = 0.15f)
-                    )
-                    val brush = Brush.linearGradient(
-                        colors = colors,
-                        start = Offset(size.width * shimmerOffset, 0f),
-                        end = Offset(size.width * (shimmerOffset + 0.6f), size.height)
-                    )
-                    drawRoundRect(
-                        brush = brush,
-                        cornerRadius = CornerRadius(28.dp.toPx(), 28.dp.toPx()),
-                        blendMode = androidx.compose.ui.graphics.BlendMode.Overlay
-                    )
-                }
-
-                // 4. CAPA: Glass Border Precision (Canvas)
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    val borderBrush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(0.5f),
-                            Color.White.copy(0.05f),
-                            Color.White.copy(0.4f)
-                        ),
-                        start = Offset(0f, 0f),
-                        end = Offset(size.width, size.height)
-                    )
-                    drawRoundRect(
-                        brush = borderBrush,
-                        cornerRadius = CornerRadius(28.dp.toPx(), 28.dp.toPx()),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
-                    )
-                }
-
-                // 5. CAPA: Contenido (V4 Premium Layout)
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(14.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(6.dp) 
+            ) {
+                // --- SECCIÓN SUPERIOR: AVATAR + INFO ---
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.Top 
                 ) {
-                    // Cabecera: Avatar circular premium
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box {
+                    // --- IZQUIERDA: AVATAR ---
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .background(
+                                        Brush.sweepGradient(listOf(maverickBlue, maverickPurple, maverickBlue)),
+                                        CircleShape
+                                    )
+                                    .padding(1.5.dp)
+                                    .background(darkCardBg, CircleShape)
+                            )
                             AsyncImage(
                                 model = ImageRequest.Builder(LocalContext.current)
                                     .data(provider.photoUrl)
                                     .crossfade(true)
-                                    .size(150, 150)
                                     .build(),
                                 contentDescription = null,
-                                modifier = Modifier
-                                    .size(62.dp)
-                                    .clip(CircleShape)
-                                    .border(2.dp, Color.White, CircleShape),
+                                modifier = Modifier.size(46.dp).clip(CircleShape).clickable { onClick() },
                                 contentScale = ContentScale.Crop
                             )
-                            if (provider.isOnline) {
+
+                            // [ELITE] Badge de "+X sucursales" (Ley Pareja)
+                            if (provider.nearbyBranchesCount > 0) {
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .size(16.dp)
-                                        .background(Green500, CircleShape)
-                                        .border(2.dp, Color.White, CircleShape)
-                                )
-                            }
-                        }
-                        
-                        if (!isCompact) {
-                            Spacer(Modifier.width(12.dp))
-                            // Rating Badge Moderno
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(Blue50)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Star, null, tint = Yellow400, modifier = Modifier.size(12.dp))
+                                        .align(Alignment.BottomEnd)
+                                        .offset(x = 4.dp, y = 4.dp)
+                                        .background(Color(0xFF22D3EE), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                ) {
                                     Text(
-                                        text = "%.1f".format(provider.rating),
-                                        color = Blue600,
-                                        fontSize = 11.sp,
+                                        text = "+${provider.nearbyBranchesCount}",
+                                        color = Color.Black,
+                                        fontSize = 8.sp,
                                         fontWeight = FontWeight.Black
                                     )
                                 }
                             }
-                        }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Text(
-                        text = provider.title,
-                        color = Slate800,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = if (isCompact) 1 else 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = provider.typeLabel.uppercase(),
-                        color = accentColor,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.5.sp
-                    )
-
-                    if (!isCompact) {
-                        Spacer(Modifier.height(14.dp))
-                        
-                        // Bento Box: Ubicación
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Slate50)
-                                .padding(10.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.LocationOn, null, tint = Slate400, modifier = Modifier.size(12.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    text = provider.displayAddress ?: "Disponible",
-                                    color = Slate600,
-                                    fontSize = 10.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                            
+                            // --- TILDE DE VERIFICACIÓN (SSOT) ---
+                            if (provider.isVerified) {
+                                Icon(
+                                    imageVector = Icons.Rounded.CheckCircle,
+                                    contentDescription = "Verificado",
+                                    tint = Color(0xFF3B82F6),
+                                    modifier = Modifier
+                                        .align(Alignment.BottomEnd)
+                                        .offset(x = 2.dp, y = 2.dp)
+                                        .size(16.dp)
+                                        .background(darkCardBg, CircleShape)
+                                        .padding(1.dp)
                                 )
                             }
                         }
+                        
+                        // Rating Mini
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 1.dp)) {
+                            Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(8.dp))
+                            Text(
+                                text = " ${"%.1f".format(provider.rating)}",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                style = TextStyle().asCompact()
+                            )
+                        }
+                    }
 
-                        Spacer(Modifier.weight(1f))
+                    // --- DERECHA: INFO Y DIRECCIÓN (CON AUTO-AJUSTE DINÁMICO) ---
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(1.dp) // Espaciado mínimo entre líneas
+                    ) {
+                        AutoSizeText(
+                            text = provider.title,
+                            maxLines = 1,
+                            style = TextStyle(
+                                fontSize = 12.sp, 
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            ).asCompact()
+                        )
+                        
+                        Text(
+                            text = provider.typeLabel.uppercase(),
+                            fontSize = 6.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = maverickBlue,
+                            letterSpacing = 0.5.sp,
+                            style = TextStyle().asCompact()
+                        )
+                        Spacer(Modifier.height(2.dp))
 
-                        // Footer: Acción
-                        Button(
-                            onClick = onChatClick,
-                            modifier = Modifier.fillMaxWidth().height(40.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(0.dp)
+                        HorizontalDivider(
+                            thickness = 0.5.dp, 
+                            color = Color.White.copy(alpha = 0.08f),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        Spacer(Modifier.height(2.dp))
+                        
+                        Text(
+                            text = "DIRECCIÓN",
+                            fontSize = 6.sp,
+                            fontWeight = FontWeight.Black,
+                            color = maverickBlue.copy(0.8f),
+                            style = TextStyle().asCompact()
+                        )
+                        
+                        AutoSizeText(
+                            text = provider.branchName ?: "CASA CENTRAL",
+                            maxLines = 1,
+                            style = TextStyle(
+                                fontSize = 10.sp, 
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            ).asCompact()
+                        )
+
+                        AutoSizeText(
+                            text = provider.displayAddress ?: "Ubicación no disponible",
+                            maxLines = 1,
+                            style = TextStyle(
+                                fontSize = 9.sp,
+                                color = Color.White.copy(alpha = 0.6f)
+                            ).asCompact()
+                        )
+                    }
+                }
+
+                // --- SOCALO MINI CON MENÚ DE INFO ---
+                HorizontalDivider(thickness = 0.5.dp, color = Color.White.copy(alpha = 0.08f))
+                Spacer(Modifier.height(3.dp))
+
+                var showBadgesMenu by remember { mutableStateOf(false) }
+
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 1.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // --- IZQUIERDA: Fila de Badges (Clickable) ---
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { showBadgesMenu = true },
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.Chat, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("MENSAJE", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            // Mostramos todos los badges (activos e inactivos)
+                            provider.badgeList.forEach { badge ->
+                                BadgeIconBoxV5Mini(
+                                    emoji = if (badge.isActive) badge.icon else null,
+                                    icon = if (!badge.isActive) getInactiveIconForId(badge.id) else null,
+                                    isActive = badge.isActive
+                                )
+                            }
+                        }
+                    }
+
+                    // --- MENÚ EMERGENTE DE INFORMACIÓN (MATERIAL 3) ---
+                    DropdownMenu(
+                        expanded = showBadgesMenu,
+                        onDismissRequest = { showBadgesMenu = false },
+                        modifier = Modifier
+                            .background(darkCardBg)
+                            .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                    ) {
+                        Text(
+                            text = "SERVICIOS Y CAPACIDADES",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = maverickBlue,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            )
+                        )
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                        
+                        provider.badgeList.forEach { badge ->
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .background(
+                                                    if (badge.isActive) maverickBlue.copy(0.1f) else Color.White.copy(0.05f),
+                                                    RoundedCornerShape(8.dp)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (badge.isActive) {
+                                                Text(text = badge.icon, fontSize = 16.sp)
+                                            } else {
+                                                Icon(
+                                                    imageVector = getInactiveIconForId(badge.id),
+                                                    contentDescription = null,
+                                                    tint = Color.Gray.copy(0.4f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                text = badge.label,
+                                                color = Color.White,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = if (badge.isActive) "ACTIVO" else "NO DISPONIBLE",
+                                                color = if (badge.isActive) Color(0xFF22C55E) else Color.Gray,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                },
+                                onClick = { showBadgesMenu = false }
+                            )
                         }
                     }
                 }
+            }
+
+            // --- BOTÓN DE MENSAJE FLOTANTE (ESTILO FAB - M3) ---
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .offset(y = (-23).dp) // Posicionado exactamente sobre el divisor
+                    .clickable { handleChatAction() }
+                    .shadow(18.dp, RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp)),
+                color = darkCardBg,
+                //shape = RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp),
+                //border = BorderStroke(0.5.dp, maverickBlue.copy(alpha = 0.4f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(0.dp)
+                ) {
+                    Text(text = "📨", fontSize = 16.sp, style = TextStyle().asCompact())
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = maverickBlue,
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
+
+                // --- MENÚ DE SELECCIÓN DE REMITENTE ---
+                SenderSelectionMenu(
+                    expanded = showSenderSelector,
+                    onDismissRequest = { showSenderSelector = false },
+                    profiles = senderProfiles,
+                    onProfileSelected = { sender ->
+                        onChatClick(sender)
+                        showSenderSelector = false
+                    }
+                )
+            }
+
+            // --- MENU TACTICO BE ---
+            MenuTacticoBe(
+                isVisible = showContextMenu,
+                onDismissRequest = { showContextMenu = false },
+                onAction = {
+                    onManageShortcut(!isShortcut)
+                    showContextMenu = false
+                },
+                touchOffset = touchOffset,
+                emotion = if (isShortcut) BeEmotion.SAD else BeEmotion.HAPPY,
+                actionLabel = if (isShortcut) "QUITAR FAVORITO" else "AGREGAR FAVORITO",
+                actionIconEmoji = "📌"
+            )
+        }
+    }
+}
+
+/**
+ * Versión Mini del Badge Box para la tarjeta compacta.
+ */
+@Composable
+private fun BadgeIconBoxV5Mini(
+    emoji: String? = null,
+    icon: ImageVector? = null,
+    isActive: Boolean = true
+) {
+    Surface(
+        color = Color.White.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
+    ) {
+        Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isActive && emoji != null) {
+                Text(
+                    text = emoji, 
+                    fontSize = 11.sp,
+                    style = TextStyle().asCompact()
+                )
+            } else if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.Gray.copy(alpha = 0.6f),
+                    modifier = Modifier.size(11.dp)
+                )
             }
         }
     }
 }
 
-// ==========================================================================================
-// ---------- PREVIEW V5 --------------------------------------------------------------------
-// ==========================================================================================
 
-@Preview(showBackground = true, backgroundColor = 0xFFF8FAFC)
+
+
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A0E14)
 @Composable
-fun PrestadorCardV5Preview() {
+fun PrestadorBusinessCardPreview() {
     MyApplicationTheme {
-        Box(modifier = Modifier.padding(20.dp)) {
-            PrestadorCardV5(
-                provider = com.example.myapplication.data.model.ProviderDisplayModel(
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0A0E14))
+                .padding(24.dp), 
+            contentAlignment = Alignment.Center
+        ) {
+            PrestadorBusinessCard(
+                provider = ProviderDisplayModel(
                     id = "5",
-                    title = "Nexus Arquitectura",
-                    subtitle = "Innovación Espacial",
-                    photoUrl = "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=256&auto=format&fit=crop",
-                    rating = 5.0,
+                    title = "Dr. Steve Smith",
+                    subtitle = "General Physician",
+                    photoUrl = "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=256&auto=format&fit=crop",
+                    rating = 4.9,
                     isVerified = true,
                     isOnline = true,
-                    type = com.example.myapplication.data.model.ProviderType.COMPANY,
-                    typeEmoji = "🏢",
-                    typeLabel = "Estudio Platinum",
-                    badgeList = listOf(),
+                    type = ProviderType.INDIVIDUAL,
+                    typeEmoji = "👨‍⚕️",
+                    typeLabel = "Medical Specialist",
+                    badgeList = listOf(
+                        BadgeDisplayData("serv", "🛠️", "Brinda Servicio", true),
+                        BadgeDisplayData("prod", "📦", "Vende Productos", false),
+                        BadgeDisplayData("24h", "🕒", "Atención 24hs", true),
+                        BadgeDisplayData("loc", "🏪", "Local Físico", true),
+                        BadgeDisplayData("visit", "🚚", "Visitas a Domicilio", true),
+                        BadgeDisplayData("env", "📦", "Envíos", false),
+                        BadgeDisplayData("date", "📅", "Turnos Online", true)
+                    ),
                     isSubscribed = true,
-                    displayAddress = "Distrito Tecnológico, BA"
+                    branchName = "Central Clinic",
+                    displayAddress = "77 Your Street Address, NY",
+                    statusText = "ABIERTO AHORA ✅"
                 ),
                 onClick = {},
-                onChatClick = {}
+                user = null,
+                onChatClick = { }
+                //sten onChatClick = { }
             )
         }
     }
 }
+
+

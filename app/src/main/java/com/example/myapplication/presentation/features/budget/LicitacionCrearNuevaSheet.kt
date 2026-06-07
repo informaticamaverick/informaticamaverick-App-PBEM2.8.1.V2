@@ -1,6 +1,6 @@
 package com.example.myapplication.presentation.features.budget
 
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.presentation.features.home.UbicacionClimaViewModel
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -126,12 +126,12 @@ fun CrearLicitacionSheet(
                     activeProfileName = activeName,
                     activeProfilePhoto = activePhoto,
                     mainAddress = (activeAddress?.streetAndNumber ?: "SCANNING...").uppercase(),
-                    localityInfo = (activeAddress?.locality ?: "PROCESANDO...").uppercase(),
+                    localityInfo = (activeAddress?.localidad ?: "PROCESANDO...").uppercase(),
                     description = activeAddress?.let { addr ->
-                        if (addr.companyOrUserName.isNotBlank() && addr.companyOrUserName != "Mi Ubicación") {
+                        if (addr.ownerName?.isNotBlank() == true && addr.ownerName != "Mi Ubicación") {
                             buildString {
-                                append(addr.companyOrUserName)
-                                if (addr.branchName.isNotBlank()) append(" - ${addr.branchName}")
+                                append(addr.ownerName)
+                                if (addr.label.isNotBlank()) append(" - ${addr.label}")
                             }
                         } else if (addr.id == "gps_current") "Mi Ubicación" else "ORIGEN TÁCTICO"
                     },
@@ -147,8 +147,6 @@ fun CrearLicitacionSheet(
             // --- SECCIÓN: ORQUESTACIÓN DE CONTENIDO ---
             CrearLicitacionContent(
                 userState = userFromBrain,
-                activeProfileName = activeName,
-                activeProfilePhoto = activePhoto,
                 activeAddressFromBrain = activeAddress,
                 isGpsEnabled = isGpsEnabled,
                 onGpsToggle = { ubicacionViewModel.toggleGps(context) },
@@ -198,14 +196,12 @@ fun CrearLicitacionSheet(
 @Composable
 fun CrearLicitacionContent(
     userState: UserEntity?,
-    activeProfileName: String,
-    activeProfilePhoto: Any?,
-    activeAddressFromBrain: AddressInfo?,
+    activeAddressFromBrain: AddressUnico?,
     isGpsEnabled: Boolean = true,
     onGpsToggle: () -> Unit = {},
     onRefreshLocation: () -> Unit = {},
     allCategories: List<CategoryEntity>,
-    onCreateTender: (String, String, String, Long, Long, Boolean, Boolean, Boolean, Boolean, AddressInfo?, List<Uri>) -> Unit,
+    onCreateTender: (String, String, String, Long, Long, Boolean, Boolean, Boolean, Boolean, AddressUnico?, List<Uri>) -> Unit,
     onSuccess: () -> Unit,
     onHasChangesChanged: (Boolean) -> Unit = {},
     showUserPopup: Boolean = false,
@@ -258,7 +254,7 @@ fun CrearLicitacionContent(
         titleInput.isNotBlank() && 
         (selectedCategory != null || categorySearch.isNotBlank()) && 
         selectedLocation != null && 
-        selectedLocation?.postalCode?.isNotBlank() == true &&
+        selectedLocation?.codigoPostal?.isNotBlank() == true &&
         userState != null
     }
 
@@ -375,7 +371,7 @@ fun CrearLicitacionContent(
                     val catName = selectedCategory?.name ?: categorySearch
                     onCreateTender(titleInput, description, catName, startDate.time, endDate.time, requiresVisit, requiresPaymentMethod, requiresWorkGuarantee, requiresProviderDoc, selectedLocation, selectedImages)
                     
-                    val locality = selectedLocation?.locality ?: "tu zona"
+                    val locality = selectedLocation?.localidad ?: "tu zona"
                     notificationHelper.showNotification("🚀 LICITACIÓN EN VIVO", "Notificando a profesionales en $locality")
                     onSuccess()
                 },
@@ -413,7 +409,7 @@ fun CrearLicitacionContent(
     if (showLocationPopup) {
         LocationDialog(
             show = showLocationPopup,
-            availableAddresses = userState?.toDomain()?.toAddressInfoList() ?: emptyList(),
+            availableAddresses = userState?.personalAddresses ?: emptyList(),
             activeAddress = selectedLocation,
             isGpsSystemEnabled = isGpsEnabled,
             onRefresh = { onRefreshLocation() },
@@ -660,16 +656,17 @@ fun CompactSwitchItem(
 @Preview(showBackground = true, backgroundColor = 0xFF121418)
 @Composable
 fun PreviewCrearLicitacionRestructured() {
-    val mockAddress = AddressInfo(
+    val mockAddress = AddressUnico(
         id = "gps_current",
-        companyOrUserName = "Juan",
-        branchName = "GPS",
-        streetAndNumber = "AV. SANTA FE 1234",
-        locality = "CABA",
-        postalCode = "1425",
+        ownerName = "Juan",
+        label = "GPS",
+        calle = "AV. SANTA FE",
+        numero = "1234",
+        localidad = "CABA",
+        codigoPostal = "1425",
         isCompany = false,
-        lat = 0.0,
-        lng = 0.0
+        latitude = 0.0,
+        longitude = 0.0
     )
     MyApplicationTheme(darkTheme = true) {
         Column(
@@ -680,8 +677,6 @@ fun PreviewCrearLicitacionRestructured() {
         ) {
             CrearLicitacionContent(
                 userState = UserEntity(id = "1", email = "test@pixel.com", displayName = "ODETTE", photoUrl = null),
-                activeProfileName = "ODETTE",
-                activeProfilePhoto = null,
                 activeAddressFromBrain = mockAddress,
                 allCategories = emptyList(),
                 onCreateTender = { _, _, _, _, _, _, _, _, _, _, _ -> },

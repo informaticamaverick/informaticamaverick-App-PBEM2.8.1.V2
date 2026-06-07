@@ -2,7 +2,7 @@ package com.example.myapplication.presentation.components
 
 // === IMPORTS ===
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -10,6 +10,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.foundation.clickable
@@ -53,6 +56,8 @@ import com.example.myapplication.presentation.designsystem.components.MaverickSt
 import com.example.myapplication.presentation.designsystem.components.shakeClick
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 
 // ==================================================================================
@@ -135,11 +140,20 @@ fun BotonCabeceraAccion(
     onClick: () -> Unit,
     icon: ImageVector,
     color: Color = MaverickColors.NeonCyan,
-
+    collapseFraction: Float = 0f
 ) {
+    val size by animateDpAsState(
+        targetValue = if (collapseFraction > 0.7f) 28.dp else 32.dp,
+        label = "ButtonSize"
+    )
+    val iconSize by animateDpAsState(
+        targetValue = if (collapseFraction > 0.7f) 14.dp else 16.dp,
+        label = "IconSize"
+    )
+
     Box(
         modifier = modifier
-            .size(32.dp)
+            .size(size)
             .clip(CircleShape)
             .background(Color(0xFF1E293B).copy(alpha = 0.6f)) // Fondo oscuro minimalista
             .border(0.8.dp, Color.White.copy(alpha = 0.15f), CircleShape) // Borde fino sutil
@@ -150,7 +164,7 @@ fun BotonCabeceraAccion(
             imageVector = icon,
             contentDescription = null,
             tint = color, // Acento solo en el icono
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(iconSize)
         )
     }
 }
@@ -166,11 +180,20 @@ fun BotonToggleEmoji(
     activeEmoji: String,
     inactiveIcon: ImageVector,
     activeColor: Color = MaverickColors.AcidGreen,
-
+    collapseFraction: Float = 0f
 ) {
+    val size by animateDpAsState(
+        targetValue = if (collapseFraction > 0.7f) 28.dp else 32.dp,
+        label = "ButtonSize"
+    )
+    val contentSize by animateFloatAsState(
+        targetValue = if (collapseFraction > 0.7f) 14f else 16f,
+        label = "ContentSize"
+    )
+
     Box(
         modifier = modifier
-            .size(32.dp)
+            .size(size)
             .clip(CircleShape)
             .background(Color(0xFF1E293B).copy(alpha = 0.6f))
             .border(
@@ -182,14 +205,13 @@ fun BotonToggleEmoji(
         contentAlignment = Alignment.Center
     ) {
         if (isActive) {
-            Text(text = activeEmoji, fontSize = 16.sp)
+            Text(text = activeEmoji, fontSize = contentSize.sp)
         } else {
             Icon(
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(contentSize.dp),
                 imageVector = inactiveIcon,
                 contentDescription = null,
                 tint = Color.White.copy(alpha = 0.6f)
-
             )
         }
     }
@@ -202,8 +224,8 @@ fun BotonToggleEmoji(
 fun BotonFlechaAbajo(
     modifier: Modifier = Modifier,
     isExpanded: Boolean,
+    collapseFraction: Float = 0f,
     onClick: () -> Unit
-
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
@@ -214,8 +236,8 @@ fun BotonFlechaAbajo(
         modifier = modifier.rotate(rotation),
         onClick = onClick,
         icon = MaverickIcons.ChevronDown,
-        color = Color.White.copy(alpha = 0.8f)
-
+        color = Color.White.copy(alpha = 0.8f),
+        collapseFraction = collapseFraction
     )
 }
 
@@ -224,35 +246,52 @@ fun BotonFlechaAbajo(
  */
 object BotonesCabecera {
     @Composable
-    fun Nuevo(onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Add, color = MaverickColors.AcidGreen)
+    fun Nuevo(collapseFraction: Float = 0f, onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Add, color = MaverickColors.AcidGreen, collapseFraction = collapseFraction)
     @Composable
-    fun Editar(onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Edit, color = MaverickColors.NeonCyan)
+    fun Editar(collapseFraction: Float = 0f, onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Edit, color = MaverickColors.NeonCyan, collapseFraction = collapseFraction)
     @Composable
-    fun Borrar(onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Delete, color = MaverickColors.DeepRed)
+    fun Borrar(collapseFraction: Float = 0f, onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Delete, color = MaverickColors.DeepRed, collapseFraction = collapseFraction)
     @Composable
-    fun Eliminar(onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Delete, color = MaverickColors.DeepRed)
+    fun Eliminar(collapseFraction: Float = 0f, onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Delete, color = MaverickColors.DeepRed, collapseFraction = collapseFraction)
     @Composable
-    fun Cerrar(onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Close, color = Color.Gray)
+    fun Cerrar(collapseFraction: Float = 0f, onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Close, color = Color.Gray, collapseFraction = collapseFraction)
     @Composable
-    fun Limpiar(onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Refresh, color = MaverickColors.MagentaNeon)
+    fun Limpiar(collapseFraction: Float = 0f, onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.Refresh, color = MaverickColors.MagentaNeon, collapseFraction = collapseFraction)
+    @Composable
+    fun Filtro(collapseFraction: Float = 0f, isActive: Boolean = false, onClick: () -> Unit) = BotonCabeceraAccion(onClick = onClick, icon = MaverickIcons.FilterList, color = if (isActive) MaverickColors.ElectricCyan else Color.White.copy(alpha = 0.6f), collapseFraction = collapseFraction)
 }
 
 /**
  * ContadorResultadosElite: Componente atómico M3 Android 16 Style.
- * Muestra un helper "RESULTADOS" arriba y el número abajo.
+ * Muestra el número arriba y el helper abajo, con escalado dinámico.
  */
 @Composable
 fun ContadorResultadosElite(
     modifier: Modifier = Modifier,
     count: Int,
+    collapseFraction: Float = 0f,
     accentColor: Color = MaverickColors.ElectricCyan
 ) {
+    val numberFontSize by animateFloatAsState(
+        targetValue = if (collapseFraction < 0.6f) 22f else 14f,
+        label = "CounterNumberSize"
+    )
+    
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = modifier.padding(horizontal = 6.dp)
+        modifier = modifier.padding(horizontal = 4.dp)
     ) {
-        androidx.compose.material3.Text(
+        Text(
+            text = count.toString().padStart(2, '0'),
+            style = MaverickTypography.HeaderTitle.copy(
+                fontSize = numberFontSize.sp,
+                color = accentColor,
+                fontWeight = FontWeight.Black,
+                lineHeight = (numberFontSize * 0.8f).sp
+            )
+        )
+        Text(
             text = "RESULT",
             style = MaverickTypography.HeaderSubtitle.copy(
                 fontSize = 6.sp,
@@ -261,15 +300,147 @@ fun ContadorResultadosElite(
                 letterSpacing = 0.8.sp
             )
         )
-        androidx.compose.material3.Text(
-            text = count.toString().padStart(2, '0'),
-            style = MaverickTypography.HeaderTitle.copy(
-                fontSize = 18.sp,
-                color = accentColor,
-                fontWeight = FontWeight.Black,
-                lineHeight = 13.sp
+    }
+}
+
+/**
+ * PerfilEmpresa: Modelo de datos para multi-perfil / multi-empresa.
+ */
+data class PerfilEmpresa(
+    val id: String,
+    val nombre: String,
+    val iniciales: String,
+    val colorAcento: Color = MaverickColors.ElectricCyan,
+    val emoji: String? = null,
+    val photoUrl: Any? = null, // 🔥 [NUEVO] Soporta URL, URI o Drawable
+    val unreadCount: Int = 0
+)
+
+/**
+ * BurbujaPerfilElite: Representación táctica de una empresa/perfil.
+ * Estilo circular con animación de escala y glow adaptativo.
+ */
+@Composable
+fun BurbujaPerfilElite(
+    modifier: Modifier = Modifier,
+    perfil: PerfilEmpresa,
+    isSelected: Boolean,
+    collapseFraction: Float = 0f,
+    onClick: () -> Unit
+) {
+    val size by animateDpAsState(
+        targetValue = if (isSelected) {
+            if (collapseFraction > 0.7f) 32.dp else 36.dp
+        } else {
+            if (collapseFraction > 0.7f) 24.dp else 28.dp
+        },
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "ProfileSize"
+    )
+    
+    val borderColor = if (isSelected) perfil.colorAcento else Color.White.copy(alpha = 0.15f)
+    val glowAlpha by animateFloatAsState(targetValue = if (isSelected) 0.5f else 0f, label = "ProfileGlow")
+
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(if (isSelected) perfil.colorAcento.copy(alpha = 0.2f) else Color.DarkGray.copy(alpha = 0.4f))
+            .border(
+                width = if (isSelected) 1.5.dp else 0.8.dp,
+                color = borderColor,
+                shape = CircleShape
             )
-        )
+            .drawBehind {
+                if (isSelected) {
+                    drawCircle(
+                        color = perfil.colorAcento,
+                        radius = (size.toPx() / 2) + 2.dp.toPx(),
+                        alpha = glowAlpha * 0.15f,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                }
+            }
+            .shakeClick { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        if (perfil.photoUrl != null) {
+            AsyncImage(
+                model = perfil.photoUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                alpha = if (isSelected) 1f else 0.6f
+            )
+        } else if (perfil.emoji != null) {
+            Text(text = perfil.emoji, fontSize = if (isSelected) 14.sp else 10.sp)
+        } else {
+            Text(
+                text = perfil.iniciales.uppercase(),
+                style = MaverickTypography.HeaderTitle.copy(
+                    fontSize = if (isSelected) 11.sp else 8.sp,
+                    fontWeight = FontWeight.Black,
+                    color = if (isSelected) Color.White else Color.Gray.copy(alpha = 0.7f),
+                    letterSpacing = 0.5.sp
+                )
+            )
+        }
+
+        // 🔥 BADGE DE NO LEÍDOS (Elite Style)
+        if (perfil.unreadCount > 0 && collapseFraction < 0.7f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 2.dp, y = (-2).dp)
+                    .size(12.dp)
+                    .clip(CircleShape)
+                    .background(MaverickColors.DeepRed)
+                    .border(1.dp, Color.Black, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (perfil.unreadCount > 9) "+" else perfil.unreadCount.toString(),
+                    fontSize = 7.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+/**
+ * SelectorPerfilesElite: Fila horizontal de burbujas de perfil.
+ */
+@Composable
+fun SelectorPerfilesElite(
+    modifier: Modifier = Modifier,
+    perfiles: List<PerfilEmpresa>,
+    perfilSeleccionadoId: String?,
+    collapseFraction: Float = 0f,
+    onPerfilClick: (PerfilEmpresa) -> Unit
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        perfiles.forEach { perfil ->
+            val isSelected = perfil.id == perfilSeleccionadoId
+            // Animación de visibilidad: Solo el seleccionado cuando está colapsado
+            AnimatedVisibility(
+                visible = collapseFraction < 0.8f || isSelected,
+                enter = fadeIn() + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally()
+            ) {
+                BurbujaPerfilElite(
+                    perfil = perfil,
+                    isSelected = isSelected,
+                    collapseFraction = collapseFraction,
+                    onClick = { onPerfilClick(perfil) }
+                )
+            }
+        }
     }
 }
 
@@ -286,12 +457,12 @@ fun CabeceraDinamicaMoldeV2(
     modifier: Modifier = Modifier,
     titulo: String,
     subtitulo: String? = null,
-    emoji: String? = null,
-    compactInfo: String = "",
     itemCount: Int? = null,
+    perfiles: List<PerfilEmpresa> = emptyList(),
+    perfilSeleccionadoId: String? = null,
+    onPerfilSelected: (PerfilEmpresa) -> Unit = {},
     collapseFraction: Float, // 0f = Expandido, 1f = Colapsado
     height: Dp,
-    filtrosActivos: List<String> = emptyList(),
     accentColor: Color = MaverickColors.ElectricCyan,
     backgroundBrush: Brush = Brush.verticalGradient(
         listOf(
@@ -355,98 +526,78 @@ fun CabeceraDinamicaMoldeV2(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(horizontal = 8.dp), // Ajustado para dar espacio a los bordes
+                    .padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // --- SLOT IZQUIERDO: EMOJI / FILTROS / CONTADOR ---
+                // --- SLOT IZQUIERDO: CONTADOR + TÍTULO/SUBTÍTULO (JUSTIFICADO A LA IZQUIERDA) ---
                 Row(
-                    modifier = Modifier.weight(1.2f),
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Start
                 ) {
-                    // Siempre visible: El contador de resultados
                     if (itemCount != null) {
-                        ContadorResultadosElite(count = itemCount, accentColor = accentColor)
+                        ContadorResultadosElite(count = itemCount, collapseFraction = collapseFraction, accentColor = accentColor)
                         
-                        // Divider solo si hay algo más a la derecha y estamos expandidos
-                        if (collapseFraction < 0.6f && (emoji != null || filtrosActivos.isNotEmpty())) {
-                            DepthDividerThemedVertical(
-                                modifier = Modifier
-                                    .height(16.dp)
-                                    .padding(horizontal = 4.dp)
-                            )
-                        } else if (collapseFraction >= 0.6f) {
-                            // Espaciador mínimo cuando está contraído
-                            Spacer(modifier = Modifier.width(4.dp))
-                        }
+                        DepthDividerThemedVertical(
+                            modifier = Modifier
+                                .height(20.dp)
+                                .padding(horizontal = 8.dp)
+                        )
                     }
 
-                    // Estos elementos solo se ven cuando la cabecera está expandida
-                    if (collapseFraction < 0.6f) {
-                        if (emoji != null) {
-                            Text(text = emoji, fontSize = 16.sp)
-                            Spacer(modifier = Modifier.width(4.dp))
-                        }
-                        
-                        filtrosActivos.take(1).forEach { filtro ->
-                            BurbujaCabeceraLista(
-                                text = filtro, 
-                                backgroundColor = Color.Black.copy(alpha = 0.4f),
-                                accentColor = MaverickColors.NeonCyan.copy(alpha = 0.6f)
-                            )
-                        }
-                    }
-                }
-
-                // --- CENTRO: TÍTULO DINÁMICO (BLANCO PURO + HELPER GRIS) ---
-                Box(
-                    modifier = Modifier.weight(3f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (collapseFraction < 0.85f) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            if (subtitulo != null && collapseFraction < 0.4f) {
+                    Column(
+                        horizontalAlignment = Alignment.Start,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        if (collapseFraction < 0.85f) {
+                            if (subtitulo != null && collapseFraction < 0.6f) {
                                 Text(
                                     text = subtitulo.uppercase(),
                                     style = MaverickTypography.HeaderSubtitle.copy(
-                                        fontSize = 7.sp,
-                                        color = Color.Gray, // HELPER GRIS
+                                        fontSize = 8.sp,
+                                        color = Color.Gray,
                                         letterSpacing = 1.sp
                                     ),
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1
+                                    textAlign = TextAlign.Start,
+                                    maxLines = 1,
+                                    modifier = Modifier.graphicsLayer { alpha = (1f - collapseFraction * 2f).coerceIn(0f, 1f) }
                                 )
                             }
                             AutoSizeText(
                                 text = titulo.uppercase(),
                                 style = MaverickTypography.HeaderTitle.copy(
-                                    fontSize = 15.sp,
-                                    color = Color.White, // BLANCO PURO
+                                    fontSize = (16 - (2 * collapseFraction)).sp,
+                                    color = Color.White,
                                     letterSpacing = 0.5.sp
                                 ),
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                modifier = Modifier.fillMaxWidth()
+                                textAlign = TextAlign.Start,
+                                maxLines = 1
                             )
                         }
-                    } else {
-                        BurbujaCabeceraLista(
-                            text = compactInfo,
-                            icon = MaverickIcons.Info,
-                            accentColor = MaverickColors.GoldPremium
-                        )
                     }
                 }
 
-                // --- SLOT DERECHO: ACCIONES ---
+                // --- SLOT DERECHO: PERFILES Y ACCIONES (CON DIVIDER INTERMEDIO) ---
                 Row(
-                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.End
                 ) {
+                    if (perfiles.isNotEmpty()) {
+                        SelectorPerfilesElite(
+                            perfiles = perfiles,
+                            perfilSeleccionadoId = perfilSeleccionadoId,
+                            collapseFraction = collapseFraction,
+                            onPerfilClick = onPerfilSelected
+                        )
+                        
+                        // DIVIDER A LA DERECHA DE LAS BURBUJAS
+                        DepthDividerThemedVertical(
+                            modifier = Modifier
+                                .height(20.dp)
+                                .padding(horizontal = 10.dp)
+                        )
+                    }
+
                     if (acciones != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -494,24 +645,44 @@ fun ListaMoldeV2(
     modifier: Modifier = Modifier,
     titulo: String = "SISTEMA DE RESULTADOS",
     subtitulo: String? = null,
-    emoji: String? = null,
-    acciones: @Composable (RowScope.() -> Unit)? = null,
+    acciones: @Composable (RowScope.(fraction: Float) -> Unit)? = null,
     filtros: @Composable (RowScope.() -> Unit)? = null,
-    compactInfo: String = "",
     itemCount: Int? = null,
-    filtrosActivos: List<String> = emptyList(),
+    perfiles: List<PerfilEmpresa> = emptyList(),
+    initialPerfilId: String? = null,
+    onPerfilSelected: (PerfilEmpresa) -> Unit = {},
     accentColor: Color = MaverickColors.ElectricCyan,
-    customMaxHeaderHeight: Dp = if (filtros != null) 90.dp else 42.dp,
+    customMaxHeaderHeight: Dp = if (filtros != null) 100.dp else 64.dp,
     customMinHeaderHeight: Dp = 40.dp,
     state: LazyListState = rememberLazyListState(),
     containerColor: Color = MaverickColors.EliteSurface,
-    content: LazyListScope.() -> Unit,
+    content: LazyListScope.(perfil: PerfilEmpresa?) -> Unit,
 ) {
     val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
     val maxHeaderHeightPx = with(density) { customMaxHeaderHeight.toPx() }
     val minHeaderHeightPx = with(density) { customMinHeaderHeight.toPx() }
     
     var headerHeightPx by remember { mutableFloatStateOf(maxHeaderHeightPx) }
+
+    // Estado para el Pager de perfiles
+    val pagerState = if (perfiles.isNotEmpty()) {
+        val initialPage = remember(initialPerfilId) {
+            val index = perfiles.indexOfFirst { it.id == initialPerfilId }
+            if (index != -1) index else 0
+        }
+        rememberPagerState(
+            initialPage = initialPage,
+            pageCount = { perfiles.size }
+        )
+    } else null
+
+    // Sincronización Pager -> Selección externa
+    if (pagerState != null) {
+        LaunchedEffect(pagerState.currentPage) {
+            onPerfilSelected(perfiles[pagerState.currentPage])
+        }
+    }
     
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -537,13 +708,33 @@ fun ListaMoldeV2(
             .background(containerColor)
             .nestedScroll(nestedScrollConnection)
     ) {
-        LazyColumn(
-            state = state,
-            modifier = Modifier.fillMaxSize().zIndex(0f),
-            contentPadding = PaddingValues(top = customMaxHeaderHeight + 8.dp, bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            content()
+        if (pagerState != null) {
+            // MODO MULTI-EMPRESA CON PAGER
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().zIndex(0f),
+                contentPadding = PaddingValues(top = customMaxHeaderHeight + 8.dp, bottom = 20.dp),
+                pageSpacing = 16.dp,
+                verticalAlignment = Alignment.Top
+            ) { page ->
+                LazyColumn(
+                    // Cada página tiene su propio scroll para evitar conflictos
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    content(perfiles[page])
+                }
+            }
+        } else {
+            // MODO ESTÁNDAR
+            LazyColumn(
+                state = state,
+                modifier = Modifier.fillMaxSize().zIndex(0f),
+                contentPadding = PaddingValues(top = customMaxHeaderHeight + 8.dp, bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                content(null)
+            }
         }
 
         // --- SOMBRA PROYECTADA (Efecto 3D de Elevación) ---
@@ -564,14 +755,18 @@ fun ListaMoldeV2(
             modifier = Modifier.zIndex(2f),
             titulo = titulo,
             subtitulo = subtitulo,
-            emoji = emoji,
-            compactInfo = compactInfo,
             itemCount = itemCount,
-            filtrosActivos = filtrosActivos,
+            perfiles = perfiles,
+            perfilSeleccionadoId = pagerState?.let { perfiles[it.currentPage].id },
+            onPerfilSelected = { perfil ->
+                scope.launch {
+                    pagerState?.animateScrollToPage(perfiles.indexOf(perfil))
+                }
+            },
             collapseFraction = collapseFraction,
             height = headerHeightDp,
             accentColor = accentColor,
-            acciones = acciones,
+            acciones = acciones?.let { { it(collapseFraction) } },
             filtros = filtros
         )
     }
@@ -593,13 +788,19 @@ fun PreviewListaMoldeV2Redisenio() {
                 .fillMaxSize()
                 .background(Color(0xFF0D1117))
         ) {
+            val perfilesMock = listOf(
+                PerfilEmpresa("1", "Maverick Corp", "MC", MaverickColors.ElectricCyan),
+                PerfilEmpresa("2", "Cyberdyne", "CD", MaverickColors.NeonCyan),
+                PerfilEmpresa("3", "Stark Ind", "SI", MaverickColors.AcidGreen)
+            )
+            var perfilActual by remember { mutableStateOf(perfilesMock[0]) }
+
             ListaMoldeV2(
                 titulo = "Presupuestos de Obra",
-                subtitulo = "Módulo de Ventas",
-                emoji = "⚡",
-                compactInfo = "Hoy: 20 May",
+                subtitulo = perfilActual.nombre,
+                perfiles = perfilesMock,
+                onPerfilSelected = { perfilActual = it },
                 itemCount = 24,
-                filtrosActivos = listOf("Urgente"),
                 acciones = {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         BotonToggleEmoji(
@@ -616,7 +817,7 @@ fun PreviewListaMoldeV2Redisenio() {
                         )
                     }
                 }
-            ) {
+            ) { perfil ->
                 items(20) { index ->
                     Box(
                         modifier = Modifier
@@ -629,7 +830,7 @@ fun PreviewListaMoldeV2Redisenio() {
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Text(
-                            "Elemento de Lista #${index + 1}",
+                            "Elemento de ${perfil?.nombre ?: "Sistema"} #${index + 1}",
                             color = Color.White,
                             style = MaverickTypography.BodyText
                         )

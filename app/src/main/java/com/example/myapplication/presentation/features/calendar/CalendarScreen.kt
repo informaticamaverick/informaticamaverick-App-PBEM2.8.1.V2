@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -32,6 +33,8 @@ import com.example.myapplication.presentation.components.*
 import com.example.myapplication.presentation.designsystem.components.MaverickColors
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.registry.MaverickIcons
+import com.example.myapplication.presentation.features.profile.UserViewModel
+import com.example.myapplication.presentation.features.profile.UserUiState
 import com.example.myapplication.presentation.global.BeBrainViewModel
 import com.example.myapplication.presentation.global.HUDContext
 import com.example.myapplication.presentation.registry.BeDictionary
@@ -54,6 +57,7 @@ fun CalendarScreen(
     onChatClick: (String) -> Unit = {},
     onNavigateToProfile: (String) -> Unit = {},
     viewModel: CalendarViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel(),
     beBrainViewModel: BeBrainViewModel = hiltViewModel(),
 ) {
     // --- SUSCRIPCIÓN A LOS OBREROS (SSOT) ---
@@ -66,12 +70,47 @@ fun CalendarScreen(
     val nextEvents by viewModel.nextEvents.collectAsStateWithLifecycle()
     val allEventsCount by viewModel.allEventsCount.collectAsStateWithLifecycle()
     val shortcuts by viewModel.shortcuts.collectAsStateWithLifecycle()
-    
+    val profileState by userViewModel.uiState.collectAsStateWithLifecycle()
+
     // --- NUEVOS COMPONENTES ELITE ---
     val filterDropdownItems by viewModel.filterDropdownItems.collectAsStateWithLifecycle()
     val sortDropdownItems by viewModel.sortDropdownItems.collectAsStateWithLifecycle()
     val activeSortCriteria by viewModel.activeSortCriteria.collectAsStateWithLifecycle()
     val beActionIds by viewModel.beActionIds.collectAsStateWithLifecycle()
+
+    // --- GESTIÓN DE MULTI-PERFIL (WHATSAPP/INSTAGRAM STYLE) ---
+    val perfiles = remember(profileState.companies, profileState.displayName, filteredEvents) {
+        val list = mutableListOf<PerfilEmpresa>()
+        
+        // 1. Perfil Personal
+        // TODO: Filtrar eventos reales por perfil cuando la entidad tenga companyId
+        val personalEventsCount = filteredEvents.size // Placeholder
+
+        list.add(PerfilEmpresa(
+            id = "personal",
+            nombre = "Mi Perfil",
+            iniciales = "YO",
+            emoji = "👤",
+            photoUrl = profileState.profileThumbnail.takeIf { it.isNotBlank() } ?: profileState.photoUrl.ifEmpty { null },
+            colorAcento = MaverickColors.ElectricCyan,
+            unreadCount = 0 // En calendario no solemos tener "no leídos" sino "pendientes"
+        ))
+        
+        // 2. Perfiles de Empresa del Usuario
+        profileState.companies.forEach { company ->
+            list.add(PerfilEmpresa(
+                id = company.id,
+                nombre = company.name,
+                iniciales = company.name.take(2).uppercase(),
+                photoUrl = company.thumbnailBase64.takeIf { !it.isNullOrBlank() } ?: company.photoUrl,
+                colorAcento = MaverickColors.NeonCyan,
+                unreadCount = 0
+            ))
+        }
+        list
+    }
+
+    val selectedPerfilId by beBrainViewModel.selectedProfileId.collectAsStateWithLifecycle()
 
     // --- ESTADO DE FILTROS ELEVADO (COORDINACIÓN DE COLAPSO) ---
     var isFilterSheetOpen by remember { mutableStateOf(false) }
@@ -117,6 +156,9 @@ fun CalendarScreen(
         showPastEvents = showPastEvents,
         nextEvents = nextEvents,
         shortcuts = shortcuts,
+        perfiles = perfiles,
+        selectedPerfilId = selectedPerfilId ?: "personal",
+        onPerfilSelected = { beBrainViewModel.selectProfile(if (it.id == "personal") null else it.id) },
         filterDropdownItems = filterDropdownItems,
         sortDropdownItems = sortDropdownItems,
         activeSorts = activeSortCriteria,
@@ -157,6 +199,9 @@ fun CalendarScreenContent(
     showPastEvents: Boolean,
     nextEvents: List<CalendarEventEntity>,
     shortcuts: List<FilterSortItem> = emptyList(),
+    perfiles: List<PerfilEmpresa> = emptyList(),
+    selectedPerfilId: String = "personal",
+    onPerfilSelected: (PerfilEmpresa) -> Unit = {},
     filterDropdownItems: List<DropdownItemData>,
     sortDropdownItems: List<DropdownItemData>,
     activeSorts: List<String> = emptyList(),
@@ -311,17 +356,27 @@ fun CalendarScreenContent(
                     modifier = Modifier.weight(1f),
                     state = listState,
                     titulo = if (showPastEvents) "HISTORIAL" else "PRÓXIMOS COMPROMISOS",
-                    subtitulo = "SISTEMA MAVERICK",
-                    compactInfo = currentVisibleLabel,
+                    subtitulo = perfiles.find { it.id == selectedPerfilId }?.nombre,
                     itemCount = allEventsCount,
-                    acciones = {
+                    perfiles = perfiles,
+                    initialPerfilId = selectedPerfilId,
+                    onPerfilSelected = onPerfilSelected,
+                    customMaxHeaderHeight = 64.dp,
+                    acciones = { fraction ->
                         if (activeFilters.isNotEmpty()) {
-                            BotonesCabecera.Limpiar(onClearFilters)
+                           // BotonesCabecera.Limpiar(onClearFilters)
                         }
                     }
-                ) {
+                ) { perfil ->
                     if (groupedEvents.isEmpty() && nextEvents.isEmpty()) {
-                        item { Box(modifier = Modifier.padding(horizontal = 8.dp)) { EmptyStateCalendar() } }
+                        item { 
+                            Box(modifier = Modifier.padding(horizontal = 8.dp)) { 
+                                EmptyCalendarPlaceholder(
+                                    message = if (perfil?.id == "personal") "No tienes compromisos personales"
+                                             else "No hay compromisos para ${perfil?.nombre ?: "esta empresa"}"
+                                ) 
+                            } 
+                        }
                     }
 
                     val allDates = (groupedEvents.keys + todayStr).distinct().sorted()
@@ -458,6 +513,46 @@ private fun calculateScrollToIndex(dateStr: String, grouped: Map<String, List<Ca
         }
     }
     return -1
+}
+
+@Composable
+fun EmptyCalendarPlaceholder(message: String = "No tienes compromisos activos") {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 80.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(
+                modifier = Modifier.size(80.dp),
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.05f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = MaverickIcons.Calendar,
+                        contentDescription = null,
+                        tint = Color.Gray.copy(alpha = 0.3f),
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = message,
+                color = Color.Gray,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Tus visitas técnicas y turnos agendados aparecerán aquí.",
+                color = Color.Gray.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFF020408)

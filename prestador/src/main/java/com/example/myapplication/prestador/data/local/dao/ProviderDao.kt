@@ -1,12 +1,17 @@
+/**
 package com.example.myapplication.prestador.data.local.dao
 
-import androidx.room.*
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import kotlinx.coroutines.flow.Flow
-
-/**
- * DAO (Data Access Object) para la tabla de Providers
+/*
+ * ARCHIVO EN DESUSO
+ * Motivo: Se ha centralizado la fuente de verdad en los DAOs del módulo :core.
+ * Se recomienda usar com.example.myapplication.core.data.local.dao.ProviderDao
+ * para todas las operaciones de persistencia del prestador.
  */
+
+/*
+import androidx.room.*
+import com.example.myapplication.core.data.local.entity.ProviderEntity
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ProviderDao {
@@ -22,27 +27,29 @@ interface ProviderDao {
     @Delete
     suspend fun deleteProvider(provider: ProviderEntity)
     
-    @Query("SELECT * FROM providers WHERE id = :id")
+    @Query("SELECT * FROM provider_profile WHERE id = :id")
     fun getProviderById(id: String): Flow<ProviderEntity?>
 
-    @Query("SELECT * FROM providers WHERE id = :id")
+    @Query("SELECT * FROM provider_profile WHERE id = :id")
     suspend fun getProviderByIdOnce(id: String): ProviderEntity?
 
-    @Query("SELECT * FROM providers ORDER BY createdAt DESC")
+    @Query("SELECT * FROM provider_profile ORDER BY createdAt DESC")
     fun getAllProviders(): Flow<List<ProviderEntity>>
 
-    @Query("SELECT EXISTS(SELECT 1 FROM providers WHERE id = :id)")
+    @Query("SELECT EXISTS(SELECT 1 FROM provider_profile WHERE id = :id)")
     suspend fun providerExists(id: String): Boolean
 
-    @Query("UPDATE providers SET photoUrl = :imageUrl WHERE id = :id")
+    @Query("UPDATE provider_profile SET photoUrl = :imageUrl WHERE id = :id")
     suspend fun updateProviderImage(id: String, imageUrl: String)
 
-    @Query("UPDATE providers SET rating = :rating WHERE id = :id")
+    @Query("UPDATE provider_profile SET rating = :rating WHERE id = :id")
     suspend fun updateProviderRating(id: String, rating: Float)
 
-    @Query("DELETE FROM providers WHERE id = :id")
+    @Query("DELETE FROM provider_profile WHERE id = :id")
     suspend fun deleteProviderById(id: String)
 
-    @Query("SELECT * FROM providers WHERE name LIKE :query ORDER BY name ASC")
+    @Query("SELECT * FROM provider_profile WHERE name LIKE :query ORDER BY name ASC")
     fun searchProviders(query: String): Flow<List<ProviderEntity>>
 }
+*/
+*/

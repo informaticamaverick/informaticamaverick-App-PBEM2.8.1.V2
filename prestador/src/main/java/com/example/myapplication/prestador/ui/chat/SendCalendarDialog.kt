@@ -1,6 +1,5 @@
 ﻿package com.example.myapplication.prestador.ui.chat
 
-import android.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,7 +28,7 @@ import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.calendar.AvailabilityViewModel
 import com.example.myapplication.prestador.viewmodel.calendar.BlockedDateViewModel
 import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -63,15 +62,14 @@ fun SendCalendarDialog(
     // Fuente única de verdad: leemos del ViewModel directamente
     val provider = (profileState as? com.example.myapplication.prestador.viewmodel.profile.ProfileState.Success)?.provider
     val localActivo = provider?.hasPhysicalLocation ?: false
-    val empresaActiva = provider?.hasCompanyProfile ?: false
+    val empresaActiva = provider?.companies?.isNotEmpty() ?: false
     val canUseLocalAppointment = localActivo || empresaActiva
-
     // Prioridad: local propio > empresa
     val mostrarBranchesEmpresa = !localActivo && empresaActiva
-    val branches = if (mostrarBranchesEmpresa) provider?.companies?.flatMap { it.branches } ?: emptyList()
+    val branches = if (mostrarBranchesEmpresa) provider.companies.flatMap { it.branches }
     else emptyList()
     val localAddress = if (localActivo)
-        provider?.addresses?.find { it.id == "local" }?.fullString() ?: provider?.address?.fullString()
+        provider.addresses.find { it.id == "local" }?.fullString() ?: provider.address?.fullString()
     else null
 
     // ID real de la empresa: primero el que viene como parámetro, si no el primero disponible en el perfil
@@ -132,7 +130,7 @@ fun SendCalendarDialog(
     }
 
     var showRangePicker by remember { mutableStateOf(false) }
-    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    val sdf = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
 
     val today = remember {
         Calendar.getInstance().apply {
@@ -301,7 +299,7 @@ fun SendCalendarDialog(
                             border = BorderStroke(1.dp, if (categoryDropdownExpanded) accentColor else accentColor.copy(alpha = 0.3f)),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .menuAnchor()
+                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                                 .clickable { categoryDropdownExpanded = true }
                         ) {
                             Row(

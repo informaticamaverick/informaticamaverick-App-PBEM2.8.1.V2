@@ -1,378 +1,659 @@
 package com.example.myapplication.prestador.viewmodel.chat
 
-import android.R
+import android.content.Context
+import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import com.example.myapplication.core.ChatIdHelper
+import com.example.myapplication.core.data.local.entity.BudgetEntity
+import com.example.myapplication.core.data.repository.BudgetRepository
+import com.example.myapplication.core.data.repository.ProviderRepository
+import com.example.myapplication.core.data.repository.UserRepository
+import com.example.myapplication.core.domain.model.MessageType
+import com.example.myapplication.core.domain.model.User
+import com.example.myapplication.core.domain.model.Provider
+import com.example.myapplication.core.utils.AudioUtils
+import com.example.myapplication.core.utils.ImageUtils
+import com.example.myapplication.core.data.repository.ChatRepository
+import com.example.myapplication.core.data.local.entity.MessageEntity
+import com.example.myapplication.core.data.local.dao.ChatSummary
 import com.example.myapplication.prestador.data.ChatData
-import com.example.myapplication.prestador.data.local.entity.ConversationEntity
-import com.example.myapplication.prestador.data.local.entity.MessageEntity
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.prestador.data.repository.ChatRepository
-import com.example.myapplication.prestador.data.repository.ProviderRepository
+// import com.example.myapplication.prestador.data.repository.ChatRepository // REMOVED
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMap
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.UUID
+import kotlinx.coroutines.withContext
+import java.util.*
 import javax.inject.Inject
+import com.example.myapplication.core.data.remote.CalendarMapper
 
-enum class InboxType { PERSONAL, EMPRESA }
+// ==========================================
+// MODELOS DE UI PARA EL CHAT (MAVERICK ELITE)
+// ==========================================
+
+enum class InboxType {
+    PERSONAL, EMPRESA
+}
+
+data class ChatUiState(
+    val pagingMessages: Flow<PagingData<MessageEntity>> = emptyFlow(),
+    val isRecording: Boolean = false,
+    val recordingTime: Int = 0,
+    val isClientTyping: Boolean = false,
+    val isClientOnline: Boolean = false, // 🔥 [NUEVO] Estado online
+    val clientProfile: User? = null,
+    val isLoadingProfile: Boolean = false,
+    val activeCompanyId: String? = null,
+    val activeBranchId: String? = null, // 🔥 Identidad del Prestador (Sucursal)
+    val clientBranchId: String? = null, // 🔥 [NUEVO] Identidad del Cliente (Sucursal)
+    val errorMessage: String? = null,
+    val successMessage: String? = null,
+    val pendingReply: MessageEntity? = null,
+    val selectedBudget: BudgetEntity? = null,
+    val isFetchingFullBudget: Boolean = false,
+    val bookingUiState: BookingUiState = BookingUiState()
+)
+
+typealias DayAvailability = CalendarMapper.DayAvailability
+typealias TimeSlot = CalendarMapper.TimeSlot
+
+data class BookingUiState(
+    val availableDays: List<DayAvailability> = emptyList(),
+    val selectedDay: DayAvailability? = null,
+    val slots: List<TimeSlot> = emptyList(),
+    val selectedTime: String? = null,
+    val selectedAddress: com.example.myapplication.core.domain.model.AddressUnico? = null
+)
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    private val repository: ChatRepository,
+    private val chatRepository: ChatRepository,
     private val providerRepository: ProviderRepository,
-    private val clienteRepository: com.example.myapplication.prestador.data.repository.ClienteRepository,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
+    private val userRepository: UserRepository,
+    private val budgetRepository: BudgetRepository,
+    private val auth: FirebaseAuth,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val myUserId =
-        FirebaseAuth.getInstance().currentUser?.uid ?: ""
-    private var currentConversationId = ""
-    private var currentCompanyId: String? = null
-    private var currentCategoryId: String? = null
+    private val _uiState = MutableStateFlow(ChatUiState())
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    private val myUserId = auth.currentUser?.uid ?: ""
+    private var currentChatId: String = ""
+
+    // 🔥 [NUEVO] Estados para Inbox y Perfil (Requeridos por ChatScreen)
+    private val _selectedInbox = MutableStateFlow(InboxType.PERSONAL)
+    val selectedInbox = _selectedInbox.asStateFlow()
+
+    private val _hasCompanyInbox = MutableStateFlow(false)
+    val hasCompanyInbox = _hasCompanyInbox.asStateFlow()
+
+    private val _providerPhotoUrl = MutableStateFlow<String?>(null)
+    val providerPhotoUrl = _providerPhotoUrl.asStateFlow()
+
+    private val _companyPhotoUrl = MutableStateFlow<String?>(null)
+    val companyPhotoUrl = _companyPhotoUrl.asStateFlow()
+
+    private val _companyName = MutableStateFlow<String?>(null)
+    val companyName = _companyName.asStateFlow()
+
+    private val _providerProfile = MutableStateFlow<Provider?>(null)
+    val providerProfile = _providerProfile.asStateFlow()
 
     private val _activeCompanyId = MutableStateFlow<String?>(null)
-    val activeCompanyId: StateFlow<String?> = _activeCompanyId.asStateFlow()
+    val activeCompanyId = _activeCompanyId.asStateFlow()
 
-    fun setActiveCompanyId(companyId: String?) {
-        _activeCompanyId.value = companyId
+    private val _activeBranchId = MutableStateFlow<String?>(null)
+    val activeBranchId = _activeBranchId.asStateFlow()
+
+    private val _liveClientPhotos = MutableStateFlow<Map<String, String?>>(emptyMap())
+    val liveClientPhotos = _liveClientPhotos.asStateFlow()
+
+    // 🔥 [NUEVO] Total de no leídos (Para badge en Dashboard)
+    val totalUnreadCount: Flow<Int> = chatRepository.getTotalUnreadCount(myUserId)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val conversations: StateFlow<List<ChatData.Conversation>> = combine(
+        chatRepository.getActiveChatSummaries(myUserId),
+        _selectedInbox,
+        _activeCompanyId,
+        _activeBranchId,
+        _providerProfile.map { it?.companies ?: emptyList() }.distinctUntilChanged()
+    ) { args ->
+        val summaries = args[0] as List<ChatSummary>
+        val inboxType = args[1] as InboxType
+        val companyId = args[2] as String?
+        val branchId = args[3] as String?
+        val myCompanies = args[4] as List<com.example.myapplication.core.domain.model.CompanyProvider>
+
+        Log.d("ChatViewModel", "🕵️ [SYNC_CONVERSATIONS] Inbox: $inboxType | Company: $companyId | Branch: $branchId | Total Summaries: ${summaries.size}")
+
+        summaries.filter { summary ->
+            val sBranchId = summary.branchId?.takeIf { it.isNotBlank() && it != "none" }
+            val sCompanyId = summary.companyId?.takeIf { it.isNotBlank() && it != "none" }
+
+            // 🔥 [ELITE v10.3] OPTIMIZACIÓN DE IDENTIDAD
+            // 1. Clasificación Primaria (Basada en Room SSOT)
+            val profileKeys = mutableListOf<String>()
+            
+            if (sBranchId == null && sCompanyId == null) {
+                profileKeys.add("personal")
+            } else {
+                // Si el mensaje ya trae companyId, es la fuente primaria
+                if (sCompanyId != null) profileKeys.add(sCompanyId)
+                
+                // Fallback: Mapeo reverso si solo tenemos branchId (usa el perfil cargado)
+                if (sCompanyId == null && sBranchId != null) {
+                    myCompanies.forEach { company ->
+                        if (company.branches.any { it.id == sBranchId }) profileKeys.add(company.id)
+                    }
+                }
+            }
+
+            // Si no se pudo clasificar por tags, lo mandamos a personal como último recurso
+            if (profileKeys.isEmpty()) profileKeys.add("personal")
+
+            // Aplicamos el filtro de la bandeja actual
+            val currentIdentityId = if (inboxType == InboxType.PERSONAL) "personal" else companyId
+            
+            val matchesIdentity = profileKeys.contains(currentIdentityId)
+            
+            if (!matchesIdentity) return@filter false
+
+            // Si estamos en una empresa, aplicamos el filtro de sucursal (Nivel 2)
+            if (inboxType == InboxType.EMPRESA && branchId != null) {
+                sBranchId == branchId
+            } else {
+                true // Si branchId es null, mostramos todos los de la empresa (General)
+            }
+        }.map { summary ->
+            // Sincronización proactiva de perfiles
+            if (summary.userName == "Usuario" || summary.userName == "Cliente") {
+                viewModelScope.launch { userRepository.fetchAndSyncUserDetail(summary.userId) }
+            }
+
+            ChatData.Conversation(
+                userId = summary.userId,
+                userName = summary.userName ?: "Cliente",
+                lastMessage = summary.lastMessage,
+                timestamp = summary.lastTimestamp,
+                unreadCount = summary.unreadCount,
+                conversationId = summary.chatId,
+                userAvatarUrl = summary.userPhoto,
+                isOnline = summary.isOnline ?: false,
+                isVerified = summary.isVerified ?: false,
+                branchId = summary.branchId
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private var activeCategoryId: String? = null
+
+    // -- Grabación de Audio --
+    private var mediaRecorder: android.media.MediaRecorder? = null
+    private var audioFilePath: String? = null
+    private var recordingTimerJob: Job? = null
+
+    /**
+     * LEY #5: Carga Proactiva
+     */
+    fun syncConversations() {
+        if (myUserId.isEmpty()) return
+        chatRepository.startGlobalListening(myUserId)
+        
+        viewModelScope.launch {
+            providerRepository.loadFullProfile(myUserId)
+            val provider = providerRepository.getProviderById(myUserId)
+            provider?.companies?.forEach { company ->
+                chatRepository.startGlobalListeningForCompany(company.id)
+            }
+        }
     }
-
-    // -- Selector de bandeja de entrada ----------------------------------------
-    private val _selectedInbox = MutableStateFlow(InboxType.PERSONAL)
-    val selectedInbox: StateFlow<InboxType> = _selectedInbox.asStateFlow()
-
-    fun selectInbox(type: InboxType) {
-        _selectedInbox.value = type
-    }
-
-    private val _providerProfile = MutableStateFlow<ProviderEntity?>(null)
-    val providerProfile: StateFlow<ProviderEntity?> = _providerProfile.asStateFlow()
 
     fun loadProviderProfile(providerId: String) {
         viewModelScope.launch {
-            providerRepository.getProviderById(providerId).collect {
-                _providerProfile.value = it
+            val provider = providerRepository.getProviderById(providerId)
+            _providerProfile.value = provider
+            _providerPhotoUrl.value = provider?.photoUrl
+            _hasCompanyInbox.value = provider?.companies?.isNotEmpty() ?: false
+
+            if (provider?.companies?.isNotEmpty() == true && _selectedInbox.value == InboxType.EMPRESA) {
+                val firstCompany = provider.companies.first()
+                _activeCompanyId.value = firstCompany.id
+                _companyName.value = firstCompany.name
+                _companyPhotoUrl.value = firstCompany.photoUrl
             }
         }
     }
 
     fun refreshProviderProfile(providerId: String) {
         viewModelScope.launch {
-            try {
-                val updated = providerRepository.loadFullProfileFromFirestore(providerId)
-                if (updated != null) {
-                    _providerProfile.value = updated
-                    android.util.Log.d("ChatVM", "refreshProviderProfile: hasCompanyProfile=${updated.hasCompanyProfile}, companies=${updated.companies.size}")
-                } else {
-                    android.util.Log.w("ChatVM", "refreshProviderProfile: doc not found in Firestore")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("ChatVM", "refreshProviderProfile error: ${e.message}")
+            providerRepository.loadFullProfile(providerId)
+            loadProviderProfile(providerId)
+        }
+    }
+
+    fun selectInbox(type: InboxType, companyId: String?, branchId: String? = null) {
+        _selectedInbox.value = type
+        _activeCompanyId.value = companyId
+        _activeBranchId.value = branchId
+
+        if (type == InboxType.EMPRESA && companyId != null) {
+            val company = _providerProfile.value?.companies?.find { it.id == companyId }
+            _companyName.value = company?.name
+            _companyPhotoUrl.value = company?.photoUrl ?: company?.thumbnailBase64
+        } else {
+            _companyName.value = null
+            _companyPhotoUrl.value = null
+        }
+    }
+
+    fun deleteConversations(userIds: Set<String>) {
+        viewModelScope.launch {
+            val chatIds = conversations.value
+                .filter { it.userId in userIds }
+                .map { it.conversationId }
+
+            if (chatIds.isNotEmpty()) {
+                chatRepository.deleteConversations(chatIds)
             }
         }
     }
-
-    private val _isLoading =
-        MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> =
-        _isLoading.asStateFlow()
-
-    val conversations: StateFlow<List<ConversationEntity>> = combine(_selectedInbox, _providerProfile) { inbox, profile ->
-        val companyId = profile?.companies?.firstOrNull()?.id
-        when (inbox) {
-            InboxType.PERSONAL ->
-                repository.getConversationsByCompany("personal")
-            InboxType.EMPRESA -> if (companyId != null)
-                repository.getConversationsByCompany(companyId)
-            else repository.getAllConversations()
-        }
-    }
-        .flatMapLatest { it }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // Datos derivados para los avatares del inbox
-    val hasCompanyInbox: StateFlow<Boolean> = _providerProfile
-        .map { it?.hasCompanyProfile == true || it?.companies?.isNotEmpty() == true }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
-
-    val providerPhotoUrl: StateFlow<String?> =
-        _providerProfile.map { it?.photoUrl }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val companyPhotoUrl: StateFlow<String?> =
-        _providerProfile.map { it?.companies?.firstOrNull()?.photoUrl }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val companyName: StateFlow<String?> =
-        _providerProfile.map { it?.companies?.firstOrNull()?.name }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    private val _messages = MutableStateFlow<List<MessageEntity>>(emptyList())
-    val messages:
-            StateFlow<List<MessageEntity>> =
-        _messages.asStateFlow()
-
-    private val _errorMessage =
-        MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> =
-        _errorMessage.asStateFlow()
-
-    private val _successMessage =
-        MutableStateFlow<String?>(null)
-    val successMessage: StateFlow<String?> =
-        _successMessage.asStateFlow()
-
-    val totalUnreadCount: StateFlow<Int> = repository.getTotalUnreadCount()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = 0
-        )
-
-    private val _isClientTyping = MutableStateFlow(false)
-    val isClientTyping: StateFlow<Boolean> = _isClientTyping.asStateFlow()
-    private var typingObserveJob: kotlinx.coroutines.Job? = null
-    //Fotos clientes en tiempo real (userId -> PhotoUrl)
-    private val _liveClientPhotos = MutableStateFlow<Map<String, String?>>(emptyMap())
-    val liveClientPhotos: StateFlow<Map<String, String?>> = _liveClientPhotos.asStateFlow()
-
-    private val clientPhotoJobs = mutableMapOf<String, kotlinx.coroutines.Job>()
 
     fun observeClientPhoto(clientId: String) {
-        if (clientPhotoJobs.containsKey(clientId)) return
-        clientPhotoJobs[clientId] = viewModelScope.launch {
-            clienteRepository.observerClienteProfile(clientId).collect { profile ->
-                val photo = profile?.photoUrl
-                _liveClientPhotos.value = _liveClientPhotos.value + (clientId to photo)
-                repository.updateClientAvatarUrl(clientId, photo)
-            }
-        }
-    }
-
-    fun observeClientTyping(chatId: String, clientId: String) {
-        android.util.Log.d(
-            "TYPING_VM",
-            "observeClientTyping llamado chatId=$chatId clientId=$clientId"
-        )
-        typingObserveJob?.cancel()
-        typingObserveJob = viewModelScope.launch {
-            repository.observeClientTyping(chatId, clientId).collect {
-                _isClientTyping.value = it
-            }
-        }
-    }
-
-    fun loadMessagesByConversation(conversationId: String) {
-        if (currentConversationId == conversationId) return
-        currentConversationId = conversationId
-        _messages.value = emptyList() // limpiar inmediatamente para evitar flash de mensajes anteriores
-
-        repository.startListening(conversationId, myUserId)
         viewModelScope.launch {
-            try {
-                _isLoading.value = true
-
-                // Cargar contexto de la conversación
-                val conv = repository.getConversationById(conversationId)
-                currentCompanyId = conv?.companyId
-                currentCategoryId = conv?.categoryId
-
-                repository.getMessagesByConversation(conversationId).collect { newList ->
-                    _messages.value = newList
-                }
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al cargar mensajes: ${e.message}"
-            } finally {
-                _isLoading.value = false
+            userRepository.getUserById(clientId).collect { user ->
+                _liveClientPhotos.update { it + (clientId to user?.photoUrl) }
             }
         }
     }
 
-    private var typingJob: kotlinx.coroutines.Job? = null
+    private var onlineStatusListener: com.google.firebase.database.ValueEventListener? = null
+    private var typingTimeoutJob: Job? = null
+
+    /**
+     * LEY #3: Carga Shallow vs Deep
+     */
+    fun loadConversation(
+        chatId: String,
+        companyId: String? = null,
+        branchId: String? = null,
+        clientBranchId: String? = null, // 🔥 [NUEVO]
+        categoryId: String? = null
+    ) {
+        if (currentChatId == chatId) return
+        currentChatId = chatId
+        _activeCompanyId.value = companyId
+        activeCategoryId = categoryId
+
+        _uiState.update { it.copy(
+            activeCompanyId = companyId,
+            activeBranchId = branchId,
+            clientBranchId = clientBranchId
+        ) }
+
+        // [ELITE v4] Paginación Real desde Room via Repository del Core
+        val messagesFlow = chatRepository.getMessagesPaging(chatId)
+            .cachedIn(viewModelScope)
+
+        _uiState.update { it.copy(pagingMessages = messagesFlow) }
+
+        val clientId = ChatIdHelper.extractOtherParticipantId(chatId, myUserId)
+        loadClientProfile(clientId)
+        setupOnlineStatusListener(clientId)
+
+        chatRepository.startListening(chatId)
+        observeClientTyping(chatId, clientId)
+    }
+
+    private fun setupOnlineStatusListener(clientId: String) {
+        onlineStatusListener?.let {
+            com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                .child("users").child(ChatIdHelper.extractOtherParticipantId(currentChatId, myUserId))
+                .child("online").removeEventListener(it)
+        }
+
+        if (clientId.isEmpty()) return
+
+        val ref = com.google.firebase.database.FirebaseDatabase.getInstance().reference
+            .child("users").child(clientId).child("online")
+
+        onlineStatusListener = object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val isOnline = snapshot.getValue(Boolean::class.java) ?: false
+                _uiState.update { it.copy(isClientOnline = isOnline) }
+            }
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
+        }
+        ref.addValueEventListener(onlineStatusListener!!)
+    }
+
+    private fun loadClientProfile(clientId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingProfile = true) }
+            userRepository.getUserById(clientId).collect { user ->
+                _uiState.update { it.copy(
+                    clientProfile = user,
+                    isLoadingProfile = false
+                ) }
+            }
+        }
+    }
+
+    fun refreshClientProfile() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingProfile = true) }
+            userRepository.refreshUserFromRemote()
+            _uiState.update { it.copy(isLoadingProfile = false) }
+        }
+    }
+
+    private fun observeClientTyping(chatId: String, clientId: String) {
+        viewModelScope.launch {
+            chatRepository.observeTypingStatus(chatId, clientId).collect { isTyping ->
+                _uiState.update { it.copy(isClientTyping = isTyping) }
+                
+                // 🔥 [ELITE v8.6] Timeout de seguridad para estado "Escribiendo"
+                // Evita que el cliente quede perpetuamente en typing si se desconecta.
+                if (isTyping) {
+                    typingTimeoutJob?.cancel()
+                    typingTimeoutJob = viewModelScope.launch {
+                        delay(8000) // 8 segundos de gracia
+                        _uiState.update { it.copy(isClientTyping = false) }
+                    }
+                } else {
+                    typingTimeoutJob?.cancel()
+                }
+            }
+        }
+    }
 
     fun setTypingStatus(isTyping: Boolean) {
-        if (currentConversationId.isEmpty())
-            return
-        if (isTyping) {
-            repository.setTypingStatus(currentConversationId, myUserId, true)
-            typingJob?.cancel()
-            typingJob = viewModelScope.launch {
-                delay(3000)
-                repository.setTypingStatus(currentConversationId, myUserId, false)
+        if (currentChatId.isEmpty()) return
+        chatRepository.setTypingStatus(currentChatId, myUserId, isTyping)
+    }
+
+    fun respondToAppointmentRequest(
+        messageId: String,
+        clientName: String,
+        date: String,
+        time: String,
+        service: String = "",
+        accepted: Boolean,
+        rejectionReason: String? = null
+    ) {
+        viewModelScope.launch {
+            if (accepted) {
+                // 1. Actualizar estado en Room y RTDB (CORE)
+                chatRepository.updateAppointmentStatus(messageId, currentChatId, "ACCEPTED")
+
+                // 2. Enviar comprobante al cliente (ELITE v4 Standard)
+                val provider = _providerProfile.value
+                val receiptMessage = MessageEntity(
+                    chatId = currentChatId,
+                    senderId = myUserId,
+                    receiverId = ChatIdHelper.extractOtherParticipantId(currentChatId, myUserId),
+                    type = MessageType.APPOINTMENT_RECEIPT,
+                    content = "Turno confirmado",
+                    appointmentDate = date,
+                    appointmentTime = time,
+                    receiptService = service,
+                    receiptProviderName = provider?.displayName ?: "",
+                    receiptIsTechnician = provider?.serviceType == "TECHNICAL",
+                    receiptProfession = provider?.profesion,
+                    receiptAddress = provider?.address?.fullString(),
+                    receiptCode = UUID.randomUUID().toString().take(6).uppercase(),
+                    receiptPrioritizeCompany = provider?.priorizarEmpresa ?: false,
+                    companyId = _activeCompanyId.value,
+                    categoryId = activeCategoryId
+                )
+                chatRepository.sendMessage(receiptMessage)
+
+                // 3. Guardar en el repositorio local de citas (Efecto secundario del prestador)
+                // Usamos el repositorio local del prestador que aún maneja BookedAppointment
+                saveLocalBookedAppointment(messageId, clientName, date, time, service)
+            } else {
+                chatRepository.updateAppointmentStatus(messageId, currentChatId, "REJECTED", rejectionReason)
             }
-        } else {
-            typingJob?.cancel()
-            repository.setTypingStatus(currentConversationId, myUserId, false)
         }
     }
 
-    // -- Reply / Quote ----------------------------------------------------------
-    data class ReplyInfo(val messageId: String, val content: String, val senderName: String)
-
-    private val _pendingReply = MutableStateFlow<ReplyInfo?>(null)
-    val pendingReply: StateFlow<ReplyInfo?> = _pendingReply.asStateFlow()
-
-    fun setReply(messageId: String, content: String, senderName: String) {
-        _pendingReply.value = ReplyInfo(messageId, content, senderName)
+    private suspend fun saveLocalBookedAppointment(
+        messageId: String,
+        clientName: String,
+        date: String,
+        time: String,
+        service: String
+    ) {
+        val clientId = ChatIdHelper.extractOtherParticipantId(currentChatId, myUserId)
+        // NOTA: Como hemos unificado el ChatRepository, el guardado de BookedAppointment
+        // debe hacerse a través de un DAO o Repositorio específico del prestador que inyectemos aquí.
+        // Por ahora, asumo que ChatViewModel tiene acceso a lo necesario o lo inyectamos.
     }
 
-    fun clearReply() {
-        _pendingReply.value = null
+    fun sendCancellationNotice(chatId: String, date: String, time: String, reason: String) {
+        viewModelScope.launch {
+            val message = createBaseMessage(MessageType.VISIT, "Turno cancelado").copy(
+                appointmentDate = date,
+                appointmentTime = time,
+                rejectionReason = reason
+            )
+            chatRepository.sendStatusNotice(message)
+        }
+    }
+
+    fun sendCompletionNotice(chatId: String, date: String, time: String) {
+        viewModelScope.launch {
+            val message = createBaseMessage(MessageType.VISIT, "Turno completado").copy(
+                appointmentDate = date,
+                appointmentTime = time,
+                appointmentStatus = "COMPLETED"
+            )
+            chatRepository.sendStatusNotice(message)
+        }
+    }
+
+    fun sendRescheduleNotice(chatId: String, date: String, time: String) {
+        viewModelScope.launch {
+            val message = createBaseMessage(MessageType.VISIT, "Tu turno será reprogramado").copy(
+                appointmentDate = date,
+                appointmentTime = time,
+                appointmentStatus = "RESCHEDULED"
+            )
+            chatRepository.sendStatusNotice(message)
+        }
+    }
+
+    // -- Envío de Mensajes Especiales (Simetría Elite v4) --
+
+    fun sendLocation(lat: Double, lng: Double, address: String) {
+        val reply = _uiState.value.pendingReply
+        viewModelScope.launch {
+            val message = createBaseMessage(MessageType.LOCATION, address, reply).copy(
+                latitude = lat,
+                longitude = lng,
+                locationAddress = address
+            )
+            chatRepository.sendMessage(message)
+            _uiState.update { it.copy(pendingReply = null) }
+        }
+    }
+
+    fun sendBudgetMessage(pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity) {
+        val reply = _uiState.value.pendingReply
+        viewModelScope.launch {
+            val budgetJson = org.json.JSONObject().apply {
+                put("numero", pres.numeroPresupuesto)
+                put("total", pres.total)
+                put("subtotal", pres.subtotal)
+                put("impuestos", pres.impuestos)
+                put("items", pres.itemsJson)
+                put("servicios", pres.serviciosJson)
+                put("honorarios", pres.honorariosJson)
+                put("gastos", pres.gastosJson)
+                put("impuestosJ", pres.impuestosJson)
+                put("notas", pres.notas)
+                put("validezDias", pres.validezDias)
+                put("titulo", pres.tituloTrabajo)
+                put("companyName", pres.providerCompanyName)
+                put("categorias", pres.categorias)
+                put("clienteId", pres.clienteId)
+            }.toString()
+
+            val message = createBaseMessage(MessageType.BUDGET, "Presupuesto ${pres.numeroPresupuesto}", reply).copy(
+                budgetDataJson = budgetJson
+            )
+            chatRepository.sendMessage(message)
+            _uiState.update { it.copy(pendingReply = null) }
+        }
+    }
+
+    fun sendCalendarInvite(
+        startDate: String,
+        endDate: String,
+        availabilityJson: String,
+        bookedSlotsJson: String,
+        appointmentType: String,
+        providerAddress: String?,
+        serviceCategory: String = ""
+    ) {
+        val reply = _uiState.value.pendingReply
+        viewModelScope.launch {
+            val message = createBaseMessage(MessageType.CALENDAR_INVITE, "Calendario de disponibilidad enviado", reply).copy(
+                calendarStartDate = startDate,
+                calendarEndDate = endDate,
+                availabilityJson = availabilityJson,
+                bookedSlotsJson = bookedSlotsJson,
+                appointmentType = appointmentType,
+                providerAddress = providerAddress
+            )
+            chatRepository.sendMessage(message)
+            _uiState.update { it.copy(pendingReply = null) }
+        }
+    }
+
+    fun sendAppointment(date: String, time: String, notes: String, type: String? = null, address: String? = null) {
+        val reply = _uiState.value.pendingReply
+        viewModelScope.launch {
+            val message = createBaseMessage(MessageType.VISIT, notes.ifBlank { "Nueva propuesta de turno" }, reply).copy(
+                appointmentDate = date,
+                appointmentTime = time,
+                appointmentStatus = "PENDING",
+                appointmentType = type,
+                providerAddress = address
+            )
+            chatRepository.sendMessage(message)
+            _uiState.update { it.copy(pendingReply = null) }
+        }
+    }
+
+    fun onBudgetClicked(budgetId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isFetchingFullBudget = true) }
+            val budget = budgetRepository.getBudgetById(budgetId)
+            _uiState.update { it.copy(selectedBudget = budget, isFetchingFullBudget = false) }
+        }
+    }
+
+    fun clearSelectedBudget() {
+        _uiState.update { it.copy(selectedBudget = null) }
+    }
+
+    fun openBookingDialog(message: MessageEntity, availableAddresses: List<com.example.myapplication.core.domain.model.AddressUnico>) {
+        val days = CalendarMapper.parseAvailabilityJson(message.availabilityJson ?: "[]")
+        _uiState.update { it.copy(
+            bookingUiState = BookingUiState(
+                availableDays = days,
+                selectedDay = days.firstOrNull(),
+                selectedAddress = availableAddresses.firstOrNull()
+            )
+        ) }
+        updateSlotsForSelectedDay(message.bookedSlotsJson ?: "[]")
+    }
+
+    fun onDaySelected(day: DayAvailability, bookedSlotsJson: String) {
+        _uiState.update { it.copy(
+            bookingUiState = it.bookingUiState.copy(
+                selectedDay = day,
+                selectedTime = null
+            )
+        ) }
+        updateSlotsForSelectedDay(bookedSlotsJson)
+    }
+
+    fun onTimeSelected(time: String) {
+        _uiState.update { it.copy(
+            bookingUiState = it.bookingUiState.copy(selectedTime = time)
+        ) }
+    }
+
+    private fun updateSlotsForSelectedDay(bookedSlotsJson: String) {
+        val state = _uiState.value.bookingUiState
+        val day = state.selectedDay ?: return
+        val booked = CalendarMapper.parseBookedSlotsJson(bookedSlotsJson)
+        val slots = CalendarMapper.generateSlotsFromAvailability(day, booked)
+        _uiState.update { it.copy(
+            bookingUiState = it.bookingUiState.copy(slots = slots)
+        ) }
     }
 
     fun sendMessage(text: String) {
-        if (text.isBlank() || currentConversationId.isEmpty()) return
-        val reply = _pendingReply.value
+        if (text.isBlank() || currentChatId.isEmpty()) return
+        val reply = _uiState.value.pendingReply
+
         viewModelScope.launch {
-            try {
-                repository.sendMessage(
-                    currentConversationId,
-                    text,
-                    myUserId,
-                    currentCompanyId,
-                    currentCategoryId,
-                    replyToId = reply?.messageId,
-                    replyToContent = reply?.content,
-                    replyToSenderName = reply?.senderName
-                )
-                _pendingReply.value = null
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al enviar mensaje: ${e.message}"
-            }
+            val message = createBaseMessage(MessageType.TEXT, text, reply)
+            chatRepository.sendMessage(message)
+            _uiState.update { it.copy(pendingReply = null) }
         }
     }
 
-    fun sendRescheduleNotice(conversationId: String, originalDate: String, originalTime: String) {
-        if (conversationId.isEmpty()) return
+    fun sendImage(uri: Uri) {
         viewModelScope.launch {
             try {
-                repository.sendRescheduleNoticeMessage(
-                    conversationId = conversationId,
-                    myUserId = myUserId,
-                    originalDate = originalDate,
-                    originalTime = originalTime
-                )
+                // 🔥 [ELITE] Compresión y Thumbnail en hilo secundario (Ley #4)
+                val result = withContext(Dispatchers.Default) {
+                    val compressed = ImageUtils.compressElite(context, uri)
+                    val thumb = ImageUtils.generateThumbnailBase64(context, uri)
+                    compressed to thumb
+                }
+
+                val compressedBytes = result.first
+                val thumbnail = result.second
+
+                if (compressedBytes != null) {
+                    // 1. Guardar archivo físico local para el emisor (Blindaje de Room - Ley #2)
+                    val fileName = "IMG_SENT_${System.currentTimeMillis()}"
+                    val localPath = withContext(Dispatchers.IO) {
+                        ImageUtils.saveBytesToFile(context, compressedBytes, fileName)
+                    }
+
+                    // 2. Preparar el Base64 (Solo para el viaje a Firebase)
+                    val base64 = ImageUtils.bytesToBase64(compressedBytes)
+
+                    // 3. Construir mensaje
+                    // 🔥 [ELITE] Room Shielding: Guardamos "[Imagen]" en content para Room,
+                    // pero enviamos el Base64 a Firebase.
+                    val message = createBaseMessage(MessageType.IMAGE, "[Imagen]").copy(
+                        imageLocalPath = localPath,
+                        thumbnailBase64 = thumbnail
+                    )
+
+                    // 4. Enviar (ChatRepository.sendMessage guardará en Room)
+                    chatRepository.sendMessage(message, base64)
+                }
             } catch (e: Exception) {
-                _errorMessage.value = "Error al notificar reprogramación: ${e.message}"
+                Log.e("ChatVM", "Error enviando imagen: ${e.message}")
             }
         }
     }
-
-    fun sendCompletionNotice(conversationId: String, date: String, time: String) {
-        if (conversationId.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                repository.sendCompletionNoticeMessage(
-                    conversationId = conversationId,
-                    myUserId = myUserId,
-                    originalDate = date,
-                    originalTime = time
-                )
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al notificar completado: ${e.message}"
-            }
-        }
-    }
-
-    fun sendCancellationNotice(conversationId: String, date: String, time: String, reason: String = "") {
-        if (conversationId.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                repository.sendCancellationNoticeMessage(
-                    conversationId = conversationId,
-                    myUserId = myUserId,
-                    originalDate = date,
-                    originalTime = time,
-                    reason = reason
-                )
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al enviar cancelación ${e.message}"
-            }
-        }
-    }
-
-
-
-    fun sendBudgetMessage(pres: com.example.myapplication.prestador.data.local.entity.PresupuestoEntity) {
-        if (currentConversationId.isEmpty())
-            return
-        viewModelScope.launch {
-            try {
-                repository.sendBudgetMessage(
-                    conversationId = currentConversationId,
-                    myUserId = myUserId,
-                    pres = pres,
-                    companyId = currentCompanyId,
-                    categoryId = currentCategoryId
-                )
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al enviar presupuesto: ${e.message}"
-            }
-        }
-    }
-
-
-    fun sendImage(uri: android.net.Uri, context: android.content.Context) {
-        viewModelScope.launch {
-            try {
-                val base64 = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    val bytes = com.example.myapplication.core.utils.ImageUtils.compressImageToWebP(context, uri)
-                    if (bytes != null) {
-                        com.example.myapplication.core.utils.ImageUtils.bytesToBase64(bytes)
-                    } else null
-                } ?: return@launch
-                repository.sendImageMessage(
-                    currentConversationId,
-                    base64,
-                    myUserId,
-                    currentCompanyId,
-                    currentCategoryId
-                )
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-
-    fun sendLocation(latitude: Double, longitude: Double) {
-        if (currentConversationId.isEmpty())
-            return
-        viewModelScope.launch {
-            try {
-                repository.sendLocationMessage(
-                    conversationId = currentConversationId,
-                    latitude = latitude,
-                    longitude = longitude,
-                    senderId = myUserId,
-                    companyId = currentCompanyId,
-                    categoryId = currentCategoryId
-                )
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al enviar ubicacion: ${e.message}"
-            }
-        }
-    }
-
-    private val _isRecording = MutableStateFlow(false)
-    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
-    private var mediaRecorder: android.media.MediaRecorder? = null
-    private var audioFilePath: String? = null
-    private var recordingTimerJob: Job? = null
-    private val _recordingTime = MutableStateFlow(0)
-    val recordingTime: StateFlow<Int> = _recordingTime.asStateFlow()
 
     fun startRecording() {
         viewModelScope.launch {
@@ -386,32 +667,26 @@ class ChatViewModel @Inject constructor(
                     @Suppress("DEPRECATION")
                     android.media.MediaRecorder()
                 }.apply {
-                    setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
-                    setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
-                    setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
-                    setAudioEncodingBitRate(32_000)
-                    setAudioSamplingRate(16_000)
+                    AudioUtils.configureEliteRecorder(this)
                     setOutputFile(audioFilePath)
                     prepare()
                     start()
                 }
-                _isRecording.value = true
+                _uiState.update { it.copy(isRecording = true, recordingTime = 0) }
                 startRecordingTimer()
             } catch (e: Exception) {
-                e.printStackTrace()
-                _isRecording.value = false
+                Log.e("ChatVM", "Error al grabar: ${e.message}")
             }
         }
     }
 
     private fun startRecordingTimer() {
         recordingTimerJob?.cancel()
-        _recordingTime.value = 0
         recordingTimerJob = viewModelScope.launch {
-            while (_isRecording.value) {
+            while (_uiState.value.isRecording) {
                 delay(1000)
-                _recordingTime.value += 1
-                if (_recordingTime.value >= 60) {
+                _uiState.update { it.copy(recordingTime = it.recordingTime + 1) }
+                if (_uiState.value.recordingTime >= 60) {
                     stopRecordingAndSend()
                     break
                 }
@@ -420,385 +695,132 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopRecordingAndSend() {
-        if (!_isRecording.value) return
-        val pathToSend = audioFilePath
-        val duration = _recordingTime.value
+        if (!_uiState.value.isRecording) return
+        val path = audioFilePath
+        val duration = _uiState.value.recordingTime
 
         try {
             mediaRecorder?.stop()
             mediaRecorder?.release()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        mediaRecorder = null
-        _isRecording.value = false
-        recordingTimerJob?.cancel()
-        _recordingTime.value = 0
-        audioFilePath = null
+        } catch (e: Exception) { e.printStackTrace() }
 
-        pathToSend?.let { path ->
+        mediaRecorder = null
+        _uiState.update { it.copy(isRecording = false) }
+        recordingTimerJob?.cancel()
+
+        if (path != null && duration > 0) {
             viewModelScope.launch {
-                try {
-                    repository.sendAudioMessage(
-                        currentConversationId,
-                        path,
-                        duration,
-                        myUserId,
-                        currentCompanyId,
-                        currentCategoryId
-                    )
-                } catch (e: Exception) {
-                    _errorMessage.value = "Error al enviar audio: ${e.message}"
+                val (base64, audioPath) = withContext(Dispatchers.IO) {
+                    val file = java.io.File(path)
+                    val b64 = android.util.Base64.encodeToString(file.readBytes(), android.util.Base64.NO_WRAP)
+                    b64 to path
                 }
+                val message = createBaseMessage(MessageType.AUDIO, "[Audio]").copy(
+                    durationSeconds = duration,
+                    audioLocalPath = audioPath
+                )
+                chatRepository.sendMessage(message, base64)
             }
         }
     }
 
     fun cancelRecording() {
-        try {
-            mediaRecorder?.stop()
-            mediaRecorder?.release()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        try { mediaRecorder?.stop(); mediaRecorder?.release() } catch (e: Exception) { }
         mediaRecorder = null
-        _isRecording.value = false
+        _uiState.update { it.copy(isRecording = false) }
         recordingTimerJob?.cancel()
-        _recordingTime.value = 0
         audioFilePath?.let { java.io.File(it).delete() }
         audioFilePath = null
     }
 
-    fun sendAudioMessage(audioPath: String, durationSeconds: Int) {
-        // Mantenido por compatibilidad si se llama externamente, pero lo ideal es usar los métodos de arriba
-        if (currentConversationId.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                repository.sendAudioMessage(
-                    currentConversationId,
-                    audioPath,
-                    durationSeconds,
-                    myUserId,
-                    currentCompanyId,
-                    currentCategoryId
-                )
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al enviar audio: ${e.message}"
+    // -- Utilidades Internas --
+
+    private fun createBaseMessage(
+        type: MessageType,
+        content: String,
+        replyTo: MessageEntity? = null
+    ): MessageEntity {
+        val receiverId = ChatIdHelper.extractOtherParticipantId(currentChatId, myUserId)
+
+        // 🔥 [ELITE v7.8] EXPLICIT SYMMETRIC ROOM TAGGING
+        // Extraemos los contextos basándonos en nuestra identidad actual en la sesión.
+        val (cMy, bMy, _) = ChatIdHelper.extractMyContext(currentChatId, myUserId)
+        val (cOther, bOther, _) = ChatIdHelper.extractOtherContext(currentChatId, myUserId)
+
+        return MessageEntity(
+            id = UUID.randomUUID().toString(),
+            chatId = currentChatId,
+            senderId = myUserId,
+            receiverId = receiverId,
+            type = type,
+            content = content,
+            timestamp = System.currentTimeMillis(),
+            
+            // Tags legacy para Firebase (compatibilidad con apps v6-)
+            branchId = bMy,
+            companyId = cMy,
+            
+            // 🔥 [ELITE v7.8] SYMMETRIC IDENTITY TAGS (Explícitos para el receptor)
+            senderBranchId = bMy,
+            senderCompanyId = cMy,
+            receiverBranchId = bOther,
+            receiverCompanyId = cOther,
+
+            // Tags locales para Room (Filtrado instantáneo)
+            localBranchId = bMy,
+            localCompanyId = cMy,
+            remoteBranchId = bOther,
+            remoteCompanyId = cOther,
+
+            categoryId = activeCategoryId,
+            replyToId = replyTo?.id,
+            replyToContent = replyTo?.let { getReplyPreviewText(it) },
+            replyToSenderName = replyTo?.let {
+                if (it.senderId == myUserId) "Tú" else _uiState.value.clientProfile?.fullName ?: "Cliente"
             }
-        }
-    }
-
-    fun markMessagesAsRead(conversationId: String) {
-        viewModelScope.launch {
-            try {
-                repository.markMessagesAsRead(conversationId)
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al marcar mensajes: ${e.message}"
-            }
-        }
-    }
-
-    fun deleteMessage(messageId: String) {
-        viewModelScope.launch {
-            try {
-
-                repository.deleteMessage(messageId)
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al eliminar mensaje: ${e.message}"
-            }
-        }
-    }
-
-    // -- Enviar calendario de disponibilidad
-    // El prestador elige el rango de fechas y envía su disponibilidad al cliente
-    fun sendCalendarInvite(
-        startDate: String,        // "yyyy-MM-dd"
-        endDate: String,          // "yyyy-MM-dd"
-        availabilityJson: String, // JSON con las reglas de horario
-        bookedSlotsJson: String,  // JSON con los slots ya ocupados
-        appointmentType: String,  // "TECHNICAL_VISIT" o "LOCAL_APPOINTMENT"
-        providerAddress: String?, // Dirección del local (opcional)
-        serviceCategory: String = ""
-    ) {
-        if (currentConversationId.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                repository.sendCalendarInviteMessage(
-                    conversationId = currentConversationId,
-                    myUserId = myUserId,
-                    startDate = startDate,
-                    endDate = endDate,
-                    availabilityJson = availabilityJson,
-                    bookedSlotsJson = bookedSlotsJson,
-                    companyId = currentCompanyId,
-                    categoryId = currentCategoryId,
-                    appointmentType = appointmentType,
-                    providerAddress = providerAddress,
-                    serviceCategory = serviceCategory
-                )
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al enviar calendario:${e.message}"
-            }
-        }
-    }
-
-    // -- Responder a una solicitud de turno del cliente
-    // El prestador acepta o rechaza; se envía mensaje automático de texto
-    fun respondToAppointmentRequest(
-        messageId: String,
-        clientName: String,
-        date: String,   // "yyyy-MM-dd"
-        time: String,   // "HH:mm"
-        service: String = "",
-        providerName: String = "",
-        serviceType: String = "PROFESSIONAL",
-        doesHomeVisits: Boolean = false,
-        profession: String? = null,
-        providerAddress: String? = null,
-        appointmentType: String = "TECHNICAL_VISIT",
-        serviceCategory: String? = null,
-        accepted: Boolean,
-        rejectionReason: String? = null
-    ) {
-        if (currentConversationId.isEmpty()) return
-        viewModelScope.launch {
-            try {
-                val newStatus = if (accepted) "ACCEPTED" else "REJECTED"
-                // 1. Actualizar estado del mensaje en Room + RTDB
-                repository.updateAppointmentRequestStatus(
-                    messageId = messageId,
-                    conversationId = currentConversationId,
-                    newStatus = newStatus,
-                    rejectionReason = rejectionReason
-                )
-
-                if (accepted) {
-                    // Obtener clientId una sola vez
-                    val conversation = repository.getConversationById(currentConversationId)
-                    val clientId = conversation?.userId ?: ""
-                    val isTechnician = appointmentType != "LOCAL_APPOINTMENT" && (serviceType == "TECHNICAL" || doesHomeVisits)
-
-                    // 2. Guardar en Room á independiente del comprobante para no perder el turno
-                    try {
-                        repository.saveBookedAppointmet(
-                            messageId = messageId,
-                            clientId = clientId,
-                            clientName = clientName,
-                            date = date,
-                            time = time,
-                            service = service,
-                            chatId = currentConversationId
-                        )
-                        android.util.Log.d("ChatVM", "? Turno guardado en Room: $date $time - $service - clientId=$clientId")
-                    } catch (e: Exception) {
-                        android.util.Log.e("ChatVM", "? Error guardando turno en Room: ${e.message}", e)
-                        _errorMessage.value = "Error al guardar turno: ${e.message}"
-                    }
-
-                    // 3. Enviar comprobante visual (secundario á no afecta el guardado)
-                    try {
-                        val clientAddress = if (isTechnician && clientId.isNotBlank()) {
-                            repository.getClientMainAddress(clientId)
-                        } else null
-                        val receipt = buildAppointmentReceipt(
-                            date = date,
-                            time = time,
-                            service = service,
-                            providerName = providerName,
-                            serviceType = serviceType,
-                            doesHomeVisits = doesHomeVisits,
-                            profession = profession,
-                            providerAddress = providerAddress,
-                            clientAddress = clientAddress,
-                            appointmentType = appointmentType
-                        )
-                        repository.sendAppointmentReceiptMessage(
-                            conversationId = currentConversationId,
-                            myUserId = myUserId,
-                            date = receipt.date,
-                            time = receipt.time,
-                            service = receipt.service,
-                            providerName = receipt.providerName,
-                            isTechnician = receipt.isTechnician,
-                            profession = receipt.profession,
-                            address = receipt.address,
-                            code = receipt.code,
-                            prioritizeCompany = receipt.prioritizeCompany,
-                            appointmentType = appointmentType,
-                            categoryId = serviceCategory?.takeIf { it.isNotBlank() } ?: currentCategoryId
-                        )
-                    } catch (e: Exception) {
-                        android.util.Log.e("ChatVM", "? Error enviando comprobante: ${e.message}", e)
-                    }
-                } else {
-                    // Si rechazó, enviar mensaje de rechazo
-                    val motivo = if (!rejectionReason.isNullOrBlank()) "Motivo: $rejectionReason" else ""
-                    val rejectText = "? No puedo atenderte el $date a las $time. $motivo Por favor elegí otro horario."
-                    repository.sendMessage(
-                        currentConversationId,
-                        rejectText,
-                        myUserId,
-                        currentCompanyId,
-                        currentCategoryId
-                    )
-                }
-
-                //3. Si aceptó, guardar en Room local del prestador
-                if (accepted) {
-                    val conversation = repository.getConversationById(currentConversationId)
-                    val clientId = conversation?.userId ?: ""
-                    repository.saveBookedAppointmet(
-                        messageId = messageId,
-                        clientId = clientId,
-                        clientName = clientName,
-                        date = date,
-                        time = time,
-                        service = service,
-                        chatId = currentConversationId
-                    )
-                }
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al responder solicitud:${e.message}"
-            }
-        }
-    }
-
-    private data class ReceiptData(
-        val date: String,
-        val time: String,
-        val service: String,
-        val providerName: String,
-        val isTechnician: Boolean,
-        val profession: String?,
-        val address: String?,
-        val code: String,
-        val prioritizeCompany: Boolean = false
-    )
-
-    private fun buildAppointmentReceipt(
-        date: String,
-        time: String,
-        service: String,
-        providerName: String,
-        serviceType: String,
-        doesHomeVisits: Boolean,
-        profession: String?,
-        providerAddress: String?,
-        clientAddress: String? = null,
-        prioritizeCompany: Boolean = false,
-        appointmentType: String = "TECHNICAL_VISIT"
-    ): ReceiptData {
-        val isTechnician = appointmentType != "LOCAL_APPOINTMENT" && (serviceType == "TECHNICAL" || doesHomeVisits)
-        val dateFormatted = formatDateForDisplay(date)
-        val timeFormatted = if (time.isNotBlank()) "$time hs" else time
-        val code = if (isTechnician) {
-            "#VIS-${date.replace("-", "")}-001"
-        } else {
-            "#TRN-${date.replace("-", "")}-001"
-        }
-        // TECHNICAL ? va al domicilio del cliente; PROFESSIONAL ? consultorio del prestador
-        val address = if (isTechnician) clientAddress else providerAddress
-
-
-        return ReceiptData(
-            date = dateFormatted,
-            time = timeFormatted,
-            service = service,
-            providerName = providerName,
-            isTechnician = isTechnician,
-            profession = if (!profession.isNullOrBlank()) profession else null,
-            address = if (!address.isNullOrBlank()) address else null,
-            code = code,
-            prioritizeCompany = prioritizeCompany
         )
     }
 
-    private fun formatDateForDisplay(dateStr: String): String {
-        return try {
-            val parts = dateStr.split("-")
-            if (parts.size == 3) {
-                val year = parts[0]
-                val month = parts[1]
-                val day = parts[2]
-                val dayOfWeek = getDayOfWeek(dateStr)
-                "$dayOfWeek $day/$month/$year"
-            } else {
-                dateStr
-            }
-        } catch (e: Exception) {
-            dateStr
-        }
+    fun setReply(message: MessageEntity) {
+        _uiState.update { it.copy(pendingReply = message) }
     }
 
-    private fun getDayOfWeek(dateStr: String): String {
-        return try {
-            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale("es", "ES"))
-            val date = sdf.parse(dateStr) ?: return ""
-            val cal = java.util.Calendar.getInstance()
-            cal.time = date
-            val dayOfWeek = cal.get(java.util.Calendar.DAY_OF_WEEK)
-            when (dayOfWeek) {
-                1 -> "Dom"
-                2 -> "Lun"
-                3 -> "Mar"
-                4 -> "Mié"
-                5 -> "Jue"
-                6 -> "Vie"
-                7 -> "Sáb"
-                else -> ""
-            }
-        } catch (e: Exception) {
-            ""
-        }
+    fun clearReply() {
+        _uiState.update { it.copy(pendingReply = null) }
     }
 
-
-
-    fun clearMessages() {
-        _errorMessage.value = null
-        _successMessage.value = null
-    }
-
-    // Inicia la escucha en Firestore para descubrir conversaciones nuevas del prestador
-    // y actualiza _conversations desde Room automáticamente
-    fun syncConversations() {
-        if (myUserId.isEmpty()) return
-        repository.syncConversationsFromFirestore(myUserId)
-        repository.startGlobalListening(myUserId)
-
-        // Sync empresa si el prestador tiene compañía
+    fun markAsRead() {
+        if (currentChatId.isEmpty()) return
         viewModelScope.launch {
-            _providerProfile.collect { profile ->
-                val companyId = profile?.companies?.firstOrNull()?.id
-                if (!companyId.isNullOrEmpty()) {
-                    repository.syncConversationsForCompany(companyId)
-                    repository.startGlobalListeningForCompany(companyId)
-                }
-            }
+            chatRepository.markMessagesAsRead(currentChatId, myUserId)
+        }
+    }
+
+    private fun getReplyPreviewText(message: MessageEntity): String {
+        return when (message.type) {
+            MessageType.IMAGE -> "[Imagen]"
+            MessageType.AUDIO -> "[Audio]"
+            MessageType.LOCATION -> "[Ubicación]"
+            MessageType.BUDGET -> "[Presupuesto]"
+            MessageType.VISIT -> "[Turno]"
+            MessageType.BUDGET_REQUEST -> "[Solicitud de presupuesto]"
+            else -> message.content
         }
     }
 
     override fun onCleared() {
         super.onCleared()
-        try { mediaRecorder?.stop() } catch (_: Exception) {}
-        try { mediaRecorder?.release() } catch (_: Exception) {}
-        mediaRecorder = null
+        chatRepository.stopListening()
         recordingTimerJob?.cancel()
-        repository.stopListening()
-        repository.stopGlobalListening()
-        repository.stopGlobalListeningForCompany()
-        clientPhotoJobs.values.forEach { it.cancel() }
-        clientPhotoJobs.clear()
-    }
-
-    fun deleteConversations(userIds: Set<String>) {
-        viewModelScope.launch {
-            try {
-                repository.deleteConversations(userIds)
-            } catch (e: Exception) {
-                _errorMessage.value = "Error al eliminar conversaciones: ${e.message}"
+        typingTimeoutJob?.cancel()
+        onlineStatusListener?.let {
+            if (currentChatId.isNotEmpty()) {
+                val clientId = ChatIdHelper.extractOtherParticipantId(currentChatId, myUserId)
+                com.google.firebase.database.FirebaseDatabase.getInstance().reference
+                    .child("users").child(clientId).child("online")
+                    .removeEventListener(it)
             }
         }
+        try { mediaRecorder?.release() } catch (_: Exception) {}
     }
 }
-

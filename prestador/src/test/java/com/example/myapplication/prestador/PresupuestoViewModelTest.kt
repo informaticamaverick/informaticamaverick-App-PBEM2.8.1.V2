@@ -1,11 +1,12 @@
 package com.example.myapplication.prestador
 
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.prestador.data.local.entity.PlantillaPresupuestoEntity
 import com.example.myapplication.prestador.data.local.entity.PresupuestoEntity
 import com.example.myapplication.prestador.data.repository.PresupuestoRepository
 import com.example.myapplication.prestador.ui.presupuesto.BudgetItem
-import com.example.myapplication.prestador.viewmodel.PresupuestoViewModel
+//import com.example.myapplication.prestador.viewmodel.PresupuestoViewModel
+import com.example.myapplication.prestador.viewmodel.presupuesto.PresupuestoViewModel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -72,7 +73,7 @@ class PresupuestoViewModelTest {
         presupuestosFlow = MutableStateFlow(listOf(presupuestoA, presupuestoB))
 
         every { repository.getAllPresupuestos() } returns presupuestosFlow
-        every { repository.getAllClientes() } returns flowOf(emptyList<ClienteEntity>())
+        every { repository.getAllClientes() } returns flowOf(emptyList<User>())
         every { repository.getCatalogPresupuesto(any()) } returns flowOf(null)
         every { repository.getAllPlantillas() } returns flowOf(emptyList<PlantillaPresupuestoEntity>())
 

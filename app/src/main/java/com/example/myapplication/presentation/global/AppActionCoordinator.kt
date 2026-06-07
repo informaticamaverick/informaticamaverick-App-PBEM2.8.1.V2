@@ -1,9 +1,10 @@
 package com.example.myapplication.presentation.global
 
-import com.example.myapplication.core.common.extensions.prepareForSearch
+import com.example.myapplication.core.utils.prepareForSearch
+import com.example.myapplication.core.utils.normalizeFull
 import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.data.repository.UserRepository
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.utils.HardwareStateProvider
 import com.example.myapplication.core.utils.ImageUtils
 import com.example.myapplication.presentation.components.BeMessage
@@ -51,9 +52,10 @@ class AppActionCoordinator @Inject constructor(
     /** 
      * [NUEVO BÚSQUEDA NORMALIZADA (CLASE ELITE):
      * Procesa la query para ignorar acentos, mayúsculas y espacios innecesarios.
+     * [FIX]: Ahora usa normalizeFull() para consistencia Maverick.
      */
     val normalizedSearchQuery = _globalSearchQuery
-        .map { it.prepareForSearch() }
+        .map { it.normalizeFull() }
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, "")
 
@@ -70,9 +72,10 @@ class AppActionCoordinator @Inject constructor(
     /**
      * [NUEVO BÚSQUEDA DEBOUNCED Y NORMALIZADA:
      * La fuente de verdad definitiva para el filtrado inteligente.
+     * [FIX ELITE]: Ahora utiliza normalizeFull() para ser inmune a acentos y paréntesis.
      */
     val debouncedNormalizedSearchQuery = debouncedSearchQuery
-        .map { it.prepareForSearch() }
+        .map { it.normalizeFull() }
         .distinctUntilChanged()
         .stateIn(scope, SharingStarted.Eagerly, "")
 
@@ -182,7 +185,7 @@ class AppActionCoordinator @Inject constructor(
     private val _selectedAddressId = MutableStateFlow<String?>(null)
     val selectedAddressId = _selectedAddressId.asStateFlow()
 
-    private val _gpsAddressOverride = MutableStateFlow<AddressInfo?>(null)
+    private val _gpsAddressOverride = MutableStateFlow<AddressUnico?>(null)
 
     fun selectAddress(addressId: String?) {
         if (addressId.isNullOrBlank()) {
@@ -192,11 +195,16 @@ class AppActionCoordinator @Inject constructor(
         _selectedAddressId.value = addressId
         
         // Sincronización automática de Perfil:
-        // Si la dirección seleccionada pertenece a una empresa, cambiamos el perfil activo.
+        // Si la dirección seleccionada pertenece a una empresa (Sucursal), cambiamos el perfil activo al ID de esa sucursal.
         scope.launch {
             val allAddresses = availableAddressInfos.first()
             val selected = allAddresses.find { it.id == addressId }
-            _selectedProfileId.value = selected?.ownerId
+            // [FIX ELITE v6.1]: Sincronización robusta de Identidad
+            if (selected?.isCompany == true) {
+                _selectedProfileId.value = selected.id
+            } else if (addressId != "gps_current") {
+                _selectedProfileId.value = null
+            }
         }
         
         // Limpiamos el override de GPS si se selecciona una dirección manual
@@ -215,7 +223,7 @@ class AppActionCoordinator @Inject constructor(
         _selectedProfileId.value = null
     }
 
-    fun updateAddressFromGps(address: AddressInfo) {
+    fun updateAddressFromGps(address: AddressUnico) {
         _gpsAddressOverride.value = address
         _selectedAddressId.value = "gps_current"
         _selectedProfileId.value = null // El GPS siempre es perfil personal por defecto
@@ -224,20 +232,37 @@ class AppActionCoordinator @Inject constructor(
     /**
      * Listado de direcciones disponibles derivadas del perfil del usuario + Ubicación GPS.
      */
-    val availableAddressInfos: Flow<List<AddressInfo>> = combine(
+    val availableAddressInfos: Flow<List<AddressUnico>> = combine(
         userRepository.userProfile,
         _gpsAddressOverride
     ) { userEntity, gpsOverride ->
-        val list = mutableListOf<AddressInfo>()
+        val list = mutableListOf<AddressUnico>()
         
         // 1. Prioridad: Ubicación GPS actual (Si está activa)
         gpsOverride?.let { list.add(it) }
         
         if (userEntity == null) return@combine list
         
-        // 2. Direcciones del Usuario (Mapeo centralizado en Core)
-        val domainUser = userEntity.toDomain()
-        list.addAll(domainUser.toAddressInfoList())
+        val user = userEntity.toDomain()
+        
+        // 2. Direcciones del Usuario
+        user.personalAddresses.forEach { addr ->
+            list.add(addr.copy(ownerId = user.uid, ownerName = user.fullName, isCompany = false))
+        }
+        
+        // 3. Direcciones de Empresas (Sucursales)
+        user.companies.forEach { company ->
+            company.branches.forEach { branch ->
+                // Usamos el ID de la sucursal como ID de la dirección para identificarla unívocamente
+                list.add(branch.address.copy(
+                    id = branch.id, 
+                    label = branch.name,
+                    ownerId = company.id,
+                    ownerName = company.name,
+                    isCompany = true
+                ))
+            }
+        }
         
         list
     }
@@ -245,7 +270,7 @@ class AppActionCoordinator @Inject constructor(
     /**
      * Dirección activa combinada (GPS, Selección o Default).
      */
-    val activeAddress: Flow<AddressInfo?> = combine(
+    val activeAddress: Flow<AddressUnico?> = combine(
         _selectedAddressId, _gpsAddressOverride, availableAddressInfos
     ) { selectedId, gpsOverride, allAddresses ->
         if (selectedId == "gps_current" && gpsOverride != null) return@combine gpsOverride
@@ -254,19 +279,29 @@ class AppActionCoordinator @Inject constructor(
         allAddresses.firstOrNull()
     }
 
+    /**
+     * [MODIFICACIÓN MAVERICK]: Se elimina la automatización del arranque para evitar CPU spikes.
+     * Ahora la suscripción es bajo demanda vía syncZoneTopic(cp).
+     */
+    /*
     private fun initTopicAutomation() {
         scope.launch {
-            activeAddress.collect { address ->
-                val cp = address?.postalCode
+            activeAddress.map { it?.codigoPostal }.distinctUntilChanged().collect { cp ->
                 if (cp != null) {
-                    syncTopicsForLocation(cp)
+                    syncZoneTopic(cp)
                 }
             }
         }
     }
+    */
 
-    private suspend fun syncTopicsForLocation(cp: String) {
-        // [ELITE ULTRA] Sincronización de Topics via FCM
+    /**
+     * Sincroniza el topic de zona para recibir notificaciones de licitaciones.
+     * Llamar bajo demanda (ej: al entrar en sección Licitaciones o activar Modo Empresa).
+     */
+    suspend fun syncZoneTopic(cp: String) {
+        if (cp.isBlank() || cp == previousTopic?.removePrefix("zona_")) return
+
         previousTopic?.let { 
             android.util.Log.d("AppActionCoordinator", "Desuscrito de topic anterior: $it")
         }
@@ -277,7 +312,8 @@ class AppActionCoordinator @Inject constructor(
     }
 
     init {
-        initTopicAutomation()
+        // [OPTIMIZACIÓN]: No iniciamos automatización de topics al arrancar para mejorar TTFD.
+        // initTopicAutomation()
     }
 }
 

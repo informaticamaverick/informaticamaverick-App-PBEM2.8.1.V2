@@ -204,7 +204,7 @@ class SimulationViewModel @Inject constructor(
                 val lat = baseLat + (Random.nextDouble() - 0.5) * 0.03
                 val lon = baseLon + (Random.nextDouble() - 0.5) * 0.03
 
-                val address = AddressProvider(
+                val address = AddressUnico(
                     id = UUID.randomUUID().toString(),
                     calle = calles.random(),
                     numero = (50..2500).random().toString(),
@@ -223,7 +223,7 @@ class SimulationViewModel @Inject constructor(
                     displayName = "$nombre $apellido",
                     name = nombre,
                     lastName = apellido,
-                    titulo = TITULOS.random(),
+                    //titulo = TITULOS.random(),
                     address = address,
                     addresses = listOf(address),
                     categories = categories,

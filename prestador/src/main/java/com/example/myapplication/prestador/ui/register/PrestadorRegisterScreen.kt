@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -39,11 +40,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.ui.theme.*
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.prestador.data.model.ServiceType
 import kotlinx.coroutines.delay
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
-import com.example.myapplication.prestador.data.model.ServicioFirebase
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myapplication.prestador.ui.register.components.*
 
@@ -111,7 +112,7 @@ fun PrestadorRegisterScreenContent(
     isLoading: Boolean,
     errorMessage: String?,
     showPriorizarDialog: Boolean,
-    servicios: List<ServicioFirebase>,
+    servicios: List<CategoryEntity>,
     loadingServicios: Boolean,
     isGoogleUser: Boolean,
     onRegisterClick: (email: String, password: String, nombre: String, apellido: String, categoria: String, mensaje: String, serviceType: String, isGoogleUser: Boolean) -> Unit,
@@ -176,6 +177,7 @@ fun PrestadorRegisterScreenContent(
 
     Scaffold(
         containerColor = colors.backgroundColor,
+        contentWindowInsets = WindowInsets(0),
         bottomBar = {
             Surface(
                 shadowElevation = 8.dp,
@@ -198,13 +200,26 @@ fun PrestadorRegisterScreenContent(
                         .fillMaxWidth()
                         .padding(16.dp)
                         .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    contentPadding = PaddingValues(0.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                    } else {
-                        Text("Crear cuenta", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(Color(0xFFFF7043), Color(0xFFFF9E80))
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text("Crear cuenta", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -217,43 +232,47 @@ fun PrestadorRegisterScreenContent(
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             item {
+                val headerShape = RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(260.dp)
+                        .shadow(6.dp, headerShape)
+                        .clip(headerShape)
                         .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    colors.primaryOrange.copy(alpha = 0.25f),
-                                    colors.backgroundColor
-                                )
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to Color(0xFFFF7043),
+                                0.45f to Color(0xFFFF9E80),
+                                1.0f to Color(0xFFFFCCBC)
                             )
                         )
+                        )
+                        .statusBarsPadding()
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = onBackToLogin) {
-                                Icon(
-                                    Icons.Default.ArrowBack,
-                                    contentDescription = "Volver",
-                                    tint = colors.primaryOrange
-                                )
-                            }
-                            Text(
-                                text = "Crear perfil",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.textPrimary,
-                                modifier = Modifier.padding(start = 4.dp)
+                        IconButton(onClick = onBackToLogin) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = "Volver",
+                                tint = Color(0xFF3D1100)
                             )
+                        }
+                        Text(
+                            text = "Crear perfil",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF3D1100),
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
                         }
 
                         Spacer(modifier = Modifier.height(8.dp))
@@ -313,13 +332,14 @@ fun PrestadorRegisterScreenContent(
                             text = "$nombre $apellido".trim().ifEmpty { "Nuevo prestador" },
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            color = colors.textPrimary
+                            color = Color(0xFF3D1100)
                         )
                         Text(
                             text = if (categoriaSeleccionada.isNotEmpty()) categoriaSeleccionada else serviceType.displayName,
                             fontSize = 13.sp,
-                            color = colors.textSecondary
+                            color = Color(0xFF3D1100).copy(alpha = 0.7f)
                         )
+                        Spacer(modifier = Modifier.height(20.dp))
                     }
                 }
             }

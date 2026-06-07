@@ -13,9 +13,11 @@ activityCompose = "1.13.0"
 composeBom = "2026.05.01"
 coil = "2.7.0"
 room = "2.6.1"
+paging = "3.3.6"
+exifinterface = "1.4.2"
 
 ksp = "2.1.0-1.0.29"
-hilt = "2.54"
+hilt = "2.55"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
 serialization = "1.7.3"
@@ -23,8 +25,8 @@ navigationCompose = "2.8.5"
 securityCrypto = "1.1.0-alpha06"
 googleGmsAuth = "21.5.1"
 credentialsAuth = "1.6.0"
-firebaseBom = "33.9.0"
-googleServices = "4.4.2"
+firebaseBom = "33.10.0"
+googleServices = "4.4.4"
 playServicesLocation = "21.3.0"
 playServicesBase = "18.10.0"
 ui = "1.11.2"
@@ -67,6 +69,12 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-paging = { group = "androidx.room", name = "room-paging", version.ref = "room" }
+
+# Paging
+androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+androidx-paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
+androidx-paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "paging" }
 
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
@@ -102,6 +110,7 @@ firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore
 firebase-database = { group = "com.google.firebase", name = "firebase-database" }
 firebase-storage = { group = "com.google.firebase", name = "firebase-storage" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 play-services-baselib = { group = "com.google.android.gms", name = "play-services-base", version.ref = "playServicesBase" }
 
@@ -123,6 +132,7 @@ androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", ve
 foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "androidxFoundation" }
 androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
 generativeai = { group = "com.google.ai.client.generativeai", name = "generativeai", version.ref = "generativeai" }
+androidx-exifinterface = { group = "androidx.exifinterface", name = "exifinterface", version.ref = "exifinterface" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

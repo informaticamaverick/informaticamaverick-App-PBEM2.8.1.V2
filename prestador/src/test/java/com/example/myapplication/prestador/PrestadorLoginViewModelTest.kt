@@ -1,6 +1,7 @@
 package com.example.myapplication.prestador
 
-import com.example.myapplication.prestador.data.repository.AuthRepository
+import com.example.myapplication.core.data.repository.AuthRepository
+import com.example.myapplication.core.data.repository.ProviderRepository
 import com.example.myapplication.prestador.ui.login.LoginState
 import com.example.myapplication.prestador.ui.login.PrestadorLoginViewModel
 import io.mockk.coEvery
@@ -24,13 +25,15 @@ class PrestadorLoginViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
     private lateinit var authRepository: AuthRepository
+    private lateinit var providerRepository: ProviderRepository
     private lateinit var viewModel: PrestadorLoginViewModel
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         authRepository = mockk()
-        viewModel = PrestadorLoginViewModel(authRepository)
+        providerRepository = mockk()
+        viewModel = PrestadorLoginViewModel(authRepository, providerRepository)
     }
 
     @AfterEach

@@ -79,6 +79,7 @@ object BudgetDataMapper {
                 providerName = data["providerName"] as? String ?: "Prestador",
                 providerCompanyName = data["providerCompanyName"] as? String,
                 providerPhotoUrl = data["providerPhotoUrl"] as? String,
+                providerThumbnail = data["providerThumbnail"] as? String ?: data["thumbnailBase64"] as? String, // [ELITE v5.4]
                 items = mappedItems,
                 services = mappedServices,
                 professionalFees = mappedFees,
@@ -128,6 +129,7 @@ object BudgetDataMapper {
                 awardedProviderName = data["awardedProviderName"] as? String,
                 awardedBudgetId = data["awardedBudgetId"] as? String,
                 awardedProviderPhotoUrl = data["awardedProviderPhotoUrl"] as? String,
+                awardedProviderThumbnail = data["awardedProviderThumbnail"] as? String ?: data["awardedThumbnailBase64"] as? String, // [ELITE v5.4]
                 requiresVisit = data["requiresVisit"] as? Boolean ?: false,
                 requiresPaymentMethod = data["requiresPaymentMethod"] as? Boolean ?: false,
                 requiresWorkGuarantee = data["requiresWorkGuarantee"] as? Boolean ?: false,

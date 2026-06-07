@@ -1,20 +1,25 @@
 ﻿package com.example.myapplication.prestador.ui.client
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -23,25 +28,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.example.myapplication.uishared.components.rememberImageModel
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.ui.draw.rotate
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import com.example.myapplication.prestador.data.model.ClienteDireccion
-import com.example.myapplication.prestador.data.model.ClienteEmpresa
-import com.example.myapplication.prestador.data.model.ClienteProfile
+import com.example.myapplication.core.domain.model.AddressUnico
+import com.example.myapplication.core.domain.model.CompanyClient
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.cliente.ClientePerfilUiState
 import com.example.myapplication.prestador.viewmodel.cliente.ClientePerfilViewModel
-import java.text.SimpleDateFormat
+import com.example.myapplication.uishared.components.rememberImageModel
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -173,9 +166,6 @@ private fun ClientePerfilContent(
         if (profile.personalAddresses.isNotEmpty()) {
             item { ClienteDireccionesSection(addresses = profile.personalAddresses) }
         }
-        if (profile.galleryImages.isNotEmpty()) {
-            item { ClienteGaleriaSection(images = profile.galleryImages) }
-        }
         if (profile.companies.isNotEmpty()) {
             item { ClienteEmpresasSection(companies = profile.companies) }
         }
@@ -186,24 +176,16 @@ private fun ClientePerfilContent(
 }
 
 @Composable
-private fun ClienteHeaderSection(profile: ClienteProfile) {
+private fun ClienteHeaderSection(profile: User) {
     val colors = getPrestadorColors()
 
     Column {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp)
+                .height(100.dp) // Reducido ya que no hay banner
                 .background(colors.surfaceElevated)
         ) {
-            if (profile.bannerImageUrl != null) {
-                AsyncImage(
-                    model = rememberImageModel(profile.bannerImageUrl),
-                    contentDescription = "Banner",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -292,8 +274,6 @@ private fun ClienteBadge(icon: ImageVector, label: String, color: Color) {
 private fun ClienteInfoSection(phone: String, email: String) {
     val colors = getPrestadorColors()
 
-    val clienteSdesde = ""
-
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),
@@ -309,10 +289,6 @@ private fun ClienteInfoSection(phone: String, email: String) {
             }
             if (email.isNotBlank()) {
                 ClienteInfoRow(icon = Icons.Default.Email, label = "Email", value = email)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            if (clienteSdesde.isNotBlank()) {
-                ClienteInfoRow(icon = Icons.Default.CalendarToday, label = "Cliente desde", value = clienteSdesde)
             }
         }
     }
@@ -349,7 +325,7 @@ private fun ClienteBioSection(bio: String) {
 }
 
 @Composable
-private fun ClienteDireccionesSection(addresses: List<ClienteDireccion>) {
+private fun ClienteDireccionesSection(addresses: List<AddressUnico>) {
     val colors = getPrestadorColors()
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -381,27 +357,9 @@ private fun ClienteDireccionesSection(addresses: List<ClienteDireccion>) {
 }
 
 @Composable
-private fun ClienteGaleriaSection(images: List<String>) {
+private fun ClienteEmpresasSection(companies: List<CompanyClient>) {
     val colors = getPrestadorColors()
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Text(text = "Galería", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary, modifier = Modifier.padding(bottom = 10.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(images) { url ->
-                AsyncImage(
-                    model = url,
-                    contentDescription = null,
-                    modifier = Modifier.size(110.dp).clip(RoundedCornerShape(10.dp)).background(colors.surfaceElevated),
-                    contentScale = ContentScale.Crop
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ClienteEmpresasSection(companies: List<ClienteEmpresa>) {
-    val colors = getPrestadorColors()
-    var expandedIndex by remember { mutableStateOf(-1) }
+    var expandedIndex by remember { mutableIntStateOf(-1) }
 
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -446,7 +404,7 @@ private fun ClienteEmpresasSection(companies: List<ClienteEmpresa>) {
 
 @Composable
 private fun EmpresaColapsable(
-    empresa: ClienteEmpresa,
+    empresa: CompanyClient,
     colors: com.example.myapplication.prestador.ui.theme.PrestadorColors,
     isExpanded: Boolean,
     onToggle: () -> Unit
@@ -528,7 +486,6 @@ private fun EmpresaColapsable(
 @Composable
 private fun ClienteAppointmentsSection() {
     val colors = getPrestadorColors()
-    val appointments = emptyList<Any>()
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         shape = RoundedCornerShape(12.dp),

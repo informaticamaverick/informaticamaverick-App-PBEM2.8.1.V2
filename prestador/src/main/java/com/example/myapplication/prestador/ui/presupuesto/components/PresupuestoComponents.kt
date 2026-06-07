@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 //import com.example.myapplication.prestador.data.PPrestadorProfileFalso
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter

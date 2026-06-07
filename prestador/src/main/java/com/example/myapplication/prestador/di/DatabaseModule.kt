@@ -31,11 +31,13 @@ object DatabaseModule {
             .build()
     }
 
+    /*
     @Provides
     @Singleton
-    fun provideProviderDao(database: PrestadorDatabase): ProviderDao {
+    fun provideProviderDao(database: PrestadorDatabase): com.example.myapplication.core.data.local.dao.ProviderDao {
         return database.providerDao()
     }
+    */
 
     @Provides
     @Singleton
@@ -49,18 +51,22 @@ object DatabaseModule {
         return database.presupuestoDao()
     }
 
+    /*
     @Provides
     @Singleton
     fun provideClienteDao(database: PrestadorDatabase): ClienteDao {
         return database.clienteDao()
     }
+    */
 
 
+    /*
     @Provides
     @Singleton
-    fun provideMessageDao(database: PrestadorDatabase): MessageDao {
-        return database.messageDao()
+    fun provideChatDao(database: PrestadorDatabase): com.example.myapplication.core.data.local.dao.ChatDao {
+        return database.chatDao()
     }
+    */
 
     @Provides
     @Singleton
@@ -68,11 +74,13 @@ object DatabaseModule {
         return database.conversationDao()
     }
 
+    /*
     @Provides
     @Singleton
     fun provideEmpleadoDao(database: PrestadorDatabase): EmpleadoDao {
         return database.empleadoDao()
     }
+    */
 
     @Provides
     @Singleton

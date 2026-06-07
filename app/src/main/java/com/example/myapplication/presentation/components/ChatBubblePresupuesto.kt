@@ -1,6 +1,6 @@
 package com.example.myapplication.presentation.components
 
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
@@ -19,7 +19,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -59,7 +58,6 @@ fun BudgetBubble(
     isMe: Boolean,
     appColors: AppColors,
     categoryEmoji: String? = null,
-    onReply: () -> Unit = {},
     providerEntity: ProviderEntity? = null, // 🔥 [NUEVO] Para el visor PDF
     onClick: () -> Unit
 ) {
@@ -72,220 +70,205 @@ fun BudgetBubble(
     val borderColor =
         if (isMe) appColors.accentGreen.copy(alpha = 0.5f) else appColors.accentBlue.copy(alpha = 0.5f)
 
-    SwipeToReplyWrapper(onReply = onReply) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = if (isMe) 12.dp else 4.dp, vertical = 4.dp),
-            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .padding(horizontal = if (isMe) 12.dp else 4.dp, vertical = 4.dp),
+        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    ) {
+        Card(
+            modifier = Modifier
+                .width(280.dp)
+                .clickable { 
+                    if (budget != null && providerEntity != null) showPdfViewer = true
+                    else onClick() 
+                },
+            shape = RoundedCornerShape(
+                topStart = 20.dp,
+                topEnd = 20.dp,
+                bottomStart = if (isMe) 20.dp else 4.dp,
+                bottomEnd = if (isMe) 4.dp else 20.dp
+            ),
+            colors = CardDefaults.cardColors(containerColor = appColors.surfaceColor),
+            border = BorderStroke(1.dp, borderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Card(
-                modifier = Modifier
-                    .width(280.dp)
-                    .clickable { 
-                        if (budget != null && providerEntity != null) showPdfViewer = true
-                        else onClick() 
-                    },
-                shape = RoundedCornerShape(
-                    topStart = 20.dp,
-                    topEnd = 20.dp,
-                    bottomStart = if (isMe) 20.dp else 4.dp,
-                    bottomEnd = if (isMe) 4.dp else 20.dp
-                ),
-                colors = CardDefaults.cardColors(containerColor = appColors.surfaceColor),
-                border = BorderStroke(1.dp, borderColor),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column {
-                    if (message.replyToId != null) {
-                        QuotedMessage(
-                            replyToSenderName = message.replyToSenderName,
-                            replyToContent = message.replyToContent,
-                            appColors = appColors,
-                            modifier = Modifier.padding(8.dp)
+            Column {
+                if (message.replyToId != null) {
+                    QuotedMessage(
+                        sender = message.replyToSenderName,
+                        content = message.replyToContent,
+                        appColors = appColors,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                // --- HEADER: MODERNO Y LIMPIO ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(headerGradient)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("📄", fontSize = 18.sp)
+                        Text(
+                            text = "PRESUPUESTO",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = 1.sp
                         )
                     }
-                    // --- HEADER: MODERNO Y LIMPIO ---
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(headerGradient)
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.25f),
+                        shape = RoundedCornerShape(6.dp)
                     ) {
+                        Text(
+                            text = "#${
+                                budget?.budgetId?.takeLast(6) ?: message.relatedId?.takeLast(
+                                    6
+                                ) ?: "---"
+                            }",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+
+                // --- CUERPO: ENFOQUE EN CATEGORÍA ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (budget == null) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = budgetOrange
+                            )
+                        }
+                    } else {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("📄", fontSize = 18.sp)
-                            Text(
-                                text = "PRESUPUESTO",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White,
-                                letterSpacing = 1.sp
-                            )
-                        }
-
-                        Surface(
-                            color = Color.Black.copy(alpha = 0.25f),
-                            shape = RoundedCornerShape(6.dp)
-                        ) {
-                            Text(
-                                text = "#${
-                                    budget?.budgetId?.takeLast(6) ?: message.relatedId?.takeLast(
-                                        6
-                                    ) ?: "---"
-                                }",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-
-                    // --- CUERPO: ENFOQUE EN CATEGORÍA ---
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (budget == null) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().height(40.dp),
-                                contentAlignment = Alignment.Center
+                            Surface(
+                                color = budgetOrange.copy(alpha = 0.1f),
+                                shape = CircleShape,
+                                modifier = Modifier.size(32.dp)
                             ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = budgetOrange
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(categoryEmoji ?: "📋", fontSize = 16.sp)
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = budget.category?.uppercase() ?: "GENERAL",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = budgetOrange,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = "Servicio Profesional Detallado",
+                                    fontSize = 12.sp,
+                                    color = appColors.textSecondaryColor,
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Surface(
-                                    color = budgetOrange.copy(alpha = 0.1f),
-                                    shape = CircleShape,
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(categoryEmoji ?: "📋", fontSize = 16.sp)
-                                    }
-                                }
-                                Column {
-                                    Text(
-                                        text = budget.category?.uppercase() ?: "GENERAL",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = budgetOrange,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                    Text(
-                                        text = "Servicio Profesional Detallado",
-                                        fontSize = 12.sp,
-                                        color = appColors.textSecondaryColor,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
                         }
                     }
+                }
 
-                    HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.05f),
-                        modifier = Modifier.padding(horizontal = 14.dp)
-                    )
+                HorizontalDivider(
+                    color = Color.White.copy(alpha = 0.05f),
+                    modifier = Modifier.padding(horizontal = 14.dp)
+                )
 
-                    // --- FOOTER: TOTAL Y VIGENCIA ---
+                // --- FOOTER: TOTAL Y VIGENCIA ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            "TOTAL DEL PRESUPUESTO",
+                            fontSize = 9.sp,
+                            color = appColors.textSecondaryColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "$ ${String.format(Locale.US, "%,.2f", budget?.grandTotal ?: 0.0)}",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            color = budgetOrange
+                        )
+                    }
+
+                    if ((budget?.validityDays ?: 0) > 0) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            Icon(
+                                Icons.Default.Timer,
+                                contentDescription = null,
+                                tint = budgetOrange.copy(alpha = 0.6f),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                "${budget?.validityDays} días",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = appColors.textSecondaryColor
+                            )
+                        }
+                    }
+                }
+
+                // --- ACCIÓN ---
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .padding(vertical = 4.dp)
+                ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(
-                                "TOTAL DEL PRESUPUESTO",
-                                fontSize = 9.sp,
-                                color = appColors.textSecondaryColor,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "$ ${String.format(Locale.US, "%,.2f", budget?.grandTotal ?: 0.0)}",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Black,
-                                color = budgetOrange
-                            )
-                        }
-
-                        if ((budget?.validityDays ?: 0) > 0) {
-                            Column(horizontalAlignment = Alignment.End) {
-                                Icon(
-                                    Icons.Default.Timer,
-                                    contentDescription = null,
-                                    tint = budgetOrange.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    "${budget?.validityDays} días",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = appColors.textSecondaryColor
-                                )
-                            }
-                        }
-                    }
-
-                    // --- ACCIÓN ---
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.White.copy(alpha = 0.03f))
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        TextButton(
+                            onClick = { 
+                                if (budget != null && providerEntity != null) showPdfViewer = true
+                                else onClick() 
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = budgetOrange)
                         ) {
-                            TextButton(
-                                onClick = { 
-                                    if (budget != null && providerEntity != null) showPdfViewer = true
-                                    else onClick() 
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = budgetOrange)
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.OpenInNew,
-                                    null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "REVISAR DETALLES",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-/**
-                            Text(
-                                text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(
-                                    Date(
-                                        message.timestamp
-                                    )
-                                ),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = appColors.textSecondaryColor.copy(alpha = 0.5f),
-                                modifier = Modifier.padding(end = 8.dp)
+                            Icon(
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                null,
+                                modifier = Modifier.size(16.dp)
                             )
-                            */
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                "REVISAR DETALLES",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         }
                     }
                 }
@@ -314,7 +297,7 @@ fun BudgetBubble(
 @Composable
 fun BudgetRequestDialog(
     provider: Provider,
-    availableAddresses: List<AddressInfo>,
+    availableAddresses: List<AddressUnico>,
     onDismissRequest: () -> Unit,
     onAcceptRequest: (problem: String, address: String, lat: Double, lng: Double) -> Unit
 ) {
@@ -478,9 +461,9 @@ fun BudgetRequestDialog(
                                     selectedAddress?.let { addr ->
                                         onAcceptRequest(
                                             problemText,
-                                            addr.streetAndNumber,
-                                            addr.lat,
-                                            addr.lng
+                                            addr.calle,
+                                            addr.latitude,
+                                            addr.longitude
                                         )
                                     }
                                 },
@@ -509,8 +492,7 @@ fun BudgetRequestDialog(
 fun BudgetRequestBubble(
     message: MessageEntity,
     isMe: Boolean,
-    appColors: AppColors,
-    onReply: () -> Unit = {} // 🔥 [NUEVO]
+    appColors: AppColors
 ) {
     val budgetOrange = Color(0xFFFF6B35)
     val budgetAmber = Color(0xFFFFB300)
@@ -520,80 +502,79 @@ fun BudgetRequestBubble(
         if (isMe) appColors.accentGreen.copy(alpha = 0.6f) else appColors.accentBlue.copy(alpha = 0.6f)
     val borderWeight = if (isMe) 1.5.dp else 1.dp
 
-    SwipeToReplyWrapper(onReply = onReply) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = if (isMe) 12.dp else 4.dp, vertical = 4.dp),
-            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .padding(horizontal = if (isMe) 12.dp else 4.dp, vertical = 4.dp),
+        horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+    ) {
+        Card(
+            modifier = Modifier.width(280.dp),
+            shape = RoundedCornerShape(
+                topStart = 20.dp,
+                topEnd = 20.dp,
+                bottomStart = if (isMe) 20.dp else 4.dp,
+                bottomEnd = if (isMe) 4.dp else 20.dp
+            ),
+            colors = CardDefaults.cardColors(containerColor = appColors.surfaceColor),
+            border = BorderStroke(borderWeight, borderColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
-            Card(
-                modifier = Modifier.width(280.dp),
-                shape = RoundedCornerShape(
-                    topStart = 20.dp,
-                    topEnd = 20.dp,
-                    bottomStart = if (isMe) 20.dp else 4.dp,
-                    bottomEnd = if (isMe) 4.dp else 20.dp
-                ),
-                colors = CardDefaults.cardColors(containerColor = appColors.surfaceColor),
-                border = BorderStroke(borderWeight, borderColor),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column {
-                    if (message.replyToId != null) {
-                        QuotedMessage(
-                            replyToSenderName = message.replyToSenderName,
-                            replyToContent = message.replyToContent,
-                            appColors = appColors,
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
-                    // --- HEADER: CONSISTENTE CON PRESUPUESTO ---
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(headerGradient)
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("📝", fontSize = 18.sp)
-                        Spacer(Modifier.width(8.dp))
+            Column {
+                if (message.replyToId != null) {
+                    QuotedMessage(
+                        sender = message.replyToSenderName,
+                        content = message.replyToContent,
+                        appColors = appColors,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                // --- HEADER: CONSISTENTE CON PRESUPUESTO ---
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(headerGradient)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("📝", fontSize = 18.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "SOLICITUD DE PRESUPUESTO",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                // --- CUERPO: DETALLE Y LOCALIZACIÓN ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            text = "SOLICITUD DE PRESUPUESTO",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
+                            text = "DETALLE DEL PROBLEMA",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = budgetOrange,
                             letterSpacing = 0.5.sp
                         )
+                        Text(
+                            text = message.content,
+                            fontSize = 13.sp,
+                            color = appColors.textPrimaryColor,
+                            lineHeight = 18.sp
+                        )
                     }
 
-                    // --- CUERPO: DETALLE Y LOCALIZACIÓN ---
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                text = "DETALLE DEL PROBLEMA",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = budgetOrange,
-                                letterSpacing = 0.5.sp
-                            )
-                            Text(
-                                text = message.content,
-                                fontSize = 13.sp,
-                                color = appColors.textPrimaryColor,
-                                lineHeight = 18.sp
-                            )
-                        }
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
 
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Surface(
                                 color = budgetOrange.copy(alpha = 0.1f),
@@ -644,36 +625,35 @@ fun BudgetRequestBubble(
             }
         }
     }
-}
 
 
 // ==========================================
 // SECCIÓN DE VISTAS PREVIAS (PREVIEWS)
 // ==========================================
 
-    @Preview(showBackground = true, name = "Burbuja Solicitud Presupuesto")
-    @Composable
-    fun BudgetRequestBubblePreview() {
-        val appColors = getThemeColors()
-        val message = MessageEntity(
-            id = "1",
-            chatId = "c1",
-            senderId = "user1",
-            receiverId = "p1",
-            type = MessageType.BUDGET_REQUEST,
-            content = "Necesito presupuesto para arreglar un lavarropas que no desagota.",
-            locationAddress = "Av. Siempre Viva 742",
-            timestamp = System.currentTimeMillis()
-        )
-        MyApplicationTheme {
-            Box(
-                modifier = Modifier.fillMaxWidth().background(appColors.backgroundColor)
-                    .padding(16.dp)
-            ) {
-                BudgetRequestBubble(message = message, isMe = true, appColors = appColors)
-            }
+@Preview(showBackground = true, name = "Burbuja Solicitud Presupuesto")
+@Composable
+fun BudgetRequestBubblePreview() {
+    val appColors = getThemeColors()
+    val message = MessageEntity(
+        id = "1",
+        chatId = "c1",
+        senderId = "user1",
+        receiverId = "p1",
+        type = MessageType.BUDGET_REQUEST,
+        content = "Necesito presupuesto para arreglar un lavarropas que no desagota.",
+        locationAddress = "Av. Siempre Viva 742",
+        timestamp = System.currentTimeMillis()
+    )
+    MyApplicationTheme {
+        Box(
+            modifier = Modifier.fillMaxWidth().background(appColors.backgroundColor)
+                .padding(16.dp)
+        ) {
+            BudgetRequestBubble(message = message, isMe = true, appColors = appColors)
         }
     }
+}
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Preview(showBackground = true, name = "Burbuja Presupuesto Formal")
@@ -723,14 +703,3 @@ fun BudgetBubblePreview() {
             }
         }
     }
-
-
-
-
-
-
-
-
-
-
-

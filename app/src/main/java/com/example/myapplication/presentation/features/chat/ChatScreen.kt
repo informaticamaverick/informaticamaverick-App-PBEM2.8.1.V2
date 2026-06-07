@@ -1,14 +1,16 @@
 package com.example.myapplication.presentation.features.chat
 
 // === IMPORTS ===
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -25,18 +27,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import com.example.myapplication.presentation.registry.MaverickIcons
 import com.example.myapplication.presentation.designsystem.components.MaverickColors
+import com.example.myapplication.presentation.designsystem.components.MaverickTypography
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
-import com.example.myapplication.presentation.components.BarraCabezera
-import com.example.myapplication.presentation.components.ListaMoldeV2
-import com.example.myapplication.presentation.components.BotonCabeceraAccion
-import com.example.myapplication.presentation.components.UnifiedChatListItem
-import com.example.myapplication.presentation.components.EmptyFiltersState
-import com.example.myapplication.presentation.components.MoldePremiumFilterCard
-import com.example.myapplication.presentation.components.MoldePremiumSortCard
-import com.example.myapplication.presentation.components.DropdownItemData
-import com.example.myapplication.presentation.components.FilterSortItem
+import com.example.myapplication.presentation.components.*
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.designsystem.theme.getAppColors
 import com.example.myapplication.presentation.features.profile.UserViewModel
@@ -49,25 +44,19 @@ import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.presentation.features.home.Screen
 import com.example.myapplication.presentation.features.budget.BudgetViewModel
 import com.example.myapplication.uishared.components.BudgetA4Viewer
+import com.example.myapplication.presentation.components.PerfilEmpresa
 import com.example.myapplication.core.domain.model.toEntity
 import com.example.myapplication.core.domain.model.Provider
+import com.example.myapplication.core.utils.ImageUtils
 import androidx.compose.ui.tooling.preview.Preview
-//import com.example.myapplication.presentation.features.budget.BudgetFilterSortItem
-
-// ==================================================================================
-// --- SECCIÓN 1: CONSTANTES Y ESTILOS ---
-// ==================================================================================
-
-// ==================================================================================
-// --- SECCIÓN 2: ORQUESTADOR DE PANTALLA ---
-// ==================================================================================
 
 @Composable
 fun ChatScreen(
     onBack: () -> Unit,
     initialProviderId: String? = null,
-    initialCompanyId: String? = null,
+    initialBranchId: String? = null,   // 🔥 Contexto del Prestador
     initialCategoryId: String? = null,
+    initialClientBranchId: String? = null, // 🔥 Contexto del Cliente (Mi Identidad)
     navController: NavHostController? = null,
     onInConversationChange: (Boolean) -> Unit = {},
     userViewModel: UserViewModel = hiltViewModel(),
@@ -77,16 +66,33 @@ fun ChatScreen(
 ) {
     // --- SUSCRIPCIÓN A DATOS (SSOT) ---
     val chattingThreads by chatListViewModel.chattingThreads.collectAsStateWithLifecycle()
+    val selectedPerfilId by chatListViewModel.selectedPerfilId.collectAsStateWithLifecycle()
     val profileState by userViewModel.uiState.collectAsStateWithLifecycle()
-    // Obtenemos los conteos de forma reactiva a través del ViewModel
     val unreadCountsMap by chatListViewModel.unreadCountsMap.collectAsStateWithLifecycle()
     val allCategories by beBrainViewModel.allCategories.collectAsStateWithLifecycle()
     val shortcuts by chatListViewModel.shortcuts.collectAsStateWithLifecycle()
+    val identityUnreadCounts by chatListViewModel.identityUnreadCounts.collectAsStateWithLifecycle()
+
+    // 🔥 [FIX v8.7] Sincronización de Identidad de Nivel 1 (Corporativa)
+    // Resolvemos el ID corporativo para que las pestañas de la UI no se rompan
+    val effectiveSelectedPerfilId = remember(selectedPerfilId, initialClientBranchId, profileState.companies) {
+        val resolvedId = when {
+            initialClientBranchId == "{clientBranchId}" || initialClientBranchId.isNullOrBlank() -> "personal"
+            else -> initialClientBranchId
+        }
+
+        if (resolvedId == "personal") selectedPerfilId
+        else {
+            // Si venimos de búsqueda con un branchId, debemos encontrar su empresa madre para la pestaña
+            profileState.companies.find { it.branches.any { b -> b.id == resolvedId } }?.id ?: selectedPerfilId
+        }
+    }
 
     // --- ESTADOS DE UI ---
     val isMultiSelectMode by chatListViewModel.isMultiSelectionActive.collectAsStateWithLifecycle()
     val selectedIds by chatListViewModel.selectedChatIds.collectAsStateWithLifecycle()
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var chatToDeleteId by remember { mutableStateOf<String?>(null) }
     var showPresupuestosSheet by remember { mutableStateOf(false) }
 
     // --- ESTADO DE FILTROS ELEVADO (COORDINACIÓN DE COLAPSO) ---
@@ -96,8 +102,41 @@ fun ChatScreen(
     var budgetForA4Preview by remember { mutableStateOf<BudgetEntity?>(null) }
     var providerForA4 by remember { mutableStateOf<Provider?>(null) }
 
+    // --- FILTRADO DE PRESUPUESTOS DINÁMICO ---
+    var showBudgetsForThisProviderOnly by remember { mutableStateOf(false) }
+    var activeProviderId by remember { 
+        mutableStateOf(if (initialProviderId == "{providerId}") null else initialProviderId)
+    }
+    var activeBranchId by remember { mutableStateOf(initialBranchId) }   // 🔥 [NUEVO]
+
+    val budgetsForChatAdmin by budgetViewModel.filteredDirectBudgets.collectAsStateWithLifecycle()
+    val filteredBudgetsForSheet = if (showBudgetsForThisProviderOnly && activeProviderId != null) {
+        budgetsForChatAdmin.filter { it.providerId == activeProviderId }
+    } else {
+        budgetsForChatAdmin
+    }
+
     // --- SINCRONIZACIÓN CON EL CEREBRO ---
     val beActionIds by chatListViewModel.beActionIds.collectAsStateWithLifecycle()
+
+    // 🔥 [FIX v8.6] Sincronización Atómica de Identidad desde Navegación
+    // Esto asegura que si venimos de un "Enviar como...", la pestaña correcta se active.
+    LaunchedEffect(initialClientBranchId, profileState.companies) {
+        val resolvedId = when {
+            initialClientBranchId == "{clientBranchId}" || initialClientBranchId.isNullOrBlank() -> "personal"
+            else -> initialClientBranchId
+        }
+        
+        // Resolvemos el nivel corporativo (Empresa o Personal) para la pestaña
+        val targetCorporateId = if (resolvedId == "personal") "personal" else {
+             profileState.companies.find { it.branches.any { b -> b.id == resolvedId } }?.id ?: resolvedId
+        }
+        
+        chatListViewModel.selectPerfil(targetCorporateId)
+        if (resolvedId != "personal" && resolvedId != targetCorporateId) {
+            chatListViewModel.selectBranch(resolvedId)
+        }
+    }
 
     LaunchedEffect(isMultiSelectMode, selectedIds, beActionIds) {
         beBrainViewModel.syncMultiSelection(isMultiSelectMode)
@@ -109,8 +148,14 @@ fun ChatScreen(
         beBrainViewModel.actionEvent.collect { actionId ->
             chatListViewModel.onBeAction(
                 actionId = actionId,
-                onNavigateToBudgets = { showPresupuestosSheet = true },
-                onShowDeleteConfirm = { showDeleteConfirmDialog = true }
+                onNavigateToBudgets = { 
+                    showBudgetsForThisProviderOnly = false
+                    showPresupuestosSheet = true 
+                },
+                onShowDeleteConfirm = { 
+                    chatToDeleteId = null
+                    showDeleteConfirmDialog = true 
+                }
             )
         }
     }
@@ -123,7 +168,7 @@ fun ChatScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            beBrainViewModel.syncMultiSelection(false, emptySet())
+            //beBrainViewModel.syncMultiSelection(false, emptySet())
             beBrainViewModel.clearCustomActions(HUDContext.CHAT)
         }
     }
@@ -132,39 +177,73 @@ fun ChatScreen(
     val sortDropdownItems by chatListViewModel.sortDropdownItems.collectAsStateWithLifecycle()
     val activeFilters by beBrainViewModel.activeFilters.collectAsStateWithLifecycle()
     
-    // Suponiendo que tenemos una forma de obtener presupuestos globales para el administrador
-    // Por ahora usamos una lista vacía o placeholder si el VM no lo tiene implementado para chat.
-    val budgetsForChatAdmin by budgetViewModel.filteredDirectBudgets.collectAsStateWithLifecycle()
+    val isRefreshing by chatListViewModel.isRefreshing.collectAsStateWithLifecycle()
+    
+    // 🔥 [NUEVO v8.9] Gestión de Notificaciones de Refresh
+    var refreshToastMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        chatListViewModel.refreshEvent.collect { message ->
+            refreshToastMessage = message
+            if (message.contains("✅") || message.contains("❌")) {
+                kotlinx.coroutines.delay(2500)
+                refreshToastMessage = null
+            }
+        }
+    }
 
     ChatScreenContent(
-        allThreads = chattingThreads,
+        allThreadsMap = chattingThreads,
         profileState = profileState,
         unreadCountsMap = unreadCountsMap,
+        identityUnreadCounts = identityUnreadCounts,
         allCategories = allCategories,
         shortcuts = shortcuts,
         onBack = onBack,
-        initialProviderId = initialProviderId,
-        initialCompanyId = initialCompanyId,
+        initialProviderId = activeProviderId,
+        initialBranchId = activeBranchId,
         initialCategoryId = initialCategoryId,
+        initialClientBranchId = initialClientBranchId,
         navController = navController,
-        onInConversationChange = onInConversationChange,
+        onInConversationChange = { inConv ->
+            onInConversationChange(inConv)
+            if (!inConv) activeProviderId = null
+        },
         beBrainViewModel = beBrainViewModel,
         chatListViewModel = chatListViewModel,
+        selectedPerfilId = effectiveSelectedPerfilId, // 🔥 [FIX v6.1]
         isMultiSelectMode = isMultiSelectMode,
         selectedIds = selectedIds,
         showDeleteConfirmDialog = showDeleteConfirmDialog,
         onDismissDeleteDialog = { showDeleteConfirmDialog = false },
         onConfirmDelete = { 
-            chatListViewModel.deleteSelectedChats()
+            if (isMultiSelectMode) {
+                chatListViewModel.deleteSelectedChats()
+            } else {
+                chatToDeleteId?.let { 
+                    chatListViewModel.deleteChatById(it)
+                }
+            }
             showDeleteConfirmDialog = false
+            chatToDeleteId = null
+        },
+        onShowDeleteConfirm = { id ->
+            chatToDeleteId = id
+            showDeleteConfirmDialog = true
         },
         showPresupuestosSheet = showPresupuestosSheet,
-        onClosePresupuestosSheet = { showPresupuestosSheet = false },
+        onClosePresupuestosSheet = { 
+            showPresupuestosSheet = false
+            showBudgetsForThisProviderOnly = false
+        },
+        onOpenPresupuestosSheet = { forThisProviderOnly ->
+            showBudgetsForThisProviderOnly = forThisProviderOnly
+            showPresupuestosSheet = true
+        },
         filterDropdownItems = filterDropdownItems,
         sortDropdownItems = sortDropdownItems,
         activeFilters = activeFilters,
         onFilterToggle = { chatListViewModel.toggleFilter(it) },
-        budgetsForChatAdmin = budgetsForChatAdmin,
+        budgetsForChatAdmin = filteredBudgetsForSheet,
         budgetForA4Preview = budgetForA4Preview,
         onOpenBudgetPreview = { budgetForA4Preview = it },
         onCloseBudgetPreview = { budgetForA4Preview = null },
@@ -172,37 +251,40 @@ fun ChatScreen(
         onAcceptBudget = { budgetViewModel.acceptBudget(it) },
         onRejectBudget = { budgetViewModel.rejectBudget(it) },
         isFilterSheetOpen = isFilterSheetOpen,
-        onFilterSheetVisibilityChange = { isFilterSheetOpen = it }
+        onFilterSheetVisibilityChange = { isFilterSheetOpen = it },
+        isRefreshing = isRefreshing,
+        onRefresh = { chatListViewModel.refreshAll() },
+        refreshToastMessage = refreshToastMessage // 🔥 [NEW]
     )
 }
 
-// ==================================================================================
-// --- SECCIÓN 3: CONTENIDO DE PANTALLA ---
-// ==================================================================================
-
-
 @Composable
 fun ChatScreenContent(
-    allThreads: List<ChatThread>,
+    allThreadsMap: Map<String, List<ChatThread>>,
     profileState: UserUiState,
     unreadCountsMap: Map<String, Int>,
+    identityUnreadCounts: Map<String, Int> = emptyMap(),
     allCategories: List<CategoryEntity> = emptyList(),
     shortcuts: List<FilterSortItem> = emptyList(),
     onBack: () -> Unit,
     initialProviderId: String? = null,
-    initialCompanyId: String? = null,
+    initialBranchId: String? = null, 
     initialCategoryId: String? = null,
+    initialClientBranchId: String? = null,
     navController: NavHostController? = null,
     onInConversationChange: (Boolean) -> Unit = {},
     beBrainViewModel: BeBrainViewModel? = null,
     chatListViewModel: ChatListViewModel? = null,
+    selectedPerfilId: String = "personal",
     isMultiSelectMode: Boolean = false,
     selectedIds: Set<String> = emptySet(),
     showDeleteConfirmDialog: Boolean = false,
     onDismissDeleteDialog: () -> Unit = {},
     onConfirmDelete: () -> Unit = {},
+    onShowDeleteConfirm: (String?) -> Unit = {},
     showPresupuestosSheet: Boolean = false,
     onClosePresupuestosSheet: () -> Unit = {},
+    onOpenPresupuestosSheet: (Boolean) -> Unit = {},
     filterDropdownItems: List<DropdownItemData> = emptyList(),
     sortDropdownItems: List<DropdownItemData> = emptyList(),
     activeFilters: Set<String> = emptySet(),
@@ -215,27 +297,34 @@ fun ChatScreenContent(
     onAcceptBudget: (BudgetEntity) -> Unit = {},
     onRejectBudget: (BudgetEntity) -> Unit = {},
     isFilterSheetOpen: Boolean = false,
-    onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
+    onFilterSheetVisibilityChange: (Boolean) -> Unit = {},
+    isRefreshing: Boolean = false, 
+    onRefresh: () -> Unit = {},
+    refreshToastMessage: String? = null // 🔥 [NEW]
 ) {
     val appColors = getAppColors()
     
-    var activeProviderId by remember { 
-        mutableStateOf(if (initialProviderId == "{providerId}") null else initialProviderId)
+    // 🔥 [FIX v8.6] CONTEXTO DE CONVERSACIÓN (SIN REDUNDANCIA)
+    var activeChatId by remember { mutableStateOf<String?>(null) }
+    var activeProviderId by remember(initialProviderId) { 
+        mutableStateOf(if (initialProviderId == "{providerId}" || initialProviderId.isNullOrBlank()) null else initialProviderId)
     }
-
-   // val fallbackProvider by if (activeProviderId != null && allThreads.none { it.provider.uid == activeProviderId }) {
-        //chatListViewModel?.getProviderById(activeProviderId!!)?.collectAsStateWithLifecycle(initialValue = null) ?: remember { mutableStateOf(null) }
-    //} else {
-     //   remember { mutableStateOf(null) }
-    //}
+    var activeBranchId by remember(initialBranchId) { 
+        mutableStateOf(if (initialBranchId == "{branchId}" || initialBranchId.isNullOrBlank()) null else initialBranchId)
+    }
+    var activeLocalBranchId by remember(initialClientBranchId) { 
+        mutableStateOf(if (initialClientBranchId == "{clientBranchId}" || initialClientBranchId.isNullOrBlank()) null else initialClientBranchId)
+    }
 
     LaunchedEffect(activeProviderId) {
         onInConversationChange(activeProviderId != null)
     }
 
     BackHandler {
-        if (activeProviderId != null) activeProviderId = null
-        else onBack()
+        if (activeProviderId != null) {
+            activeProviderId = null
+            activeChatId = null
+        } else onBack()
     }
 
     val currentUserId = profileState.uid
@@ -247,36 +336,57 @@ fun ChatScreenContent(
     } else {
         if (activeProviderId == null) {
             ChatListContent(
-                threadsList = allThreads,
+                threadsMap = allThreadsMap,
+                profileState = profileState, 
                 unreadCountsMap = unreadCountsMap,
+                identityUnreadCounts = identityUnreadCounts,
                 shortcuts = shortcuts,
-                onChatClick = { thread -> activeProviderId = thread.provider.uid },
+                onChatClick = { thread -> 
+                    activeChatId = thread.chatId
+                    activeProviderId = thread.userId
+                    activeBranchId = thread.otherBranchId
+                    activeLocalBranchId = thread.branchId
+                },
                 onBack = onBack,
+                selectedPerfilId = selectedPerfilId,
                 navController = navController,
                 beBrainViewModel = beBrainViewModel,
                 chatListViewModel = chatListViewModel,
                 isMultiSelectMode = isMultiSelectMode,
                 selectedIds = selectedIds,
                 isFilterSheetOpen = isFilterSheetOpen,
-                onFilterSheetVisibilityChange = onFilterSheetVisibilityChange
+                onFilterSheetVisibilityChange = onFilterSheetVisibilityChange,
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                refreshToastMessage = refreshToastMessage
             )
         } else {
-            // Resolver el proveedor (desde la lista local o fetch remoto vía ChatViewModel)
-            val chatId = ChatIdHelper.generateChatId(currentUserId, activeProviderId!!)
+            // Resolución de ID: Prioridad al ID del hilo, fallback a generación simétrica
+            val chatId = activeChatId ?: ChatIdHelper.generateChatId(
+                uid1 = currentUserId, 
+                uid2 = activeProviderId!!, 
+                b1 = activeLocalBranchId ?: if (selectedPerfilId == "personal") null else selectedPerfilId,
+                b2 = activeBranchId
+            )
+            
             val chatViewModel: ChatViewModel = hiltViewModel(key = chatId)
             val chatUiState by chatViewModel.uiState.collectAsStateWithLifecycle()
+            val effectiveProvider = chatUiState.activeProvider
 
-            val providerFromList = allThreads.find { it.provider.uid == activeProviderId }?.provider
-            val effectiveProvider = providerFromList ?: chatUiState.activeProvider
-
-            LaunchedEffect(activeProviderId, allCategories) {
+            LaunchedEffect(activeProviderId, activeBranchId, allCategories, selectedPerfilId, activeLocalBranchId) {
                 if (activeProviderId != null) {
-                    val chatId = ChatIdHelper.generateChatId(currentUserId, activeProviderId!!)
+                    // Si no tenemos clientCompanyId, lo buscamos en el perfil
+                    val currentIdentityId = activeLocalBranchId ?: if (selectedPerfilId == "personal") null else selectedPerfilId
+                    val myCompanyId = profileState.companies.find { it.id == currentIdentityId || it.branches.any { b -> b.id == currentIdentityId } }?.id
+                        ?: if (currentIdentityId != "personal") currentIdentityId else null
+
                     chatViewModel.initialize(
                         chatId = chatId,
-                        companyId = initialCompanyId,
+                        branchId = activeBranchId,
+                        clientCompanyId = myCompanyId,
+                        clientBranchId = if (currentIdentityId == "personal") null else currentIdentityId,
                         categoryId = initialCategoryId,
-                        initialProvider = providerFromList, 
+                        initialProvider = null,
                         categories = allCategories
                     )
                 }
@@ -287,15 +397,23 @@ fun ChatScreenContent(
                     ChatConversationScreen(
                         provider = effectiveProvider,
                         viewModel = chatViewModel,
+                        chatId = chatId,
                         onBack = { activeProviderId = null },
                         appColors = appColors,
                         onNavigateToCalendar = { navController?.navigate(Screen.Calendar.route) },
+                        onShowBudgets = { onOpenPresupuestosSheet(true) },
+                        onShowCalendar = { navController?.navigate(Screen.Calendar.route) },
+                        onShowSearch = { beBrainViewModel.setSearchActive(true) },
+                        onDeleteChat = { onShowDeleteConfirm(chatId) },
+                        onBlockProvider = { /* TODO */ },
+                        onReportProvider = { /* TODO */ },
+                        onToggleFavorite = { /* TODO */ },
+                        isFavorite = false,
                         beBrainViewModel = beBrainViewModel,
                         ubicacionViewModel = hiltViewModel()
                     )
                 }
             } else {
-                // Estado de carga del perfil del prestador
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = appColors.accentBlue)
                 }
@@ -309,18 +427,6 @@ fun ChatScreenContent(
             title = "PRESUPUESTOS EN CHATS",
             helperText = "ADMINISTRADOR DE",
             tenderName = "HISTORIAL DE MENSAJES",
-          //  filterOptions = filterDropdownItems.map {
-          //      BudgetFilterSortItem(
-          //          it.id,
-          //          it.label,
-          //          it.emoji ?: "🔹"
-          //      )
-            //},
-           // sortOptions = sortDropdownItems.map { BudgetFilterSortItem(it.id, it.label, it.emoji ?: "🔹") },
-           // selectedFilter = activeFilters.find { !it.startsWith("sort_") },
-           // selectedSort = activeFilters.find { it.startsWith("sort_") },
-           // onFilterSelect = onFilterToggle,
-           // onSortSelect = onFilterToggle,
             budgets = budgetsForChatAdmin,
             onBudgetClick = { budget -> onOpenBudgetPreview(budget) }
         )
@@ -334,9 +440,8 @@ fun ChatScreenContent(
                     prestador = providerForA4?.toEntity(),
                     budget = budgetForA4Preview,
                     onDismiss = onCloseBudgetPreview,
-                    clientName = profileState.displayName ?: "Cliente"
+                    clientName = profileState.displayName
                 ) { _, _ ->
-                    // Acciones del Cliente: Aceptar / Rechazar
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (budgetForA4Preview.status == com.example.myapplication.core.data.local.entity.BudgetStatus.PENDIENTE) {
                             OutlinedButton(
@@ -364,11 +469,16 @@ fun ChatScreenContent(
         }
 
         if (showDeleteConfirmDialog) {
+            val text = if (isMultiSelectMode) {
+                "¿Estás seguro de que deseas eliminar las ${selectedIds.size} conversaciones seleccionadas?"
+            } else {
+                "¿Estás seguro de que deseas eliminar esta conversación?"
+            }
             AlertDialog(
                 onDismissRequest = onDismissDeleteDialog,
-                title = { Text("Eliminar chats") },
-                text = { Text("¿Estás seguro de que deseas eliminar las ${selectedIds.size} conversaciones seleccionadas?") },
-                confirmButton = { TextButton(onClick = onConfirmDelete) { Text("Eliminar", color = Color.Red) } },
+                title = { Text("Eliminar chat") },
+                text = { Text(text) },
+                confirmButton = { TextButton(onClick = { onConfirmDelete(); activeProviderId = null }) { Text("Eliminar", color = Color.Red) } },
                 dismissButton = { TextButton(onClick = onDismissDeleteDialog) { Text("Cancelar") } },
                 containerColor = appColors.surfaceColor, 
                 titleContentColor = Color.White,
@@ -378,44 +488,76 @@ fun ChatScreenContent(
     }
 }
 
-// ==================================================================================
-// --- SECCIÓN 4: LISTA DE CHATS (MODO ELITE) ---
-// ==================================================================================
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListContent(
-    threadsList: List<ChatThread>,
+    threadsMap: Map<String, List<ChatThread>>,
+    profileState: UserUiState,
     unreadCountsMap: Map<String, Int>,
+    identityUnreadCounts: Map<String, Int> = emptyMap(),
     shortcuts: List<FilterSortItem> = emptyList(),
     onChatClick: (ChatThread) -> Unit,
     onBack: () -> Unit,
+    selectedPerfilId: String = "personal",
     navController: NavHostController? = null,
     beBrainViewModel: BeBrainViewModel? = null,
     chatListViewModel: ChatListViewModel? = null,
     isMultiSelectMode: Boolean = false,
     selectedIds: Set<String> = emptySet(),
     isFilterSheetOpen: Boolean = false,
-    onFilterSheetVisibilityChange: (Boolean) -> Unit = {}
+    onFilterSheetVisibilityChange: (Boolean) -> Unit = {},
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
+    refreshToastMessage: String? = null
 ) {
-   // val refreshState = rememberPullToRefreshState()
-   // val scope = rememberCoroutineScope()
-   // var isRefreshing by remember { mutableStateOf(false) }
-
-    // --- SUSCRIPCIÓN A ESTADOS DEL VM (Elite) ---
     val filterDropdownItems by chatListViewModel?.filterDropdownItems?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
     val sortDropdownItems by chatListViewModel?.sortDropdownItems?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
     val activeFilters by beBrainViewModel?.activeFilters?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptySet()) }
-
-    // Estado de expansión de grupos
-    // Removed grouping logic for now
-
     val activeSortCriteria by chatListViewModel?.activeSortCriteria?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyList()) }
+    val selectedBranchId by chatListViewModel?.selectedBranchId?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(null) }
     
-    // --- LÓGICA DE SCROLL (Fase 1 + 2) ---
+    val pullToRefreshState = androidx.compose.material3.pulltorefresh.rememberPullToRefreshState()
+
+    // 🔥 [ELITE v9.0] PRE-PROCESAMIENTO DE IMÁGENES (Evita flood de HWUI)
+    val companyPhotos = remember(profileState.companies) {
+        profileState.companies.associate { it.id to ImageUtils.processImageSource(it.thumbnailBase64 ?: it.photoUrl) }
+    }
+
+    // --- GESTIÓN DE MULTI-IDENTIDAD NIVEL 1 (CORPORATIVO: PERFIL/EMPRESAS) ---
+    val identities = remember(profileState.companies, profileState.displayName, identityUnreadCounts, companyPhotos) {
+        val list = mutableListOf<PerfilEmpresa>()
+        
+        // 1. Identidad Personal (Chats personales)
+        val personalUnread = identityUnreadCounts["personal"] ?: 0
+        
+        list.add(PerfilEmpresa(
+            id = "personal",
+            nombre = "Mi Perfil",
+            iniciales = "YO",
+            emoji = "👤",
+            photoUrl = profileState.profileThumbnail.takeIf { it.isNotBlank() } ?: profileState.photoUrl.ifEmpty { null },
+            colorAcento = MaverickColors.ElectricCyan,
+            unreadCount = personalUnread 
+        ))
+        
+        // 2. Identidades de Empresa (Agrupador Corporativo)
+        profileState.companies.forEach { company ->
+            val companyUnread = identityUnreadCounts[company.id] ?: 0
+
+            list.add(PerfilEmpresa(
+                id = company.id,
+                nombre = company.name,
+                iniciales = company.name.take(2).uppercase(),
+                photoUrl = companyPhotos[company.id],
+                colorAcento = MaverickColors.NeonCyan,
+                unreadCount = companyUnread
+            ))
+        }
+        list
+    }
+
     var scrollAccumulator by remember { mutableFloatStateOf(0f) }
 
-    // 🔥 [ELITE] Lógica de Colapso Automático por Menú de Filtros
     val autoCollapseFraction by animateFloatAsState(
         targetValue = if (isFilterSheetOpen) 1f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
@@ -425,7 +567,7 @@ fun ChatListContent(
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (isFilterSheetOpen) return Offset.Zero // 🔥 Bloquear scroll manual si el menú está abierto
+                if (isFilterSheetOpen) return Offset.Zero 
                 val delta = available.y
                 val newScroll = (scrollAccumulator - delta).coerceIn(0f, 330f)
                 val consumed = scrollAccumulator - newScroll
@@ -441,100 +583,234 @@ fun ChatListContent(
     Box(
         modifier = Modifier.fillMaxSize().background(MaverickColors.V2TechSurface).nestedScroll(nestedScrollConnection)
     ) {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                val visuals = BeDictionary.Contexts["chat"]!!
-                BarraCabezera(
-                    title = visuals.title,
-                    subtitle = visuals.subtitle,
-                    emoji = visuals.emoji,
-                    onBack = onBack,
-                    collapseFraction = collapseFraction,
-                    accentColor = visuals.accentColor
-                )
-            }
-        ) { paddingValues ->
-            Column(modifier = Modifier.fillMaxSize().padding(top = paddingValues.calculateTopPadding())) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Spacer(modifier = Modifier.height(8.dp * (1f - cardsHideFraction)))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .graphicsLayer { alpha = 1f - cardsHideFraction; translationY = -20.dp.toPx() * cardsHideFraction }
-                            .height(106.dp * (1f - cardsHideFraction)),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MoldePremiumFilterCard(
-                            label = "Filtrar por",
-                            dropdownItems = filterDropdownItems,
-                            shortcutItems = shortcuts,
-                            activeFilters = activeFilters,
-                            onToggle = { chatListViewModel?.toggleFilter(it) },
-                            onManageShortcuts = { id, add -> chatListViewModel?.manageShortcut(id, add) },
-                            modifier = Modifier.weight(1f),
-                            isSheetVisible = isFilterSheetOpen,
-                            onSheetVisibilityChange = onFilterSheetVisibilityChange
-                        )
-
-                        MoldePremiumSortCard(
-                            label = "Ordenar por",
-                            dropdownItems = sortDropdownItems,
-                            shortcutItems = emptyList(),
-                            activeSorts = activeSortCriteria,
-                            onToggle = { chatListViewModel?.toggleFilter(it) },
-                            onManageShortcuts = { _, _ -> }
-                        )
-                    }
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            state = pullToRefreshState,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = {
+                    val visuals = BeDictionary.Contexts["chat"]!!
+                    BarraCabezera(
+                        title = visuals.title,
+                        subtitle = visuals.subtitle,
+                        emoji = visuals.emoji,
+                        onBack = onBack,
+                        collapseFraction = collapseFraction,
+                        accentColor = visuals.accentColor
+                    )
                 }
-                Spacer(modifier = Modifier.height(16.dp * (1f - cardsHideFraction)))
-                //Spacer(modifier = Modifier.height(16.dp))
-                ListaMoldeV2(
-                    modifier = Modifier.weight(1f),
-                    titulo = "BANDEJA DE ENTRADA",
-                    compactInfo = "${threadsList.size} CONVERSACIONES",
-                    itemCount = threadsList.size,
-                    customMaxHeaderHeight = 50.dp,
-                    acciones = {
-                        if (activeFilters.isNotEmpty()) {
-                            BotonCabeceraAccion(
-                                onClick = { chatListViewModel?.toggleFilter("CLEAR_ALL") },
-                                icon = MaverickIcons.Filter,
-                                color = MaverickColors.MagentaNeon
+            ) { paddingValues ->
+                Column(modifier = Modifier.fillMaxSize().padding(top = paddingValues.calculateTopPadding())) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Spacer(modifier = Modifier.height(8.dp * (1f - cardsHideFraction)))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .graphicsLayer { alpha = 1f - cardsHideFraction; translationY = -20.dp.toPx() * cardsHideFraction }
+                                .height(106.dp * (1f - cardsHideFraction)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            MoldePremiumFilterCard(
+                                label = "Filtrar por",
+                                dropdownItems = filterDropdownItems,
+                                shortcutItems = shortcuts,
+                                activeFilters = activeFilters,
+                                onToggle = { chatListViewModel?.toggleFilter(it) },
+                                onManageShortcuts = { id, add -> chatListViewModel?.manageShortcut(id, add) },
+                                modifier = Modifier.weight(1f),
+                                isSheetVisible = isFilterSheetOpen,
+                                onSheetVisibilityChange = onFilterSheetVisibilityChange
+                            )
+
+                            MoldePremiumSortCard(
+                                label = "Ordenar por",
+                                dropdownItems = sortDropdownItems,
+                                shortcutItems = emptyList(),
+                                activeSorts = activeSortCriteria,
+                                onToggle = { chatListViewModel?.toggleFilter(it) },
+                                onManageShortcuts = { _, _ -> }
                             )
                         }
                     }
-                ) {
-                    items(threadsList, key = { it.chatId }) { thread ->
-                        val threadId = thread.chatId
-                        val isSelected = selectedIds.contains(threadId)
-                        Box(modifier = Modifier.padding(horizontal = 8.dp)) {
-                            UnifiedChatListItem(
-                                thread = thread,
-                                unreadCount = unreadCountsMap[threadId] ?: 0,
-                                isSelected = isSelected,
-                                isMultiSelectMode = isMultiSelectMode,
-                                onClick = { if (isMultiSelectMode) chatListViewModel?.toggleSelection(threadId) else onChatClick(thread) },
-                                onLongClick = { if (!isMultiSelectMode) chatListViewModel?.updateMultiSelection(true); chatListViewModel?.toggleSelection(threadId) },
-                                onAvatarClick = { navController?.navigate("perfil_prestador/${thread.provider.uid}") }
-                            )
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(16.dp * (1f - cardsHideFraction)))
                     
-                    if (threadsList.isEmpty()) {
-                        item {
-                            if (activeFilters.isNotEmpty()) {
-                                EmptyFiltersState(
-                                    activeFilters = activeFilters,
-                                    filterDropdownItems = filterDropdownItems,
-                                    sortDropdownItems = sortDropdownItems,
-                                    onClearFilters = { beBrainViewModel?.clearFilters() }
+                    // --- NIVEL 2: SELECTOR DE SUCURSALES (ETIQUETAS M3) ---
+                    val activeCompany = profileState.companies.find { it.id == selectedPerfilId }
+                    val groupedThreads by chatListViewModel?.groupedThreads?.collectAsStateWithLifecycle() ?: remember { mutableStateOf(emptyMap()) }
+                    val totalItemCount = groupedThreads.values.sumOf { it.size }
+
+                    ListaMoldeV2(
+                        modifier = Modifier.weight(1f),
+                        titulo = "BANDEJA DE ENTRADA",
+                        subtitulo = identities.find { it.id == selectedPerfilId }?.nombre,
+                        itemCount = totalItemCount,
+                        perfiles = identities,
+                        initialPerfilId = selectedPerfilId,
+                        onPerfilSelected = { 
+                            if (selectedPerfilId != it.id) {
+                                chatListViewModel?.selectPerfil(it.id)
+                                chatListViewModel?.selectBranch(null) // Reset branch al cambiar empresa
+                            }
+                        },
+                        customMaxHeaderHeight = 64.dp,
+                        acciones = { fraction ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                AnimatedVisibility(
+                                    visible = activeFilters.isNotEmpty() || selectedBranchId != null,
+                                    enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
+                                    exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End)
+                                ) {
+                                    BotonesCabecera.Limpiar(collapseFraction = fraction) {
+                                        chatListViewModel?.toggleFilter("CLEAR_ALL")
+                                        chatListViewModel?.selectBranch(null)
+                                    }
+                                }
+                                
+                                BotonesCabecera.Filtro(
+                                    collapseFraction = fraction,
+                                    isActive = activeFilters.isNotEmpty(),
+                                    onClick = { onFilterSheetVisibilityChange(!isFilterSheetOpen) }
                                 )
-                            } else {
-                                EmptyChatPlaceholder()
                             }
                         }
+                    ) { perfil ->
+                        // 🔥 [ELITE v8.8] ANIMATED CONTENT + SKELETON
+                        item {
+                            AnimatedContent(
+                                targetState = isRefreshing && totalItemCount == 0,
+                                transitionSpec = {
+                                    fadeIn(animationSpec = tween(300)) togetherWith 
+                                    fadeOut(animationSpec = tween(300)) using 
+                                    SizeTransform(clip = false)
+                                },
+                                label = "list_content_transition"
+                            ) { loading ->
+                                if (loading) {
+                                    Column {
+                                        repeat(5) { ChatThreadSkeleton() }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 🔥 [NUEVO] Cabecera de Sucursales M3
+                        if (activeCompany != null && activeCompany.branches.isNotEmpty()) {
+                            item {
+                                LazyRow(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp, horizontal = 8.dp)
+                                        .animateContentSize(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    item {
+                                        BranchSelectorChip(
+                                            label = "TODOS",
+                                            isSelected = selectedBranchId == null,
+                                            onClick = { chatListViewModel?.selectBranch(null) }
+                                        )
+                                    }
+                                    items(activeCompany.branches) { branch ->
+                                        BranchSelectorChip(
+                                            label = branch.name.uppercase(),
+                                            isSelected = selectedBranchId == branch.id,
+                                            onClick = { chatListViewModel?.selectBranch(branch.id) }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        groupedThreads.forEach { (header, threads) ->
+                            if (header.isNotEmpty()) {
+                                item {
+                                    BurbujaCabeceraLista(
+                                        text = header,
+                                        icon = MaverickIcons.Calendar,
+                                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+                                    )
+                                }
+                            }
+
+                            items(threads, key = { it.chatId }) { thread ->
+                                val threadId = thread.chatId
+                                val isSelected = selectedIds.contains(threadId)
+                                Box(modifier = Modifier.padding(horizontal = 8.dp).animateItem()) {
+                                    UnifiedChatListItem(
+                                        thread = thread,
+                                        unreadCount = unreadCountsMap[threadId] ?: 0,
+                                        isSelected = isSelected,
+                                        isMultiSelectMode = isMultiSelectMode,
+                                        onClick = { if (isMultiSelectMode) chatListViewModel?.toggleSelection(threadId) else onChatClick(thread) },
+                                        onLongClick = { if (!isMultiSelectMode) chatListViewModel?.updateMultiSelection(true); chatListViewModel?.toggleSelection(threadId) },
+                                        onAvatarClick = { navController?.navigate("perfil_prestador/${thread.userId}") }
+                                    )
+                                }
+                            }
+                        }
+                        
+                        if (totalItemCount == 0 && !isRefreshing) {
+                            item {
+                                if (activeFilters.isNotEmpty()) {
+                                    EmptyFiltersState(
+                                        activeFilters = activeFilters,
+                                        filterDropdownItems = filterDropdownItems,
+                                        sortDropdownItems = sortDropdownItems,
+                                        onClearFilters = { beBrainViewModel?.clearFilters() }
+                                    )
+                                } else {
+                                    EmptyChatPlaceholder(
+                                        message = if (perfil?.id == "personal") "No tienes chats personales" 
+                                                 else "No hay chats para ${perfil?.nombre ?: "esta empresa"}"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 🔥 [NUEVO v8.9] MAVERICK REFRESH TOAST (Google Elite Style)
+        AnimatedVisibility(
+            visible = refreshToastMessage != null,
+            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 100.dp).zIndex(10f)
+        ) {
+            refreshToastMessage?.let { msg ->
+                Surface(
+                    color = MaverickColors.V2TechSurface.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(24.dp),
+                    border = BorderStroke(1.dp, MaverickColors.NeonCyan.copy(alpha = 0.5f)),
+                    shadowElevation = 8.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (msg.contains("...")) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaverickColors.NeonCyan
+                            )
+                        }
+                        Text(
+                            text = msg.uppercase(),
+                            style = MaverickTypography.HeaderSubtitle.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                letterSpacing = 1.sp
+                            )
+                        )
                     }
                 }
             }
@@ -542,12 +818,40 @@ fun ChatListContent(
     }
 }
 
-// ==================================================================================
-// --- SECCIÓN 5: OTROS COMPONENTES ---
-// ==================================================================================
+@Composable
+fun BranchSelectorChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .clickable { onClick() }
+            .animateContentSize(),
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) MaverickColors.NeonCyan.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.03f),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, 
+            if (isSelected) MaverickColors.NeonCyan.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.08f)
+        )
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                color = if (isSelected) MaverickColors.NeonCyan else Color.Gray.copy(alpha = 0.7f),
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+        }
+    }
+}
 
 @Composable
-fun EmptyChatPlaceholder() {
+fun EmptyChatPlaceholder(message: String = "No tienes conversaciones activas") {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -571,7 +875,7 @@ fun EmptyChatPlaceholder() {
             }
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "No tienes conversaciones activas", 
+                text = message,
                 color = Color.Gray,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold
@@ -586,7 +890,6 @@ fun EmptyChatPlaceholder() {
     }
 }
 
-
 @Preview(showBackground = true)
 @Composable
 fun ChatScreenPreview() {
@@ -599,7 +902,7 @@ fun ChatScreenPreview() {
 
     MyApplicationTheme {
         ChatScreenContent(
-            allThreads = emptyList(),
+            allThreadsMap = emptyMap(),
             profileState = sampleProfileState,
             unreadCountsMap = sampleUnreadCounts,
             onBack = {}

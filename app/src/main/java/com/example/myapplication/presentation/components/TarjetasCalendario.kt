@@ -176,7 +176,7 @@ fun ModernEventCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "💬",
+                        text = "📨",
                         fontSize = 20.sp,
                         modifier = Modifier.graphicsLayer(alpha = contentAlpha)
                     )
@@ -374,7 +374,7 @@ fun NextCommitmentBanner(
                         .background(Brush.radialGradient(listOf(typeColor.copy(0.12f), Color.Transparent)))
                 )
 
-                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
+                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.Top) {
                     // SECCIÓN IZQUIERDA: EMOJI + HORA
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -481,7 +481,7 @@ fun NextCommitmentBanner(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "💬",
+                                text = "📨",
                                 fontSize = 24.sp
                             )
                         }

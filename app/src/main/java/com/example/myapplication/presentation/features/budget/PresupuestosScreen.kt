@@ -8,6 +8,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -45,6 +46,8 @@ import com.example.myapplication.presentation.designsystem.components.*
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.features.home.CategoryViewModel
 import com.example.myapplication.presentation.features.home.CategoryVisuals
+import com.example.myapplication.presentation.features.profile.UserViewModel
+import com.example.myapplication.presentation.features.profile.UserUiState
 import com.example.myapplication.presentation.global.BeBrainViewModel
 import com.example.myapplication.presentation.global.HUDContext
 import com.example.myapplication.presentation.registry.BeDictionary
@@ -69,6 +72,7 @@ private val CardSurface = MaverickColors.EliteSurface
 fun PresupuestosScreen(
     viewModel: BudgetViewModel = hiltViewModel(),
     categoryViewModel: CategoryViewModel = hiltViewModel(),
+    userViewModel: UserViewModel = hiltViewModel(),
     beBrainViewModel: BeBrainViewModel = hiltViewModel(),
     onChatClick: (String, String?) -> Unit = { _, _ -> },
     onBack: () -> Unit,
@@ -80,12 +84,13 @@ fun PresupuestosScreen(
     val activeFilters by beBrainViewModel.activeFilters.collectAsStateWithLifecycle()
     val allBudgetsData by viewModel.allBudgets.collectAsStateWithLifecycle(emptyList())
     val shortcuts by viewModel.shortcuts.collectAsStateWithLifecycle()
+    val profileState by userViewModel.uiState.collectAsStateWithLifecycle()
 
     // --- SUSCRIPCIÓN A FILTROS MAPEADOS EN VM (Elite) ---
     val filterDropdownItems by viewModel.filterDropdownItems.collectAsStateWithLifecycle()
     val sortDropdownItems by viewModel.sortDropdownItems.collectAsStateWithLifecycle()
     val activeSortCriteria by viewModel.activeSortCriteria.collectAsStateWithLifecycle()
-    
+
     // Optimización de Flujo de Datos: Uso de estadísticas pre-calculadas en ViewModel
     val budgetStatsMap by viewModel.budgetStats.collectAsStateWithLifecycle()
 
@@ -101,7 +106,7 @@ fun PresupuestosScreen(
     var selectedTenderForSheet by remember { mutableStateOf<TenderEntity?>(null) }
     var budgetForA4Preview by remember { mutableStateOf<BudgetEntity?>(null) }
     var tenderForDetails by remember { mutableStateOf<TenderEntity?>(null) }
-    
+
     // Estados para Analíticas
     var showAnalyticsOverlay by remember { mutableStateOf(false) }
     var budgetsToAnalyze by remember { mutableStateOf<List<BudgetEntity>>(emptyList()) }
@@ -170,10 +175,10 @@ fun PresupuestosScreen(
                     }
                 }
                 "compare_all" -> {
-                    val currentTenderId = viewModel.selectedIds.value.firstOrNull() 
+                    val currentTenderId = viewModel.selectedIds.value.firstOrNull()
                     val tender = tenders.find { it.tenderId == currentTenderId }
                     val budgetsForThisTender = allBudgetsData.filter { it.tenderId == currentTenderId }
-                    
+
                     if (tender != null && budgetsForThisTender.isNotEmpty()) {
                         tenderForAnalytics = tender
                         budgetsToAnalyze = budgetsForThisTender
@@ -199,15 +204,56 @@ fun PresupuestosScreen(
     }.collectAsStateWithLifecycle()
 
     var providerForA4 by remember { mutableStateOf<Provider?>(null) }
-    
+
     LaunchedEffect(budgetForA4Preview) {
         if (budgetForA4Preview != null) {
             providerForA4 = viewModel.getProviderById(budgetForA4Preview!!.providerId)
         }
     }
 
+    // --- GESTIÓN DE MULTI-PERFIL (WHATSAPP/INSTAGRAM STYLE) ---
+    val allTenders by viewModel.allTenders.collectAsStateWithLifecycle()
+    val perfiles = remember(profileState.companies, profileState.displayName, budgetStatsMap, allTenders) {
+        val list = mutableListOf<PerfilEmpresa>()
+        
+        // 1. Perfil Personal
+        val personalTenders = allTenders.filter { it.companyName == null }
+        val personalUnread = personalTenders.sumOf { budgetStatsMap[it.tenderId]?.unreadCount ?: 0 }
+        
+        list.add(PerfilEmpresa(
+            id = "personal",
+            nombre = "Mi Perfil",
+            iniciales = "YO",
+            emoji = "👤",
+            photoUrl = profileState.profileThumbnail.takeIf { it.isNotBlank() } ?: profileState.photoUrl.ifEmpty { null },
+            colorAcento = MaverickColors.ElectricCyan,
+            unreadCount = personalUnread
+        ))
+        
+        // 2. Perfiles de Empresa del Usuario
+        profileState.companies.forEach { company ->
+            val companyTenders = allTenders.filter { it.companyName == company.name }
+            val companyUnread = companyTenders.sumOf { budgetStatsMap[it.tenderId]?.unreadCount ?: 0 }
+
+            list.add(PerfilEmpresa(
+                id = company.id,
+                nombre = company.name,
+                iniciales = company.name.take(2).uppercase(),
+                photoUrl = company.thumbnailBase64.takeIf { !it.isNullOrBlank() } ?: company.photoUrl,
+                colorAcento = MaverickColors.NeonCyan,
+                unreadCount = companyUnread
+            ))
+        }
+        list
+    }
+
+    val selectedPerfilId by beBrainViewModel.selectedProfileId.collectAsStateWithLifecycle()
+
     PresupuestosScreenContent(
         tenders = tenders,
+        perfiles = perfiles,
+        selectedPerfilId = selectedPerfilId ?: "personal",
+        onPerfilSelected = { beBrainViewModel.selectProfile(if (it.id == "personal") null else it.id) },
         categories = categories,
         activeFilters = activeFilters,
         activeSorts = activeSortCriteria,
@@ -277,9 +323,9 @@ fun PresupuestosScreen(
 
     CrearLicitacionSheet(
         isVisible = showCrearLicitacionSheet,
-        onClose = { 
+        onClose = {
             showCrearLicitacionSheet = false
-            beBrainViewModel.onRouteChanged("presupuestos") 
+            beBrainViewModel.onRouteChanged("presupuestos")
         },
         onSuccess = {
             showCrearLicitacionSheet = false
@@ -293,6 +339,9 @@ fun PresupuestosScreen(
 @Composable
 fun PresupuestosScreenContent(
     tenders: List<TenderEntity>,
+    perfiles: List<PerfilEmpresa> = emptyList(),
+    selectedPerfilId: String = "personal",
+    onPerfilSelected: (PerfilEmpresa) -> Unit = {},
     categories: List<CategoryEntity>,
     activeFilters: Set<String>,
     activeSorts: List<String> = emptyList(),
@@ -338,7 +387,7 @@ fun PresupuestosScreenContent(
 ) {
     val tenderListState = rememberLazyListState()
     val refreshState = rememberPullToRefreshState()
-    
+
     // 🔥 [ELITE] Reset scroll to top when tenders list changes (Filter/Sort/Update)
     LaunchedEffect(tenders) {
         if (tenders.isNotEmpty()) {
@@ -354,7 +403,7 @@ fun PresupuestosScreenContent(
         else {
             val formatter = SimpleDateFormat("dd MMMM", Locale.getDefault())
             val now = Calendar.getInstance()
-            tenders.groupBy { 
+            tenders.groupBy {
                 val time = Calendar.getInstance().apply { timeInMillis = it.startDate }
                 when {
                     now.get(Calendar.YEAR) == time.get(Calendar.YEAR) &&
@@ -369,7 +418,7 @@ fun PresupuestosScreenContent(
 
     // Estado de expansión de grupos
     val expandedGroups = remember { mutableStateMapOf<String, Boolean>().apply {
-        groupedTenders.keys.forEach { put(it, true) } 
+        groupedTenders.keys.forEach { put(it, true) }
     } }
 
     // --- LÓGICA DE CABECERA REACTIVA ---
@@ -395,7 +444,7 @@ fun PresupuestosScreenContent(
 
     // --- LÓGICA DE SCROLL Y COLAPSO DE TARJETAS (Elite V5 - Double Phase) ---
     var scrollAccumulator by remember { mutableFloatStateOf(0f) }
-    
+
     // 🔥 [ELITE] Lógica de Colapso Automático por Menú de Filtros
     val autoCollapseFraction by animateFloatAsState(
         targetValue = if (isFilterSheetOpen) 1f else 0f,
@@ -432,12 +481,12 @@ fun PresupuestosScreenContent(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBg) 
+            .background(DarkBg)
             .nestedScroll(nestedScrollConnection)
     ) {
         Scaffold(
             containerColor = Color.Transparent,
-            modifier = Modifier.padding(bottom = bottomPadding.calculateBottomPadding()), 
+            modifier = Modifier.padding(bottom = bottomPadding.calculateBottomPadding()),
             topBar = {
                 val visuals = BeDictionary.Contexts["presupuestos"]!!
                 BarraCabezera(
@@ -514,31 +563,38 @@ fun PresupuestosScreenContent(
                     Spacer(modifier = Modifier.height(16.dp * (1f - cardsHideFraction.value)))
                 ListaMoldeV2(
                     modifier = Modifier.weight(1f),
-                    titulo = "CONCURSOS PÚBLICOS",
-                    subtitulo = null, // Minimalismo Elite
-                    compactInfo = currentVisibleDate,
+                    titulo = "BANDEJA DE LICITACIONES",
+                    subtitulo = perfiles.find { it.id == selectedPerfilId }?.nombre,
                     itemCount = tenders.size,
-                    customMaxHeaderHeight = 44.dp,
-                    customMinHeaderHeight = 40.dp,
-                    accentColor = MaverickBlue,
-                    acciones = {
-                        // Botón Limpiar Filtros - Estilo Elite (Sincronizado con Categorías)
-                        if (activeFilters.isNotEmpty()) {
-                            BotonCabeceraAccion(
-                                onClick = { onFilterToggle("CLEAR_ALL") },
-                                icon = Icons.Default.FilterAlt,
-                                color = MaverickColors.MagentaNeon
+                    perfiles = perfiles,
+                    initialPerfilId = selectedPerfilId,
+                    onPerfilSelected = onPerfilSelected,
+                    customMaxHeaderHeight = 64.dp,
+                    acciones = { fraction ->
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            AnimatedVisibility(
+                                visible = activeFilters.isNotEmpty(),
+                                enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
+                                exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End)
+                            ) {
+                                BotonesCabecera.Limpiar(collapseFraction = fraction) {
+                                    onFilterToggle("CLEAR_ALL")
+                                }
+                            }
+
+                            BotonesCabecera.Filtro(
+                                collapseFraction = fraction,
+                                isActive = activeFilters.isNotEmpty(),
+                                onClick = { onFilterSheetVisibilityChange(!isFilterSheetOpen) }
                             )
                         }
                     }
-                ) {
-                    if (tenders.isEmpty() && activeFilters.isNotEmpty()) {
+                ) { perfil ->
+                    if (tenders.isEmpty()) {
                         item {
-                            EmptyFiltersState(
-                                activeFilters = activeFilters,
-                                filterDropdownItems = filterDropdownItems,
-                                sortDropdownItems = sortDropdownItems,
-                                onClearFilters = { onFilterToggle("CLEAR_ALL") }
+                            EmptyTendersPlaceholder(
+                                message = if (perfil?.id == "personal") "No tienes licitaciones personales"
+                                         else "No hay licitaciones para ${perfil?.nombre ?: "esta empresa"}"
                             )
                         }
                     } else {
@@ -577,6 +633,7 @@ fun PresupuestosScreenContent(
                                             awardedProviderName = tender.awardedProviderName,
                                             awardedBudgetId = tender.awardedBudgetId,
                                             awardedProviderPhotoUrl = tender.awardedProviderPhotoUrl,
+                                            awardedProviderThumbnail = tender.awardedProviderThumbnail, // [ELITE v5.4]
                                             onViewDetails = { onViewTenderDetails(tender) },
                                             onClick = { onTenderClick(tender) },
                                             onLongClick = {
@@ -664,7 +721,7 @@ fun PresupuestosScreenContent(
                 if (tenderForDetails.locationAddress != null) {
                     PopUpSectionHeader("Ubicación", emoji = "📍")
                     PopUpDetailSection(
-                        "🗺️", 
+                        "🗺️",
                         "Dirección",
                         "${tenderForDetails.locationAddress} ${tenderForDetails.locationNumber ?: ""}, ${tenderForDetails.locationLocality ?: ""}"
                     )
@@ -770,12 +827,12 @@ fun PresupuestosScreenContent(
                 )
             }
         }
-        
+
         if (budgetForA4Preview != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             Dialog(onDismissRequest = onCloseBudgetPreview, properties = DialogProperties(usePlatformDefaultWidth = false)) {
                 BudgetA4Viewer(
-                    prestador = providerForA4?.toEntity(), 
-                    budget = budgetForA4Preview, 
+                    prestador = providerForA4?.toEntity(),
+                    budget = budgetForA4Preview,
                     onDismiss = onCloseBudgetPreview,
                     clientName = "Cliente"
                 ) { _, _ ->
@@ -808,6 +865,46 @@ fun PresupuestosScreenContent(
     }
 }
 
+@Composable
+fun EmptyTendersPlaceholder(message: String = "No tienes licitaciones activas") {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 80.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(
+                modifier = Modifier.size(80.dp),
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.05f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Gavel,
+                        contentDescription = null,
+                        tint = Color.Gray.copy(alpha = 0.3f),
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = message,
+                color = Color.Gray,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Tus pedidos de servicio aparecerán aquí para que los prestadores se postulen.",
+                color = Color.Gray.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true, backgroundColor = 0xFF05070A)
 @Composable
 fun PresupuestosScreenPreview() {
@@ -836,7 +933,7 @@ fun PresupuestosScreenPreview() {
             onManageShortcuts = { _, _ -> },
             onChatClick = { _, _ -> },
             onBack = {},
-            bottomPadding = PaddingValues(0.dp), 
+            bottomPadding = PaddingValues(0.dp),
             isMultiSelectionActive = false,
             selectedItemIds = emptySet(),
             onToggleItemSelection = {},

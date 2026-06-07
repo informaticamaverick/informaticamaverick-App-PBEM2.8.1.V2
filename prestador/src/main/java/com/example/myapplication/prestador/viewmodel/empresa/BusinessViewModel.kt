@@ -3,9 +3,9 @@ package com.example.myapplication.prestador.viewmodel.empresa
 import android.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 import com.example.myapplication.core.domain.model.CompanyProvider
-import com.example.myapplication.prestador.data.repository.ProviderRepository
+import com.example.myapplication.core.data.repository.ProviderRepository
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,7 +60,7 @@ class BusinessViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                providerRepository.getProviderById(providerId).collect { provider ->
+                providerRepository.getProviderFlowById(providerId).collect { provider ->
                     _provider.value = provider
                     _businesses.value = provider?.companies ?: emptyList()
                 }
@@ -101,12 +101,10 @@ class BusinessViewModel @Inject constructor(
                 }
 
                 val updatedProvider = currentProvider.copy(
-                    companies = updatedCompanies,
-                    hasCompanyProfile = true
+                    companies = updatedCompanies
                 )
                 //Solo sincornizar si hubo cambios reales
-                if (updatedProvider.companies == currentProvider.companies &&
-                    updatedProvider.hasCompanyProfile == currentProvider.hasCompanyProfile)
+                if (updatedProvider.companies == currentProvider.companies)
                 {
                     _successMessage.value = "Sin cambios"
                     return@launch
@@ -138,8 +136,7 @@ class BusinessViewModel @Inject constructor(
 
                 val updatedCompanies = currentProvider.companies.filter { it.id != businessId }
                 val updatedProvider = currentProvider.copy(
-                    companies = updatedCompanies,
-                    hasCompanyProfile = updatedCompanies.isNotEmpty()
+                    companies = updatedCompanies
                 )
 
                 // Sincronización SSOT

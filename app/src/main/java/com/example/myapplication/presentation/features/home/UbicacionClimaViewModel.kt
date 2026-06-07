@@ -8,7 +8,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.utils.MaverickGeoUtils
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import android.location.Location
@@ -42,7 +42,7 @@ class UbicacionClimaViewModel @Inject constructor(
     val isCellularEnabled = coordinator.isCellularEnabled
 
     /** La dirección activa fluye desde el SSOT en el Coordinator */
-    val activeAddress: StateFlow<AddressInfo?> = coordinator.activeAddress
+    val activeAddress: StateFlow<AddressUnico?> = coordinator.activeAddress
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _isCargando = MutableStateFlow(false)
@@ -113,21 +113,14 @@ class UbicacionClimaViewModel @Inject constructor(
                     
                     val address = MaverickGeoUtils.getAddressFromCoordinates(context, lat, lng)
                     address?.let { a ->
-                        val freshGpsAddress = AddressInfo(
+                        val freshGpsAddress = a.copy(
                             id = "gps_current",
-                            companyOrUserName = "Mi Ubicación",
-                            branchName = "GPS Tracker",
-                            streetAndNumber = if (a.calle.isNotBlank()) "${a.calle} ${a.numero}".trim() else "Ubicación detectada",
-                            locality = a.localidad,
-                            province = a.provincia,
-                            country = a.pais,
-                            postalCode = a.codigoPostal,
-                            isCompany = false,
-                            lat = a.latitude,
-                            lng = a.longitude
+                            ownerName = "Mi Ubicación",
+                            label = "GPS Tracker",
+                            isCompany = false
                         )
                         coordinator.updateAddressFromGps(freshGpsAddress)
-                        Toast.makeText(context, "🛰️ Ubicación GPS activada: ${freshGpsAddress.locality}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "🛰️ Ubicación GPS activada: ${freshGpsAddress.localidad}", Toast.LENGTH_SHORT).show()
 
                         onResultado(a.pais, a.provincia, a.localidad, a.calle, a.numero, a.codigoPostal, a.latitude, a.longitude)
                     }
@@ -231,7 +224,7 @@ class UbicacionClimaViewModel @Inject constructor(
         viewModelScope.launch {
             coordinator.activeAddress.collect { address ->
                 if (address != null) {
-                    fetchWeather(address.lat, address.lng)
+                    fetchWeather(address.latitude, address.longitude)
                 }
             }
         }

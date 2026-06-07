@@ -6,7 +6,9 @@ import android.graphics.Bitmap
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.os.Build
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import android.graphics.Color as AndroidColor
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -49,6 +51,7 @@ import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 import java.io.File
 import java.io.FileOutputStream
 
+@RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CrearPresupuestoRapidoSheet(onDismiss: () -> Unit) {
@@ -512,8 +515,8 @@ fun CrearPresupuestoRapidoSheet(onDismiss: () -> Unit) {
     // Preview + PDF compartir
     if (mostrarPreview && provider != null) {
         val providerName = when {
-            provider.tieneEmpresa == true && !provider.nombreEmpresa.isNullOrBlank() -> provider.nombreEmpresa!!
-            else -> "${provider.name.orEmpty()} ${provider.apellido.orEmpty()}".trim()
+            provider.companies.isNotEmpty() && provider.companies.first().name.isNotBlank() -> provider.companies.first().name
+            else -> "${provider.name.orEmpty()} ${provider.lastName.orEmpty()}".trim()
         }
         BudgetPreviewPDFDialog(
             prestador = provider,

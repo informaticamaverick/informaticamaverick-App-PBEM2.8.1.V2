@@ -39,6 +39,12 @@ data class MessageEntity(
     val durationSeconds: Int? = null,
     val relatedId: String? = null, // ID relacionado (ej: ID del Presupuesto)
 
+    // Datos Embebidos (Costo Zero Sync)
+    val budgetDataJson: String? = null,
+    val rejectionReason: String? = null,
+    val budgetRequestDescription: String? = null,
+    val budgetRequestClientAddress: String? = null,
+
     // Datos de apoyo para visualización rápida (Turnos/Citas)
     val appointmentDate: String? = null,
     val appointmentTime: String? = null,
@@ -46,7 +52,25 @@ data class MessageEntity(
     val appointmentType: String? = null,
     val providerAddress: String? = null,
     val companyId: String? = null,
+    val branchId: String? = null, // [DEPRECATED v7] Usar senderBranchId
     val categoryId: String? = null,
+
+    // 🔥 [ELITE v7.5] SYMMETRIC TAGGED IDENTITY
+    // senderBranchId -> Contexto de sucursal de quien envía el mensaje.
+    // senderCompanyId -> Contexto corporativo de quien envía.
+    // receiverBranchId -> Contexto de sucursal de quien recibe.
+    // receiverCompanyId -> Contexto corporativo de quien recibe.
+    val senderBranchId: String? = null,
+    val senderCompanyId: String? = null,
+    val receiverBranchId: String? = null,
+    val receiverCompanyId: String? = null,
+
+    // [SOBERANÍA LOCAL]: Tags de filtrado rápido para el DAO local.
+    // Estos campos ayudan a que Room asigne el mensaje a la pestaña correcta del usuario local.
+    val localBranchId: String? = null,
+    val localCompanyId: String? = null,
+    val remoteBranchId: String? = null,
+    val remoteCompanyId: String? = null,
 
     // Invitaciones de Calendario
     val calendarStartDate: String? = null,
@@ -62,6 +86,14 @@ data class MessageEntity(
     val receiptProfession: String? = null,
     val receiptAddress: String? = null,
     val receiptCode: String? = null,
+    val receiptPrioritizeCompany: Boolean? = null,
+
+    // [NUEVO] Previsualización Elite (WhatsApp Style)
+    val thumbnailBase64: String? = null,
+
+    // Archivos Locales
+    val imageLocalPath: String? = null,
+    val audioLocalPath: String? = null,
 
     // Respuestas (Reply)
     val replyToId: String? = null,
@@ -72,6 +104,7 @@ data class MessageEntity(
     val timestamp: Long = System.currentTimeMillis(),
     val status: String = "SENT", // SENT, READ, ERROR
     val isRead: Boolean = false,
+    val isDelivered: Boolean = false,
     val isSynced: Boolean = false
 ) {
     // Constructor sin argumentos necesario para la deserialización de Firebase Realtime Database

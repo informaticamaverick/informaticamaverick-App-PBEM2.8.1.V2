@@ -1,17 +1,19 @@
 package com.example.myapplication.presentation.features.chat
 
-import com.example.myapplication.core.domain.model.AddressInfo
+import com.example.myapplication.core.domain.model.AddressUnico
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,16 +27,25 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.example.myapplication.core.domain.model.Provider
+import com.example.myapplication.core.utils.ImageUtils
 import com.example.myapplication.presentation.designsystem.theme.AppColors
 import com.example.myapplication.core.domain.model.MessageType
 import com.example.myapplication.presentation.components.*
 import com.example.myapplication.presentation.components.BudgetRequestDialog 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import com.example.myapplication.core.data.local.entity.BudgetEntity
 import com.example.myapplication.core.data.local.entity.MessageEntity
 import com.example.myapplication.core.data.local.entity.TenderEntity
 import com.example.myapplication.core.data.local.entity.CategoryEntity
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import coil.compose.AsyncImage
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
 import com.example.myapplication.presentation.designsystem.theme.getThemeColors
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -55,13 +66,13 @@ import com.example.myapplication.presentation.features.home.UbicacionClimaViewMo
 @Composable
 fun ChatConversationContent(
     provider: Provider,
-    availableAddresses: List<AddressInfo> = emptyList(),
+    availableAddresses: List<AddressUnico> = emptyList(),
     uiState: ChatUiState,
     events: Flow<ChatUiEvent>,
     onBack: () -> Unit,
     appColors: AppColors,
     onSendMessage: (String) -> Unit,
-    onSendImage: (Uri) -> Unit,
+    onSendImage: (Uri, android.content.Context) -> Unit,
     onSendLocation: (Double, Double, String) -> Unit,
     onSendAppointment: (String, String, String, String?, String?) -> Unit,
     onAudioClick: () -> Unit,
@@ -83,12 +94,21 @@ fun ChatConversationContent(
     onOpenBooking: (MessageEntity) -> Unit,
     onDaySelected: (DayAvailability, String) -> Unit,
     onTimeSelected: (String) -> Unit,
-    onAddressSelected: (AddressInfo) -> Unit,
-    onReply: (MessageEntity?) -> Unit = {} 
+    onAddressSelected: (AddressUnico) -> Unit,
+    onReply: (MessageEntity?) -> Unit = {},
+    onSwitchContext: (String?) -> Unit = { _ -> }, // 🔥 [FIX v6]
+    onShowBudgets: () -> Unit = {}, // 🔥 [NUEVO]
+    onShowCalendar: () -> Unit = {}, // 🔥 [NUEVO]
+    onShowSearch: () -> Unit = {}, // 🔥 [NUEVO]
+    onDeleteChat: () -> Unit = {}, // 🔥 [NUEVO]
+    onBlockProvider: () -> Unit = {}, // 🔥 [NUEVO]
+    onReportProvider: () -> Unit = {}, // 🔥 [NUEVO]
+    onToggleFavorite: () -> Unit = {}, // 🔥 [NUEVO]
+    isFavorite: Boolean = false, // 🔥 [NUEVO]
+    recordingTime: Int = 0 
 ) {
     // Resolver datos del Header usando el perfil base del prestador (Chat Unificado)
     val resolvedProviderName = provider.displayName
-    val resolvedProviderPhoto = provider.photoUrl
 
     var inputText by remember { mutableStateOf("") }
     var showAttachMenu by remember { mutableStateOf(false) }
@@ -99,12 +119,38 @@ fun ChatConversationContent(
     val context = LocalContext.current
     val listState = rememberLazyListState()
 
+    // --- LÓGICA DE COLAPSO DE CABECERA (Telegram Style) ---
+    val collapseFraction by remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex > 0) 1f
+            else (listState.firstVisibleItemScrollOffset / 140f).coerceIn(0f, 1f)
+        }
+    }
+
+    // 🔥 [ELITE] Botón Volver Abajo (Telegram Style)
+    val showScrollToBottom by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 3 }
+    }
+    val coroutineScope = rememberCoroutineScope()
+
+    // 🔥 [ELITE v4] Paging 3 Integration
+    val pagingMessages = uiState.pagingMessages.collectAsLazyPagingItems()
+
+    // 🔥 [NUEVO] AUTO-SCROLL AL RECIBIR MENSAJES (Paging 3)
+    LaunchedEffect(pagingMessages.itemCount) {
+        if (pagingMessages.itemCount > 0) {
+            listState.animateScrollToItem(0)
+        }
+    }
+
     // Manejo de eventos del ViewModel
     LaunchedEffect(events) {
         events.collect { event ->
             when (event) {
                 is ChatUiEvent.ShowError -> Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
-                ChatUiEvent.MessageSent -> { /* Scroll logic if needed */ }
+                ChatUiEvent.MessageSent -> { 
+                    listState.animateScrollToItem(0) // Scroll al enviar
+                }
             }
         }
     }
@@ -112,10 +158,10 @@ fun ChatConversationContent(
     // --- PERMISOS Y LAUNCHERS ---
 
     // VALORES PARA PREVIEW (Evitar FileProvider en modo diseño)
-    val isInEditMode = androidx.compose.ui.platform.LocalInspectionMode.current
+    val isInEditMode = LocalInspectionMode.current
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let { onSendImage(it); showAttachMenu = false }
+        uri?.let { onSendImage(it, context); showAttachMenu = false }
     }
 
     val micPermissionLauncher = rememberLauncherForActivityResult(
@@ -152,7 +198,7 @@ fun ChatConversationContent(
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success) {
-            onSendImage(tempPhotoUri)
+            onSendImage(tempPhotoUri, context)
         }
     }
 
@@ -175,9 +221,27 @@ fun ChatConversationContent(
         }
     }
 
-    val effectiveProviderPhoto = uiState.providerPhotoUrl ?: provider.photoUrl
+    // 🔥 [ELITE] Procesamiento centralizado de imagen (Ley #2)
+    val effectiveProviderPhoto = remember(uiState.activeProvider, provider) {
+        val target = uiState.activeProvider ?: provider
+        ImageUtils.processImageSource(target.profileThumbnail ?: target.photoUrl)
+    }
 
     // --- VISORES ---
+    if (uiState.isFetchingFullBudget) {
+        Dialog(onDismissRequest = {}) {
+            Surface(
+                modifier = Modifier.size(100.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Black.copy(alpha = 0.8f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFF22D3EE))
+                }
+            }
+        }
+    }
+
     if (uiState.selectedBudget != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
         val budget = uiState.selectedBudget
         Dialog(
@@ -270,19 +334,10 @@ fun ChatConversationContent(
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
-        topBar = {
-            ChatHeader(
-                providerName = resolvedProviderName,
-                providerPhoto = resolvedProviderPhoto,
-                isOnline = uiState.isProviderOnline, 
-                onBack = onBack,
-                appColors = appColors,
-                isProviderTyping = uiState.isProviderTyping
-            )
-        },
+        modifier = Modifier.fillMaxSize(),
         bottomBar = {
             Column(modifier = Modifier.background(appColors.backgroundColor)) {
+                
                 AnimatedVisibility(
                     visible = uiState.replyingToMessage != null,
                     enter = slideInVertically { it } + fadeIn(),
@@ -291,32 +346,32 @@ fun ChatConversationContent(
                     uiState.replyingToMessage?.let { msg ->
                         ReplyPreviewBar(
                             message = msg,
-                            onCancelReply = { onReply(null) }, 
-                            appColors = appColors
+                            onCancel = { onReply(null) },
+                            colors = appColors
                         )
                     }
                 }
 
                 AnimatedVisibility(visible = showAttachMenu) {
                     AttachmentOptionsMenu(
-                        onDismiss = { showAttachMenu = false },
-                        onImageClick = { galleryLauncher.launch("image/*"); showAttachMenu = false },
-                        onLocationClick = { showLocationSelectionDialog = true; showAttachMenu = false },
-                        onInviteClick = { showTenderSelectionDialog = true },
-                        onBudgetRequestClick = { showBudgetRequestDialog = true; showAttachMenu = false }
+                        onGallery = { galleryLauncher.launch("image/*"); showAttachMenu = false },
+                        onCamera = { handleCameraClick(); showAttachMenu = false },
+                        onLocation = { showLocationSelectionDialog = true; showAttachMenu = false },
+                        onBudget = { showBudgetRequestDialog = true; showAttachMenu = false },
+                        onAppointment = { showTenderSelectionDialog = true }
                     )
                 }
 
                 MessageInputBar(
-                    inputText = inputText,
-                    onInputChange = { inputText = it; onTypingStatus(it.isNotEmpty()) },
-                    onSendMessage = { onSendMessage(it); inputText = "" },
+                    value = inputText,
+                    onValueChange = { inputText = it; onTypingStatus(it.isNotEmpty()) },
+                    onSend = { onSendMessage(it); inputText = "" },
                     appColors = appColors,
-                    onAttachMenuToggle = { showAttachMenu = !showAttachMenu },
+                    onAttachmentClick = { showAttachMenu = !showAttachMenu },
+                    onMicClick = { handleAudioClick() },
                     onCameraClick = { handleCameraClick() },
-                    onAudioClick = { handleAudioClick() },
-                    onCancelAudio = { onCancelAudio() },
-                    isRecordingAudio = uiState.isRecording
+                    isRecording = uiState.isRecording,
+                    recordingTime = recordingTime
                 )
             }
         },
@@ -326,115 +381,183 @@ fun ChatConversationContent(
         val safePadding = remember(paddingValues, layoutDirection) {
             PaddingValues(
                 start = paddingValues.calculateStartPadding(layoutDirection).coerceAtLeast(0.dp),
-                top = paddingValues.calculateTopPadding().coerceAtLeast(0.dp),
+                top = 0.dp,
                 end = paddingValues.calculateEndPadding(layoutDirection).coerceAtLeast(0.dp),
                 bottom = paddingValues.calculateBottomPadding().coerceAtLeast(0.dp)
             )
         }
 
-        LazyColumn(
-            state = listState,
-            reverseLayout = true,
-            modifier = Modifier.fillMaxSize().padding(safePadding),
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            itemsIndexed(uiState.messages.reversed()) { index, uiModel ->
-                val message = uiModel.message
-                val budget = uiModel.budget
-                val reversedMessages = uiState.messages.reversed()
-                if (index == reversedMessages.size - 1 || !isSameDayChat(message.timestamp, reversedMessages[index + 1].message.timestamp)) {
-                    DateSeparator(timestamp = message.timestamp, appColors = appColors)
-                }
+        Box(modifier = Modifier.fillMaxSize().padding(safePadding)) {
+            LazyColumn(
+                state = listState,
+                reverseLayout = true,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 130.dp, bottom = 12.dp, start = 4.dp, end = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(
+                    count = pagingMessages.itemCount,
+                    key = pagingMessages.itemKey { it.message.id }
+                ) { index ->
+                    val uiModel = pagingMessages[index] ?: return@items
+                    val message = uiModel.message
+                    val budget = uiModel.budget
+                    
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // El separador de fecha es más complejo con Paging 3, 
+                        // se recomienda usar insertSeparators en el Flow.
+                        // Por ahora mantenemos la lógica básica si hay datos previos.
+                        if (index < pagingMessages.itemCount - 1) {
+                            val nextMsg = pagingMessages[index + 1]?.message
+                            if (nextMsg != null && !isSameDayChat(message.timestamp, nextMsg.timestamp)) {
+                                DateSeparator(timestamp = message.timestamp, colors = appColors)
+                            }
+                        }
 
-                when (message.type) {
-                    MessageType.BUDGET -> BudgetBubble(
-                        message = message,
-                        budget = budget,
-                        isMe = message.senderId != provider.id,
-                        appColors = appColors,
-                        categoryEmoji = uiModel.categoryEmoji,
-                        onClick = { message.relatedId?.let { onBudgetClick(it) } }
-                    )
-                    MessageType.AUDIO -> AudioMessageBubble(
-                        message = message,
-                        appColors = appColors,
-                        isFromMe = message.senderId != provider.id
-                    )
-                    MessageType.VISIT -> {
-                        val isTechnical = message.appointmentType == "TECHNICAL_VISIT"
-                        if (isTechnical) {
-                            TechnicalVisitProposalBubble(
+                        when (message.type) {
+                            MessageType.BUDGET -> {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                    BudgetBubble(
+                                        message = message,
+                                        budget = budget,
+                                        isMe = message.senderId != provider.id,
+                                        appColors = appColors,
+                                        categoryEmoji = uiModel.categoryEmoji,
+                                        onClick = { 
+                                            // 🔥 [FIX] Resolución de ID idéntica al ViewModel para consistencia Elite
+                                            val bId = message.relatedId ?: message.id
+                                            onBudgetClick(bId) 
+                                        }
+                                    )
+                                } else {
+                                    MessageBubble(
+                                        message = message,
+                                        appColors = appColors,
+                                        isFromMe = message.senderId != provider.id,
+                                        budget = budget,
+                                        allCategories = allCategories,
+                                        onReply = { onReply(message) },
+                                        onAddressClick = onAddressClick
+                                    )
+                                }
+                            }
+                            MessageType.AUDIO -> AudioMessageBubble(
                                 message = message,
-                                isMe = message.senderId != provider.id,
                                 appColors = appColors,
-                                providerPhotoUrl = if (message.senderId == provider.id) effectiveProviderPhoto else null,
-                                categoryEmoji = uiModel.categoryEmoji,
-                                onAccept = { 
-                                    onRespondAppointment(
-                                        "preview", 
-                                        message.id, 
-                                        message.relatedId ?: "", 
-                                        true, 
-                                        message.appointmentDate, 
-                                        message.appointmentTime, 
-                                        "Visita Técnica", 
-                                        provider.displayName, 
-                                        effectiveProviderPhoto,
-                                        message.categoryId ?: provider.categories.firstOrNull(),
-                                        null
-                                    ) 
-                                },
-                                onReject = { onRespondAppointment("preview", message.id, message.relatedId ?: "", false, null, null, "", "", null, null, null) }
+                                isMe = message.senderId != provider.id
                             )
-                        } else {
-                            LocalAppointmentProposalBubble(
-                                message = message,
-                                isMe = message.senderId != provider.id,
-                                appColors = appColors,
-                                providerPhotoUrl = if (message.senderId == provider.id) effectiveProviderPhoto else null,
-                                categoryEmoji = uiModel.categoryEmoji,
-                                onAccept = { 
-                                    onRespondAppointment(
-                                        "preview", 
-                                        message.id, 
-                                        message.relatedId ?: "", 
-                                        true, 
-                                        message.appointmentDate, 
-                                        message.appointmentTime, 
-                                        "Turno en local",
-                                        provider.displayName, 
-                                        effectiveProviderPhoto,
-                                        message.categoryId ?: provider.categories.firstOrNull(),
-                                        null
-                                    ) 
-                                },
-                                onReject = { onRespondAppointment("preview", message.id, message.relatedId ?: "", false, null, null, "", "", null, null, null) }
-                            )
+                            MessageType.VISIT -> {
+                                val isTechnical = message.appointmentType == "TECHNICAL_VISIT"
+                                if (isTechnical) {
+                                    TechnicalVisitProposalBubble(
+                                        message = message,
+                                        isMe = message.senderId != provider.id,
+                                        appColors = appColors,
+                                        categoryEmoji = uiModel.categoryEmoji,
+                                        onAccept = { 
+                                            onRespondAppointment(
+                                                "preview", 
+                                                message.id, 
+                                                message.relatedId ?: "", 
+                                                true, 
+                                                message.appointmentDate, 
+                                                message.appointmentTime, 
+                                                "Visita Técnica", 
+                                                provider.displayName, 
+                                                effectiveProviderPhoto as? String,
+                                                message.categoryId ?: provider.categories.firstOrNull(),
+                                                null
+                                            ) 
+                                        },
+                                        onReject = { onRespondAppointment("preview", message.id, message.relatedId ?: "", false, null, null, "", "", null, null, null) }
+                                    )
+                                } else {
+                                    LocalAppointmentProposalBubble(
+                                        message = message,
+                                        isMe = message.senderId != provider.id,
+                                        appColors = appColors,
+                                        categoryEmoji = uiModel.categoryEmoji,
+                                        onAccept = { 
+                                            onRespondAppointment(
+                                                "preview", 
+                                                message.id, 
+                                                message.relatedId ?: "", 
+                                                true, 
+                                                message.appointmentDate, 
+                                                message.appointmentTime, 
+                                                "Turno en local",
+                                                provider.displayName, 
+                                                effectiveProviderPhoto as? String,
+                                                message.categoryId ?: provider.categories.firstOrNull(),
+                                                null
+                                            ) 
+                                        },
+                                        onReject = { onRespondAppointment("preview", message.id, message.relatedId ?: "", false, null, null, "", "", null, null, null) }
+                                    )
+                                }
+                            }
+                            else -> {
+                                var showViewer by remember { mutableStateOf(false) }
+                                MessageBubble(
+                                    message = message,
+                                    appColors = appColors,
+                                    isFromMe = message.senderId != provider.id,
+                                    budget = budget,
+                                    allCategories = allCategories, 
+                                    onReply = { onReply(message) }, 
+                                    onImageClick = { showViewer = true },
+                                    onCalendarClick = { 
+                                        if (message.type == MessageType.CALENDAR_INVITE) {
+                                            onOpenBooking(message)
+                                            showCalendarBooking = message
+                                        }
+                                        else onCalendarClick() 
+                                    },
+                                    onAddressClick = onAddressClick,
+                                    isEnabled = if (message.type == MessageType.CALENDAR_INVITE) 
+                                        !uiState.confirmedInviteIds.contains(message.id) else true
+                                )
+                                if (showViewer) ImageZoomDialog(message = message, onDismiss = { showViewer = false })
+                            }
+
                         }
                     }
-                    else -> {
-                        var showViewer by remember { mutableStateOf(false) }
-                        MessageBubble(
-                            message = message,
-                            appColors = appColors,
-                            isFromMe = message.senderId != provider.id,
-                            budget = budget,
-                            allCategories = allCategories, 
-                            onReply = { onReply(message) }, 
-                            onImageClick = { showViewer = true },
-                            onCalendarClick = { 
-                                if (message.type == MessageType.CALENDAR_INVITE) {
-                                    onOpenBooking(message)
-                                    showCalendarBooking = message
-                                }
-                                else onCalendarClick() 
-                            },
-                            onAddressClick = onAddressClick,
-                            isEnabled = if (message.type == MessageType.CALENDAR_INVITE) 
-                                !uiState.confirmedInviteIds.contains(message.id) else true
+                }
+            }
+
+            // 🔥 [ELITE] Cabecera sobrepuesta
+            TelegramStyleChatHeader(
+                title = resolvedProviderName,
+                photoUrl = effectiveProviderPhoto,
+                isOnline = uiState.isProviderOnline,
+                onBack = onBack,
+                appColors = appColors,
+                collapseFraction = collapseFraction,
+                onSearchClick = onShowSearch
+            )
+
+            // --- BOTÓN SCROLL TO BOTTOM (Elite Style) ---
+            AnimatedVisibility(
+                visible = showScrollToBottom,
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut(),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 16.dp, end = 12.dp)
+            ) {
+                Surface(
+                    onClick = { coroutineScope.launch { listState.animateScrollToItem(0) } },
+                    modifier = Modifier.size(40.dp),
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    shadowElevation = 8.dp
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = com.example.myapplication.presentation.registry.MaverickIcons.ChevronDown,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
                         )
-                        if (showViewer) ImageZoomDialog(message = message, onDismiss = { showViewer = false })
                     }
                 }
             }
@@ -456,9 +579,18 @@ fun ChatConversationContent(
 fun ChatConversationScreen(
     provider: Provider,
     viewModel: ChatViewModel,
+    chatId: String, // 🔥 Recibir el chatId real
     onBack: () -> Unit,
     appColors: AppColors,
     onNavigateToCalendar: () -> Unit = {},
+    onShowBudgets: () -> Unit = {}, // 🔥 [NUEVO]
+    onShowCalendar: () -> Unit = {}, // 🔥 [NUEVO]
+    onShowSearch: () -> Unit = {}, // 🔥 [NUEVO]
+    onDeleteChat: () -> Unit = {}, // 🔥 [NUEVO]
+    onBlockProvider: () -> Unit = {}, // 🔥 [NUEVO]
+    onReportProvider: () -> Unit = {}, // 🔥 [NUEVO]
+    onToggleFavorite: () -> Unit = {}, // 🔥 [NUEVO]
+    isFavorite: Boolean = false, // 🔥 [NUEVO]
     appointmentViewModel: AppointmentViewModel = hiltViewModel(),
     budgetViewModel: BudgetViewModel = hiltViewModel(),
     beBrainViewModel: BeBrainViewModel = hiltViewModel(),
@@ -483,6 +615,7 @@ fun ChatConversationScreen(
     val matchingTenders by viewModel.getMatchingTenders(mainCategory).collectAsStateWithLifecycle(initialValue = emptyList())
     val availableAddresses by beBrainViewModel.availableAddressInfos.collectAsStateWithLifecycle()
     val allCategories by beBrainViewModel.allCategories.collectAsStateWithLifecycle()
+    val recordingTime by viewModel.recordingTime.collectAsStateWithLifecycle() // 🔥 [NUEVO]
 
     ChatConversationContent(
         provider = provider,
@@ -492,7 +625,7 @@ fun ChatConversationScreen(
         onBack = onBack,
         appColors = appColors,
         onSendMessage = { viewModel.sendText(it) },
-        onSendImage = { viewModel.sendImage(it) },
+        onSendImage = { uri, ctx -> viewModel.sendImage(uri, ctx) }, // 🔥 Pasar context
         onSendLocation = { lat, lng, addr -> viewModel.sendLocation(lat, lng, addr) },
         onSendAppointment = { d, t, n, type, addr -> viewModel.sendAppointment(d, t, n, type, addr) },
         onAudioClick = { if (uiState.isRecording) viewModel.stopRecordingAndSend() else viewModel.startRecording(context) },
@@ -503,8 +636,9 @@ fun ChatConversationScreen(
         onClearBudget = { viewModel.clearSelectedBudget() },
         onAcceptBudget = { budgetViewModel.acceptBudget(it) },
         onRejectBudget = { budgetViewModel.rejectBudget(it) },
-        onRespondAppointment = { cid, mid, aid, acc, d, t, tit, pn, purl, cname, cemoji ->
-            appointmentViewModel.respondToProviderAppointment(cid, mid, aid, acc, d, t, tit, pn, purl, cname, cemoji)
+        onRespondAppointment = { _, mid, aid, acc, d, t, tit, pn, purl, cname, cemoji ->
+            // 🔥 Pasar el chatId real para la actualización en Firebase
+            appointmentViewModel.respondToProviderAppointment(chatId, mid, aid, acc, d, t, tit, pn, purl, cname, cemoji)
         },
         onTenderInvitation = { viewModel.sendTenderInvitation(it) },
         onCalendarClick = onNavigateToCalendar,
@@ -520,7 +654,17 @@ fun ChatConversationScreen(
         onDaySelected = { day, booked -> viewModel.onDaySelected(day, booked) },
         onTimeSelected = { viewModel.onTimeSelected(it) },
         onAddressSelected = { viewModel.onAddressSelected(it) },
-        onReply = { viewModel.setReplyMessage(it) }
+        onReply = { viewModel.setReplyMessage(it) },
+        onSwitchContext = { bId -> viewModel.switchChatContext(bId) }, // 🔥 [FIX v6] Un solo argumento
+        onShowBudgets = onShowBudgets,
+        onShowCalendar = onShowCalendar,
+        onShowSearch = onShowSearch,
+        onDeleteChat = onDeleteChat,
+        onBlockProvider = onBlockProvider,
+        onReportProvider = onReportProvider,
+        onToggleFavorite = onToggleFavorite,
+        isFavorite = isFavorite,
+        recordingTime = recordingTime // 🔥 [NUEVO]
     )
 }
 
@@ -531,7 +675,7 @@ private fun isSameDayChat(t1: Long, t2: Long): Boolean {
 
 @Composable
 fun LocationSelectionDialog(
-    availableAddresses: List<AddressInfo>,
+    availableAddresses: List<AddressUnico>,
     appColors: AppColors,
     onDismiss: () -> Unit,
     onSelect: (Double, Double, String) -> Unit,
@@ -597,15 +741,15 @@ fun LocationSelectionDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { 
-                                        val full = "${addr.streetAndNumber}, ${addr.locality}, ${addr.province}"
-                                        onSelect(addr.lat, addr.lng, full) 
+                                        val full = "${addr.streetAndNumber}, ${addr.localidad}, ${addr.provincia}"
+                                        onSelect(addr.latitude, addr.longitude, full) 
                                     },
                                 colors = CardDefaults.cardColors(containerColor = appColors.surfaceColor),
                                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text(addr.streetAndNumber, fontWeight = FontWeight.Bold, color = Color.White)
-                                    Text("${addr.locality}, ${addr.province}", fontSize = 12.sp, color = Color.Gray)
+                                    Text("${addr.localidad}, ${addr.provincia}", fontSize = 12.sp, color = Color.Gray)
                                 }
                             }
                         }
@@ -685,13 +829,12 @@ fun ChatConversationScreenPreview() {
             phoneNumber = "123",
             categories = listOf("Técnico"),
             matricula = null,
-            titulo = null,
+            profesion = "Técnico",
             cuilCuit = "20-12345678-9",
-            address = com.example.myapplication.core.domain.model.AddressProvider("Calle", "123"),
+            address = com.example.myapplication.core.domain.model.AddressUnico("Calle", "123"),
             works24h = false,
             photoUrl = null,
-            bannerImageUrl = null,
-            hasCompanyProfile = false,
+            profileThumbnail = null,
             isSubscribed = true,
             isVerified = true,
             isOnline = true,
@@ -731,9 +874,9 @@ fun ChatConversationScreenPreview() {
             onBack = {},
             appColors = getThemeColors(),
             onSendMessage = {},
-            onSendImage = {},
-            onSendLocation = {_,_,_ ->},
-            onSendAppointment = {_,_,_,_,_ ->},
+            onSendImage = { _, _ -> },
+            onSendLocation = { _, _, _ -> },
+            onSendAppointment = { _, _, _, _, _ -> },
             onAudioClick = {},
             onCancelAudio = {},
             onBudgetClick = {},
@@ -741,14 +884,13 @@ fun ChatConversationScreenPreview() {
             onClearBudget = {},
             onAcceptBudget = {},
             onRejectBudget = {},
-            onRespondAppointment = {_,_,_,_,_,_,_,_,_,_,_ ->},
+            onRespondAppointment = { _, _, _, _, _, _, _, _, _, _, _ -> },
             onTenderInvitation = {},
             allCategories = sampleCategories,
             onOpenBooking = {},
-            onDaySelected = {_,_ ->},
+            onDaySelected = { _, _ -> },
             onTimeSelected = {},
             onAddressSelected = {}
         )
     }
 }
-

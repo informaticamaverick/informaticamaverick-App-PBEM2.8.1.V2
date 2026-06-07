@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 53,
-    "identityHash": "8876689cdb5222744877393dff13f282",
+    "identityHash": "327292774dc9ef62f80feb84f66a3875",
     "entities": [
       {
         "tableName": "presupuestos",
@@ -248,8 +248,8 @@
         "foreignKeys": []
       },
       {
-        "tableName": "providers",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `email` TEXT NOT NULL, `alternateEmail` TEXT, `emails` TEXT NOT NULL, `phoneNumber` TEXT NOT NULL, `additionalPhones` TEXT NOT NULL, `displayName` TEXT NOT NULL, `name` TEXT NOT NULL, `lastName` TEXT NOT NULL, `matricula` TEXT, `titulo` TEXT, `cuilCuit` TEXT, `profesion` TEXT, `addresses` TEXT NOT NULL, `address` TEXT, `companies` TEXT NOT NULL, `hasCompanyProfile` INTEGER NOT NULL, `priorizarEmpresa` INTEGER NOT NULL, `doesService` INTEGER NOT NULL, `doesProduct` INTEGER NOT NULL, `works24h` INTEGER NOT NULL, `hasPhysicalLocation` INTEGER NOT NULL, `doesHomeVisits` INTEGER NOT NULL, `doesShipping` INTEGER NOT NULL, `acceptsAppointments` INTEGER NOT NULL, `trabajaConOtros` INTEGER NOT NULL, `isSubscribed` INTEGER NOT NULL, `isVerified` INTEGER NOT NULL, `isFavorite` INTEGER NOT NULL, `isOnline` INTEGER NOT NULL, `rating` REAL NOT NULL, `workingHours` TEXT NOT NULL, `categories` TEXT NOT NULL, `description` TEXT NOT NULL, `photoUrl` TEXT, `bannerImageUrl` TEXT, `galleryImages` TEXT NOT NULL, `favoriteProviderIds` TEXT NOT NULL, `serviceType` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "tableName": "provider_profile",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `photoUrl` TEXT, `profileThumbnail` TEXT, `displayName` TEXT NOT NULL, `name` TEXT NOT NULL, `lastName` TEXT NOT NULL, `matricula` TEXT, `profesion` TEXT, `cuilCuit` TEXT, `description` TEXT NOT NULL, `email` TEXT NOT NULL, `emails` TEXT NOT NULL, `phoneNumber` TEXT NOT NULL, `addresses` TEXT NOT NULL, `address` TEXT, `companies` TEXT NOT NULL, `doesService` INTEGER NOT NULL, `doesProduct` INTEGER NOT NULL, `works24h` INTEGER NOT NULL, `hasPhysicalLocation` INTEGER NOT NULL, `doesHomeVisits` INTEGER NOT NULL, `doesShipping` INTEGER NOT NULL, `acceptsAppointments` INTEGER NOT NULL, `trabajaConOtros` INTEGER NOT NULL, `isSubscribed` INTEGER NOT NULL, `isVerified` INTEGER NOT NULL, `isOnline` INTEGER NOT NULL, `isFavorite` INTEGER NOT NULL, `rating` REAL NOT NULL, `workingHours` TEXT NOT NULL, `categories` TEXT NOT NULL, `latitude` REAL NOT NULL, `longitude` REAL NOT NULL, `lastSyncTimestamp` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -258,34 +258,16 @@
             "notNull": true
           },
           {
-            "fieldPath": "email",
-            "columnName": "email",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "alternateEmail",
-            "columnName": "alternateEmail",
+            "fieldPath": "photoUrl",
+            "columnName": "photoUrl",
             "affinity": "TEXT",
             "notNull": false
           },
           {
-            "fieldPath": "emails",
-            "columnName": "emails",
+            "fieldPath": "profileThumbnail",
+            "columnName": "profileThumbnail",
             "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "phoneNumber",
-            "columnName": "phoneNumber",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "additionalPhones",
-            "columnName": "additionalPhones",
-            "affinity": "TEXT",
-            "notNull": true
+            "notNull": false
           },
           {
             "fieldPath": "displayName",
@@ -312,8 +294,8 @@
             "notNull": false
           },
           {
-            "fieldPath": "titulo",
-            "columnName": "titulo",
+            "fieldPath": "profesion",
+            "columnName": "profesion",
             "affinity": "TEXT",
             "notNull": false
           },
@@ -324,10 +306,28 @@
             "notNull": false
           },
           {
-            "fieldPath": "profesion",
-            "columnName": "profesion",
+            "fieldPath": "description",
+            "columnName": "description",
             "affinity": "TEXT",
-            "notNull": false
+            "notNull": true
+          },
+          {
+            "fieldPath": "email",
+            "columnName": "email",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "emails",
+            "columnName": "emails",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phoneNumber",
+            "columnName": "phoneNumber",
+            "affinity": "TEXT",
+            "notNull": true
           },
           {
             "fieldPath": "addresses",
@@ -345,18 +345,6 @@
             "fieldPath": "companies",
             "columnName": "companies",
             "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "hasCompanyProfile",
-            "columnName": "hasCompanyProfile",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "priorizarEmpresa",
-            "columnName": "priorizarEmpresa",
-            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -420,14 +408,14 @@
             "notNull": true
           },
           {
-            "fieldPath": "isFavorite",
-            "columnName": "isFavorite",
+            "fieldPath": "isOnline",
+            "columnName": "isOnline",
             "affinity": "INTEGER",
             "notNull": true
           },
           {
-            "fieldPath": "isOnline",
-            "columnName": "isOnline",
+            "fieldPath": "isFavorite",
+            "columnName": "isFavorite",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -450,39 +438,21 @@
             "notNull": true
           },
           {
-            "fieldPath": "description",
-            "columnName": "description",
-            "affinity": "TEXT",
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
             "notNull": true
           },
           {
-            "fieldPath": "photoUrl",
-            "columnName": "photoUrl",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "bannerImageUrl",
-            "columnName": "bannerImageUrl",
-            "affinity": "TEXT",
-            "notNull": false
-          },
-          {
-            "fieldPath": "galleryImages",
-            "columnName": "galleryImages",
-            "affinity": "TEXT",
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
             "notNull": true
           },
           {
-            "fieldPath": "favoriteProviderIds",
-            "columnName": "favoriteProviderIds",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "serviceType",
-            "columnName": "serviceType",
-            "affinity": "TEXT",
+            "fieldPath": "lastSyncTimestamp",
+            "columnName": "lastSyncTimestamp",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -503,7 +473,7 @@
       },
       {
         "tableName": "promotions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `providerId` TEXT NOT NULL, `providerName` TEXT NOT NULL, `providerImageUrl` TEXT, `type` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `imageUrls` TEXT NOT NULL, `discount` INTEGER, `categories` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `expiresAt` INTEGER NOT NULL, `status` TEXT NOT NULL, `likes` INTEGER NOT NULL, `views` INTEGER NOT NULL, `rating` REAL NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`providerId`) REFERENCES `providers`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `providerId` TEXT NOT NULL, `providerName` TEXT NOT NULL, `providerImageUrl` TEXT, `type` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT NOT NULL, `imageUrls` TEXT NOT NULL, `discount` INTEGER, `categories` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `expiresAt` INTEGER NOT NULL, `status` TEXT NOT NULL, `likes` INTEGER NOT NULL, `views` INTEGER NOT NULL, `rating` REAL NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`providerId`) REFERENCES `provider_profile`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -631,7 +601,7 @@
         ],
         "foreignKeys": [
           {
-            "table": "providers",
+            "table": "provider_profile",
             "onDelete": "CASCADE",
             "onUpdate": "NO ACTION",
             "columns": [
@@ -1331,7 +1301,7 @@
       },
       {
         "tableName": "rental_spaces",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `providerId` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT, `pricePerHour` REAL NOT NULL, `blockDuration` INTEGER NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`providerId`) REFERENCES `providers`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `providerId` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT, `pricePerHour` REAL NOT NULL, `blockDuration` INTEGER NOT NULL, `isActive` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`providerId`) REFERENCES `provider_profile`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -1407,7 +1377,7 @@
         ],
         "foreignKeys": [
           {
-            "table": "providers",
+            "table": "provider_profile",
             "onDelete": "CASCADE",
             "onUpdate": "NO ACTION",
             "columns": [
@@ -1733,7 +1703,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8876689cdb5222744877393dff13f282')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '327292774dc9ef62f80feb84f66a3875')"
     ]
   }
 }

@@ -2,7 +2,8 @@ package com.example.myapplication.prestador.ui.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.repository.AuthRepository
+import com.example.myapplication.core.data.repository.AuthRepository
+import com.example.myapplication.core.data.repository.ProviderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,12 +12,10 @@ import javax.inject.Inject
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
 
-
-
-
 @HiltViewModel
 class PrestadorLoginViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val providerRepository: ProviderRepository
 ) : ViewModel() {
 
     private val _loginState = MutableStateFlow<LoginState>(LoginState.Idle)
@@ -40,7 +39,7 @@ class PrestadorLoginViewModel @Inject constructor(
                 result.onSuccess { user ->
                     // Verificar si el usuario tiene perfil completo
                     saveFcmToken(user.uid)
-                    val profileExists = authRepository.checkUserProfileExists(user.uid)
+                    val profileExists = providerRepository.getProviderByIdOnce(user.uid) != null
                     _hasProfile.value = profileExists
                     _loginState.value = LoginState.Success
                 }.onFailure { error ->
@@ -66,10 +65,10 @@ class PrestadorLoginViewModel @Inject constructor(
                 _loginState.value = LoginState.Loading
                 val result = authRepository.signInWithGoogle(idToken)
                 
-                result.onSuccess { user ->
+                result.onSuccess { (user, _) ->
                     // Verificar si el usuario tiene perfil completo
                     saveFcmToken(user.uid)
-                    val profileExists = authRepository.checkUserProfileExists(user.uid)
+                    val profileExists = providerRepository.getProviderByIdOnce(user.uid) != null
                     _hasProfile.value = profileExists
                     _loginState.value = LoginState.Success
                 }.onFailure { error ->

@@ -1,9 +1,9 @@
 package com.example.myapplication.prestador
 
-import com.example.myapplication.prestador.data.local.dao.ClienteDao
+import com.example.myapplication.core.data.local.dao.UserDao
+import com.example.myapplication.core.data.local.entity.UserEntity
 import com.example.myapplication.prestador.data.local.dao.PlantillaPresupuestoDao
 import com.example.myapplication.prestador.data.local.dao.PresupuestoDao
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
 import com.example.myapplication.prestador.data.local.entity.PlantillaPresupuestoEntity
 import com.example.myapplication.prestador.data.repository.RoomPresupuestoRepository
 import io.mockk.coEvery
@@ -21,26 +21,26 @@ import org.junit.jupiter.api.Test
 class RoomPresupuestoRepositoryTest {
 
     private lateinit var presupuestoDao: PresupuestoDao
-    private lateinit var clienteDao: ClienteDao
+    private lateinit var userDao: UserDao
     private lateinit var plantillaDao: PlantillaPresupuestoDao
     private lateinit var repository: RoomPresupuestoRepository
 
     @BeforeEach
     fun setUp() {
         presupuestoDao = mockk()
-        clienteDao = mockk()
+        userDao = mockk()
         plantillaDao = mockk()
-        repository = RoomPresupuestoRepository(presupuestoDao, clienteDao, plantillaDao)
+        repository = RoomPresupuestoRepository(presupuestoDao, userDao, plantillaDao)
     }
 
     @Test
     fun `getClienteById returns first value from dao flow`() = runTest {
-        val cliente = ClienteEntity(id = "c-1", nombre = "Ana", email = "ana@test.com")
-        every { clienteDao.getClienteById("c-1") } returns flowOf(cliente)
+        val userEntity = UserEntity(id = "c-1", name = "Ana", email = "ana@test.com")
+        every { userDao.getUserByIdFlow("c-1") } returns flowOf(userEntity)
 
         val result = repository.getClienteById("c-1")
 
-        assertEquals(cliente, result)
+        assertEquals(userEntity.toDomain(), result)
     }
 
     @Test

@@ -241,60 +241,47 @@ fun MoldePremiumFilterCard(
             shape = RoundedCornerShape(8.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(rememberScrollState())
-                        .padding(end = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (shortcutItems.isEmpty() && activeFilters.isEmpty()) {
-                        Text(
-                            text = "MANTÉN PARA AÑADIR FAVORITOS",
-                            color = Color.White.copy(alpha = 0.2f),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-
-                    val shortcutIds = remember(shortcutItems) { shortcutItems.map { it.id }.toSet() }
-
-                    shortcutItems.forEach { item ->
-                        FilterChipSmall(
-                            item = item,
-                            isSelected = activeFilters.contains(item.id),
-                            isShortcut = true,
-                            onClick = { onToggle(item.id) },
-                            onManageShortcuts = onManageShortcuts
-                        )
-                    }
-
-                    dropdownItems.filter {
-                        activeFilters.contains(it.id) && !shortcutIds.contains(it.id)
-                    }.forEach { item ->
-                         FilterChipSmall(
-                            item = item,
-                            isSelected = true,
-                            isShortcut = false,
-                            onClick = { onToggle(item.id) },
-                            onManageShortcuts = onManageShortcuts
-                        )
-                    }
+                if (shortcutItems.isEmpty() && activeFilters.isEmpty()) {
+                    Text(
+                        text = "MANTÉN PARA AÑADIR FAVORITOS",
+                        color = Color.White.copy(alpha = 0.2f),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
                 }
 
-                HeaderActionButtonV2(
-                    icon = if (isSheetVisible) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
-                    onClick = { onSheetVisibilityChange(!isSheetVisible) },
-                    backgroundColor = if (isSheetVisible) MaverickColors.DeepRed.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f),
-                    borderColor = if (isSheetVisible) MaverickColors.DeepRed.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f),
-                    contentColor = if (isSheetVisible) MaverickColors.DeepRed else Color.White.copy(alpha = 0.8f)
-                )
+                val shortcutIds = remember(shortcutItems) { shortcutItems.map { it.id }.toSet() }
+
+                shortcutItems.forEach { item ->
+                    FilterChipSmall(
+                        item = item,
+                        isSelected = activeFilters.contains(item.id),
+                        isShortcut = true,
+                        onClick = { onToggle(item.id) },
+                        onManageShortcuts = onManageShortcuts
+                    )
+                }
+
+                dropdownItems.filter {
+                    activeFilters.contains(it.id) && !shortcutIds.contains(it.id)
+                }.forEach { item ->
+                        FilterChipSmall(
+                        item = item,
+                        isSelected = true,
+                        isShortcut = false,
+                        onClick = { onToggle(item.id) },
+                        onManageShortcuts = onManageShortcuts
+                    )
+                }
             }
         }
 
@@ -554,7 +541,7 @@ fun SortGridItemSmall(
 }
 
 // ==========================================================================================
-// --- SECCIÓN 3: MENÚ ELITE DE FILTROS (BOTTOM SHEET) ---
+// --- MENÚ ELITE DE FILTROS (BOTTOM SHEET) ---
 // ==========================================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -41,13 +41,13 @@ class FastViewModel @Inject constructor(
             fastRepository.registerUsage(cat)
 
             val address = appActionCoordinator.activeAddress.firstOrNull()
-            val lat = address?.lat ?: -26.8310
-            val lon = address?.lng ?: -65.2045
-            val zipCode = address?.postalCode ?: ""
+           // val lat = address?., lat ?: -26.8310
+           // val lon = address?.lng ?: -65.2045
+            //val zipCode = address?.postalCode ?: ""
 
             _uiState.update { it.copy(isSearching = true, searchFinished = false, selectedCategory = cat) }
-            val results = fastRepository.searchHybridEmergency(cat.name, lat, lon, _uiState.value.filters, zipCode)
-            _uiState.update { it.copy(isSearching = false, searchFinished = true, searchResults = results) }
+         //   val results = fastRepository.searchHybridEmergency(cat.name, lat, lon, _uiState.value.filters, zipCode)
+           // _uiState.update { it.copy(isSearching = false, searchFinished = true, searchResults = results) }
         }
     }
 

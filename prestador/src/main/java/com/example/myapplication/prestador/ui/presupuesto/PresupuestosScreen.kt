@@ -1,4 +1,4 @@
-﻿package com.example.myapplication.prestador.ui.presupuesto
+package com.example.myapplication.prestador.ui.presupuesto
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -6,9 +6,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,7 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.focusModifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -27,9 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.prestador.ui.presupuesto.BudgetPreviewPDFDialog
-//import com.example.myapplication.prestador.data.PPrestadorProfileFalso
-//import com.example.myapplication.prestador.utils.toPrestadorProfileFalso
 import com.example.myapplication.prestador.ui.presupuesto.BudgetItem
 import com.example.myapplication.prestador.ui.presupuesto.BudgetTax
 import com.example.myapplication.prestador.ui.presupuesto.BudgetService
@@ -40,8 +41,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.prestador.viewmodel.profile.EditProfileViewModel
 import com.example.myapplication.prestador.viewmodel.profile.ProfileState
 
-
-// Enums para estado del presupuesto
 enum class PresupuestoEstado(val displayName: String, val color: Color) {
     PENDIENTE("Pendiente", Color(0xFFFFA726)),
     ACEPTADO("Aceptado", Color(0xFF66BB6A)),
@@ -49,7 +48,6 @@ enum class PresupuestoEstado(val displayName: String, val color: Color) {
     ENVIADO("Enviado", Color(0xFF42A5F5))
 }
 
-// Data class para presupuesto
 data class Presupuesto(
     val id: String,
     val numeroPresupuesto: String,
@@ -74,66 +72,48 @@ fun PresupuestosScreen(
     val colors = getPrestadorColors()
     val editProfileViewModel: EditProfileViewModel = hiltViewModel()
     val profileState by editProfileViewModel.profileState.collectAsState()
-    val businessEntity by editProfileViewModel.businessEntity.collectAsState()
     val isProfessional = (profileState as? ProfileState.Success)?.provider?.serviceType
         .equals("PROFESSIONAL", ignoreCase = true)
 
-    // Estado para el filtro
     var filtroEstado by remember { mutableStateOf<PresupuestoEstado?>(null) }
-    var showFilterMenu by remember { mutableStateOf(false) }
     var showPreviewDialog by remember { mutableStateOf(false) }
     var presupuestoSeleccionado by remember { mutableStateOf<Presupuesto?>(null) }
-    var clienteParaPreview by remember { mutableStateOf<com.example.myapplication.prestador.data.local.entity.ClienteEntity?>(null) }
+    var clienteParaPreview by remember { mutableStateOf<User?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // DATOS REALES DE LA BD
     val presupuestosDB by viewModel.presupuestos.collectAsState()
     val selectedIds by viewModel.selectedIds.collectAsState()
     val isSelectionMode by viewModel.isSelectionMode.collectAsState()
-    
-    // SIMPLIFICADO: Sin cargar clientes por ahora
-    // val clientesDB by viewModel.clientes.collectAsState()
-    
-    // Convertir PresupuestoEntity a Presupuesto para la UI
-    // mapNotNull con try/catch por-item: un entity inválido no oculta toda la lista
+
     val presupuestos = presupuestosDB.mapNotNull { entity ->
         try {
-            val fecha = if (entity.fecha.isNotBlank())
-                LocalDate.parse(entity.fecha)
-            else
-                LocalDate.now()
+            val fecha = if (entity.fecha.isNotBlank()) LocalDate.parse(entity.fecha) else LocalDate.now()
             Presupuesto(
                 id = entity.id,
                 numeroPresupuesto = entity.numeroPresupuesto,
                 clienteNombre = "Cliente",
                 fecha = fecha,
                 monto = entity.total,
-                estado = when(entity.estado) {
+                estado = when (entity.estado) {
                     "Aceptado" -> PresupuestoEstado.ACEPTADO
                     "Rechazado" -> PresupuestoEstado.RECHAZADO
                     "Enviado" -> PresupuestoEstado.ENVIADO
                     else -> PresupuestoEstado.PENDIENTE
                 },
-                descripcion = entity.notas.ifEmpty { "Sin descripción" }
+                descripcion = entity.notas.ifEmpty { "Sin descripcion" }
             )
-        } catch (e: Exception) {
-            null // skip entidades con fecha inválida en lugar de vaciar toda la lista
-        }
+        } catch (e: Exception) { null }
     }
 
-    // Filtrar presupuestos
-    val presupuestosFiltrados = if (filtroEstado != null) {
+    val presupuestosFiltrados = if (filtroEstado != null)
         presupuestos.filter { it.estado == filtroEstado }
-    } else {
-        presupuestos
-    }
+    else presupuestos
 
-    // Diálogo de confirmación de borrado
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text(if (isProfessional) "Eliminar consultas" else "Eliminar presupuestos") },
-            text = { Text(if (isProfessional) "¿Eliminar ${selectedIds.size} consulta(s) seleccionada(s)?" else "¿Eliminar ${selectedIds.size} presupuesto(s) seleccionado(s)?") },
+            text = { Text(if (isProfessional) "Eliminar ${selectedIds.size} consulta(s) seleccionada(s)?" else "Eliminar ${selectedIds.size} presupuesto(s) seleccionado(s)?") },
             confirmButton = {
                 TextButton(onClick = { viewModel.deleteSelected(); showDeleteDialog = false }) {
                     Text("Eliminar", color = Color(0xFFEF4444))
@@ -147,26 +127,63 @@ fun PresupuestosScreen(
 
     Scaffold(
         containerColor = colors.backgroundColor,
-        floatingActionButton = {
-            if (!isSelectionMode) {
-                ExtendedFloatingActionButton(
-                    onClick = onCrearNuevo,
-                    containerColor = colors.primaryOrange,
-                    contentColor = Color.White,
-                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                    text = { Text(if (isProfessional) "Nueva Consulta" else "Nuevo Presupuesto") }
-                )
-            }
-        },
+        contentWindowInsets = WindowInsets(0),
         bottomBar = {
             if (isSelectionMode) {
-                Button(
-                    onClick = { showDeleteDialog = true },
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.surfaceColor)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Eliminar ${selectedIds.size} seleccionado(s)", fontSize = 16.sp)
+                    Button(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                        Text("Eliminar ${selectedIds.size} seleccionado(s)", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.surfaceColor)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Button(
+                        onClick = onCrearNuevo,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    brush = Brush.horizontalGradient(listOf(Color(0xFFFF7043), Color(0xFFFF9E80))),
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                                .padding(vertical = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                                Text(
+                                    if (isProfessional) "Nueva Consulta" else "Nuevo Presupuesto",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -177,23 +194,24 @@ fun PresupuestosScreen(
                 .padding(paddingValues)
                 .background(colors.backgroundColor)
         ) {
-            // ── HEADER estilo Inicio ──────────────────────────────────────
+            // HEADER
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .shadow(elevation = 4.dp, shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                    .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
                     .background(
                         brush = Brush.verticalGradient(
-                            colors = listOf(
-                                colors.primaryOrange,
-                                colors.primaryOrange.copy(alpha = 0.85f)
+                            colorStops = arrayOf(
+                                0.0f to Color(0xFFFF7043),
+                                0.45f to Color(0xFFFF9E80),
+                                1.0f to Color(0xFFFFCCBC)
                             )
-                        ),
-                        shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+                        )
                     )
-                    .padding(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 28.dp)
+                    .padding(start = 4.dp, end = 16.dp, top = 4.dp, bottom = 20.dp)
             ) {
                 Column {
-                    // Fila título + acciones
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -204,130 +222,147 @@ fun PresupuestosScreen(
                                 Icon(
                                     if (isSelectionMode) Icons.Default.Close else Icons.Default.ArrowBack,
                                     contentDescription = null,
-                                    tint = Color.White
+                                    tint = Color(0xFF3D1100)
                                 )
                             }
-                            Spacer(Modifier.width(4.dp))
                             Text(
-                                text = if (isSelectionMode) "${selectedIds.size} seleccionados" else if (isProfessional) "Consultas" else "Presupuestos",
+                                text = if (isSelectionMode) "${selectedIds.size} seleccionados"
+                                       else if (isProfessional) "Consultas" else "Presupuestos",
                                 fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF3D1100)
                             )
                         }
-                        // Botón filtro
-                        Row {
-                            IconButton(onClick = onNavigateToConfig) {
-                                Icon(Icons.Default.Settings, contentDescription = "Configuración", tint = Color.White)
-                            }
-
-                        Box {
-                            IconButton(onClick = { showFilterMenu = true }) {
-                                Icon(Icons.Default.FilterList, contentDescription = "Filtrar", tint = Color.White)
-                            }
-                            if (filtroEstado != null) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(Color.White, CircleShape)
-                                        .align(Alignment.TopEnd)
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showFilterMenu,
-                                onDismissRequest = { showFilterMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Todos") },
-                                    onClick = { filtroEstado = null; showFilterMenu = false },
-                                    leadingIcon = { if (filtroEstado == null) Icon(Icons.Default.Check, null) }
-                                )
-                                HorizontalDivider()
-                                PresupuestoEstado.values().forEach { estado ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Box(
-                                                    Modifier.size(12.dp).clip(CircleShape)
-                                                        .background(estado.color)
-                                                )
-                                                Spacer(Modifier.width(8.dp))
-                                                Text(estado.displayName)
-                                            }
-                                        },
-                                        onClick = { filtroEstado = estado; showFilterMenu = false },
-                                        leadingIcon = {
-                                            if (filtroEstado == estado) Icon(
-                                                Icons.Default.Check,
-                                                null
-                                            )
-                                        }
-                                    )
-                                }
-                                }
-                            }
+                        IconButton(onClick = onNavigateToConfig) {
+                            Icon(Icons.Default.Settings, contentDescription = "Configuracion", tint = Color(0xFF3D1100))
                         }
                     }
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                    // Stats cards
+                    // Stats pills
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier.padding(start = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Total presupuestos
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                                .padding(12.dp)
-                        ) {
-                            Column {
-                                Text("TOTAL", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.85f))
-                                Spacer(Modifier.height(4.dp))
-                                Text("${presupuestos.size}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                Text("presupuestos", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
+                        Surface(shape = RoundedCornerShape(20.dp), color = Color.White.copy(alpha = 0.45f)) {
+                            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Description, null, tint = Color(0xFF5D2000), modifier = Modifier.size(13.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    "${presupuestos.size} ${if (isProfessional) "consultas" else "presupuestos"}",
+                                    fontSize = 11.sp, color = Color(0xFF5D2000), fontWeight = FontWeight.SemiBold
+                                )
                             }
                         }
-                        // Total facturado
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                                .padding(12.dp)
-                        ) {
-                            Column {
-                                Text("FACTURADO", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.85f))
-                                Spacer(Modifier.height(4.dp))
+                        Surface(shape = RoundedCornerShape(20.dp), color = Color.White.copy(alpha = 0.45f)) {
+                            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Pending, null, tint = Color(0xFF5D2000), modifier = Modifier.size(13.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    "${presupuestos.count { it.estado == PresupuestoEstado.PENDIENTE }} pendientes",
+                                    fontSize = 11.sp, color = Color(0xFF5D2000), fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                        Surface(shape = RoundedCornerShape(20.dp), color = Color.White.copy(alpha = 0.45f)) {
+                            Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AttachMoney, null, tint = Color(0xFF5D2000), modifier = Modifier.size(13.dp))
+                                Spacer(Modifier.width(4.dp))
                                 Text(
                                     "$ ${"%,.0f".format(presupuestos.sumOf { it.monto })}",
-                                    fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White
+                                    fontSize = 11.sp, color = Color(0xFF5D2000), fontWeight = FontWeight.SemiBold
                                 )
-                                Text("total", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
                             }
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // ── CONTENIDO ────────────────────────────────────────────────
+            // FILTROS HORIZONTALES
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val todosSelected = filtroEstado == null
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (todosSelected) colors.primaryOrange else colors.surfaceColor,
+                    modifier = Modifier.clickable { filtroEstado = null }
+                ) {
+                    Text(
+                        "Todos",
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (todosSelected) Color.White else colors.textSecondary
+                    )
+                }
+                PresupuestoEstado.entries.forEach { estado ->
+                    val selected = filtroEstado == estado
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (selected) estado.color else colors.surfaceColor,
+                        modifier = Modifier.clickable { filtroEstado = if (selected) null else estado }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (!selected) {
+                                Box(Modifier.size(8.dp).clip(CircleShape).background(estado.color))
+                            }
+                            Text(
+                                estado.displayName,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (selected) Color.White else colors.textSecondary
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // CONTENIDO
             if (presupuestosFiltrados.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Icon(
-                            Icons.Default.Description, contentDescription = null,
-                            modifier = Modifier.size(64.dp), tint = colors.textSecondary
+                        Box(
+                            modifier = Modifier
+                                .size(90.dp)
+                                .background(colors.primaryOrange.copy(alpha = 0.1f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Description, contentDescription = null,
+                                modifier = Modifier.size(44.dp),
+                                tint = colors.primaryOrange.copy(alpha = 0.6f)
+                            )
+                        }
+                        Text(
+                            if (filtroEstado != null)
+                                "No hay ${if (isProfessional) "consultas" else "presupuestos"} ${filtroEstado?.displayName?.lowercase()}"
+                            else
+                                "Aun no tenes ${if (isProfessional) "consultas" else "presupuestos"}",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary
                         )
                         Text(
-                            if (filtroEstado != null) "No hay presupuestos ${filtroEstado?.displayName?.lowercase()}"
-                            else "No hay presupuestos",
-                            style = MaterialTheme.typography.bodyLarge,
+                            if (isProfessional) "Crea tu primera consulta con el boton de abajo"
+                            else "Crea tu primer presupuesto con el boton de abajo",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = colors.textSecondary
                         )
                     }
@@ -348,7 +383,6 @@ fun PresupuestosScreen(
                                 if (isSelectionMode) {
                                     viewModel.toggleSelection(presupuesto.id)
                                 } else {
-                                    // Abrir vista previa al tocar la card
                                     presupuestoSeleccionado = presupuesto
                                     showPreviewDialog = true
                                 }
@@ -370,13 +404,11 @@ fun PresupuestosScreen(
             }
         }
     }
-    
-    // Diálogo de vista previa
+
     LaunchedEffect(presupuestoSeleccionado?.id) {
         val entity = presupuestosDB.find { it.id == presupuestoSeleccionado?.id }
         val clienteId = entity?.clienteId
-        clienteParaPreview = if (!clienteId.isNullOrBlank())
-            viewModel.getClienteById(clienteId) else null
+        clienteParaPreview = if (!clienteId.isNullOrBlank()) viewModel.getClienteById(clienteId) else null
     }
 
     if (showPreviewDialog && presupuestoSeleccionado != null) {
@@ -384,71 +416,30 @@ fun PresupuestosScreen(
         val prestador = (profileState as? ProfileState.Success)?.provider
 
         if (prestador != null && entity != null) {
-            // Deserializar artículos
-            val realItems = entity.itemsJson
-                .takeIf { it.isNotBlank() }
-                ?.split("|")
-                ?.mapNotNull { s ->
-                    val p = s.split(";")
-                    if (p.size >= 4) BudgetItem(
-                        code = p[0], description = p[1],
-                        quantity = p[2].toIntOrNull() ?: 1,
-                        unitPrice = p[3].toDoubleOrNull() ?: 0.0,
-                        taxPercentage = p.getOrNull(4)?.toDoubleOrNull() ?: 0.0,
-                        discountPercentage = p.getOrNull(5)?.toDoubleOrNull() ?: 0.0
-                    ) else null
-                } ?: emptyList()
+            val realItems = entity.itemsJson.takeIf { it.isNotBlank() }?.split("|")?.mapNotNull { s ->
+                val p = s.split(";")
+                if (p.size >= 4) BudgetItem(code = p[0], description = p[1], quantity = p[2].toIntOrNull() ?: 1, unitPrice = p[3].toDoubleOrNull() ?: 0.0, taxPercentage = p.getOrNull(4)?.toDoubleOrNull() ?: 0.0, discountPercentage = p.getOrNull(5)?.toDoubleOrNull() ?: 0.0) else null
+            } ?: emptyList()
 
-            // Deserializar servicios / mano de obra
-            val realServices = entity.serviciosJson
-                .takeIf { it.isNotBlank() }
-                ?.split("|")
-                ?.mapNotNull { s ->
-                    val p = s.split(";")
-                    if (p.size >= 2) BudgetService(
-                        code = p[0], description = p[1],
-                        total = p.getOrNull(2)?.toDoubleOrNull() ?: 0.0
-                    ) else null
-                } ?: emptyList()
+            val realServices = entity.serviciosJson.takeIf { it.isNotBlank() }?.split("|")?.mapNotNull { s ->
+                val p = s.split(";")
+                if (p.size >= 2) BudgetService(code = p[0], description = p[1], total = p.getOrNull(2)?.toDoubleOrNull() ?: 0.0) else null
+            } ?: emptyList()
 
-            // Deserializar honorarios
-            val realFees = entity.honorariosJson
-                .takeIf { it.isNotBlank() }
-                ?.split("|")
-                ?.mapNotNull { s ->
-                    val p = s.split(";")
-                    if (p.size >= 2) BudgetProfessionalFee(
-                        code = p[0], description = p[1],
-                        total = p.getOrNull(2)?.toDoubleOrNull() ?: 0.0
-                    ) else null
-                } ?: emptyList()
+            val realFees = entity.honorariosJson.takeIf { it.isNotBlank() }?.split("|")?.mapNotNull { s ->
+                val p = s.split(";")
+                if (p.size >= 2) BudgetProfessionalFee(code = p[0], description = p[1], total = p.getOrNull(2)?.toDoubleOrNull() ?: 0.0) else null
+            } ?: emptyList()
 
-            // Deserializar gastos varios
-            val realMisc = entity.gastosJson
-                .takeIf { it.isNotBlank() }
-                ?.split("|")
-                ?.mapNotNull { s ->
-                    val p = s.split(";")
-                    if (p.size >= 2) BudgetMiscExpense(
-                        description = p[0],
-                        amount = p[1].toDoubleOrNull() ?: 0.0
-                    ) else null
-                } ?: emptyList()
+            val realMisc = entity.gastosJson.takeIf { it.isNotBlank() }?.split("|")?.mapNotNull { s ->
+                val p = s.split(";")
+                if (p.size >= 2) BudgetMiscExpense(description = p[0], amount = p[1].toDoubleOrNull() ?: 0.0) else null
+            } ?: emptyList()
 
-            // Deserializar impuestos
-            val realTaxes = entity.impuestosJson
-                .takeIf { it.isNotBlank() }
-                ?.split("|")
-                ?.mapNotNull { s ->
-                    val p = s.split(";")
-                    if (p.size >= 2) BudgetTax(
-                        description = p[0],
-                        amount = p[1].toDoubleOrNull() ?: 0.0
-                    ) else null
-                } ?: emptyList()
-
-            val subtotalAmount = entity.subtotal
-            val taxAmount = entity.impuestos
+            val realTaxes = entity.impuestosJson.takeIf { it.isNotBlank() }?.split("|")?.mapNotNull { s ->
+                val p = s.split(";")
+                if (p.size >= 2) BudgetTax(description = p[0], amount = p[1].toDoubleOrNull() ?: 0.0) else null
+            } ?: emptyList()
 
             BudgetPreviewPDFDialog(
                 prestador = prestador,
@@ -458,15 +449,15 @@ fun PresupuestosScreen(
                 miscExpenses = realMisc,
                 taxes = realTaxes,
                 grandTotal = presupuestoSeleccionado!!.monto,
-                subtotal = subtotalAmount,
-                taxAmount = taxAmount,
+                subtotal = entity.subtotal,
+                taxAmount = entity.impuestos,
                 discountAmount = 0.0,
                 onDismiss = { showPreviewDialog = false },
                 onEnviar = { showPreviewDialog = false },
-                clientName = clienteParaPreview?.nombre ?: "",
-                clientAddress = clienteParaPreview?.direccion,
+                clientName = clienteParaPreview?.name ?: "",
+                clientAddress = clienteParaPreview?.mainAddress?.fullString(),
                 providerName = prestador.displayName,
-                providerAddress = prestador.direccionLocal ?: "",
+                providerAddress = prestador.address?.fullString() ?: "",
                 isProfessional = isProfessional,
                 presupuestoNumero = presupuestoSeleccionado!!.numeroPresupuesto,
                 tituloTrabajo = entity.tituloTrabajo,
@@ -477,6 +468,7 @@ fun PresupuestosScreen(
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PresupuestoCard(
     presupuesto: Presupuesto,
@@ -487,11 +479,12 @@ fun PresupuestoCard(
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onToggleSelect: () -> Unit = {}
-){
+) {
     val colors = getPrestadorColors()
     var showEstadoMenu by remember { mutableStateOf(false) }
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
             .combinedClickable(
                 onClick = { if (isSelectionMode) onToggleSelect() else onClick() },
                 onLongClick = { onToggleSelect() }
@@ -503,14 +496,12 @@ fun PresupuestoCard(
         )
     ) {
         Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            // Franja naranja borde izquierdo (igual que inicio)
             Box(
                 modifier = Modifier
                     .width(5.dp)
                     .fillMaxHeight()
                     .background(
-                        if (isSelected) Color(0xFFEF4444)
-                        else presupuesto.estado.color,
+                        if (isSelected) Color(0xFFEF4444) else presupuesto.estado.color,
                         RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp)
                     )
             )
@@ -526,7 +517,6 @@ fun PresupuestoCard(
                     )
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // Número y Estado
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -538,7 +528,6 @@ fun PresupuestoCard(
                             fontWeight = FontWeight.Bold,
                             color = colors.textPrimary
                         )
-                        // Estado chip — tap para cambiar estado
                         Box {
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
@@ -578,7 +567,7 @@ fun PresupuestoCard(
                                             showEstadoMenu = false
                                         },
                                         leadingIcon = {
-                                            val color = when(estado) {
+                                            val color = when (estado) {
                                                 "Aceptado" -> PresupuestoEstado.ACEPTADO.color
                                                 "Rechazado" -> PresupuestoEstado.RECHAZADO.color
                                                 "Enviado" -> PresupuestoEstado.ENVIADO.color
@@ -591,13 +580,11 @@ fun PresupuestoCard(
                             }
                         }
                     }
-                    // Cliente
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Person, null, modifier = Modifier.size(15.dp), tint = colors.textSecondary)
                         Spacer(Modifier.width(4.dp))
                         Text(presupuesto.clienteNombre, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
                     }
-                    // Footer: fecha + monto + botón preview
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,

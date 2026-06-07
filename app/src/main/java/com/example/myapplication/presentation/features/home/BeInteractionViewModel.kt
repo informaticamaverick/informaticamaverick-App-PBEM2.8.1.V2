@@ -8,8 +8,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.core.common.extensions.matchesSmart
-import com.example.myapplication.core.common.extensions.prepareForSearch
+import com.example.myapplication.core.utils.matchesSmart
+import com.example.myapplication.core.utils.prepareForSearch
 import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.data.local.entity.BudgetEntity
 import com.example.myapplication.core.data.local.entity.TenderEntity

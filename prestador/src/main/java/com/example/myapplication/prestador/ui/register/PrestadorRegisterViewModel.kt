@@ -2,19 +2,16 @@ package com.example.myapplication.prestador.ui.register
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.local.dao.ProviderDao
-import com.example.myapplication.prestador.data.local.entity.BusinessEntity
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.prestador.data.local.entity.SucursalEntity
-import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.data.local.dao.ProviderDao
+//import com.example.myapplication.prestador.data.local.entity.BusinessEntity
+//import com.example.myapplication.prestador.data.local.entity.ProviderEntity
+//import com.example.myapplication.prestador.data.local.entity.SucursalEntity
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.domain.model.BranchProvider
 import com.example.myapplication.core.domain.model.CompanyProvider
-import com.example.myapplication.prestador.data.model.ServicioFirebase
-import com.example.myapplication.prestador.data.repository.BusinessRepository
-import com.example.myapplication.prestador.data.repository.CompaniesFirestoreSync
-import com.example.myapplication.prestador.data.repository.ServiciosRepository
-import com.example.myapplication.prestador.data.repository.SucursalFirestoreSync
-import com.example.myapplication.prestador.data.repository.SucursalRepository
+import com.example.myapplication.core.data.local.entity.CategoryEntity
+import com.example.myapplication.core.data.repository.ProviderRepository
+import com.example.myapplication.core.data.repository.CategoryRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -32,25 +29,19 @@ class PrestadorRegisterViewModel @Inject constructor(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
     private val providerDao: ProviderDao,
-    private val serviciosRepository: ServiciosRepository,
+    private val categoryRepository: CategoryRepository,
     // =========================================================================
     // SECCIÓN: REPOSITORIOS (SSOT)
-    // Se añade el repositorio centralizado para la arquitectura jerárquica
+    // Se utiliza el repositorio centralizado del módulo :core
     // =========================================================================
-    private val providerRepository: com.example.myapplication.prestador.data.repository.ProviderRepository,
-    /* 
-    private val businessRepository: BusinessRepository,
-    private val sucursalRepository: SucursalRepository,
-    private val companiesFirestoreSync: CompaniesFirestoreSync,
-    private val sucursalFirestoreSync: SucursalFirestoreSync 
-    */
+    private val providerRepository: ProviderRepository,
 ) : ViewModel() {
 
     private val _registerState = MutableStateFlow<RegisterState>(RegisterState.Idle)
     val registerState: StateFlow<RegisterState> = _registerState
 
-    private val _servicios = MutableStateFlow<List<ServicioFirebase>>(emptyList())
-    val servicios: StateFlow<List<ServicioFirebase>> = _servicios
+    private val _servicios = MutableStateFlow<List<CategoryEntity>>(emptyList())
+    val servicios: StateFlow<List<CategoryEntity>> = _servicios
 
     private val _loadingServicios = MutableStateFlow(false)
     val loadingServicios: StateFlow<Boolean> = _loadingServicios
@@ -62,11 +53,9 @@ class PrestadorRegisterViewModel @Inject constructor(
     fun cargarServicios() {
         viewModelScope.launch {
             _loadingServicios.value = true
-            try {
-                _servicios.value = serviciosRepository.getServicios()
-            } catch (e: Exception) {
-                //Si falla Firebase, la lista queda vacia
-            }finally {
+            // [LEY #6]: Soberanía Local de Catálogos
+            categoryRepository.allCategories.collect { list ->
+                _servicios.value = list
                 _loadingServicios.value = false
             }
         }
@@ -140,7 +129,7 @@ class PrestadorRegisterViewModel @Inject constructor(
                 // =========================================================================
                 
                 // A. Dirección Principal
-                val mainAddress = AddressProvider(
+                val mainAddress = AddressUnico(
                     id = "main_address",
                     calle = direccion,
                     provincia = provincia,
@@ -153,7 +142,7 @@ class PrestadorRegisterViewModel @Inject constructor(
                     BranchProvider(
                         id = UUID.randomUUID().toString(),
                         name = sucMap["nombre"] ?: "Sucursal",
-                        address = AddressProvider(calle = sucMap["direccion"] ?: ""),
+                        address = AddressUnico(calle = sucMap["direccion"] ?: ""),
                         hasPhysicalLocation = true,
                         acceptsAppointments = true,
                         doesService = true
@@ -185,15 +174,15 @@ class PrestadorRegisterViewModel @Inject constructor(
                     address = mainAddress,
                     addresses = listOf(mainAddress),
                     companies = companyProviders,
-                    hasCompanyProfile = tieneNegocio,
-                    categories = serviciosList,
-                    serviceType = serviceType,
                     works24h = is24Hours,
                     doesHomeVisits = isHomeService,
                     hasPhysicalLocation = hasStoreAppointments,
                     acceptsAppointments = hasStoreAppointments,
                     doesService = doesService,
                     doesProduct = doesProduct,
+                    categories = serviciosList,
+                    serviceType = serviceType,
+                    priorizarEmpresa = tieneNegocio,
                     createdAt = System.currentTimeMillis()
                 )
 

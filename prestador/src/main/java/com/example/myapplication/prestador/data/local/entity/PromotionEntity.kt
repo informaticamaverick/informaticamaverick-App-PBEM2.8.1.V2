@@ -3,6 +3,7 @@ package com.example.myapplication.prestador.data.local.entity
 import android.icu.text.CaseMap
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 import androidx.room.ForeignKey
 import androidx.room.Index
 

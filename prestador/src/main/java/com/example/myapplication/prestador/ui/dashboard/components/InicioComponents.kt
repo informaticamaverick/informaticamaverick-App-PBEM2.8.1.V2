@@ -1,6 +1,8 @@
 ﻿package com.example.myapplication.prestador.ui.dashboard.components
 
 import android.icu.util.Calendar
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -43,13 +45,19 @@ import com.example.myapplication.prestador.viewmodel.dashboard.DashboardUiState
 import com.example.myapplication.prestador.viewmodel.dashboard.DashboardViewModel
 import java.util.UUID
 import kotlinx.coroutines.delay
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+
 import kotlinx.coroutines.launch
 import com.example.myapplication.prestador.data.model.OportunidadItem
-import com.example.myapplication.prestador.data.local.entity.ClienteEntity
+//import com.example.myapplication.core.data.local.entity.ClienteEntity
 import com.example.myapplication.prestador.viewmodel.calendar.CalendarViewModel
-import com.example.myapplication.prestador.viewmodel.oportunidades.OportunidadesViewModel
+//import com.example.myapplication.prestador.viewmodel.oportunidades.OportunidadesViewModel
 import com.example.myapplication.prestador.ui.dashboard.components.GestionarCatalogoSheet
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun InicioScreen(
     state: DashboardUiState,
@@ -255,6 +263,10 @@ fun InicioScreen(
 
                     // Botón Fast — se implementará más adelante
                 }
+                Spacer(Modifier.height(12.dp))
+
+                //Widget del clima animado
+                WeatherWidget(modifier = Modifier.fillMaxWidth())
             }
         } // fin header
 
@@ -453,8 +465,11 @@ fun InicioScreen(
             nombrePrestador = state.nombrePrestador,
             email = state.email,
             imageBase64 = state.imageBase64,
+            profileCompletion = state.profileCompletion,
+            isVerified = state.isVerified,
             onClose = { mostrarAvatarPopup = false },
-            onEditProfile = onNavigateToEditProfile
+            onEditProfile = onNavigateToEditProfile,
+            onLogout = onLogout
         )
     } // fin Box raíz
 }

@@ -1,12 +1,15 @@
 package com.example.myapplication.prestador.data.local.entity
 
+/*
+ * ARCHIVO EN DESUSO
+ * Motivo: Se ha centralizado la fuente de verdad en los modelos del módulo :core.
+ * Las direcciones ahora se gestionan mediante AddressUnico definido en
+ * com.example.myapplication.core.domain.model.AddressUnico
+ */
+
+/*
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-
-/**
- * Entidad reutilizable para presentar una direccion completa.
- * Seusa para prestado, casa central, sucursales, etc.
- */
 
 @Entity(tableName = "direcciones")
 data class DireccionEntity(
@@ -25,3 +28,4 @@ data class DireccionEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+*/

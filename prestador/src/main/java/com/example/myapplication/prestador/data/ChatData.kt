@@ -23,7 +23,10 @@ object ChatData {
         val isVisible: Boolean = true,
         val isLocked: Boolean = false,
         val conversationId: String = "",
-        val userAvatarUrl: String? = null
+        val userAvatarUrl: String? = null,
+        val isOnline: Boolean = false,
+        val isVerified: Boolean = false,
+        val branchId: String? = null // 🔥 [NUEVO] Contexto de sucursal
     )
 
     /**

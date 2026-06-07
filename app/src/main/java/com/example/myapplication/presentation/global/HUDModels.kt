@@ -1,22 +1,4 @@
 package com.example.myapplication.presentation.global
-import com.example.myapplication.presentation.global.HUDContext
-
-
-
-
-
-
-
-
-
-
-
-
-import com.example.myapplication.presentation.features.home.*
-
-import com.example.myapplication.presentation.features.auth.*
-
-import com.example.myapplication.presentation.features.home.*
 
 /**
  * --- ENUM DE CONTEXTO DEL HUD (ELITE VERSION) ---
@@ -49,7 +31,8 @@ enum class HUDContext(
     CALENDAR(isSearchable = false, requiresBottomBar = true, showBeAssistant = true, allowsCustomTools = true),
     PROMO(isSearchable = false, requiresBottomBar = true, showBeAssistant = true, allowsCustomTools = false),
     TENDER_DETAILS(isSearchable = false, requiresBottomBar = true, showBeAssistant = true, allowsCustomTools = true),
-    PROFILE(isSearchable = false, requiresBottomBar = true, showBeAssistant = true, allowsCustomTools = true),
+    PROFILE(isSearchable = false, requiresBottomBar = false, showBeAssistant = false, allowsCustomTools = true),
+    PROFILE_PRESTADOR(isSearchable = false, requiresBottomBar = false, showBeAssistant = false, allowsCustomTools = true),
     SEARCH_RESULTS(isSearchable = true, requiresBottomBar = false, showBeAssistant = true, allowsCustomTools = true),
     FAST(isSearchable = true, requiresBottomBar = false, showBeAssistant = true, allowsCustomTools = false),
     UNKNOWN(isSearchable = false, requiresBottomBar = false, showBeAssistant = false, allowsCustomTools = false)

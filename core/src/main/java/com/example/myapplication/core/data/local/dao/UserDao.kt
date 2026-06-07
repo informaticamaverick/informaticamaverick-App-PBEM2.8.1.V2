@@ -23,6 +23,15 @@ interface UserDao {
     @Query("SELECT * FROM user_profile LIMIT 1")
     fun getUser(): Flow<UserEntity?>
 
+    @Query("SELECT * FROM user_profile WHERE id = :id")
+    fun getUserByIdFlow(id: String): Flow<UserEntity?>
+
+    @Query("SELECT * FROM user_profile")
+    fun getAllUsers(): Flow<List<UserEntity>>
+
+    @Query("SELECT * FROM user_profile WHERE name LIKE :query OR displayName LIKE :query")
+    fun searchUsers(query: String): Flow<List<UserEntity>>
+
     /**
      * Obtiene el perfil del usuario de forma inmediata (No observable).
      */

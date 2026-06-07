@@ -2,15 +2,15 @@ package com.example.myapplication.core.data.local.entity
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.example.myapplication.core.domain.model.AddressClient
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.domain.model.CompanyClient
 import com.example.myapplication.core.domain.model.User
 import com.example.myapplication.core.utils.ImageUtils
 
 /**
  * --- ENTIDAD DE USUARIO / CLIENTE (ROOM) ---
- * Almacena el perfil del dueño de la aplicación.
- * Centraliza datos personales, direcciones y empresas locales.
+ * [ELITE v5.1]: Sin flags de prestador, sin categorías, sin banners.
+ * Usa AddressUnico para paridad.
  */
 @Entity(tableName = "user_profile")
 data class UserEntity(
@@ -22,10 +22,10 @@ data class UserEntity(
     val phoneNumber: String = "",
     val bio: String = "",
     val photoUrl: String? = null,
-    val bannerImageUrl: String? = null,
+    val profileThumbnail: String? = null,
     val additionalEmails: List<String> = emptyList(),
     val additionalPhones: List<String> = emptyList(),
-    val personalAddresses: List<AddressClient> = emptyList(),
+    val personalAddresses: List<AddressUnico> = emptyList(),
     val hasCompanyProfile: Boolean = false,
     val companies: List<CompanyClient> = emptyList(),
     val isOnline: Boolean = false,
@@ -39,68 +39,38 @@ data class UserEntity(
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val createdAt: Long = System.currentTimeMillis(),
-    val isSynced: Boolean = true
+    val updatedAt: Long = System.currentTimeMillis()
 ) {
-    /**
-     * Nombre completo calculado para mostrar en UI.
-     */
-    fun getFullName(): String = if (name.isNotBlank() || lastName.isNotBlank()) "$name $lastName" else displayName
-
-    /**
-     * Convierte la entidad de Room al modelo de Dominio.
-     * [ELITE SSOT]: Procesa las imágenes para consumo directo en UI.
-     */
-    fun toDomain(): User {
-        val processedCompanies = companies.map { company ->
-            company.copy(
-                profileImage = ImageUtils.processImageSource(company.photoUrl),
-                bannerImage = ImageUtils.processImageSource(company.bannerImageUrl),
-                branches = company.branches.map { branch ->
-                    branch.copy(
-                        representatives = branch.representatives.map { rep ->
-                            rep.copy(photoImage = ImageUtils.processImageSource(rep.photoUrl))
-                        }
-                    )
-                }
-            )
-        }
-
-        return User(
-            uid = id,
-            email = email,
-            displayName = displayName,
-            name = name,
-            lastName = lastName,
-            phoneNumber = phoneNumber,
-            bio = bio,
-            photoUrl = photoUrl,
-            bannerImageUrl = bannerImageUrl,
-            profileImage = ImageUtils.processImageSource(photoUrl),
-            bannerImage = ImageUtils.processImageSource(bannerImageUrl),
-            additionalEmails = additionalEmails,
-            additionalPhones = additionalPhones,
-            personalAddresses = personalAddresses,
-            hasCompanyProfile = hasCompanyProfile,
-            companies = processedCompanies,
-            isOnline = isOnline,
-            isSubscribed = isSubscribed,
-            isVerified = isVerified,
-            notificationsEnabled = notificationsEnabled,
-            isPublicProfile = isPublicProfile,
-            isProfileComplete = isProfileComplete,
-            rating = rating,
-            favoriteProviderIds = favoriteProviderIds,
-            latitude = latitude,
-            longitude = longitude,
-            createdAt = createdAt,
-            isSynced = isSynced
-        )
-    }
+    fun toDomain(): User = User(
+        uid = id,
+        email = email,
+        displayName = displayName,
+        name = name,
+        lastName = lastName,
+        phoneNumber = phoneNumber,
+        bio = bio,
+        photoUrl = photoUrl,
+        profileThumbnail = profileThumbnail,
+        additionalEmails = additionalEmails,
+        additionalPhones = additionalPhones,
+        personalAddresses = personalAddresses,
+        hasCompanyProfile = hasCompanyProfile,
+        companies = companies,
+        isOnline = isOnline,
+        isSubscribed = isSubscribed,
+        isVerified = isVerified,
+        notificationsEnabled = notificationsEnabled,
+        isPublicProfile = isPublicProfile,
+        isProfileComplete = isProfileComplete,
+        rating = rating,
+        favoriteProviderIds = favoriteProviderIds,
+        latitude = latitude,
+        longitude = longitude,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
 
     companion object {
-        /**
-         * Crea una entidad de Room a partir del modelo de Dominio.
-         */
         fun fromDomain(u: User): UserEntity = UserEntity(
             id = u.uid,
             email = u.email,
@@ -110,7 +80,7 @@ data class UserEntity(
             phoneNumber = u.phoneNumber,
             bio = u.bio,
             photoUrl = u.photoUrl,
-            bannerImageUrl = u.bannerImageUrl,
+            profileThumbnail = u.profileThumbnail,
             additionalEmails = u.additionalEmails,
             additionalPhones = u.additionalPhones,
             personalAddresses = u.personalAddresses,
@@ -127,7 +97,7 @@ data class UserEntity(
             latitude = u.latitude,
             longitude = u.longitude,
             createdAt = u.createdAt,
-            isSynced = u.isSynced
+            updatedAt = u.updatedAt
         )
     }
 }

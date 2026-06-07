@@ -1,10 +1,12 @@
-﻿package com.example.myapplication.prestador.ui.dashboard
+package com.example.myapplication.prestador.ui.dashboard
 
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,38 +16,32 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.ui.chat.PrestadorChatScreen
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.prestador.ui.calendar.PrestadorCalendarScreen
-import com.example.myapplication.prestador.ui.presupuesto.PresupuestosScreen
+import com.example.myapplication.prestador.ui.chat.PrestadorChatScreen
+import com.example.myapplication.prestador.ui.notifications.NotificacionesScreen
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.viewmodel.chat.ChatViewModel
+import com.example.myapplication.prestador.viewmodel.dashboard.NotificacionesViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
-import com.example.myapplication.prestador.viewmodel.dashboard.NotificacionesViewModel
-import com.example.myapplication.prestador.ui.notifications.NotificacionesScreen
-import com.example.myapplication.prestador.viewmodel.chat.ChatViewModel
 
-
-
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun PreviewDashboard() {
-    // Preview sin ViewModel (no es posible testearlo con Hilt)
-    // MaterialTheme {
-    //     PrestadorDashboardScreen(...)
-    // }
-}
-
+/**
+ * --- PRESTADOR DASHBOARD (STATELESS UI) ---
+ * Orquestador principal de la aplicación.
+ * Sigue la Ley #1: La UI no toma decisiones, solo delega al ViewModel.
+ */
 @Composable
 fun PrestadorDashboardScreen(
     onNavigateToEditProfile: () -> Unit = {},
@@ -69,7 +65,7 @@ fun PrestadorDashboardScreen(
     onNavigateToAcercaDe: () -> Unit = {},
 ) {
     val colors = getPrestadorColors()
-    var selectedTab by rememberSaveable { mutableStateOf(2) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(2) }
     var isInConversation by remember { mutableStateOf(false) }
     var targetChatUserId by remember { mutableStateOf<String?>(null) }
     var autoOpenCalendarInChat by remember { mutableStateOf(false) }
@@ -77,37 +73,21 @@ fun PrestadorDashboardScreen(
     var pendingRescheduleTime by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
     var triggerCalendarCreate by remember { mutableStateOf(false) }
-    val isProfessional = false // TODO: Obtener de perfil real
-    val unreadCount by notificacionesViewModel.unreadCount.collectAsState()
-    val unreadMessageCount by chatViewModel.totalUnreadCount.collectAsState()
+    
+    val unreadCount by notificacionesViewModel.unreadCount.collectAsStateWithLifecycle(initialValue = 0)
+    val unreadMessageCount by chatViewModel.totalUnreadCount.collectAsStateWithLifecycle(initialValue = 0)
 
     Scaffold(
+        containerColor = colors.backgroundColor,
         floatingActionButton = {
             if (!isInConversation && selectedTab == 1) {
-                FloatingActionButton(
-                    onClick = { triggerCalendarCreate = true },
-                    containerColor = colors.primaryOrange,
-                    contentColor = Color.White,
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 6.dp,
-                        pressedElevation = 12.dp
-                    ),
-                    modifier = Modifier.padding(bottom = 16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = "Nueva cita",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                DashboardFAB(onClick = { triggerCalendarCreate = true })
             }
         },
         bottomBar = {
-            // Ocultar barra de navegación cuando se está en una conversación individual
-            if (!(selectedTab == 3 && isInConversation)) {
+            if (!isInConversation || selectedTab != 3) {
                 PrestadorBottomNavigationBar(
                     selectedTab = selectedTab,
-                    isProfessional = isProfessional,
                     unreadCount = unreadCount,
                     unreadMessageCount = unreadMessageCount,
                     onTabSelected = { selectedTab = it }
@@ -119,9 +99,7 @@ fun PrestadorDashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(colors.backgroundColor)
         ) {
-            // Animación suave al cambiar de tab
             AnimatedContent(
                 targetState = selectedTab,
                 transitionSpec = {
@@ -132,7 +110,6 @@ fun PrestadorDashboardScreen(
                 },
                 label = "tab_transition"
             ) { currentTab ->
-                // Contenido según el tab seleccionado
                 when (currentTab) {
                     0 -> {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -140,8 +117,6 @@ fun PrestadorDashboardScreen(
                                 onNavigateToPresupuesto = onNavigateToPresupuesto,
                                 onBackToHome = { selectedTab = 2 }
                             )
-                        } else {
-                            PresupuestoNotSupportedContent(onBackToHome = { selectedTab = 2 })
                         }
                     }
                     1 -> PrestadorCalendarScreen(
@@ -165,8 +140,7 @@ fun PrestadorDashboardScreen(
                                     autoOpenCalendarInChat = false
                                 }
                             }
-                        },
-
+                        }
                     )
                     2 -> InicioContent(
                         onNavigateToEditProfile = onNavigateToEditProfile,
@@ -175,7 +149,7 @@ fun PrestadorDashboardScreen(
                         onNavigateToPromotionList = onNavigateToPromotionList,
                         onNavigateToThemeDemo = onNavigateToThemeDemo,
                         onNavigateToCalendar = { selectedTab = 1 },
-                        onNavigateToPresupuesto = onNavigateToPresupuesto,
+                        onNavigateToCrearPresupuesto = { onNavigateToPresupuesto() },
                         onNavigateToPresupuestos = onNavigateToPresupuestos,
                         onNavigateToChat = { clientId ->
                             targetChatUserId = clientId
@@ -189,33 +163,18 @@ fun PrestadorDashboardScreen(
                         onNavigateToPrivacidad = onNavigateToPrivacidad,
                         onNavigateToAcercaDe = onNavigateToAcercaDe,
                     )
-                    3 -> {
-                        println("🔥 DASHBOARD: Renderizando tab de chat")
-                        println("🔥 targetChatUserId actual: $targetChatUserId")
-                        
-                        // Efecto para manejar la navegación al chat específico
-                        LaunchedEffect(targetChatUserId) {
-                            if (targetChatUserId != null) {
-                                println("🔥 LaunchedEffect: targetChatUserId = $targetChatUserId")
-                                // Esperar un frame para que el chat se renderice
-                                kotlinx.coroutines.delay(100)
-                            }
-                        }
-                        
-                        PrestadorChatScreen(
-                            onBack = {
-                                selectedTab = 2
-                                targetChatUserId = null
-                            },
-                            onInConversationChange = { isInConversation = it },
-                            onNavigateToClientePerfil = onNavigateToClientePerfil,
-                            onNavigateToPresupuesto = onNavigateToPresupuesto,
-                            initialChatUserId = targetChatUserId,
-                            autoOpenCalendarDialog = autoOpenCalendarInChat,
-                            rescheduleDate = pendingRescheduleDate,
-                            rescheduleTime = pendingRescheduleTime
-                        )
-                    }
+                    3 -> PrestadorChatScreen(
+                        onBack = {
+                            selectedTab = 2
+                            targetChatUserId = null
+                        },
+                        onInConversationChange = { isInConversation = it },
+                        onNavigateToClientePerfil = onNavigateToClientePerfil,
+                        initialChatUserId = targetChatUserId,
+                        autoOpenCalendarDialog = autoOpenCalendarInChat,
+                        rescheduleDate = pendingRescheduleDate,
+                        rescheduleTime = pendingRescheduleTime
+                    )
                     4 -> NotificacionesScreen(
                         onNavigateBack = { selectedTab = 2 },
                         onAccion = { route ->
@@ -232,104 +191,60 @@ fun PrestadorDashboardScreen(
 }
 
 @Composable
+private fun DashboardFAB(onClick: () -> Unit) {
+    FloatingActionButton(
+        onClick = onClick,
+        containerColor = Color.Transparent,
+        contentColor = Color.White,
+        shape = CircleShape,
+        modifier = Modifier
+            .padding(bottom = 16.dp)
+            .shadow(6.dp, CircleShape)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xFFFF7043), Color(0xFFFFCCBC))
+                ),
+                shape = CircleShape
+            )
+    ) {
+        Icon(Icons.Filled.Add, "Acción rápida", Modifier.size(28.dp))
+    }
+}
+
+@Composable
 fun PrestadorBottomNavigationBar(
     selectedTab: Int,
-    isProfessional: Boolean,
     unreadCount: Int,
-    unreadMessageCount: Int = 0,
+    unreadMessageCount: Int,
     onTabSelected: (Int) -> Unit
 ) {
     val colors = getPrestadorColors()
-    // Animación para el botón central
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
-
-    BottomAppBar(
-        modifier = Modifier
-            .navigationBarsPadding(), // AÑADIDO: Respeta el espacio de gestos
-        containerColor = colors.surfaceColor,
-        tonalElevation = 8.dp
+    Surface(
+        modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp),
+        shape = RoundedCornerShape(28.dp),
+        color = colors.surfaceColor,
+        shadowElevation = 16.dp
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(70.dp) // Altura del contenido
-                .padding(horizontal = 4.dp),
+            modifier = Modifier.fillMaxWidth().height(68.dp).padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Presupuesto (Extremo izquierdo)
-            BottomNavItem(
-                icon = Icons.Default.Edit,
-                label = if (isProfessional) "Consulta" else "Presupuesto",
-                isSelected = selectedTab == 0,
-                onClick = { onTabSelected(0) }
-            )
-
-            // Calendario
-            BottomNavItem(
-                icon = Icons.Default.DateRange,
-                label = "Calendario",
-                isSelected = selectedTab == 1,
-                onClick = { onTabSelected(1) }
-            )
-
-            // Inicio (Centro - Botón destacado)
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .scale(if (selectedTab == 2) pulseScale else 1f),
-                contentAlignment = Alignment.Center
+            BottomNavItem(Icons.Default.Edit, "Presupuesto", selectedTab == 0) { onTabSelected(0) }
+            BottomNavItem(Icons.Default.DateRange, "Calendario", selectedTab == 1) { onTabSelected(1) }
+            
+            // Botón Central (Home)
+            FloatingActionButton(
+                onClick = { onTabSelected(2) },
+                modifier = Modifier.size(52.dp),
+                containerColor = colors.primaryOrange,
+                shape = CircleShape
             ) {
-                FloatingActionButton(
-                    onClick = { onTabSelected(2) },
-                    containerColor = if (selectedTab == 2) {
-                        colors.primaryOrange // Naranja intenso
-                    } else {
-                        colors.primaryOrange.copy(alpha = 0.7f) // Naranja medio
-                    },
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 6.dp,
-                        pressedElevation = 8.dp
-                    ),
-                    shape = CircleShape
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Home,
-                        contentDescription = "Inicio",
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                Icon(Icons.Default.Home, "Inicio", tint = Color.White, modifier = Modifier.size(26.dp))
             }
 
-            // Chat
-            BottomNavItem(
-                icon = Icons.Default.Email,
-                label = "Chat",
-                isSelected = selectedTab == 3,
-                onClick = { onTabSelected(3) },
-                showBadge = unreadMessageCount > 0,
-                badgeCount = unreadMessageCount
-            )
-
-            // Notificaciones (Extremo derecha)
-            BottomNavItem(
-                icon = Icons.Default.Notifications,
-                label = "Alertas",
-                isSelected = selectedTab == 4,
-                onClick = { onTabSelected(4) },
-                showBadge = unreadCount > 0,
-                badgeCount = unreadCount
-            )
+            BottomNavItem(Icons.Default.Email, "Chat", selectedTab == 3, unreadMessageCount > 0, unreadMessageCount) { onTabSelected(3) }
+            BottomNavItem(Icons.Default.Notifications, "Alertas", selectedTab == 4, unreadCount > 0, unreadCount) { onTabSelected(4) }
         }
     }
 }
@@ -339,327 +254,44 @@ fun RowScope.BottomNavItem(
     icon: ImageVector,
     label: String,
     isSelected: Boolean,
-    onClick: () -> Unit,
     showBadge: Boolean = false,
-    badgeCount: Int = 0
+    badgeCount: Int = 0,
+    onClick: () -> Unit
 ) {
     val colors = getPrestadorColors()
-    val selectedColor = colors.primaryOrange // Naranja
-    val unselectedColor = colors.textSecondary // Gris
+    val tint = if (isSelected) colors.primaryOrange else colors.textSecondary
 
-    Box(
-        modifier = Modifier.weight(1f),
-        contentAlignment = Alignment.Center
+    Column(
+        modifier = Modifier.weight(1f).clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top, // Cambio: alineación superior
-            modifier = Modifier
-                .padding(top = 4.dp, bottom = 2.dp) // Menos padding
-        ) {
-            BadgedBox(
-                badge = {
-                    if (showBadge && badgeCount > 0) {
-                        Badge(
-                            containerColor = colors.primaryOrange,
-                            contentColor = Color.White
-                        ) {
-                            Text(
-                                text = if (badgeCount > 9) "9+" else badgeCount.toString(),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+        BadgedBox(
+            badge = {
+                if (showBadge && badgeCount > 0) {
+                    Badge(containerColor = Color.Red, contentColor = Color.White) {
+                        Text(if (badgeCount > 9) "9+" else badgeCount.toString())
                     }
                 }
-            ) {
-                IconButton(
-                    onClick = onClick,
-                    modifier = Modifier.size(36.dp) // Más compacto
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = label,
-                        tint = if (isSelected) selectedColor else unselectedColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
             }
-            
-            Spacer(modifier = Modifier.height(0.dp)) // Sin espacio extra
-
-            Text(
-                text = label,
-                fontSize = 10.sp, // Más pequeño
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                color = if (isSelected) selectedColor else unselectedColor,
-                maxLines = 1
-            )
+        ) {
+            Icon(icon, label, tint = tint, modifier = Modifier.size(24.dp))
         }
+        Text(label, fontSize = 10.sp, color = tint, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
     }
 }
-
-// ==================== CONTENIDO DE CADA TAB ====================
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun PresupuestoContent(
-    onNavigateToPresupuesto: () -> Unit = {},
-    onBackToHome: () -> Unit = {}
-) {
-    // Mostrar directamente la lista de presupuestos sin TopBar
-    PresupuestosScreen(
-        onBack = onBackToHome, // Regresar al tab de Inicio
-        onCrearNuevo = onNavigateToPresupuesto, // Navegar a crear presupuesto
-        onVerDetalle = { presupuesto ->
-            // TODO: Navegar a detalle
-        },
-        showTopBar = false // Ocultar TopBar porque ya está en el dashboard
+fun PresupuestoContent(onNavigateToPresupuesto: () -> Unit, onBackToHome: () -> Unit) {
+    com.example.myapplication.prestador.ui.presupuesto.PresupuestosScreen(
+        onBack = onBackToHome,
+        onCrearNuevo = onNavigateToPresupuesto,
+        onVerDetalle = { },
+        showTopBar = false
     )
-}
-
-@Composable
-private fun PresupuestoNotSupportedContent(onBackToHome: () -> Unit) {
-    val colors = getPrestadorColors()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = Icons.Default.Info,
-            contentDescription = null,
-            tint = colors.textSecondary,
-            modifier = Modifier.size(48.dp)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Presupuestos no disponible en este Android",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textPrimary
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Requiere Android 8.0 (API 26) o superior.",
-            fontSize = 14.sp,
-            color = colors.textSecondary
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        OutlinedButton(onClick = onBackToHome) {
-            Text("Volver")
-        }
-    }
-}
-
-
-@Composable
-fun CalendarioContent() {
-    val colors = getPrestadorColors()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.primaryOrange,
-                            colors.primaryOrange.copy(alpha = 0.7f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.DateRange,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(60.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Calendario",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.primaryOrange
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Gestiona tus citas y horarios",
-            fontSize = 16.sp,
-            color = colors.textSecondary
-        )
-    }
-}
-
-@Composable
-fun ChatContent(unreadMessagesCount: Int = 0) {
-    val colors = getPrestadorColors()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.primaryOrange,
-                            colors.primaryOrange.copy(alpha = 0.7f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Email,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(60.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Chat",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.primaryOrange
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Conversa con tus clientes",
-            fontSize = 16.sp,
-            color = colors.textSecondary
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Badge de mensajes pendientes
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = colors.error.copy(alpha = 0.1f),
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Email,
-                    contentDescription = null,
-                    tint = colors.error,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = if (unreadMessagesCount > 0) "Tienes $unreadMessagesCount mensajes(s) sin leer" else "No tienes mensajes sin leer",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.error
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun NotificacionesContent() {
-    val colors = getPrestadorColors()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(120.dp)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            colors.primaryOrange,
-                            colors.primaryOrange.copy(alpha = 0.7f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Notifications,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(60.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "Notificaciones",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.primaryOrange
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Mantente al día con alertas importantes",
-            fontSize = 16.sp,
-            color = colors.textSecondary
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Badge de notificaciones pendientes
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = colors.primaryOrange.copy(alpha = 0.1f),
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = colors.primaryOrange,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = "Tienes 5 notificaciones nuevas",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.primaryOrange
-                )
-            }
-        }
-    }
 }

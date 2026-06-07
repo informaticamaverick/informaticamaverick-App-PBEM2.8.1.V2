@@ -31,13 +31,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.capitalize
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.myapplication.core.data.local.entity.ProviderEntity
 import com.example.myapplication.prestador.data.model.ServiceType
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.utils.getServiceTypeConfig
@@ -170,7 +173,7 @@ fun PrestadorCalendarScreen(
     }
     
     //Formato de fecha para la comparacion
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
     //Filtrar citas del dia seleccionado
     val selectedDateStr = dateFormat.format(selectedDate.time)
     
@@ -221,8 +224,8 @@ fun PrestadorCalendarScreen(
     val availableEmployees = remember(empleadosState) {
         when (val state = empleadosState) {
             is com.example.myapplication.prestador.viewmodel.empresa.EmpleadosUiState.Success ->
-                state.empleados.filter { it.activo }.map { it.id to it.nombreCompleto() }
-            else -> emptyList()
+                state.empleados.map { it.id to "${it.name} ${it.lastName}" }
+            else -> emptyList<Pair<String, String>>()
         }
     }
     
@@ -236,6 +239,7 @@ fun PrestadorCalendarScreen(
     }.size
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
@@ -248,20 +252,21 @@ fun PrestadorCalendarScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .shadow(4.dp, RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+                    .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
                     .background(
                         brush = Brush.verticalGradient(
-                            colors = listOf(
-                                colors.primaryOrange,
-                                colors.primaryOrange.copy(alpha = 0.85f)
+                            colorStops = arrayOf(
+                                0.0f to Color(0xFFFF7043),
+                                0.45f to Color(0xFFFF9E80),
+                                1.0f to Color(0xFFFFCCBC)
                             )
-                        ),
-                        shape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+                        )
                     )
-                    .statusBarsPadding()
-                    .padding(start = 4.dp, end = 16.dp, bottom = 14.dp)
+                    .padding(start = 4.dp, end = 16.dp, bottom = 20.dp, top = 4.dp)
             ) {
                 Column {
-                    // Fila: back + título
+                    //Fila back + titulo
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -277,30 +282,38 @@ fun PrestadorCalendarScreen(
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    // Stats chips compactas
+                    //Stats chips estilo home
                     Row(
                         modifier = Modifier.padding(start = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(
                             modifier = Modifier
-                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
+                                .background(Color.White, RoundedCornerShape(20.dp))
                                 .padding(horizontal = 12.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.Today, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                            Text("Hoy: $citasHoy", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                        }
-                        Row(
-                            modifier = Modifier
-                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
-                                .padding(horizontal = 12.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            Icon(Icons.Default.CalendarMonth, null, tint = Color.White, modifier = Modifier.size(13.dp))
-                            Text("Este mes: $citasEsteMes", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Row(
+                                modifier = Modifier
+                                    .background(Color.White, RoundedCornerShape(20.dp))
+                                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(Icons.Default.Today, null, tint = Color(0xFF7B3000).copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
+                                Text("Hoy: $citasHoy", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF7B3000).copy(alpha = 0.75f))
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .background(Color.White, RoundedCornerShape(20.dp))
+                                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(Icons.Default.CalendarMonth, null, tint = Color(0xFF7B3000).copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
+                                Text("Este mes: $citasEsteMes", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF7B3000).copy(alpha = 0.75f))
+                            }
                         }
                     }
                 }
@@ -384,7 +397,6 @@ fun PrestadorCalendarScreen(
 }
 
 //Header del calendario con navegacion de mes
-
 @Composable
 fun CalendarHeader(
     currentDate: Calendar,
@@ -392,35 +404,46 @@ fun CalendarHeader(
     onNextMonth: () -> Unit
 ) {
     val colors = getPrestadorColors()
-    val monthFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
+    val locale = remember { Locale.getDefault() }
+    val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onPreviousMonth) {
+        IconButton(
+            onClick = onPreviousMonth,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(Color(0xFFFF7043).copy(alpha = 0.1f))
+        ) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowLeft,
                 contentDescription = "Mes anterior",
-                tint = Color(0xFFFF6B35)
+                tint = Color(0xFFFF7043)
             )
         }
 
         Text(
-            text = monthFormat.format(currentDate.time).capitalize(Locale.getDefault()),
+            text = monthFormat.format(currentDate.time).capitalize(locale),
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = colors.textPrimary
+            color = Color(0xFF7B3000).copy(alpha = 0.85f)
         )
-        
-        IconButton(onClick = onNextMonth) {
+
+        IconButton(
+            onClick = onNextMonth,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(Color(0xFFFF7043).copy(alpha = 0.1f))
+        ) {
             Icon(
                 imageVector = Icons.Default.KeyboardArrowRight,
                 contentDescription = "Mes siguiente",
-                tint = Color(0xFFFF6B35)
+                tint = Color(0xFFFF7043)
             )
         }
     }
@@ -434,7 +457,7 @@ fun CalendarGrid(
     onDateSelected: (Calendar) -> Unit
 ) {
     val colors = getPrestadorColors()
-    val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
     //DIAS DE LA SEMANA
     val daysOfWeek = listOf("D", "L", "M", "M", "J", "V", "S")
@@ -456,7 +479,7 @@ fun CalendarGrid(
                     textAlign = TextAlign.Center,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    color = colors.textSecondary
+                    color = Color(0xFFFF7043)
                 )
             }
         }
@@ -620,13 +643,13 @@ fun AppointmentsList(
     onReschedule: (id: String, chatId: String, date: String, time: String, clientId: String, clientName: String) -> Unit = { _, _, _, _, _, _ -> }
 ) {
     val colors = getPrestadorColors()
-    val dateFormat = SimpleDateFormat("d 'de' MMMM", Locale.getDefault())
+    val dateFormat = remember { SimpleDateFormat("d 'de' MMMM", Locale.getDefault()) }
     val monthNames = listOf(
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
     )
 
-    val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time)
+    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Calendar.getInstance().time) }
 
     // Separar en próximas (pending/confirmed/rescheduled con fecha >= hoy) e historial (completed/cancelled o pasadas)
     val upcoming = appointments.filter {
@@ -814,9 +837,26 @@ fun AppointmentCard(
             .clickable { onToggleExpand() },
         shape = RoundedCornerShape(12.dp),
         color = colors.surfaceColor,
-        shadowElevation = 2.dp
+        shadowElevation = 3.dp
     ) {
-        Column {
+        Row {
+            Box(
+                modifier = Modifier
+                    .width(5.dp)
+                    .fillMaxHeight()
+                    .background(
+                        color = when (appointment.status) {
+                            AppointmentStatus.CONFIRMED -> Color(0xFF10B981)
+                            AppointmentStatus.PENDING -> Color(0xFFF59E0B)
+                            AppointmentStatus.CANCELLED -> Color(0xFFEF4444)
+                            AppointmentStatus.COMPLETED -> Color(0xFF6366F1)
+                            AppointmentStatus.RESCHEDULED -> Color(0xFF059669)
+                        },
+                        shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
+                    )
+            )
+            Column {
+
             Row(
                 modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1251,6 +1291,7 @@ fun AppointmentCard(
                         }
                     }
                 }
+            }
             }
         }
     }

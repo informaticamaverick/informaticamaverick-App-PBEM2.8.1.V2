@@ -55,6 +55,9 @@ interface BudgetDao {
     @Query("SELECT * FROM budgets WHERE budgetId = :bId")
     suspend fun getBudgetById(bId: String): BudgetEntity?
 
+    @Query("SELECT * FROM budgets WHERE budgetId IN (:bIds)")
+    suspend fun getBudgetsByIds(bIds: List<String>): List<BudgetEntity>
+
     @Update
     suspend fun updateBudgetStatus(budget: BudgetEntity)
 

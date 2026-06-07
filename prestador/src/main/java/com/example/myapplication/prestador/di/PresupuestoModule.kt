@@ -1,6 +1,6 @@
 package com.example.myapplication.prestador.di
 
-import com.example.myapplication.prestador.data.local.dao.ClienteDao
+import com.example.myapplication.core.data.local.dao.UserDao
 import com.example.myapplication.prestador.data.local.dao.PlantillaPresupuestoDao
 import com.example.myapplication.prestador.data.local.dao.PresupuestoDao
 import com.example.myapplication.prestador.data.repository.PresupuestoRepository
@@ -41,9 +41,9 @@ object PresupuestoModule {
     @Singleton
     fun providePresupuestoRepository(
         presupuestoDao: PresupuestoDao,
-        clienteDao: ClienteDao,
+        userDao: com.example.myapplication.core.data.local.dao.UserDao,
         plantillaDao: PlantillaPresupuestoDao
     ): PresupuestoRepository {
-        return RoomPresupuestoRepository(presupuestoDao, clienteDao, plantillaDao)
+        return RoomPresupuestoRepository(presupuestoDao, userDao, plantillaDao)
     }
 }

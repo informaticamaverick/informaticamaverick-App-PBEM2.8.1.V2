@@ -35,6 +35,7 @@ import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
 import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.domain.model.Provider
+import com.example.myapplication.core.utils.formatearTexto
 import com.example.myapplication.data.model.ProviderDisplayModel
 import com.example.myapplication.presentation.features.home.CategoryVisuals
 import com.example.myapplication.presentation.designsystem.components.*
@@ -145,10 +146,10 @@ data class AccordionBanner(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PremiumLensCarousel(
+    modifier: Modifier = Modifier,
     items: List<AccordionBanner>,
     isPaused: Boolean = false,
     onItemClick: (AccordionBanner) -> Unit,
-    modifier: Modifier = Modifier,
     autoplayDelay: Long = 4000L
 ) {
     if (items.isEmpty()) return
@@ -161,12 +162,10 @@ fun PremiumLensCarousel(
         if (!isPaused && items.size > 1) {
             while (true) {
                 delay(autoplayDelay)
-                if (!isPaused) {
-                    pagerState.animateScrollToPage(
-                        page = pagerState.currentPage + 1,
-                        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
-                    )
-                }
+                pagerState.animateScrollToPage(
+                    page = pagerState.currentPage + 1,
+                    animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing)
+                )
             }
         }
     }
@@ -228,7 +227,7 @@ fun PremiumLensCarouselV3(
         if (!isPaused && items.size > 1) {
             while (true) {
                 delay(autoplayDelay)
-                if (!isPaused && items.isNotEmpty()) {
+                if (items.isNotEmpty()) {
                     pagerState.animateScrollToPage(
                         page = pagerState.currentPage + 1,
                         animationSpec = tween(durationMillis = 1000, easing = FastOutSlowInEasing)

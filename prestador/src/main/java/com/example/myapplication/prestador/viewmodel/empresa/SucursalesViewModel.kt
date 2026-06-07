@@ -2,12 +2,12 @@ package com.example.myapplication.prestador.viewmodel.empresa
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.prestador.data.local.entity.ProviderEntity
-import com.example.myapplication.core.domain.model.AddressProvider
+import com.example.myapplication.core.data.local.entity.ProviderEntity
+import com.example.myapplication.core.domain.model.AddressUnico
 import com.example.myapplication.core.domain.model.BranchProvider
 import com.example.myapplication.core.domain.model.CompanyProvider
 import com.example.myapplication.core.domain.model.EmployeeProvider
-import com.example.myapplication.prestador.data.repository.ProviderRepository
+import com.example.myapplication.core.data.repository.ProviderRepository
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -57,7 +57,7 @@ class SucursalesViewModel @Inject constructor(
     private fun loadProviderHierarchy() {
         if (providerId.isBlank()) return
         viewModelScope.launch {
-            providerRepository.getProviderById(providerId).collect { provider ->
+            providerRepository.getProviderFlowById(providerId).collect { provider ->
                 _provider.value = provider
             }
         }
@@ -102,7 +102,7 @@ class SucursalesViewModel @Inject constructor(
                     id = UUID.randomUUID().toString(),
                     name = nombre,
                     workingHours = horario ?: "",
-                    address = AddressProvider(
+                    address = AddressUnico(
                         id = UUID.randomUUID().toString(),
                         calle = calle ?: "",
                         numero = numero ?: "",
@@ -205,13 +205,13 @@ class SucursalesViewModel @Inject constructor(
                     name = nombre,
                     lastName = apellido ?: "",
                     position = cargo ?: "",
-                    photoUrl = imageUrl
+                    detail = "" // Se eliminó photoUrl según SSOT
                 )
 
                 val updatedCompanies = currentProvider.companies.map { company ->
                     company.copy(branches = company.branches.map { branch ->
                         if (branch.id == sucursalId) {
-                            branch.copy(employees = branch.employees + newEmployee)
+                            branch.copy(team = branch.team + newEmployee)
                         } else branch
                     })
                 }
@@ -236,7 +236,7 @@ class SucursalesViewModel @Inject constructor(
                 var foundBranchId: String? = null
                 currentProvider.companies.forEach { company ->
                     company.branches.forEach { branch ->
-                        if (branch.employees.any { it.id == employeeId }) {
+                        if (branch.team.any { it.id == employeeId }) {
                             foundCompanyId = company.id
                             foundBranchId = branch.id
                         }
@@ -245,7 +245,7 @@ class SucursalesViewModel @Inject constructor(
 
                 val updatedCompanies = currentProvider.companies.map { company ->
                     company.copy(branches = company.branches.map { branch ->
-                        branch.copy(employees = branch.employees.filter { it.id != employeeId })
+                        branch.copy(team = branch.team.filter { it.id != employeeId })
                     })
                 }
 
@@ -283,13 +283,13 @@ class SucursalesViewModel @Inject constructor(
                     company.copy(branches = company.branches.map { branch ->
                         if (branch.id == sucursalId) {
                             // Si no hay empleados, agregamos uno. Si hay, actualizamos el primero.
-                            val updatedEmployees = if (branch.employees.isEmpty()) {
-                                listOf(EmployeeProvider(name = nombre, lastName = apellido ?: "", position = cargo ?: "Encargado", photoUrl = imageUrl))
+                            val updatedEmployees = if (branch.team.isEmpty()) {
+                                listOf(EmployeeProvider(name = nombre, lastName = apellido ?: "", position = cargo ?: "Encargado"))
                             } else {
-                                val first = branch.employees[0]
-                                listOf(first.copy(name = nombre, lastName = apellido ?: "", position = cargo ?: first.position, photoUrl = imageUrl)) + branch.employees.drop(1)
+                                val first = branch.team[0]
+                                listOf(first.copy(name = nombre, lastName = apellido ?: "", position = cargo ?: first.position)) + branch.team.drop(1)
                             }
-                            branch.copy(employees = updatedEmployees)
+                            branch.copy(team = updatedEmployees)
                         } else branch
                     })
                 }

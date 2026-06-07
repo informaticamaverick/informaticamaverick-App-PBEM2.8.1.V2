@@ -5,7 +5,8 @@ import com.example.myapplication.core.data.local.dao.FastCategoryDao
 import com.example.myapplication.core.data.local.entity.CategoryEntity
 import com.example.myapplication.core.data.local.dao.FastCategoryEntity
 import com.example.myapplication.core.utils.MaverickGeoUtils
-import com.example.myapplication.data.model.ProviderDisplayModel
+import com.example.myapplication.presentation.mapper.ProviderDisplayMapper
+import com.example.myapplication.presentation.features.profile.UserLocation
 import com.example.myapplication.presentation.features.home.FastFilterState
 import com.example.myapplication.presentation.features.home.ProviderWithDistance
 import kotlinx.coroutines.delay
@@ -51,19 +52,10 @@ class FastRepository @Inject constructor(
             
             val distance = MaverickGeoUtils.calculateDistanceKm(userLat, userLon, pLat, pLon)
             
-            val service = ProviderDisplayModel(
-                id = provider.uid,
-                title = provider.displayName,
-                photoUrl = provider.profileImage,
-                bannerImageUrl = provider.bannerImage,
-                rating = provider.rating.toDouble(),
-                isVerified = provider.isVerified,
-                isOnline = provider.isOnline,
-                isSubscribed = provider.isSubscribed,
-                type = if (provider.hasCompanyProfile) com.example.myapplication.data.model.ProviderType.COMPANY else com.example.myapplication.data.model.ProviderType.INDIVIDUAL,
-                categories = provider.categories,
-                latitude = pLat,
-                longitude = pLon,
+            val userLocation = UserLocation(userLat, userLon)
+            val service = ProviderDisplayMapper.toDisplayModel(provider, userLocation).copy(
+                //latitude = pLat,
+                //longitude = pLon,
                 distanceKm = distance
             )
             

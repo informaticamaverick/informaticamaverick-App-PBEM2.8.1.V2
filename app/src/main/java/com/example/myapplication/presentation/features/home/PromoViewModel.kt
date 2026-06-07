@@ -54,17 +54,18 @@ class PromoViewModel @Inject constructor() : ViewModel() {
         services.filter { it.isSubscribed }.take(6).forEach { service ->
             val stableSeed = Random(service.id.hashCode().toLong())
             val discount = if (stableSeed.nextBoolean()) (10..50).random(stableSeed) else null
-            
+           /**
             bannerList.add(AccordionBanner(
                 id = "promo_${service.id}", 
                 title = service.title, 
                 subtitle = if (discount != null) "¡OFERTA IMPERDIBLE!" else "SERVICIO DESTACADO", 
-                icon = if (service.doesProduct) "🛍️" else "🛠️", 
+               // icon = if (service.doesProduct) "🛍️" else "🛠️",
                 color = if (discount != null) Color(0xFFE91E63) else Color(0xFF2197F5), 
-                type = if (service.doesProduct) BannerType.PRODUCT_SALE else BannerType.PROMO, 
-                discount = discount,
-                service = service 
+               // type = if (service.doesProduct) BannerType.PRODUCT_SALE else BannerType.PROMO,
+               // discount = discount,
+              //  service = service
             ))
+            */
         }
 
         // C. MAPEADO DE ADS

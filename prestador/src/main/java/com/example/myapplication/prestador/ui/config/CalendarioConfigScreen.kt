@@ -24,8 +24,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -62,7 +62,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,7 +75,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.serialization.RouteEncoder
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.prestador.data.local.entity.AvailabilityScheduleEntity
 import com.example.myapplication.prestador.data.local.entity.BlockedDateEntity
 import com.example.myapplication.prestador.data.local.entity.BlockedDateReason
@@ -102,15 +101,15 @@ fun CalendarioConfigScreen(
     onNavigateToCalendarioEmpresa: () -> Unit = {},
     providerViewModel: ProviderViewModel = hiltViewModel(),
     availabilityViewModel: AvailabilityViewModel = hiltViewModel(),
-    blockedDateViewModel: BlockedDateViewModel = hiltViewModel()
+    blockedDateViewModel: BlockedDateViewModel = hiltViewModel(),
 ) {
     val colors = getPrestadorColors()
-    val provider by providerViewModel.provider.collectAsState()
-    val allSchedules by availabilityViewModel.schedules.collectAsState()
-    val uiState by availabilityViewModel.uiState.collectAsState()
-    val blockedUiState by blockedDateViewModel.uiState.collectAsState()
-    val blockedDates by blockedDateViewModel.blockedDates.collectAsState()
-    val holidays by blockedDateViewModel.argentineHolidays.collectAsState()
+    val provider by providerViewModel.provider.collectAsStateWithLifecycle()
+    val allSchedules by availabilityViewModel.schedules.collectAsStateWithLifecycle()
+    val uiState by availabilityViewModel.uiState.collectAsStateWithLifecycle()
+    val blockedUiState by blockedDateViewModel.uiState.collectAsStateWithLifecycle()
+    val blockedDates by blockedDateViewModel.blockedDates.collectAsStateWithLifecycle()
+    val holidays by blockedDateViewModel.argentineHolidays.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -119,7 +118,7 @@ fun CalendarioConfigScreen(
         }
     }
 
-    val tieneEmpresa = provider?.tieneEmpresa ?: false
+    val tieneEmpresa = provider?.companies?.isNotEmpty() ?: false
     val hasLocalFisico = provider?.hasPhysicalLocation ?: false
 
     val visitSchedules = allSchedules.filter {
@@ -151,13 +150,13 @@ fun CalendarioConfigScreen(
                 deleteLocalGroup = null
                 showSuccessMessage = s.message
                 availabilityViewModel.resetState()
-                kotlinx.coroutines.delay(3000)
+                kotlinx.coroutines.delay(kotlin.time.Duration.parse("3s"))
                 showSuccessMessage = ""
             }
             is AvailabilityViewModel.UiState.Error -> {
                 showErrorMessage = s.message
                 availabilityViewModel.resetState()
-                kotlinx.coroutines.delay(3000)
+                kotlinx.coroutines.delay(kotlin.time.Duration.parse("3s"))
                 showErrorMessage = ""
             }
             else -> Unit
@@ -169,13 +168,13 @@ fun CalendarioConfigScreen(
             is BlockedDateViewModel.UiState.Success -> {
                 showSuccessMessage = s.msg
                 blockedDateViewModel.resetState()
-                kotlinx.coroutines.delay(3000)
+                kotlinx.coroutines.delay(kotlin.time.Duration.parse("3s"))
                 showSuccessMessage = ""
             }
             is BlockedDateViewModel.UiState.Error -> {
                 showErrorMessage = s.msg
                 blockedDateViewModel.resetState()
-                kotlinx.coroutines.delay(3000)
+                kotlinx.coroutines.delay(kotlin.time.Duration.parse("3s"))
                 showErrorMessage = ""
             }
             else -> Unit
@@ -196,9 +195,9 @@ fun CalendarioConfigScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = colors.textPrimary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = colors.textPrimary)
             }
-            Column(modifier = androidx.compose.ui.Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "Horarios de atención",
                     style = MaterialTheme.typography.titleMedium,

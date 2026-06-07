@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.draw.*
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.Popup
 import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
@@ -56,6 +58,9 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.StrokeCap
+import coil.compose.AsyncImage
+import com.example.myapplication.core.data.local.entity.UserEntity
+import com.example.myapplication.core.utils.ImageUtils
 import com.example.myapplication.presentation.components.BeEmotion
 
 // ==========================================================================================
@@ -1210,6 +1215,141 @@ fun MenuTacticoShortcutPreview() {
                 onDismissRequest = {},
                 onAction = {},
                 touchOffset = Offset(200f, 400f) // Ejemplo de offset
+            )
+        }
+    }
+}
+
+// ==========================================================================================
+// --- SECCIÓN: SELECTOR DE REMITENTE (INTELIGENTE) ---
+// ==========================================================================================
+
+data class SenderProfile(
+    val id: String, // "personal" or companyId
+    val branchId: String? = null,
+    val name: String,
+    val subName: String? = null,
+    val photoUrl: String? = null
+)
+
+fun getAvailableSenderProfiles(user: UserEntity?): List<SenderProfile> {
+    if (user == null) return emptyList()
+    val list = mutableListOf<SenderProfile>()
+    
+    // 1. Perfil Personal
+    list.add(SenderProfile(
+        id = "personal",
+        name = "Mi Perfil Personal",
+        subName = user.displayName.ifBlank { "${user.name} ${user.lastName}" }.trim(),
+        photoUrl = user.profileThumbnail ?: user.photoUrl
+    ))
+    
+    // 2. Empresas y Sucursales
+    user.companies.forEach { company ->
+        company.branches.forEach { branch ->
+            list.add(SenderProfile(
+                id = company.id,
+                branchId = branch.id,
+                name = branch.name,
+                subName = company.name,
+                photoUrl = company.thumbnailBase64 ?: company.photoUrl
+            ))
+        }
+    }
+    return list
+}
+
+@Composable
+fun SenderSelectionMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    profiles: List<SenderProfile>,
+    onProfileSelected: (SenderProfile) -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        modifier = Modifier
+            .width(220.dp)
+            .background(MaverickColors.V2TechSurface)
+            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+    ) {
+        Text(
+            text = "ENVIAR MENSAJE COMO:",
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelSmall.copy(
+                color = MaverickColors.ElectricCyan,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            )
+        )
+        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+        
+        profiles.forEach { profile ->
+            DropdownMenuItem(
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            modifier = Modifier.size(32.dp),
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.05f)
+                        ) {
+                            val processedPhoto = ImageUtils.processImageSource(profile.photoUrl)
+                            if (processedPhoto != null) {
+                                AsyncImage(
+                                    model = processedPhoto,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = profile.name.uppercase(),
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                            if (profile.subName != null) {
+                                Text(
+                                    text = profile.subName,
+                                    color = Color.Gray,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                },
+                onClick = { 
+                    onProfileSelected(profile)
+                    onDismissRequest()
+                }
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF05070A)
+@Composable
+fun SenderSelectionMenuPreview() {
+    val profiles = listOf(
+        SenderProfile("personal", null, "Mi Perfil Personal", "Max Power"),
+        SenderProfile("c1", "b1", "Sucursal Centro", "Maverick Tech")
+    )
+    MyApplicationTheme {
+        Box(modifier = Modifier.padding(20.dp)) {
+            SenderSelectionMenu(
+                expanded = true,
+                onDismissRequest = {},
+                profiles = profiles,
+                onProfileSelected = {}
             )
         }
     }
