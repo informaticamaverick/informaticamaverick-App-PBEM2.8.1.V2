@@ -47,6 +47,10 @@ fun BurbujaBase(
     nombreRespuesta: String? = null,
     contenidoRespuesta: String? = null,
     margenInterno: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+    // [WHATSAPP-STYLE] BurbujaTexto arma la hora/ticks incrustados adentro de su propio Text
+    // (inlineContent) para que quede en el mismo renglón que el texto — cuando hace eso, no
+    // queremos que BurbujaBase agregue OTRA fila de hora abajo (quedaría duplicada).
+    mostrarFilaHora: Boolean = true,
     alHacerClick: (() -> Unit)? = null,
     alHacerSwipeRespuesta: (() -> Unit)? = null,
     contenidoExtra: @Composable (() -> Unit)? = null,
@@ -167,25 +171,27 @@ fun BurbujaBase(
                         contenido()
                     }
 
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(top = 1.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(marcaTiempo)),
-                            fontSize = 10.sp,
-                            color = colorContenido.copy(alpha = 0.5f),
-                            fontWeight = FontWeight.Medium
-                        )
-                        if (esMio) {
-                            val colorTick = if (estaLeido) Color(0xFF4FC3F7) else colorContenido.copy(alpha = 0.4f)
-                            when {
-                                !estaSincronizado -> Icon(Icons.Default.Schedule, null, tint = colorTick, modifier = Modifier.size(10.dp))
-                                estaLeido || estaEntregado -> Icon(Icons.Default.DoneAll, null, tint = colorTick, modifier = Modifier.size(13.dp))
-                                else -> Icon(Icons.Default.Done, null, tint = colorTick, modifier = Modifier.size(13.dp))
+                    if (mostrarFilaHora) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.End)
+                                .padding(top = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(marcaTiempo)),
+                                fontSize = 10.sp,
+                                color = colorContenido.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (esMio) {
+                                val colorTick = if (estaLeido) Color(0xFF4FC3F7) else colorContenido.copy(alpha = 0.4f)
+                                when {
+                                    !estaSincronizado -> Icon(Icons.Default.Schedule, null, tint = colorTick, modifier = Modifier.size(10.dp))
+                                    estaLeido || estaEntregado -> Icon(Icons.Default.DoneAll, null, tint = colorTick, modifier = Modifier.size(13.dp))
+                                    else -> Icon(Icons.Default.Done, null, tint = colorTick, modifier = Modifier.size(13.dp))
+                                }
                             }
                         }
                     }

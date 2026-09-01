@@ -69,7 +69,6 @@ fun ChatConversationMaster(
     alCambiarEstadoEscritura: (Boolean) -> Unit = {},
     mensajeRespuesta: MensajeEntity? = null,
     alResponderMensaje: (MensajeEntity?) -> Unit = {},
-    alEliminarMensaje: (String) -> Unit = {}, // 🔥 [NEW]
     alHacerClickOpciones: () -> Unit = {},
     alHacerClickBuscar: () -> Unit = {},
     alHacerClickInfo: () -> Unit = {},
@@ -142,7 +141,7 @@ fun ChatConversationMaster(
                         mensaje = mensajeRespuesta,
                         alCancelar = { alResponderMensaje(null) },
                         colorAcento = colorAcento,
-                        colorFondo = Color(0xFF1C242F),
+                        colorFondo = Color(0xFF0F172A),
                         esMio = mensajeRespuesta.idEmisor == idUsuarioActual
                     )
                 }
@@ -155,7 +154,7 @@ fun ChatConversationMaster(
                     },
                     alEnviar = {
                         if (it.isNotBlank()) {
-                            alEnviarTexto(it)
+                            alEnviarTexto(it.trim())
                             textoEntrada = ""
                         }
                     },
@@ -180,25 +179,19 @@ fun ChatConversationMaster(
 
             }
         },
-        containerColor = Color.Black
+        containerColor = Color(0xFF030712)
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(id = CoreR.drawable.backgroudchat),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().alpha(0.08f),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
             LazyColumn(
                 state = estadoLista,
                 reverseLayout = true,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(bottom = paddingValues.calculateBottomPadding()),
-                contentPadding = PaddingValues(top = 100.dp, bottom = 12.dp, start = 8.dp, end = 8.dp), 
+                // [FIX] "bottom" suma paddingExtraBotonAbajo (56dp en el prestador, 0dp en el
+                // cliente) para que la última burbuja nunca quede tapada por el FAB de acciones
+                // rápidas flotando en la esquina inferior derecha.
+                contentPadding = PaddingValues(top = 100.dp, bottom = 12.dp + paddingExtraBotonAbajo, start = 8.dp, end = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp) 
             ) {
                 items(
@@ -222,8 +215,18 @@ fun ChatConversationMaster(
                                     mensaje = item.entidad,
                                     idUsuarioActual = idUsuarioActual,
                                     presupuesto = item.presupuesto,
-                                    colorFondoMio = Color(0xFF2B5278),
-                                    colorFondoOtro = Color(0xFF1B2733),
+                                    // [FIX] Se oscurece colorAcento un 28% para el fondo de la burbuja: cada
+                                    // app ya trae su propio acento (naranja en prestador, celeste en cliente),
+                                    // pero el celeste del cliente es demasiado claro para texto blanco encima
+                                    // si se usa tal cual. Oscurecer mantiene la identidad de cada app sin
+                                    // perder contraste, sin necesidad de un color fijo compartido.
+                                    colorFondoMio = Color(
+                                        red = colorAcento.red * 0.72f,
+                                        green = colorAcento.green * 0.72f,
+                                        blue = colorAcento.blue * 0.72f,
+                                        alpha = colorAcento.alpha
+                                    ),
+                                    colorFondoOtro = Color(0xFF1E293B),
                                     idAudioReproduciendo = idAudioReproduciendo,
                                     progresoAudio = progresoAudio,
                                     alHacerClickImagen = alHacerClickImagen,
@@ -295,7 +298,7 @@ fun ChatConversationMaster(
                     onClick = { alcanceCorrutina.launch { estadoLista.animateScrollToItem(0) } },
                     modifier = Modifier.size(48.dp),
                     shape = CircleShape,
-                    color = Color(0xFF1C242F),
+                    color = Color(0xFF1E293B),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
                     shadowElevation = 12.dp
                 ) {
@@ -328,10 +331,7 @@ fun ChatConversationMaster(
                     alResponder = { alResponderMensaje(mensajeSeleccionadoContextual!!) },
                     alCopiar = { },
                     alReenviar = { },
-                    alEliminar = { 
-                        alEliminarMensaje(mensajeSeleccionadoContextual!!.id)
-                        mensajeSeleccionadoContextual = null
-                    },
+                    alEliminar = { },
                     alCerrar = { mensajeSeleccionadoContextual = null }
                 )
             }

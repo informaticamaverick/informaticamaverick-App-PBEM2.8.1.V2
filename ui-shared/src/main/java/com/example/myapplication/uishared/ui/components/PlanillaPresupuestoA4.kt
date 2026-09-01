@@ -608,8 +608,8 @@ fun PlanillaPresupuestoA4Viewer(
                     }
                 }
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth().graphicsLayer(clip = true).pointerInput(Unit) { detectTransformGestures { _, pan, zoom, _ -> escala = (escala * zoom).coerceIn(escalaAjusteInicial, 4f); desplazamiento = desplazamiento.copy(y = desplazamiento.y + pan.y) } }, contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.wrapContentSize(unbounded = true).requiredWidth(EXECUTIVE_A4_WIDTH).graphicsLayer(scaleX = escala, scaleY = escala, translationY = desplazamiento.y)) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth().graphicsLayer(clip = true).pointerInput(Unit) { detectTransformGestures { _, pan, zoom, _ -> escala = (escala * zoom).coerceIn(escalaAjusteInicial, 4f); desplazamiento = Offset(desplazamiento.x + pan.x, desplazamiento.y + pan.y) } }, contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.wrapContentSize(unbounded = true).requiredWidth(EXECUTIVE_A4_WIDTH).graphicsLayer(scaleX = escala, scaleY = escala, translationX = desplazamiento.x, translationY = desplazamiento.y)) {
                     PlanillaPresupuestoA4(
                         prestador = prestador, 
                         relacion = relacion, 

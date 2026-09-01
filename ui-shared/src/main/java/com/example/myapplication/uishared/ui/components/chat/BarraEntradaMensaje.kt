@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -27,6 +29,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -147,6 +150,12 @@ fun BarraEntradaMensaje(
                             fontFamily = FontFamily.SansSerif
                         ),
                         cursorBrush = SolidColor(colorAcento),
+                        // 🐛 FIX (01/09): sin esto, tocar "Enter" en el teclado insertaba un
+                        // salto de línea real en vez de mandar el mensaje — el "\n" quedaba
+                        // guardado al final del texto y se veía como un hueco vacío entre el
+                        // texto y la hora dentro de la burbuja del chat.
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { if (valor.isNotBlank()) alEnviar(valor) }),
                         decorationBox = { inner ->
                             Box {
                                 if (valor.isEmpty()) Text(
