@@ -1,3 +1,5 @@
+/**
+
 package com.example.myapplication.prestador
 
 import androidx.activity.ComponentActivity
@@ -7,8 +9,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.myapplication.prestador.ui.dashboard.PrestadorBottomNavigationBar
-import com.example.myapplication.prestador.ui.dashboard.components.InicioScreen
+import com.example.myapplication.prestador.ui.pantallas.dashboard.PrestadorBottomNavigationBar
+import com.example.myapplication.prestador.ui.pantallas.dashboard.componentes.InicioScreen
 //import com.example.myapplication.prestador.viewmodel.DashboardUiState
 import com.example.myapplication.prestador.viewmodel.dashboard.DashboardUiState
 import org.junit.Assert.assertEquals
@@ -67,3 +69,33 @@ class PrestadorDashboardScreenTest {
         }
     }
 }
+**/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

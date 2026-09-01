@@ -6,9 +6,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.myapplication.prestador.ui.login.LoginState
-import com.example.myapplication.prestador.ui.login.PrestadorLoginScreen
-import com.example.myapplication.prestador.ui.login.PrestadorLoginViewModel
+import com.example.myapplication.prestador.ui.pantallas.login.EstadoLogin
+import com.example.myapplication.prestador.ui.pantallas.login.PrestadorLoginScreen
+import com.example.myapplication.prestador.ui.pantallas.login.PrestadorLoginViewModel
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -25,7 +25,7 @@ class PrestadorLoginScreenTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
-    private val loginState = MutableStateFlow<LoginState>(LoginState.Idle)
+    private val loginState = MutableStateFlow<EstadoLogin>(EstadoLogin.Inactivo)
     private val hasProfile = MutableStateFlow(false)
     private val passwordResetEmailSent = MutableStateFlow(false)
     private lateinit var viewModel: PrestadorLoginViewModel
@@ -73,3 +73,33 @@ class PrestadorLoginScreenTest {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -6,7 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.example.myapplication.prestador.ui.client.ClientePerfilScreen
+import com.example.myapplication.prestador.ui.pantallas.client.ClientePerfilScreen
 
 fun NavGraphBuilder.clienteNavGraph(navController: NavHostController) {
 
@@ -21,3 +21,47 @@ fun NavGraphBuilder.clienteNavGraph(navController: NavHostController) {
         )
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

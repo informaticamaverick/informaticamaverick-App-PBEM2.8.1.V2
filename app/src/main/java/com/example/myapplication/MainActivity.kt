@@ -14,7 +14,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -24,62 +23,108 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import com.example.myapplication.presentation.features.auth.LoginScreen
+import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.myapplication.presentation.global.BeBrainViewModel
-import com.example.myapplication.presentation.global.InitialNavTarget
-import com.example.myapplication.presentation.features.home.AppNavigation
-import com.example.myapplication.presentation.designsystem.theme.MyApplicationTheme
+import com.example.myapplication.coordinadores.UsuarioArranqueViewModel
+import com.example.myapplication.ui.componentes.be.vm.BeCerebroViewModel
+import com.example.myapplication.ui.pantallas.auth.AutenticacionScreen
+import com.example.myapplication.ui.pantallas.home.NavegacionCajaPrincipal
+import com.example.myapplication.ui.estilos.ClienteTheme
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.example.myapplication.core.servicios.publicidad.BeAdsManager
+import androidx.activity.viewModels
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val gestorArranque: UsuarioArranqueViewModel by viewModels()
+
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        
+        // [ELITE]: Mantener Splash hasta que el gestor decida la ruta inicial
+        splashScreen.setKeepOnScreenCondition {
+            gestorArranque.rutaInicial.value == "verificando"
+        }
+
+        // --- INICIALIZACIÓN MAVERICK ADS ---
+        BeAdsManager.initialize(this)
+
         enableEdgeToEdge()
+        
+        // [ELITE v2026.6] Procesamiento de Intent para Deep Linking (FCM)
+        val deepLinkRoute = processIntentExtras(intent)
+
         setContent {
-            MyApplicationTheme {
-                // [OPTIMIZACIÓN MAVERICK]: Fondo base inmediato para evitar flash blanco
+            ClienteTheme {
+                // [OPTIMIZACIÓN app]: Fondo base inmediato para evitar flash blanco
                 Box(modifier = Modifier.fillMaxSize().background(Color(0xFF050508))) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
-                        color = Color.Transparent // Surface transparente para ver el fondo base
+                        color = Color.Transparent 
                     ) {
-                        // Se llama a la navegación raíz de la aplicación.
-                        RootNavigation()
+                        RootNavigation(gestorArranque = gestorArranque, initialDeepLink = deepLinkRoute)
                     }
                 }
             }
+        }
+    }
+
+    private fun processIntentExtras(intent: android.content.Intent?): String? {
+        val extras = intent?.extras ?: return null
+        val type = extras.getString("target_type") ?: return null
+        
+        return when (type) {
+            "promo" -> {
+                val pId = extras.getString("providerId") ?: ""
+                val bId = extras.getString("branchId") ?: ""
+                val cId = extras.getString("companyId") ?: ""
+                val promoId = extras.getString("promoId") ?: ""
+                "chat?providerId=$pId&branchId=$bId&companyId=$cId&promoId=$promoId"
+            }
+            "budget", "tender_update", "concurso", "presupuesto", "concursos" -> "concursos"
+            "profile" -> "perfil_cliente"
+            "message" -> "chat?providerId=${extras.getString("senderId")}"
+            else -> null
         }
     }
 }
 
 /**
  * RootNavigation maneja la navegación principal de la aplicación.
- * Decide si mostrar la pantalla de startup, login, completar perfil o la navegación principal del cliente.
  */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun RootNavigation(beBrainViewModel: BeBrainViewModel = hiltViewModel()) {
+fun RootNavigation(
+    BeCerebroViewModel: BeCerebroViewModel = hiltViewModel(),
+    gestorArranque: UsuarioArranqueViewModel, // Inyectado desde el host
+    initialDeepLink: String? = null
+) {
     val navController = rememberNavController()
-    val navTarget by beBrainViewModel.initialNavTarget.collectAsState()
+    val rutaInicial by gestorArranque.rutaInicial.collectAsStateWithLifecycle()
 
-    // [OPTIMIZACIÓN MAVERICK V5]: Decisión de destino inicial proactiva.
-    // Si todavía estamos chequeando (CHECKING), mostramos un contenedor vacío con el color de splash.
-    // Esto evita que se renderice la LoginScreen aunque sea por milisegundos.
-    if (navTarget == InitialNavTarget.CHECKING) {
+    // Verificación ya iniciada en el host si es necesario, o aquí
+    LaunchedEffect(Unit) {
+        if (rutaInicial == "verificando") {
+            gestorArranque.realizarVerificacionInicial()
+        }
+    }
+
+    if (rutaInicial == "verificando") {
         Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D0221)))
         return
     }
 
-    val startDestination = when (navTarget) {
-        InitialNavTarget.LOGIN -> "login"
-        else -> "main_screen"
+    val startDestination = when (rutaInicial) {
+        "login" -> "login"
+        else -> {
+            if (initialDeepLink != null) "main_screen?target=$initialDeepLink"
+            else "main_screen"
+        }
     }
 
     NavHost(
@@ -110,23 +155,10 @@ fun RootNavigation(beBrainViewModel: BeBrainViewModel = hiltViewModel()) {
             ) + fadeOut(animationSpec = tween(300))
         }
     ) {
-        // ======================================================================================
-        // 0. PANTALLA DE STARTUP (DESACTIVADA)
-        // ======================================================================================
-        /*
-        composable("startup") {
-            StartupScreen( ... )
-        }
-        */
-
-        // ======================================================================================
-        // 1. PANTALLA DE LOGIN
-        // ======================================================================================
         composable("login") {
-            LoginScreen(
-                onLoginSuccess = { targetRoute ->
-                    // MAVERICK V5: Navegación limpia y atómica.
-                    val finalRoute = if (targetRoute == "perfil_cliente_edit") "main_screen?target=profile" else "main_screen"
+            AutenticacionScreen(
+                alExito = { targetRoute ->
+                    val finalRoute = if (targetRoute == "perfil_cliente_edit") "main_screen?target=perfil_cliente" else "main_screen"
                     navController.navigate(finalRoute) {
                         popUpTo("login") { inclusive = true }
                     }
@@ -134,9 +166,6 @@ fun RootNavigation(beBrainViewModel: BeBrainViewModel = hiltViewModel()) {
             )
         }
 
-        // ======================================================================================
-        // 2. PANTALLA PRINCIPAL (Contiene Home, Perfil, Chat, etc.)
-        // ======================================================================================
         composable(
             route = "main_screen?target={target}",
             arguments = listOf(
@@ -148,8 +177,9 @@ fun RootNavigation(beBrainViewModel: BeBrainViewModel = hiltViewModel()) {
             )
         ) { backStackEntry ->
             val target = backStackEntry.arguments?.getString("target")
-            AppNavigation(
+            NavegacionCajaPrincipal(
                 initialTarget = target,
+                beViewModel = BeCerebroViewModel, 
                 onLogoutRequest = {
                     navController.navigate("login") {
                         popUpTo(0) { inclusive = true }
@@ -159,3 +189,37 @@ fun RootNavigation(beBrainViewModel: BeBrainViewModel = hiltViewModel()) {
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

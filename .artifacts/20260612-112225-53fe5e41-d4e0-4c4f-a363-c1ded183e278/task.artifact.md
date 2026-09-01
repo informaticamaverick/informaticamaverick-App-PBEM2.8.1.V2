@@ -1,0 +1,8 @@
+- [x] Implementar Mejoras en Licitaciones (Core y Prestador)
+- [/] Refinar Sistema de Notificaciones (App Cliente)
+	- [ ] Implementar `MaverickFirebaseMessagingService` (FCM)
+	- [ ] Crear `UserSettingsRepository` (DataStore)
+	- [ ] Implementar pantalla de configuración de notificaciones
+	- [ ] Actualizar Badges en Barra de Navegación
+	- [ ] Sincronizar estados en `BeBrainViewModel`
+- [ ] Verificar Flujo Completo 2026

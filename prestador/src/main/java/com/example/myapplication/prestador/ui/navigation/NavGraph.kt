@@ -18,12 +18,17 @@ import com.google.firebase.auth.FirebaseAuth
 @Composable
 fun PrestadorNavGraph(
     navController: NavHostController,
-    startDestination: String = if (FirebaseAuth.getInstance().currentUser != null)
-        PrestadorRoutes.Dashboard.route
-    else
-        PrestadorRoutes.Login.route
+    initialTenderId: String? = null,
+    startDestinationRoute: String? = null
 ) {
     val colors = getPrestadorColors()
+    
+    val startDestination = startDestinationRoute ?: if (FirebaseAuth.getInstance().currentUser != null) {
+        if (!initialTenderId.isNullOrBlank()) PrestadorRoutes.Dashboard.createRoute(initialTenderId)
+        else PrestadorRoutes.Dashboard.route
+    } else {
+        PrestadorRoutes.Login.route
+    }
 
     Box(
         modifier = Modifier
@@ -44,7 +49,7 @@ fun PrestadorNavGraph(
             profileNavGraph(navController)
             // chatNavGraph(navController) // Integrado en Dashboard
             presupuestoNavGraph(navController)
-            promotionNavGraph(navController)
+            promocionNavGraph(navController)
             clienteNavGraph(navController)
         }
     }

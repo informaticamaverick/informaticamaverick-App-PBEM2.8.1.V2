@@ -1,0 +1,38 @@
+- [x] Unificar cabecera de usuario con morphing elite
+    - [x] Modificar `UsuarioPerfilParteCabecera.kt`
+    - [x] Modificar `UsuarioPerfilParteLienzo.kt`
+- [x] Corregir visualización de imagen de prestador
+    - [x] Implementar fallback en `PrestadorPerfilParteCabecera.kt`
+    - [x] Corregir mapeo en `PrestadorMappers.kt`
+- [x] Solucionar pixelado de imágenes
+    - [x] Implementar subida a Storage en `SincronizadorRemotoPrestador`
+    - [x] Implementar descarga local en `MotorSincLocal`
+- [x] Mejorar UX de carga
+    - [x] Crear `ShimmerPerfilElite`
+    - [x] Actualizar pantallas de perfil para usar skeletons
+- [x] Ocultar HUD y Barra de Navegación en perfiles
+    - [x] Resetear configuración de Be en `CoordinadorAcciones.kt`
+    - [x] Reforzar lógica de ocultación en `NavegacionCajaPrincipal.kt`
+- [x] Auditoría y Saneamiento de Identidad y Direcciones
+    - [x] Añadir `nombre` y `apellido` a `UsuarioDominio` y `PrestadorDominio`
+    - [x] Actualizar `UsuarioMappers.kt` y `PrestadorMappers.kt`
+    - [x] Fix de integridad de IDs en `MotorSincLocal.kt` (PULL)
+    - [x] Fix de filtrado de direcciones en `SincUsuarioRepositorio.kt` y `SincronizadorRemotoPrestador.kt` (PUSH)
+    - [x] Actualizar UI en `UsuarioPerfilParteSecciones.kt`
+- [x] Optimizar Motor de Búsqueda de Categorías
+    - [x] Implementar reactividad total en `CategoryViewModel.kt`
+    - [x] Habilitar búsqueda dual (Global/Segmentada) con SQLViews
+    - [x] Filtrar Supercategorías proactivamente
+    - [x] Saneamiento de renderizado en `HomeScreenClienteV4.kt`
+- [x] Modernizar Tarjetas de Presupuestos
+    - [x] Mover `TarjetaPresupuesto.kt` a `ui-shared`
+    - [x] Actualizar `ArchiveroPresupuestoSheet.kt` en App Azul
+    - [x] Actualizar `ConcursoResultadoScreen.kt` (Licitaciones)
+- [x] Enriquecer Datos de Tarjeta de Presupuesto
+    - [x] Implementar `ImageUtils.processImageSource` en `TarjetaPresupuesto`
+    - [x] Añadir soporte para nombre de categoría legible
+    - [x] Enriquecer `PresupuestoArchiveroUiModel` con metadatos de rubro
+- [x] Refinar Interactividad y Arquitectura de Tarjeta
+    - [x] Migrar `TarjetaPresupuesto` a `PresupuestoResumenDominio`
+    - [x] Diferenciar áreas de click (Cuerpo vs Contacto)
+    - [x] Asegurar fallback de iniciales en avatar

@@ -6,24 +6,22 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.example.myapplication.prestador.ui.presupuesto.CrearPresupuestoPrestadorScreen
-import com.example.myapplication.prestador.ui.presupuesto.PresupuestosScreen
+import com.example.myapplication.prestador.ui.pantallas.presupuesto.ArmadorPresupuestoScreen
+import com.example.myapplication.prestador.ui.pantallas.presupuesto.PresupuestosScreen
 
 fun NavGraphBuilder.presupuestoNavGraph(navController: NavController) {
 
     composable(PrestadorRoutes.Presupuestos.route) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            PresupuestosScreen(
-                onBack = { navController.navigateUp() },
-                onCrearNuevo = {
-                    navController.navigate(PrestadorRoutes.CrearPresupuesto.createRoute("presupuestos"))
-                },
-                onVerDetalle = { _ -> },
-                onNavigateToConfig = {
-                    navController.navigate(PrestadorRoutes.PresupuestoConfig.route)
-                }
-            )
-        }
+        PresupuestosScreen(
+            onVolver = { navController.navigateUp() },
+            onCrearNuevo = {
+                navController.navigate(PrestadorRoutes.CrearPresupuesto.createRoute("presupuestos"))
+            },
+            onVerDetalle = { _ -> },
+            onNavegarConfig = {
+                navController.navigate(PrestadorRoutes.PresupuestoConfig.route)
+            }
+        )
     }
 
     composable(
@@ -36,26 +34,88 @@ fun NavGraphBuilder.presupuestoNavGraph(navController: NavController) {
             navArgument("appointmentId") {
                 type = NavType.StringType
                 defaultValue = ""
+            },
+            navArgument("tenderId") {
+                type = NavType.StringType
+                defaultValue = ""
+            },
+            navArgument("clientId") {
+                type = NavType.StringType
+                defaultValue = ""
             }
         )
     ) { backStackEntry ->
         val origin = backStackEntry.arguments?.getString("origin") ?: "dashboard"
         val appointmentId = backStackEntry.arguments?.getString("appointmentId") ?: ""
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            CrearPresupuestoPrestadorScreen(
-                appointmentId = appointmentId,
-                onBack = {
-                    when (origin) {
-                        "chat" -> navController.navigate(PrestadorRoutes.Dashboard.route) {
-                            popUpTo(PrestadorRoutes.CrearPresupuesto.route) { inclusive = true }
-                        }
-                        "presupuestos" -> navController.navigate(PrestadorRoutes.Presupuestos.route) {
-                            popUpTo(PrestadorRoutes.CrearPresupuesto.route) { inclusive = true }
-                        }
-                        else -> navController.navigateUp()
+        val tenderId = backStackEntry.arguments?.getString("tenderId") ?: ""
+        val clientId = backStackEntry.arguments?.getString("clientId") ?: ""
+        
+        ArmadorPresupuestoScreen(
+            idCliente = clientId.ifBlank { tenderId.ifBlank { appointmentId } }, 
+            idPrestador = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: "",
+            idConcurso = tenderId.ifBlank { null },
+            onVolver = {
+                when (origin) {
+                    "chat" -> navController.navigate(PrestadorRoutes.Dashboard.route) {
+                        popUpTo(PrestadorRoutes.CrearPresupuesto.route) { inclusive = true }
                     }
+                    "presupuestos" -> navController.navigate(PrestadorRoutes.Presupuestos.route) {
+                        popUpTo(PrestadorRoutes.CrearPresupuesto.route) { inclusive = true }
+                    }
+                    else -> navController.navigateUp()
                 }
-            )
-        }
+            },
+            onVerCatalogo = {
+                navController.navigate(PrestadorRoutes.Catalogo.route)
+            },
+            onNavigateToPaywall = {
+                navController.navigate(PrestadorRoutes.Paywall.route)
+            }
+        )
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

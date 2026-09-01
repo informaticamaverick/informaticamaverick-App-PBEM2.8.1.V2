@@ -1,0 +1,18 @@
+- [x] Unificación Radical al Español (Ley #9)
+    - [x] Limpiar `MapeadorMensajesMav.kt` (Eliminar fallbacks en inglés)
+    - [x] Actualizar `ChatMavRepository.kt` (Envío con llaves en español)
+- [x] Implementación de Trazabilidad Hormiga (Ley #7)
+    - [x] Añadir cabeceras en `MotorDescubrimientoMav.kt`
+    - [x] Añadir cabeceras en `ChatMavRepository.kt`
+    - [x] Añadir cabeceras en `BusquedaRemoteMediator.kt`
+    - [x] Añadir cabeceras en `MapeadorMensajesMav.kt`
+    - [x] Estandarizar logs en todo el sistema de chat y búsqueda
+- [x] Ajuste Táctico de Identidad (:prestador)
+    - [x] Corregir `idPropietarioReceptor` en `ChatConversationScreen.kt`
+- [x] Documentación Maestra Detallada
+    - [x] Redactar `PROTOCOLO_BUSQUEDA_RESULTADOS_PRESTADORES.md`
+    - [x] Redactar `PROTOCOLO_TOPICS_INDEX.md`
+    - [x] Actualizar `PROTOCOL_CHAT_MAV.md`
+- [x] Verificación Final
+    - [x] Validar comunicación entre apps
+    - [x] Comprobar logs en Logcat

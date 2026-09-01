@@ -1,21 +1,27 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# --- REGLAS ELITE: APP AZUL (v2026.REL) ---
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# 1. Preservar Modelos de UI y ViewModels (Evita fallos en SavedState y Recomposición)
+-keep class com.example.myapplication.ui.componentes.be.modelos.** { *; }
+-keep class com.example.myapplication.viewmodel.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# 2. Entidades y Vistas SQL específicas de la App Azul
+-keep class com.example.myapplication.datos.local.entidades.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# 3. Google Play Services & Firebase
+-keep class com.google.android.gms.** { *; }
+-keep class com.google.firebase.** { *; }
+
+# 4. Eliminar Logs en modo Release (Ley de Higiene Maverick)
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+    public static *** w(...);
+}
+
+# 5. Coil & Accompanist
+-keep class coil.** { *; }
+-keep class com.google.accompanist.** { *; }
+
+# 6. Generative AI (Gemini)
+-keep class com.google.ai.client.generativeai.** { *; }

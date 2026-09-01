@@ -1,0 +1,12 @@
+- [x] Refactor `NuevoTurnoLocalSheet` to stateless pattern
+    - [x] Create `NuevoTurnoLocalSheetContent`
+    - [x] Move UI logic and state parameters to Content
+- [x] Implement UI Overhaul
+    - [x] Create Local Info Section (Address + Name)
+    - [x] Create Client Info Section
+    - [x] Implement DatePicker integration (Today+)
+    - [x] Refine Resource Selection UI
+    - [x] Enhance Time Slots Grid (Occupied vs Selected styling)
+- [x] Fix Preview
+    - [x] Update `PreviewNuevoTurnoLocal` to use Content with Mock data
+- [x] Verify UI and Selection Logic

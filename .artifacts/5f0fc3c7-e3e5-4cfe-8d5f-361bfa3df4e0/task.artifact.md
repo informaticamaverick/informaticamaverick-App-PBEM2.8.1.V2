@@ -1,0 +1,11 @@
+- [ ] Fix Domain & Compile Errors
+    - [ ] Add `HonorarioPresupuesto` to `PresupuestoComun.kt`
+    - [ ] Update `CalculadoraPresupuestoMav.kt` (Logic & Result fields)
+    - [ ] Fix call sites in `SnapshotFinancieroMapper.kt` and `BorradorPresupuestoViewModel.kt`
+- [ ] Refactor UI State
+    - [ ] Create `ChatUiState.kt` and extract states from `ChatViewModel.kt`
+    - [ ] Unify flows in `ListaChatsViewModel.kt` into `ListaChatsUiState`
+- [ ] Improve Loading UX (Shimmers)
+    - [ ] Add `LoadingConversationSkeleton` to `Shimmers.kt`
+    - [ ] Update `ChatScreen.kt` to use the new skeleton
+    - [ ] Update `ChatConversationScreen.kt` to use bubble shimmers

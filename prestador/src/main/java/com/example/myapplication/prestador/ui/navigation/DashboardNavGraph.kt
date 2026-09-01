@@ -2,28 +2,38 @@ package com.example.myapplication.prestador.ui.navigation
 
 import android.app.Activity
 import android.content.Intent
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
-import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.firebase.auth.FirebaseAuth
-import com.example.myapplication.prestador.ui.dashboard.PrestadorDashboardScreen
+import com.example.myapplication.prestador.ui.pantallas.dashboard.PrestadorDashboardScreen
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
 
 fun NavGraphBuilder.dashboardNavGraph(navController: NavController) {
 
-    composable (PrestadorRoutes.Dashboard.route) {
+    composable (
+        route = PrestadorRoutes.Dashboard.route,
+        arguments = listOf(
+            navArgument("idConcurso") {
+                type = NavType.StringType
+                defaultValue = ""
+            }
+        )
+    ) { backStackEntry ->
+        val concursoId = backStackEntry.arguments?.getString("idConcurso") ?: ""
         val activity = LocalContext.current as? Activity
 
         PrestadorDashboardScreen (
+            idConcursoInicial = concursoId,
             onNavigateToEditProfile = {
                 navController.navigate(PrestadorRoutes.Profile.route)
-            },
-            onNavigateToServiceConfig = {
-                navController.navigate(PrestadorRoutes.ServiceConfig.route)
             },
             onLogout = {
                 val uid = FirebaseAuth.getInstance().currentUser?.uid
@@ -39,7 +49,7 @@ fun NavGraphBuilder.dashboardNavGraph(navController: NavController) {
                             activity?.let { ctx ->
                                 GoogleSignIn.getClient(
                                     ctx,
-                                    GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
+                                    Builder(DEFAULT_SIGN_IN).build()
                                 ).signOut()
                             }
                         } catch (e: Exception) {}
@@ -62,20 +72,11 @@ fun NavGraphBuilder.dashboardNavGraph(navController: NavController) {
                     }
                 }
             },
-            onNavigateToPresupuesto = {
-                navController.navigate(PrestadorRoutes.CrearPresupuesto.createRoute("dashboard"))
-            },
-            onNavigateToPresupuestoCita = { appointmentId ->
-                navController.navigate(PrestadorRoutes.CrearPresupuesto.createRoute("calendar", appointmentId))
-            },
-            onNavigateToPresupuestos = {
-                navController.navigate(PrestadorRoutes.Presupuestos.route)
-            },
-            onNavigateToPromotion = {
-                navController.navigate(PrestadorRoutes.CreatePromotion.route)
+            onNavigateToPresupuesto = { idConcurso, idCliente ->
+                navController.navigate(PrestadorRoutes.CrearPresupuesto.createRoute("dashboard", tenderId = idConcurso, clientId = idCliente))
             },
             onNavigateToPromotionList = {
-                navController.navigate(PrestadorRoutes.PromotionsList.route)
+                navController.navigate(PrestadorRoutes.PromocionesLista.route)
             },
             onNavigateToClientePerfil = { clientId ->
                 navController.navigate(PrestadorRoutes.ClientePerfil.createRoute(clientId))
@@ -83,8 +84,8 @@ fun NavGraphBuilder.dashboardNavGraph(navController: NavController) {
             onNavigateToPresupuestoConfig = {
                 navController.navigate(PrestadorRoutes.PresupuestoConfig.route)
             },
-            onNavigateToCalendarioConfig = {
-                navController.navigate(PrestadorRoutes.CalendarConfig.route)
+            onNavigateToHorariosConfig = {
+                navController.navigate(PrestadorRoutes.HorariosConfig.route)
             },
             onNavigateToApariencia = {
                 navController.navigate(PrestadorRoutes.AparienciaConfig.route)
@@ -100,6 +101,35 @@ fun NavGraphBuilder.dashboardNavGraph(navController: NavController) {
             },
             onNavigateToAcercaDe = {
                 navController.navigate(PrestadorRoutes.AcercaDe.route)
+            },
+            onNavigateToPaywall = {
+                navController.navigate(PrestadorRoutes.Paywall.route)
+            },
+            onNavigateToGestionTurnos = {
+                navController.navigate(PrestadorRoutes.GestionTurnos.route)
+            },
+            onNavigateToGestionVisitas = {
+                navController.navigate(PrestadorRoutes.GestionVisitas.route)
+            }
+        )
+    }
+
+    composable(route = PrestadorRoutes.Paywall.route) {
+        val contexto = LocalContext.current
+        val actividad = contexto as? Activity
+        val viewModel: com.example.myapplication.prestador.viewmodel.premium.PaywallViewModel = hiltViewModel()
+
+        com.example.myapplication.prestador.ui.premium.MuroDePago(
+            onBack = { navController.popBackStack() },
+            onSubscribeClick = {
+                actividad?.let { act ->
+                    viewModel.iniciarCompra(act)
+                }
+            },
+            onSimulateClick = {
+                viewModel.simularPagoExitoso {
+                    navController.popBackStack()
+                }
             }
         )
     }

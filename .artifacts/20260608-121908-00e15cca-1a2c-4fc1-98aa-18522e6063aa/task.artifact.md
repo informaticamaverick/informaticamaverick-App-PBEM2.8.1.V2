@@ -1,0 +1,31 @@
+# Task Management
+
+- [x] Research and Planning (Provider)
+    - [x] Audit Topik system in both apps
+    - [x] Research industry notification methodologies
+    - [x] Create Implementation Plan
+- [x] Implementation (EXECUTION - Provider)
+    - [x] Prestador: Update `NotificacionesViewModel` to handle tender actions
+    - [x] Prestador: Create `LicitacionTopikPresupuesto.kt` for tender details and response
+    - [x] Prestador: Enhance `NotificacionesScreen` to handle Licitacion cards and show sheet
+    - [x] Prestador: Update `MainActivity` notification routing
+- [x] User App Sync & Data Flow Optimization
+    - [x] Audit `PresupuestosScreen.kt` and `BudgetViewModel.kt` data flow
+    - [x] Optimize budget fetching for tenders (Real-time sync)
+    - [x] Identify and mark redundant files in User App
+- [x] Tactical Audit & Market Navigation
+    - [x] Core/Apps: Add tactical logs `[TOPIK_FLOW]` for creation and reception
+    - [x] Prestador: Create `MercadoLicitacionesScreen.kt` (Market)
+    - [x] Prestador: Update Navigation Bar and Graphs to include "Market"
+- [x] Debugging & Sync Fix
+    - [x] Provider: Fix `MercadoLicitacionesScreen` to fetch from Firestore
+    - [x] Provider: Implement `refreshMarket` logic in `NotificacionesViewModel`
+    - [x] Core: Implement `syncTendersByMatchKey` in `BudgetRepository`
+    - [x] Provider: Fix `allCp` to include company branches (Deep Identity)
+    - [x] Provider: Unlock personal sections in `ProfileScreen` for editing in Modo Empresa
+    - [x] Provider: Increase category limit to 10
+    - [x] Core: Fix `ProviderRepository` to convert local paths to Base64 for Cloud Sync
+    - [x] Client: Fix `syncZoneTopic` to manage multiple active topics and unsubscription
+    - [x] Client: Call `unsubscribeFromZoneTopic` when tender ends
+    - [x] Document Cloud Function requirement for real push notifications
+- [x] Final Verification (VERIFICATION)

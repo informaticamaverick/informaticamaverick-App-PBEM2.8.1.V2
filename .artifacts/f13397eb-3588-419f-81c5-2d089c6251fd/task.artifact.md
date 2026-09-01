@@ -1,0 +1,16 @@
+- [x] Add Audit Logs for Synchronization
+- [x] Implement Promotion Discovery & Audit Strategy
+- [x] Implement Professional Delta Sync Architecture
+- [x] Implement Silent Sync and Elite Context
+- [x] Performance Optimization & Detailed Logging (Blue App)
+- [x] Fix Promotion Visibility and Index Links
+- [x] Google Ads Elite Integration & Proactive Sync
+- [x] Google Ads Support for Video and Automatic Backfill
+- [x] Fix Provider Promotion Flow (My Publications)
+- [x] Professional Promotion Management and Preview
+- [x] Mercado B2B Elite (Suministros and Herramientas)
+- [x] Toolbox Redesign and Dashboard Refinement
+    - [x] Update `InicioComponents.kt` with new Toolbox design
+    - [x] Update `PrestadorDashboardScreen.kt` with new tool callbacks
+    - [x] Refine FAB label style in `PromotionListScreen.kt`
+    - [x] Verify build and interactions

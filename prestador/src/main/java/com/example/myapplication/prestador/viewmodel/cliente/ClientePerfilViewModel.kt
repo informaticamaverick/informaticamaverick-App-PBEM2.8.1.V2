@@ -1,138 +1,108 @@
-﻿package com.example.myapplication.prestador.viewmodel.cliente
+package com.example.myapplication.prestador.viewmodel.cliente
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.core.data.repository.UserRepository
-import com.example.myapplication.core.domain.model.User
+import com.example.myapplication.core.datos.local.dao.DireccionDao
+import com.example.myapplication.core.datos.local.dao.IdentidadUsuarioDao
+import com.example.myapplication.core.datos.local.entidades.DireccionEntity
+import com.example.myapplication.core.datos.local.entidades.IdentidadUsuarioEntity
+import com.example.myapplication.core.dominio.motores.MotorSincLocal
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 data class ClientePerfilUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
-    val profile: User = User()
+    val identidad: IdentidadUsuarioEntity? = null,
+    val direcciones: List<DireccionEntity> = emptyList(),
+    val estaDetectandoGps: Boolean = false
 )
 
 @HiltViewModel
 class ClientePerfilViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val contexto: android.content.Context,
     savedStateHandle: SavedStateHandle,
-    private val userRepository: UserRepository
+    private val motorLocal: MotorSincLocal,
+    private val usuarioDao: IdentidadUsuarioDao,
+    private val direccionDao: DireccionDao
 ) : ViewModel() {
 
-    private val clientId: String = checkNotNull(savedStateHandle["clientId"])
+    private val clientId: String = savedStateHandle["clientId"] ?: ""
 
-    private val _uiState = MutableStateFlow(ClientePerfilUiState())
-    val uiState: StateFlow<ClientePerfilUiState> = _uiState.asStateFlow()
-
-    private val _refreshTick = MutableStateFlow(0)
-    val refreshTick: StateFlow<Int> = _refreshTick.asStateFlow()
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<ClientePerfilUiState> = if (clientId.isBlank()) {
+        MutableStateFlow(ClientePerfilUiState(isLoading = false, error = "ID de cliente no especificado"))
+    } else {
+        combine(
+            usuarioDao.obtenerPorId(clientId),
+            direccionDao.obtenerPorPropietario(clientId)
+        ) { identidad, dirs ->
+            ClientePerfilUiState(
+                isLoading = false,
+                identidad = identidad,
+                direcciones = dirs
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ClientePerfilUiState())
+    }
 
     init {
-        loadProfileShallow()
-    }
-
-    /**
-     * LEY #3: Carga Shallow (Datos básicos necesarios para renderizar la pantalla)
-     */
-    private fun loadProfileShallow() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            try {
-                userRepository.getUserById(clientId).collect { user ->
-                    if (user != null) {
-                        _uiState.value = _uiState.value.copy(isLoading = false, profile = user)
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "No se encontró el perfil del cliente"
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Error al cargar el perfil: ${e.message}"
-                )
-            }
-        }
-    }
-
-    /**
-     * LEY #3: Carga Deep (Solo si la UI necesita información adicional pesada)
-     */
-    fun loadProfileDeep() {
-        // Implementación futura: Si el modelo User no trae todo (ej. historial completo de transacciones),
-        // aquí llamaríamos a un método especializado del repositorio.
+        if (clientId.isNotBlank()) refreshProfile()
     }
 
     fun refreshProfile() {
         viewModelScope.launch {
-            userRepository.refreshUserFromRemote()
-            _refreshTick.value++
+            motorLocal.impactarUsuarioDeep(clientId)
         }
     }
 }
-/*
-// ARCHIVO ANTERIOR (EN DESUSO)
-import com.example.myapplication.prestador.data.model.ClienteProfile
-import com.example.myapplication.prestador.data.repository.ClienteRepository
 
-data class ClientePerfilUiState(
-    val isLoading: Boolean = true,
-    val error: String? = null,
-    val profile: ClienteProfile = ClienteProfile()
-)
 
-@HiltViewModel
-class ClientePerfilViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
-    private val clienteRepository: ClienteRepository
-) : ViewModel() {
 
-    private val clientId: String = checkNotNull(savedStateHandle["clientId"])
 
-    private val _uiState = MutableStateFlow(ClientePerfilUiState())
-    val uiState: StateFlow<ClientePerfilUiState> = _uiState.asStateFlow()
 
-    private val _refreshTick = MutableStateFlow(0)
-    val refreshTick: StateFlow<Int> = _refreshTick.asStateFlow()
 
-    init {
-        observeClienteProfile()
-    }
 
-    private fun observeClienteProfile() {
-        viewModelScope.launch {
-            try {
-                clienteRepository.observerClienteProfile(clientId).collect {
-                    profile ->
-                    if (profile != null) {
-                        _uiState.value = _uiState.value.copy(isLoading = false, profile = profile)
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "No se encontró el perfil del cliente"
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Error al cargar el perfil: ${e.message}"
-                )
-            }
-        }
-    }
-    fun refreshProfile() {
-        viewModelScope.launch {
-            observeClienteProfile()
-            _refreshTick.value++
-        }
-    }
-}
-*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

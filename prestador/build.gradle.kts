@@ -5,7 +5,6 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
@@ -22,14 +21,21 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Configuración de Room schema export para KSP
-    ksp {
-        arg("room.schemaLocation", "$projectDir/schemas")
+    signingConfigs {
+        create("release") {
+            // 🔥 [ELITE v2026]: Firma rápida para testeo en smartphone real.
+            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -40,12 +46,19 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/LICENSE.md"
+            excludes += "/META-INF/LICENSE-notice.md"
+            excludes += "/META-INF/LICENSE"
+            excludes += "/META-INF/NOTICE"
+            excludes += "/META-INF/DEPENDENCIES"
+        }
     }
     testOptions {
         unitTests.all {
@@ -54,12 +67,18 @@ android {
     }
 }
 
+// Configuración de Room schema export para KSP
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         freeCompilerArgs.addAll(
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
-            "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi"
+            "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
+            "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
         )
     }
 }
@@ -68,9 +87,10 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":ui-shared"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     @Suppress("ComposeBomOrder")
     implementation(platform(libs.androidx.compose.bom))
@@ -129,7 +149,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.database)
-    implementation(libs.firebase.messaging)
+    implementation(libs.firebase.messaging) // 🔥 [TOPIK] Soporte para notificaciones
     
     // Room Database
     implementation(libs.androidx.room.runtime)
@@ -138,9 +158,9 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     // WorkManager para recordatorios
-    implementation("androidx.work:work-runtime-ktx:2.9.0")
-    implementation("androidx.hilt:hilt-work:1.2.0")
-    ksp("androidx.hilt:hilt-compiler:1.2.0")
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
     
     // Retrofit para clima (Gson)
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
@@ -151,7 +171,13 @@ dependencies {
     // Image Loading
     implementation(libs.coil.compose)
 
+    // 🔥 AdMob (Publicidad Elite)
+    implementation(libs.play.services.ads)
+
+    // 🔥 Google Play Billing (Membresía Elite v2026)
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
+
     // 🔥 Paging 3 (Requerido por ChatViewModel Elite v4)
-    implementation("androidx.paging:paging-runtime-ktx:3.3.0")
-    implementation("androidx.paging:paging-compose:3.3.0")
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
 }

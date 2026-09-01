@@ -1,11 +1,12 @@
 package com.example.myapplication.core.di
 
 import android.content.Context
-import androidx.room.Room
-import com.example.myapplication.core.data.local.AppDatabase
-import com.example.myapplication.core.data.local.dao.*
-import com.example.myapplication.core.data.remote.api.WeatherApiService
-import com.example.myapplication.core.data.repository.*
+import com.example.myapplication.core.datos.local.AppDatabase
+import com.example.myapplication.core.datos.local.dao.*
+import com.example.myapplication.core.datos.remoto.api.WeatherApiService
+import com.example.myapplication.core.datos.remoto.api.GeorefApiService
+import com.example.myapplication.core.datos.repositorios.*
+import com.example.myapplication.core.dominio.repository.TopicoRepositorio
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FirebaseFirestore
@@ -19,16 +20,9 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
 
-/**
- * --- MÓDULO HILT: CORE (PROVEEDOR MAESTRO) ---
- * Provee las dependencias de Base de Datos, DAOs y Repositorios compartidos.
- * Al estar aquí, cualquier app que use :core tendrá acceso automático a estos servicios.
- */
 @Module
 @InstallIn(SingletonComponent::class)
 object CoreModule {
-
-    // --- 0. SERVICIOS EXTERNOS (RETROFIT) ---
 
     @Provides
     @Singleton
@@ -40,122 +34,57 @@ object CoreModule {
             .create(WeatherApiService::class.java)
     }
 
-    // --- 1. PERSISTENCIA COMPARTIDA (ROOM) ---
+    @Provides
+    @Singleton
+    fun provideClimaRepositorio(
+        apiService: WeatherApiService
+    ): ClimaRepositorio = ClimaRepositorio(apiService)
 
     @Provides
     @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
-        val dbName = if (context.packageName.contains("prestador")) {
-            "maverick_prestador.db"
-        } else {
-            "maverick_app.db"
-        }
-        return Room.databaseBuilder(
-            context,
-            AppDatabase::class.java,
-            dbName
-        ).fallbackToDestructiveMigration().build()
-    }
+    fun provideTopicoRepositorio(impl: FirebaseTopicRepositorio): TopicoRepositorio = impl
 
     @Provides
     @Singleton
-    fun provideUserDao(db: AppDatabase): UserDao = db.userDao()
+    fun provideGeorefRepository(api: GeorefApiService): GeorefRepositorio = 
+        GeorefRepositorio(api)
 
     @Provides
     @Singleton
-    fun provideCategoryDao(db: AppDatabase): CategoryDao = db.categoryDao()
-
-    @Provides
-    @Singleton
-    fun provideSuperCategoryDao(db: AppDatabase): SuperCategoryDao = db.superCategoryDao()
-
-    @Provides
-    @Singleton
-    fun provideBudgetDao(db: AppDatabase): BudgetDao = db.budgetDao()
-
-    @Provides
-    @Singleton
-    fun provideProviderDao(db: AppDatabase): ProviderDao = db.providerDao()
-
-    @Provides
-    @Singleton
-    fun provideChatDao(db: AppDatabase): ChatDao = db.chatDao()
-
-    @Provides
-    @Singleton
-    fun provideCalendarDao(db: AppDatabase): CalendarDao = db.calendarDao()
-
-
-    // --- 2. REPOSITORIOS COMPARTIDOS ---
-
-    @Provides
-    @Singleton
-    fun provideUserRepository(
-        @ApplicationContext context: Context,
-        userDao: UserDao,
-        auth: FirebaseAuth,
-        firestore: FirebaseFirestore
-    ): UserRepository = UserRepository(context, userDao, auth, firestore)
-
-    @Provides
-    @Singleton
-    fun provideChatRepository(
-        chatDao: ChatDao,
-        firestore: FirebaseFirestore,
-        database: FirebaseDatabase,
-        auth: FirebaseAuth,
-        budgetRepository: BudgetRepository,
-        appointmentRepository: AppointmentRepository,
-        @ApplicationContext context: Context
-    ): ChatRepository = ChatRepository(chatDao, firestore, database, auth, budgetRepository, appointmentRepository, context)
-
-    @Provides
-    @Singleton
-    fun provideBudgetRepository(
-        budgetDao: BudgetDao,
-        firestore: FirebaseFirestore,
-        storage: FirebaseStorage
-    ): BudgetRepository = BudgetRepository(budgetDao, firestore, storage)
-
-    @Provides
-    @Singleton
-    fun provideProviderRepository(
-        @ApplicationContext context: Context,
-        providerDao: ProviderDao,
-        firestore: FirebaseFirestore,
-        auth: FirebaseAuth
-    ): ProviderRepository = ProviderRepository(context, providerDao, firestore, auth)
-
-    @Provides
-    @Singleton
-    fun provideCategoryRepository(
-        categoryDao: CategoryDao
-    ): CategoryRepository = CategoryRepository(categoryDao)
-
-    @Provides
-    @Singleton
-    fun provideAppointmentRepository(
-        firestore: FirebaseFirestore,
-        calendarDao: CalendarDao
-    ): AppointmentRepository = AppointmentRepository(firestore, calendarDao)
-
-    @Provides
-    @Singleton
-    fun provideCalendarRepository(
-        calendarDao: CalendarDao,
-        categoryDao: CategoryDao,
-        firestore: FirebaseFirestore
-    ): CalendarRepository = CalendarRepository(calendarDao, categoryDao, firestore)
-
-    @Provides
-    @Singleton
-    fun provideAuthRepository(
-        auth: FirebaseAuth
-    ): AuthRepository = AuthRepository(auth)
-
-    @Provides
-    @Singleton
-    fun provideWeatherRepository(
-        weatherApi: WeatherApiService
-    ): WeatherRepository = WeatherRepository(weatherApi)
+    fun provideNotificacionRepository(dao: NotificacionDao): NotificacionRepositorio =
+        NotificacionRepositorio(dao)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

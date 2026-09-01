@@ -1,0 +1,10 @@
+- `[ ]` Eliminar archivos redundantes en `:core` (`ClimaMavRepository`, `RepositorioAutenticacionMav`)
+- `[ ]` Saneamiento en `:prestador`:
+    - Unificar `PrestadorStartupManager` (Mover activo a `coordinadores`)
+    - Eliminar `PrestadorPerfilRepository` y `PrestadorConfiguracionRepository`
+- `[ ]` Saneamiento en `:app` (Azul):
+    - Eliminar legacy (`UsIdentidadViewModel`, `UsIdentidadDetalleViewModel`, `UsIndiceBusquedaRepository`)
+    - Renombrar `UsConfiguracionRepository` -> `UsuarioConfiguracionRepository`
+    - Renombrar `UsConfiguracionViewModel` -> `UsuarioConfiguracionViewModel`
+- `[ ]` Actualizar inyección de dependencias y referencias en código
+- `[ ]` Limpieza y compilación final

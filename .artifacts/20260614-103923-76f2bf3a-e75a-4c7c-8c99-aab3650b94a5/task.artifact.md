@@ -1,0 +1,38 @@
+# Tasks
+
+- [x] Architectural Refactoring of Be Assistant & Home Screen
+    - [x] Deep Research & Audit
+        - [x] Audit `BeBrainViewModel` and `BeAssistantViewModel`
+        - [x] Audit `AppActionCoordinator`
+        - [x] Research modern Android architectural patterns (UDF/Delegation)
+        - [x] Identify code debt and redundant components
+    - [x] Implementation Planning
+        - [x] Create initial implementation plan
+        - [x] Refine plan based on user feedback
+    - [x] Execution
+        - [x] Refactor `AppActionCoordinator` (Consolidate search & identity)
+        - [x] Create `BeAssistantStateDelegate`
+        - [x] Refactor `BeBrainViewModel` (State unification & Delegation)
+        - [x] Implement `FavoritesScreen`
+        - [x] Cleanup `HomeScreenClienteV4` and `AppNavigation`
+        - [x] Remove dead code (`BeInteractionViewModel`, etc.)
+    - [x] Verification
+        - [x] Verify build stability
+        - [x] Audit performance and animations manually
+        - [x] Create walkthrough of changes
+
+- [ ] Chat Elite Optimization & Refactoring
+    - [/] Research & Audit
+        - [x] Audit `ChatConversationScreen` ViewModel bloat
+        - [x] Analyze Paging 3 date separator strategy
+        - [x] Trace multimedia data flow (Ley #8)
+    - [/] Implementation Planning
+        - [x] Create plan for Chat optimization
+    - [ ] Execution
+        - [ ] Refactor `ChatViewModel` (Consolidate actions & Paging separators)
+        - [ ] Simplify `ChatConversationScreen` UI & Permission handling
+        - [ ] Refine Telegram-style Header transitions
+        - [ ] Optimize Multimedia send/receive flow
+    - [ ] Verification
+        - [ ] Verify 120Hz fluid scrolling
+        - [ ] Build and Manual test

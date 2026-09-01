@@ -1,4 +1,4 @@
-package com.example.myapplication.core.utils
+package com.example.myapplication.core.utilidades
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -26,7 +26,7 @@ class ImageUtilsTest {
 
     @Test
     fun `processImageSource should prefix absolute path with file uri`() {
-        val path = "/data/user/0/com.example.myapplication/files/maverick_media/IMG_123.webp"
+        val path = "/data/user/0/com.example.myapplication/files/app_media/IMG_123.webp"
         assertEquals("file://$path", ImageUtils.processImageSource(path))
     }
 
@@ -38,7 +38,7 @@ class ImageUtilsTest {
 
     @Test
     fun `processImageSource should decode Base64 if long enough`() {
-        val originalBytes = "Hello Maverick Elite Protocol".toByteArray()
+        val originalBytes = "Hello Elite Protocol".toByteArray()
         val base64 = Base64.getEncoder().encodeToString(originalBytes)
         // Make it long enough (> 100)
         val longBase64 = base64.repeat(5)
@@ -51,3 +51,35 @@ class ImageUtilsTest {
         // assertEquals(originalBytes.size * 5, (result as ByteArray).size)
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

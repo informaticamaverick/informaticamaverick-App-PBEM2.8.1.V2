@@ -2,20 +2,16 @@ package com.example.myapplication.prestador.ui.navigation
 
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
-import androidx.navigation.NavHostController
 import androidx.navigation.NavOptions
 import androidx.navigation.compose.composable
-import com.example.myapplication.prestador.ui.profile.ProfileScreen
-import com.google.firebase.auth.FirebaseAuth
+import com.example.myapplication.prestador.ui.pantallas.profile.PerfilPrestadorScreen
 
 fun NavGraphBuilder.profileNavGraph(navController: NavController) {
 
     composable(PrestadorRoutes.Profile.route) {
-        ProfileScreen(
-            onBack = { navController.navigateUp() },
-            onSettings = { navController.navigate(PrestadorRoutes.ServiceConfig.route) },
-            onLogout = {
-                FirebaseAuth.getInstance().signOut()
+        PerfilPrestadorScreen(
+            alVolver = { navController.navigateUp() },
+            alCerrarSesion = {
                 navController.navigate(
                     PrestadorRoutes.Login.route,
                     NavOptions.Builder()
@@ -23,14 +19,59 @@ fun NavGraphBuilder.profileNavGraph(navController: NavController) {
                         .build()
                 )
             },
-            onNavigateToCalendarioConfig = {
-                navController.navigate(PrestadorRoutes.CalendarioConfig.route)
+            onConfig = {
+                navController.navigate(PrestadorRoutes.ServiceConfig.route)
             },
-            onNavigateToCalendarioConfigEntity = { ownerId, ownerName ->
-                navController.navigate(
-                    PrestadorRoutes.CalendarioConfigEntity.createRoute(ownerId, ownerName)
-                )
+            alHorarios = { ownerId ->
+                navController.navigate(PrestadorRoutes.HorariosConfigEntity.createRoute(ownerId, "Configurar Horarios"))
+            },
+            onNavigateToPaywall = {
+                navController.navigate(PrestadorRoutes.Paywall.route)
             }
         )
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

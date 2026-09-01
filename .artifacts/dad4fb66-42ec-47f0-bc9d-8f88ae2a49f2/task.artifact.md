@@ -1,0 +1,9 @@
+- [x] Lógica del Asistente (Prioridades)
+    - [x] [MODIFY] `BeCuerpoViewModel.kt`: Implementar Válvula de Exclusividad Radical.
+- [x] Reactividad en Pantallas
+    - [x] [MODIFY] `ArchiveroPresupuestoViewModel.kt`: Observar estado global de multiselección.
+- [x] Higiene de UI y Fixes
+    - [x] [MODIFY] `PiezasHerramientasBe.kt`: Corregir firma de componentes.
+    - [x] [MODIFY] `ArmadorHerramientasLienzo.kt`: Corregir llamadas y limpiar UI.
+- [x] Verificación Final
+    - [x] Build y pruebas de exclusividad.

@@ -54,16 +54,17 @@
         <!-- WorkManager para recordatorios de citas -->
         <provider
             android:name="androidx.startup.InitializationProvider"
-            android:authorities="com.example.myapplication.prestador.androidx-startup"
+            android:authorities="${applicationId}.androidx-startup"
             android:exported="false"
             tools:node="merge">
             <meta-data
                 android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup" />
+                android:value="androidx.startup"
+                tools:node="remove" />
         </provider>
 
         <!--Firebase Cloud Messanging -->
-        <service android:name=".MyFirebaseMessagingService" android:exported="false">
+        <service android:name=".AppMessagingService" android:exported="false">
             <intent-filter>
                 <action android:name ="com.google.firebase.MESSAGING_EVENT" />
         </intent-filter>

@@ -1,0 +1,30 @@
+# Tareas de Estrategia de Búsqueda Elite (v2026.ELITE)
+
+- [x] Refactorizar `MotorDescubrimientoMav.kt`
+    - [x] Implementar `generarMatrizDeBusqueda` (Producto Cartesiano)
+- [x] Refactorizar `MotorSincronizacionMav.kt`
+    - [x] Actualizar `actualizarIndiceBusqueda` para recolectar todas las categorías y zonas
+    - [x] Inyectar matriz completa en Firestore
+- [x] Actualizar `BusquedaRemoteMediator.kt`
+    - [x] Añadir `orderBy` por membresía y reputación
+- [x] Actualizar `CoordinadorPrestadorMav.kt`
+    - [x] Sincronizar suscripciones FCM con la matriz de búsqueda
+- [x] Verificar consistencia en `PromocionRepository.kt` y `PresupuestoMavRepository.kt`
+- [x] Implementar Estrategia Elite en Promociones
+    - [x] Actualizar `Promotion.kt` (Añadir `estaSuscrito`)
+    - [x] Actualizar `PromotionEntity.kt` y `PromotionDao.kt`
+    - [x] Sincronizar `PromocionMapper.kt` (Datos Shallow)
+    - [x] Refactorizar `PromocionRemoteMediator.kt` (Prioridad Red)
+    - [x] Actualizar `PrestadorPromocionRepository.kt` (Inyección de Membresía)
+    - [x] DB Version Bump v38
+- [x] Estandarización Final de Concursos
+    - [x] Actualizar `ConcursoEntity` (Añadir `estaSuscrito`)
+    - [x] Sincronizar `ConcursoMapper.kt`
+    - [x] Refactorizar `ConcursoRemoteMediator.kt` (Prioridad Red)
+    - [x] Actualizar `PresupuestoMavRepository.kt` (Inyección de Huellas Maestras)
+    - [x] DB Version Bump v39
+- [x] Orquestación Ciclo de Vida (Red y Tópicos)
+    - [x] Refactorizar `CoordinadorAccionesMav` (Diferencial de tópicos Azul)
+    - [x] Refactorizar `CoordinadorPrestadorMav` (Higiene proactiva Naranja)
+    - [x] Sincronizar `BeCerebroViewModel` con estados de red
+    - [x] Blindaje de Logs Tácticos en Motor y Repositorios

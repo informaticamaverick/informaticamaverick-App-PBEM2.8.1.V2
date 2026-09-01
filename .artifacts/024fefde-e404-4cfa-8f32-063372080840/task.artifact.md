@@ -1,0 +1,6 @@
+- [x] Optimizar resiliencia de sincronización en `GestorSincronizacionMav.kt`
+    - [x] Cambiar política de `REPLACE` a `KEEP` para evitar cancelaciones
+- [x] Eliminar Jank visual al liberar memoria en `CategoryViewModel.kt`
+    - [x] Mover mapeo de categorías a `Dispatchers.Default`
+    - [x] Introducir delay táctico de 100ms antes de vaciar listas
+- [x] Verificación de logs y fluidez en dispositivo real

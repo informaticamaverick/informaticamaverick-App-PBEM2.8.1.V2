@@ -1,0 +1,8 @@
+- [ ] Limpiar `ArmadorPresupuestoScreen.kt` de código obsoleto
+- [ ] Implementar `NavigationRail` lateral con iconos M3
+- [ ] Desarrollar `SeccionIdentidad` con sub-bloques para Prestador y Cliente
+- [ ] Desarrollar `SeccionPresupuesto` con sub-bloques para Materiales y Servicios
+- [ ] Desarrollar `SeccionFinanzas` con resumen de aritmética y ajustes
+- [ ] Integrar el diálogo de "Añadir Ítem" mejorado
+- [ ] Pulir transiciones y animaciones de sección
+- [ ] Verificación final

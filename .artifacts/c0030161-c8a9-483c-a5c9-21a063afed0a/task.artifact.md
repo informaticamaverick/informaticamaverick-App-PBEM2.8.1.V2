@@ -1,0 +1,4 @@
+- [ ] Corregir crash en `PrestadorPresupuestoRepository.kt`.
+- [ ] Implementar `try-catch` y manejo de errores en `PresupuestoMavViewModel.kt`.
+- [ ] Mostrar feedback visual al usuario en `NuevoPresupuestoSheet.kt` (reemplazando el crash).
+- [ ] Verificar build y estabilidad.

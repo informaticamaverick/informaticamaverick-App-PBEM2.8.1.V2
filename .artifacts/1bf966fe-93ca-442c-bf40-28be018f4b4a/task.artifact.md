@@ -1,0 +1,6 @@
+- [ ] Unificar cabecera inmersiva naranja en la Home (`InicioComponents.kt`)
+- [ ] Aplicar estilo inmersivo naranja a la cabecera de Chats (`ChatListScreen.kt`)
+- [ ] Aplicar estilo inmersivo naranja a `PromotionFeedScreen.kt`
+- [ ] Aplicar estilo inmersivo naranja a `PromotionListScreen.kt`
+- [ ] Ajustar insets y radios de esquina en todas las cabeceras (28dp)
+- [ ] Verificación visual de coherencia de marca (ADN Maverick Orange)

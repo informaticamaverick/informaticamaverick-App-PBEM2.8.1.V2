@@ -1,0 +1,764 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 9,
+    "identityHash": "bd384ebd29c91ba040b60a408a9de582",
+    "entities": [
+      {
+        "tableName": "presupuestos_mav",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`idPresupuesto` TEXT NOT NULL, `idCliente` TEXT NOT NULL, `idPrestador` TEXT NOT NULL, `idConcurso` TEXT, `idCategoria` TEXT, `tipo` TEXT NOT NULL, `nombrePrestador` TEXT NOT NULL, `nombreEmpresaPrestador` TEXT, `urlFotoPrestador` TEXT, `urlMiniatura` TEXT, `numeroPresupuesto` TEXT, `tituloTrabajo` TEXT, `subtotal` REAL NOT NULL, `montoImpuestos` REAL NOT NULL, `montoDescuento` REAL NOT NULL, `montoInteres` REAL NOT NULL, `totalGeneral` REAL NOT NULL, `diasValidez` INTEGER NOT NULL, `notas` TEXT, `metodosPago` TEXT, `infoGarantia` TEXT, `tiempoEjecucion` TEXT, `estado` TEXT NOT NULL, `leido` INTEGER NOT NULL, `marcaTiempo` INTEGER NOT NULL, `ultimaActualizacion` INTEGER NOT NULL, PRIMARY KEY(`idPresupuesto`))",
+        "fields": [
+          {
+            "fieldPath": "idPresupuesto",
+            "columnName": "idPresupuesto",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idCliente",
+            "columnName": "idCliente",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idPrestador",
+            "columnName": "idPrestador",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idConcurso",
+            "columnName": "idConcurso",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "idCategoria",
+            "columnName": "idCategoria",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombrePrestador",
+            "columnName": "nombrePrestador",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombreEmpresaPrestador",
+            "columnName": "nombreEmpresaPrestador",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "urlFotoPrestador",
+            "columnName": "urlFotoPrestador",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "urlMiniatura",
+            "columnName": "urlMiniatura",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "numeroPresupuesto",
+            "columnName": "numeroPresupuesto",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tituloTrabajo",
+            "columnName": "tituloTrabajo",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "subtotal",
+            "columnName": "subtotal",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "montoImpuestos",
+            "columnName": "montoImpuestos",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "montoDescuento",
+            "columnName": "montoDescuento",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "montoInteres",
+            "columnName": "montoInteres",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalGeneral",
+            "columnName": "totalGeneral",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "diasValidez",
+            "columnName": "diasValidez",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notas",
+            "columnName": "notas",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "metodosPago",
+            "columnName": "metodosPago",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "infoGarantia",
+            "columnName": "infoGarantia",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tiempoEjecucion",
+            "columnName": "tiempoEjecucion",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "estado",
+            "columnName": "estado",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "leido",
+            "columnName": "leido",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "marcaTiempo",
+            "columnName": "marcaTiempo",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ultimaActualizacion",
+            "columnName": "ultimaActualizacion",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "idPresupuesto"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_presupuestos_mav_idConcurso",
+            "unique": false,
+            "columnNames": [
+              "idConcurso"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_presupuestos_mav_idConcurso` ON `${TABLE_NAME}` (`idConcurso`)"
+          },
+          {
+            "name": "index_presupuestos_mav_idPrestador",
+            "unique": false,
+            "columnNames": [
+              "idPrestador"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_presupuestos_mav_idPrestador` ON `${TABLE_NAME}` (`idPrestador`)"
+          },
+          {
+            "name": "index_presupuestos_mav_idCliente",
+            "unique": false,
+            "columnNames": [
+              "idCliente"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_presupuestos_mav_idCliente` ON `${TABLE_NAME}` (`idCliente`)"
+          },
+          {
+            "name": "index_presupuestos_mav_idCategoria",
+            "unique": false,
+            "columnNames": [
+              "idCategoria"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_presupuestos_mav_idCategoria` ON `${TABLE_NAME}` (`idCategoria`)"
+          }
+        ]
+      },
+      {
+        "tableName": "productos_mav",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `idPropietario` TEXT NOT NULL, `idPresupuesto` TEXT, `idBorrador` TEXT, `idOriginal` TEXT, `nombre` TEXT NOT NULL, `descripcion` TEXT NOT NULL, `precioCosto` REAL NOT NULL, `precioVenta` REAL NOT NULL, `cantidad` INTEGER NOT NULL, `impuestoDefault` REAL NOT NULL, `descuentoDefault` REAL NOT NULL, `interesDefault` REAL NOT NULL, `moneda` TEXT NOT NULL, `sku` TEXT, `codigoBarras` TEXT, `idCategoria` TEXT NOT NULL, `stockActual` INTEGER NOT NULL, `stockMinimo` INTEGER NOT NULL, `tipo` TEXT NOT NULL, `estaActivo` INTEGER NOT NULL, `urlImagen` TEXT, `miniaturaBase64` TEXT, `fechaCreacion` INTEGER NOT NULL, `ultimaSincronizacion` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idPropietario",
+            "columnName": "idPropietario",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idPresupuesto",
+            "columnName": "idPresupuesto",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "idBorrador",
+            "columnName": "idBorrador",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "idOriginal",
+            "columnName": "idOriginal",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descripcion",
+            "columnName": "descripcion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioCosto",
+            "columnName": "precioCosto",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "precioVenta",
+            "columnName": "precioVenta",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cantidad",
+            "columnName": "cantidad",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "impuestoDefault",
+            "columnName": "impuestoDefault",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descuentoDefault",
+            "columnName": "descuentoDefault",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "interesDefault",
+            "columnName": "interesDefault",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "moneda",
+            "columnName": "moneda",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sku",
+            "columnName": "sku",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "codigoBarras",
+            "columnName": "codigoBarras",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "idCategoria",
+            "columnName": "idCategoria",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stockActual",
+            "columnName": "stockActual",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "stockMinimo",
+            "columnName": "stockMinimo",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estaActivo",
+            "columnName": "estaActivo",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "urlImagen",
+            "columnName": "urlImagen",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "miniaturaBase64",
+            "columnName": "miniaturaBase64",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fechaCreacion",
+            "columnName": "fechaCreacion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ultimaSincronizacion",
+            "columnName": "ultimaSincronizacion",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_productos_mav_idPropietario",
+            "unique": false,
+            "columnNames": [
+              "idPropietario"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_productos_mav_idPropietario` ON `${TABLE_NAME}` (`idPropietario`)"
+          },
+          {
+            "name": "index_productos_mav_idCategoria",
+            "unique": false,
+            "columnNames": [
+              "idCategoria"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_productos_mav_idCategoria` ON `${TABLE_NAME}` (`idCategoria`)"
+          },
+          {
+            "name": "index_productos_mav_idPresupuesto",
+            "unique": false,
+            "columnNames": [
+              "idPresupuesto"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_productos_mav_idPresupuesto` ON `${TABLE_NAME}` (`idPresupuesto`)"
+          },
+          {
+            "name": "index_productos_mav_idBorrador",
+            "unique": false,
+            "columnNames": [
+              "idBorrador"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_productos_mav_idBorrador` ON `${TABLE_NAME}` (`idBorrador`)"
+          },
+          {
+            "name": "index_productos_mav_sku",
+            "unique": false,
+            "columnNames": [
+              "sku"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_productos_mav_sku` ON `${TABLE_NAME}` (`sku`)"
+          }
+        ]
+      },
+      {
+        "tableName": "productos_fts",
+        "createSql": "CREATE VIRTUAL TABLE IF NOT EXISTS `${TABLE_NAME}` USING FTS4(`nombre` TEXT NOT NULL, `descripcion` TEXT NOT NULL, tokenize=unicode61 `remove_diacritics=1`, content=`productos_mav`)",
+        "fields": [
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "descripcion",
+            "columnName": "descripcion",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": []
+        },
+        "ftsVersion": "FTS4",
+        "ftsOptions": {
+          "tokenizer": "unicode61",
+          "tokenizerArgs": [
+            "remove_diacritics=1"
+          ],
+          "contentTable": "productos_mav",
+          "languageIdColumnName": "",
+          "matchInfo": "FTS4",
+          "notIndexedColumns": [],
+          "prefixSizes": [],
+          "preferredOrder": "ASC"
+        },
+        "contentSyncTriggers": [
+          "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_productos_fts_BEFORE_UPDATE BEFORE UPDATE ON `productos_mav` BEGIN DELETE FROM `productos_fts` WHERE `docid`=OLD.`rowid`; END",
+          "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_productos_fts_BEFORE_DELETE BEFORE DELETE ON `productos_mav` BEGIN DELETE FROM `productos_fts` WHERE `docid`=OLD.`rowid`; END",
+          "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_productos_fts_AFTER_UPDATE AFTER UPDATE ON `productos_mav` BEGIN INSERT INTO `productos_fts`(`docid`, `nombre`, `descripcion`) VALUES (NEW.`rowid`, NEW.`nombre`, NEW.`descripcion`); END",
+          "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_productos_fts_AFTER_INSERT AFTER INSERT ON `productos_mav` BEGIN INSERT INTO `productos_fts`(`docid`, `nombre`, `descripcion`) VALUES (NEW.`rowid`, NEW.`nombre`, NEW.`descripcion`); END"
+        ]
+      },
+      {
+        "tableName": "movimientos_stock",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`idMovimiento` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `idProducto` TEXT NOT NULL, `cantidad` INTEGER NOT NULL, `tipo` TEXT NOT NULL, `motivo` TEXT, `idReferencia` TEXT, `marcaTiempo` INTEGER NOT NULL, FOREIGN KEY(`idProducto`) REFERENCES `productos_mav`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "idMovimiento",
+            "columnName": "idMovimiento",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idProducto",
+            "columnName": "idProducto",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cantidad",
+            "columnName": "cantidad",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "motivo",
+            "columnName": "motivo",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "idReferencia",
+            "columnName": "idReferencia",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "marcaTiempo",
+            "columnName": "marcaTiempo",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "idMovimiento"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_movimientos_stock_idProducto",
+            "unique": false,
+            "columnNames": [
+              "idProducto"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_movimientos_stock_idProducto` ON `${TABLE_NAME}` (`idProducto`)"
+          },
+          {
+            "name": "index_movimientos_stock_marcaTiempo",
+            "unique": false,
+            "columnNames": [
+              "marcaTiempo"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_movimientos_stock_marcaTiempo` ON `${TABLE_NAME}` (`marcaTiempo`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "productos_mav",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "idProducto"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "borradores_presupuesto",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`idBorrador` TEXT NOT NULL, `idPrestador` TEXT NOT NULL, `idDireccionCliente` TEXT, `tituloTrabajo` TEXT NOT NULL, `idCategoria` TEXT, `tipo` TEXT NOT NULL, `subtotal` REAL NOT NULL, `totalGeneral` REAL NOT NULL, `idIdentidadEmisora` TEXT, `direccionManual` TEXT, `metodosPago` TEXT, `diasValidez` INTEGER NOT NULL, `notas` TEXT, `numeroPresupuesto` TEXT, `calleManual` TEXT, `numeroManual` TEXT, `pisoManual` TEXT, `deptoManual` TEXT, `localidadManual` TEXT, `provinciaManual` TEXT, `cpManual` TEXT, `ultimaModificacion` INTEGER NOT NULL, PRIMARY KEY(`idBorrador`))",
+        "fields": [
+          {
+            "fieldPath": "idBorrador",
+            "columnName": "idBorrador",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idPrestador",
+            "columnName": "idPrestador",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idDireccionCliente",
+            "columnName": "idDireccionCliente",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tituloTrabajo",
+            "columnName": "tituloTrabajo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idCategoria",
+            "columnName": "idCategoria",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "tipo",
+            "columnName": "tipo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "subtotal",
+            "columnName": "subtotal",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalGeneral",
+            "columnName": "totalGeneral",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idIdentidadEmisora",
+            "columnName": "idIdentidadEmisora",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "direccionManual",
+            "columnName": "direccionManual",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "metodosPago",
+            "columnName": "metodosPago",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "diasValidez",
+            "columnName": "diasValidez",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notas",
+            "columnName": "notas",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "numeroPresupuesto",
+            "columnName": "numeroPresupuesto",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "calleManual",
+            "columnName": "calleManual",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "numeroManual",
+            "columnName": "numeroManual",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pisoManual",
+            "columnName": "pisoManual",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "deptoManual",
+            "columnName": "deptoManual",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "localidadManual",
+            "columnName": "localidadManual",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "provinciaManual",
+            "columnName": "provinciaManual",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cpManual",
+            "columnName": "cpManual",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "ultimaModificacion",
+            "columnName": "ultimaModificacion",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "idBorrador"
+          ]
+        }
+      },
+      {
+        "tableName": "plantillas_presupuesto_mav",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `nombre` TEXT NOT NULL, `idCategoria` TEXT, `fechaCreacion` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nombre",
+            "columnName": "nombre",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idCategoria",
+            "columnName": "idCategoria",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "fechaCreacion",
+            "columnName": "fechaCreacion",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "excepciones_horarias_mav",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `idReferencia` TEXT NOT NULL, `fechaLong` INTEGER NOT NULL, `motivo` TEXT NOT NULL, `estaCerrado` INTEGER NOT NULL, `inicioParcial` TEXT, `finParcial` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "idReferencia",
+            "columnName": "idReferencia",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fechaLong",
+            "columnName": "fechaLong",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "motivo",
+            "columnName": "motivo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "estaCerrado",
+            "columnName": "estaCerrado",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "inicioParcial",
+            "columnName": "inicioParcial",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "finParcial",
+            "columnName": "finParcial",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_excepciones_horarias_mav_idReferencia",
+            "unique": false,
+            "columnNames": [
+              "idReferencia"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_excepciones_horarias_mav_idReferencia` ON `${TABLE_NAME}` (`idReferencia`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bd384ebd29c91ba040b60a408a9de582')"
+    ]
+  }
+}

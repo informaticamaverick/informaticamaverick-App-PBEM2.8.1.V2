@@ -6,9 +6,10 @@ import androidx.navigation.NavOptions
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.example.myapplication.prestador.ui.login.PrestadorLoginScreen
-import com.example.myapplication.prestador.ui.register.PrestadorRegisterScreen
-import com.example.myapplication.prestador.ui.success.PrestadorSuccessScreen
+import com.example.myapplication.prestador.ui.pantallas.login.PrestadorLoginScreen
+import com.example.myapplication.prestador.ui.pantallas.register.PrestadorOnboardingWizardScreen
+import com.example.myapplication.prestador.ui.pantallas.register.PrestadorRegisterScreen
+import com.example.myapplication.prestador.ui.pantallas.success.PrestadorSuccessScreen
 
 fun NavGraphBuilder.authNavGraph(navController: NavHostController) {
 
@@ -21,14 +22,31 @@ fun NavGraphBuilder.authNavGraph(navController: NavHostController) {
                         NavOptions.Builder().setPopUpTo(PrestadorRoutes.Login.route, true).build()
                     )
                 } else {
+                    // 🔥 [ELITE] Si no tiene perfil, guiar por el Wizard
                     navController.navigate(
-                        PrestadorRoutes.Register.createRoute(isGoogle = true),
+                        PrestadorRoutes.OnboardingWizard.createRoute(isGoogle = true),
                         NavOptions.Builder().setPopUpTo(PrestadorRoutes.Login.route, true).build()
                     )
                 }
             },
             onNavigateToRegister = {
-                navController.navigate(PrestadorRoutes.Register.createRoute(isGoogle = false))
+                navController.navigate(PrestadorRoutes.OnboardingWizard.createRoute(isGoogle = false))
+            }
+        )
+    }
+
+    composable(
+        route = PrestadorRoutes.OnboardingWizard.route,
+        arguments = listOf(
+            navArgument("isGoogle") { type = NavType.BoolType; defaultValue = false }
+        )
+    ) { backStackEntry ->
+        val isGoogle = backStackEntry.arguments?.getBoolean("isGoogle") ?: false
+        PrestadorOnboardingWizardScreen(
+            isGoogle = isGoogle,
+            onBack = { navController.popBackStack() },
+            onNavigateToForm = { tieneNegocio ->
+                navController.navigate(PrestadorRoutes.Register.createRoute(isGoogle, tieneNegocio))
             }
         )
     }
@@ -36,18 +54,19 @@ fun NavGraphBuilder.authNavGraph(navController: NavHostController) {
     composable(
         route = PrestadorRoutes.Register.route,
         arguments = listOf(
-            navArgument("isGoogle") {
-                type = NavType.BoolType
-                defaultValue = false
-            }
+            navArgument("isGoogle") { type = NavType.BoolType; defaultValue = false },
+            navArgument("tieneNegocio") { type = NavType.BoolType; defaultValue = false }
         )
     ) { backStackEntry ->
         val isGoogle = backStackEntry.arguments?.getBoolean("isGoogle") ?: false
+        val tieneNegocio = backStackEntry.arguments?.getBoolean("tieneNegocio") ?: false
+        
         PrestadorRegisterScreen(
             isGoogleUser = isGoogle,
+            tieneNegocioInicial = tieneNegocio, // 🔥 PASAR SELECCIÓN
             onRegisterSuccess = {
                 navController.navigate(
-                    PrestadorRoutes.Success.route,
+                    PrestadorRoutes.Dashboard.route,
                     NavOptions.Builder().setPopUpTo(PrestadorRoutes.Register.route, true).build()
                 )
             },
@@ -71,3 +90,47 @@ fun NavGraphBuilder.authNavGraph(navController: NavHostController) {
         )
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,11 @@
+- [x] **Evolución del Motor de Búsqueda (Core)**
+    - [x] Actualizar `ArchiveroViewModel.kt` para soportar filtrado por participantes y sección de Imágenes.
+- [x] **Refinamiento de Componentes (ui-shared)**
+    - [x] Hacer el buscador opcional en `ArchiveroMoldeSheet.kt`.
+    - [x] Crear `ArchiveroImagenesSheet.kt` (Cuadrícula sin buscador).
+    - [x] Añadir botón "Imágenes" al menú de `MenuAdjuntosMav.kt`.
+- [x] **Integración de Identidad (Prestador)**
+    - [x] Sincronizar IDs en `ChatConversationScreen.kt` y disparar nuevas hojas.
+- [x] **Verificación**
+    - [x] Validar con `@Preview` la hoja de imágenes.
+    - [x] Confirmar que los archivos ahora aparecen filtrados correctamente.
