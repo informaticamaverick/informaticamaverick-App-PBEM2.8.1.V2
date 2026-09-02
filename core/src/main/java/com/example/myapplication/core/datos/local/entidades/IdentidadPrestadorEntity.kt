@@ -44,9 +44,10 @@ data class IdentidadPrestadorEntity(
     val idCategorias: List<String> = emptyList(),
     val especialidades: String? = null,
     val matricula: String? = null,
-    
+    val matriculaFotoUrl: String? = null,
+
     // --- SECTOR: MÉTRICAS Y ESTATUS ---
-    val reputacion: Float = 0f,
+    val reputacion: Float = 5f, // Arranca en 5.0, baja según cómo lo califique el cliente
     val totalReseñas: Int = 0,
     val trabajosRealizados: Int = 0,
     val likes: Int = 0,

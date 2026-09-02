@@ -71,7 +71,7 @@ import com.example.myapplication.core.datos.local.entidades.vistas.*
         ResultadoBusquedaPrestadorSQLView::class,
         InventarioSucursalSQLView::class
     ],
-    version = 84, // 🔥 [ELITE v2026]: Actualización de esquemas por integridad de datos
+    version = 85, // 🔥 [ELITE v2026]: Agregado matriculaFotoUrl a IdentidadPrestadorEntity
     exportSchema = true
 )
 @TypeConverters(Converters::class)

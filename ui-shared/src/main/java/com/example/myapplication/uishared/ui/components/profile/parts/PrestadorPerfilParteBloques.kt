@@ -48,7 +48,7 @@ import com.example.myapplication.core.utilidades.ImageUtils
  * [PROPÓSITO]: Moléculas de UI que agrupan piezas atómicas para formar filas o tarjetas.
  */
 
-private val ColorAcentoMav = Color(0xFF3B82F6)
+private val ColorAcentoMav = Color(0xFFFF7043)
 
 @Composable
 fun FilaDatoPerfilMav(
@@ -139,7 +139,7 @@ fun EtiquetaFlagMav(
     enModoEdicion: Boolean = false,
     alCambiar: (Boolean) -> Unit = {}
 ) {
-    val colorAcento = Color(0xFF3B82F6)
+    val colorAcento = Color(0xFFFF7043)
     val colorFondo = if (habilitado) colorAcento.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f)
     val colorBorde = if (habilitado) colorAcento.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f)
     val colorTexto = if (habilitado) Color.White else Color.Gray
@@ -302,6 +302,19 @@ fun TarjetaDireccionEliteMav(
                 }
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!esSoloLectura) {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(ColorAcentoMav.copy(alpha = 0.1f))
+                                .clickable { alEditar(direccion) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Edit, null, tint = ColorAcentoMav, modifier = Modifier.size(15.dp))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                    }
                     IconButton(
                         onClick = {
                             val uri = Uri.parse("geo:0,0?q=${Uri.encode(direccion.aTextoCompleto())}")
@@ -344,64 +357,71 @@ fun TarjetaVinculoGoogleMav(
     enModoEdicion: Boolean,
     alVincular: () -> Unit,
     alDesvincular: () -> Unit,
-    forma: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp)
+    forma: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp),
+    modoCompacto: Boolean = false
 ) {
     var mostrarConfirmacionDesvincular by remember { mutableStateOf(false) }
     val estaVinculado = emailGoogle.isNotBlank()
 
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (estaVinculado) Modifier 
-                else Modifier.border(1.dp, Color(0xFF4285F4).copy(alpha = 0.2f), forma)
-            ),
-        shape = forma,
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (estaVinculado) Color(0xFF16161D) else Color(0xFF4285F4).copy(alpha = 0.05f)
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(id = com.example.myapplication.core.R.drawable.icons8_logo_de_google_48),
-                    contentDescription = null,
-                    tint = Color.Unspecified,
-                    modifier = Modifier.size(24.dp)
+    val contenidoFila: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                painter = painterResource(id = com.example.myapplication.core.R.drawable.icons8_logo_de_google_48),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (estaVinculado) "CUENTA DE GOOGLE VINCULADA" else "VINCULAR CUENTA DE GOOGLE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (estaVinculado) Color.Gray else Color(0xFF4285F4),
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
                 )
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (estaVinculado) "CUENTA DE GOOGLE VINCULADA" else "VINCULAR CUENTA DE GOOGLE",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (estaVinculado) Color.Gray else Color(0xFF4285F4),
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = if (estaVinculado) emailGoogle else "Asegura tu perfil y sincroniza tus datos",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                Text(
+                    text = if (estaVinculado) emailGoogle else "Asegura tu perfil y sincroniza tus datos",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            if (enModoEdicion && estaVinculado) {
+                IconButton(onClick = { mostrarConfirmacionDesvincular = true }) {
+                    Icon(Icons.Default.LinkOff, "Desvincular", tint = Color.Red.copy(alpha = 0.7f))
                 }
-                
-                if (enModoEdicion && estaVinculado) {
-                    IconButton(onClick = { mostrarConfirmacionDesvincular = true }) {
-                        Icon(Icons.Default.LinkOff, "Desvincular", tint = Color.Red.copy(alpha = 0.7f))
-                    }
-                } else if (!estaVinculado) {
-                    Button(
-                        onClick = alVincular,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4)),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Text("VINCULAR", fontSize = 10.sp, fontWeight = FontWeight.Black)
-                    }
+            } else if (!estaVinculado) {
+                Button(
+                    onClick = alVincular,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4)),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text("VINCULAR", fontSize = 10.sp, fontWeight = FontWeight.Black)
                 }
             }
+        }
+    }
+
+    if (modoCompacto) {
+        contenidoFila()
+    } else {
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (estaVinculado) Modifier
+                    else Modifier.border(1.dp, Color(0xFF4285F4).copy(alpha = 0.2f), forma)
+                ),
+            shape = forma,
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = if (estaVinculado) Color(0xFF16161D) else Color(0xFF4285F4).copy(alpha = 0.05f)
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) { contenidoFila() }
         }
     }
 
@@ -409,14 +429,14 @@ fun TarjetaVinculoGoogleMav(
         AlertDialog(
             onDismissRequest = { mostrarConfirmacionDesvincular = false },
             title = { Text("⚠️ Desvincular Google", color = Color.White) },
-            text = { 
+            text = {
                 Text(
                     "Al desvincular tu cuenta de Google, perderás la capacidad de iniciar sesión con este método.",
                     color = Color.White.copy(alpha = 0.7f)
-                ) 
+                )
             },
             confirmButton = {
-                TextButton(onClick = { 
+                TextButton(onClick = {
                     mostrarConfirmacionDesvincular = false
                     alDesvincular()
                 }) {
@@ -430,6 +450,62 @@ fun TarjetaVinculoGoogleMav(
             },
             containerColor = Color(0xFF1A1A24)
         )
+    }
+}
+
+@Composable
+fun FilaDatoPerfilCompactaMav(
+    etiqueta: String,
+    valor: String,
+    enModoEdicion: Boolean,
+    esEmail: Boolean = false,
+    alCambiarValor: (String) -> Unit = {}
+) {
+    val contexto = LocalContext.current
+    Column {
+        Text(etiqueta, fontSize = 9.5.sp, color = Color.Gray, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp)
+        Spacer(Modifier.height(3.dp))
+        if (enModoEdicion) {
+            OutlinedTextField(
+                value = valor,
+                onValueChange = alCambiarValor,
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                placeholder = { Text("Completar...", color = Color.Gray, fontSize = 14.sp) },
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    cursorColor = ColorAcentoMav,
+                    focusedBorderColor = ColorAcentoMav,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.03f)
+                )
+            )
+        } else {
+            Text(
+                text = valor.ifBlank { "No especificado" },
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (esEmail) ColorAcentoMav else Color.White,
+                textDecoration = if (esEmail) TextDecoration.Underline else TextDecoration.None,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clickable(enabled = esEmail) {
+                    try {
+                        val intent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:$valor")
+                            putExtra(Intent.EXTRA_SUBJECT, "Contacto desde Maverick")
+                        }
+                        contexto.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(contexto, "No hay apps de correo instaladas", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
     }
 }
 

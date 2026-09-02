@@ -1,12 +1,19 @@
 package com.example.myapplication.uishared.ui.components.profile.parts
 
+import android.net.Uri
+import android.widget.Space
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.pager.HorizontalPager
@@ -25,6 +32,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -32,11 +40,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.myapplication.core.dominio.modelos.*
+import com.example.myapplication.core.utilidades.ImageUtils
 import com.example.myapplication.uishared.ui.components.profile.parts.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-private val ColorAcentoMav = Color(0xFF3B82F6)
+private val ColorAcentoMav = Color(0xFFFF7043)
 
 /**
  * --- SECCIONES DEL PERFIL (Ley #10 - Rompecabezas) ---
@@ -136,44 +148,23 @@ fun SeccionHumanoProfesionalMav(
         val cornerRadius = 16.dp
 
         if (identidad.tipo == TipoPrestador.INDIVIDUAL) {
-            if (esMiPropioPerfil) {
-                TarjetaVinculoGoogleMav(
-                    emailGoogle = identidad.correo, 
-                    enModoEdicion = !identidad.esGoogle, 
-                    alVincular = alVincularGoogle, 
-                    alDesvincular = alDesvincularGoogle,
-                    forma = RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius, bottomStart = 4.dp, bottomEnd = 4.dp)
-                )
-                Spacer(Modifier.height(2.dp))
-            }
-
             TarjetaDatosPersonalesMav(
-                identidad = identidad, 
-                esMiPropioPerfil = esMiPropioPerfil, 
-                alGuardar = alGuardarIdentidad
+                identidad = identidad,
+                esMiPropioPerfil = esMiPropioPerfil,
+                alGuardar = alGuardarIdentidad,
+                alVincularGoogle = alVincularGoogle,
+                alDesvincularGoogle = alDesvincularGoogle
             )
             Spacer(Modifier.height(12.dp))
         }
 
         if (identidad.esPerfilComercial) {
-            TarjetaRubrosEspecialidadesMav(
-                identidad = identidad, 
+            TarjetaActividadProfesionalMav(
+                identidad = identidad,
                 esMiPropioPerfil = esMiPropioPerfil,
-                todasLasCategorias = todasLasCategorias, 
-                alGuardar = alGuardarIdentidad,
-                forma = if (esMiPropioPerfil) RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 4.dp, bottomEnd = 4.dp) else RoundedCornerShape(cornerRadius)
+                todasLasCategorias = todasLasCategorias,
+                alGuardar = alGuardarIdentidad
             )
-            
-            Spacer(Modifier.height(12.dp))
-            
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                Box(modifier = Modifier.weight(1f)) { 
-                    TarjetaCapacidadesMav(identidad, esMiPropioPerfil, alGuardarIdentidad, forma = RoundedCornerShape(topStart = cornerRadius, bottomStart = cornerRadius, topEnd = 4.dp, bottomEnd = 4.dp)) 
-                }
-                Box(modifier = Modifier.weight(1f)) { 
-                    TarjetaComercialesMav(identidad, esMiPropioPerfil, alGuardarIdentidad, forma = RoundedCornerShape(topEnd = cornerRadius, bottomEnd = cornerRadius, topStart = 4.dp, bottomStart = 4.dp)) 
-                }
-            }
 
             Spacer(Modifier.height(12.dp))
 
@@ -313,8 +304,16 @@ fun SeccionEmpresaSoberanaMav(
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) { page ->
                 val suc = sucursalesVinculadas[page]
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // [FIX]: forzamos idSucursal/idPropietario acá SIEMPRE, sin importar si la
+                    // dirección ya venía bien vinculada desde Room — así el editor y el enrutamiento
+                    // de actualizarDireccion (PerfilPrestadorDeepViewModel) identifican correctamente
+                    // a qué sucursal pertenece, incluso con datos viejos guardados antes de este fix.
+                    val direccionDeSucursal = remember(suc) {
+                        (suc.direcciones.firstOrNull() ?: DireccionDominio(calle = suc.direccionVisible ?: ""))
+                            .copy(idSucursal = suc.id, idPropietario = suc.idPropietario)
+                    }
                     TarjetaDireccionEliteMav(
-                        direccion = suc.direcciones.firstOrNull() ?: DireccionDominio(calle = suc.direccionVisible ?: ""),
+                        direccion = direccionDeSucursal,
                         esSoloLectura = !esMiPropioPerfil,
                         alEditar = { dir -> alAbrirEditorDireccion(suc, dir) },
                         alBorrar = { /* sucursales se eliminan desde la pestaña */ },
@@ -356,56 +355,320 @@ fun SeccionEmpresaSoberanaMav(
             Text("Este prestador no tiene sucursales activas visibles.", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(16.dp))
         }
     }
+
+    // [FIX]: el ícono de borrado solo seteaba "sucursalABorrar" pero nada lo leía — nunca se
+    // mostraba confirmación ni se llamaba a alEliminarSucursal, el botón no hacía nada.
+    val sucursalPendienteDeBorrado = sucursalABorrar
+    if (sucursalPendienteDeBorrado != null) {
+        DialogoConfirmacion(
+            titulo = "¿ELIMINAR SUCURSAL?",
+            mensaje = "Se eliminará \"${sucursalPendienteDeBorrado.titulo}\" y toda su información asociada.",
+            textoConfirmar = "ELIMINAR",
+            onConfirm = {
+                alEliminarSucursal(sucursalPendienteDeBorrado.id)
+                sucursalABorrar = null
+            },
+            onDismiss = { sucursalABorrar = null }
+        )
+    }
 }
 
 // --- TARJETAS ESPECÍFICAS (Organismos) ---
 
 @Composable
-fun TarjetaDatosPersonalesMav(identidad: PrestadorDominio, esMiPropioPerfil: Boolean, alGuardar: (PrestadorDominio) -> Unit) {
-    var modoEdicion by remember { mutableStateOf(false) }
-    var apodo by remember(identidad) { mutableStateOf(identidad.titulo) }
-    var correo by remember(identidad) { mutableStateOf(identidad.correo) }
-    var telefono by remember(identidad) { mutableStateOf(identidad.numeroTelefono) }
+fun TarjetaDatosPersonalesMav(
+    identidad: PrestadorDominio,
+    esMiPropioPerfil: Boolean,
+    alGuardar: (PrestadorDominio) -> Unit,
+    alVincularGoogle: () -> Unit = {},
+    alDesvincularGoogle: () -> Unit = {}
+) {
+    var mostrarHoja by remember { mutableStateOf(false) }
+    val apodo = identidad.titulo
+    val correo = identidad.correo
+    val telefono = identidad.numeroTelefono
+    val matricula = identidad.matricula ?: ""
 
     ElevatedCard(
-        modifier = Modifier.fillMaxWidth(), 
-        shape = RoundedCornerShape(16.dp), 
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF16161D))
     ) {
         Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Column {
-                CabeceraSeccionMav(titulo = "DATOS PERSONALES", emoji = "📇")
-                Spacer(Modifier.height(16.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilaDatoPerfilMav("NOMBRE PÚBLICO", apodo, Icons.Default.Face, modoEdicion, { apodo = it })
-                    if (esMiPropioPerfil) {
-                        FilaDatoPerfilMav("CORREO DE CONTACTO", correo, Icons.Default.Email, modoEdicion, { correo = it })
-                        FilaDatoPerfilMav("TELÉFONO", telefono, Icons.Default.Phone, modoEdicion, { telefono = it })
+                CabeceraSeccionMav(titulo = "PERFIL", emoji = "📇")
+                Spacer(Modifier.height(14.dp))
+
+                if (esMiPropioPerfil) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            FilaDatoPerfilCompactaMav("NOMBRE PÚBLICO", apodo, false)
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
+                            FilaDatoPerfilCompactaMav("TELÉFONO", telefono, false)
+                        }
                     }
-                }
+                    Spacer(Modifier.height(14.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            FilaDatoPerfilCompactaMav("CORREO", correo, false, esEmail = true)
+                        }
+                        Box(modifier = Modifier.weight(1f)) {
+                            Column {
+                                FilaDatoPerfilCompactaMav("MATRÍCULA", matricula, false)
+                                if (matricula.isNotBlank()) {
+                                    Spacer(Modifier.height(6.dp))
+                                    ChipEstadoMatriculaMav(estaVerificado = identidad.estaVerificado)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+                    Spacer(Modifier.height(14.dp))
+
+                    TarjetaVinculoGoogleMav(
+                        emailGoogle = identidad.correo,
+                        enModoEdicion = !identidad.esGoogle,
+                        alVincular = alVincularGoogle,
+                        alDesvincular = alDesvincularGoogle,
+                        modoCompacto = true
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            modifier = Modifier.size(32.dp),
+                            shape = CircleShape,
+                            color = ColorAcentoMav.copy(alpha = 0.1f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Badge,null, tint = ColorAcentoMav, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("NOMBRE PÚBLICO", fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                            Text(apodo, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(Modifier.height(14.dp))
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+                    Spacer(Modifier.height(12.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Lock, null, tint = Color.Gray, modifier = Modifier.size(12.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Por privacidad, solo se comparte el nombre público de este usuario.",
+                                fontSize = 10.sp,
+                                color = Color.Gray,
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
             }
 
             if (esMiPropioPerfil) {
-                Row(
-                    modifier = Modifier.align(Alignment.TopEnd),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(ColorAcentoMav.copy(alpha = 0.1f))
+                        .clickable { mostrarHoja = true },
+                    contentAlignment = Alignment.Center
                 ) {
-                    if (modoEdicion) {
-                        IconButton(onClick = { 
-                            alGuardar(identidad.copy(titulo = apodo, correo = correo, numeroTelefono = telefono))
-                            modoEdicion = false 
-                        }) { Icon(Icons.Default.Check, null, tint = Color(0xFF4ADE80), modifier = Modifier.size(22.dp)) }
-                        IconButton(onClick = { 
-                            modoEdicion = false 
-                            apodo = identidad.titulo
-                            correo = identidad.correo
-                            telefono = identidad.numeroTelefono
-                        }) { Icon(Icons.Default.Close, null, tint = Color.Red.copy(alpha = 0.8f), modifier = Modifier.size(22.dp)) }
-                    } else {
-                        IconButton(onClick = { modoEdicion = true }) { 
-                            Icon(Icons.Default.Edit, null, tint = ColorAcentoMav, modifier = Modifier.size(20.dp)) 
-                        }
+                    Icon(Icons.Default.Edit, null, tint = ColorAcentoMav, modifier = Modifier.size(15.dp))
+                }
+            }
+        }
+    }
+
+    if (mostrarHoja) {
+        HojaEditarDatosPersonalesMav(
+            identidad = identidad,
+            onDismiss = { mostrarHoja = false },
+            onGuardar = { nuevaIdentidad ->
+                alGuardar(nuevaIdentidad)
+                mostrarHoja = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun ChipEstadoMatriculaMav(estaVerificado: Boolean) {
+    val color = if (estaVerificado) Color(0xFF10B981) else Color(0xFFF59E0B)
+    val texto = if (estaVerificado) "Verificado" else "En revisión"
+    val icono = if (estaVerificado) Icons.Default.Verified else Icons.Default.Schedule
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Icon(icono, null, tint = color, modifier = Modifier.size(11.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(texto, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HojaEditarDatosPersonalesMav(
+    identidad: PrestadorDominio,
+    onDismiss: () -> Unit,
+    onGuardar: (PrestadorDominio) -> Unit
+) {
+    var apodo by remember { mutableStateOf(identidad.titulo) }
+    var correo by remember { mutableStateOf(identidad.correo) }
+    var telefono by remember { mutableStateOf(identidad.numeroTelefono) }
+    var matricula by remember { mutableStateOf(identidad.matricula ?: "") }
+    var matriculaFotoLocal by remember { mutableStateOf(identidad.matriculaFotoUrl) }
+    var comprimiendoFoto by remember { mutableStateOf(false) }
+
+    val contexto = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val uid = identidad.id
+
+    val selectorFotoMatricula = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            comprimiendoFoto = true
+            scope.launch {
+                val ruta = withContext(Dispatchers.IO) {
+                    val bytes = ImageUtils.compressElite(contexto, uri)
+                    bytes?.let { ImageUtils.saveBytesToFile(contexto, it, "matricula_$uid") }
+                }
+                if (ruta != null) matriculaFotoLocal = ruta
+                comprimiendoFoto = false
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF16161D),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = { Box(modifier = Modifier.padding(top = 10.dp).size(width = 36.dp, height = 4.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(2.dp))) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 12.dp, bottom = 28.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Editar perfil", fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color.White)
+                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.Close, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                FilaDatoPerfilCompactaMav("NOMBRE PÚBLICO", apodo, true) { apodo = it }
+                FilaDatoPerfilCompactaMav("TELÉFONO", telefono, true) { telefono = it }
+                FilaDatoPerfilCompactaMav("CORREO DE CONTACTO", correo, true) { correo = it }
+                FilaDatoPerfilCompactaMav("MATRÍCULA PROFESIONAL", matricula, true) { matricula = it }
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            FilaFotoMatriculaMav(
+                fotoActual = matriculaFotoLocal,
+                cargando = comprimiendoFoto,
+                onSeleccionar = { selectorFotoMatricula.launch("image/*") },
+                onQuitar = { matriculaFotoLocal = null }
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)
+                ) { Text("Cancelar", fontSize = 13.sp, fontWeight = FontWeight.Black) }
+
+                Button(
+                    onClick = {
+                        onGuardar(identidad.copy(titulo = apodo, correo = correo, numeroTelefono = telefono, matricula = matricula, matriculaFotoUrl = matriculaFotoLocal))
+                    },
+                    modifier = Modifier.weight(2f).height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ColorAcentoMav)
+                ) { Text("Guardar cambios", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color.White) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilaFotoMatriculaMav(
+    fotoActual: Any?,
+    cargando: Boolean,
+    onSeleccionar: () -> Unit,
+    onQuitar: () -> Unit
+) {
+    Column {
+        Text("FOTO DE TU MATRÍCULA (OPCIONAL)", fontSize = 9.5.sp, color = Color.Gray, fontWeight = FontWeight.Bold, letterSpacing = 0.3.sp)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)), RoundedCornerShape(12.dp))
+                    .clickable(enabled = !cargando) { onSeleccionar() },
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    cargando -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = ColorAcentoMav)
+                    fotoActual != null -> {
+                        val esArchivoLocal = fotoActual is String && !fotoActual.startsWith("http") && !fotoActual.startsWith("data:")
+                        AsyncImage(
+                            model = if (esArchivoLocal) java.io.File(fotoActual) else fotoActual,
+                            contentDescription = "Foto de la matrícula",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
                     }
+                    else -> Icon(Icons.Default.AddAPhoto, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(
+                    if (fotoActual != null) "Foto cargada" else "Agregar foto",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+                Text(
+                    "Ayuda al admin a verificar tu matrícula más rápido",
+                    fontSize = 10.sp,
+                    color = Color.Gray
+                )
+                if (fotoActual != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "Quitar",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFF87171),
+                        modifier = Modifier.clickable(enabled = !cargando) { onQuitar() }
+                    )
                 }
             }
         }
@@ -674,6 +937,245 @@ fun TarjetaComercialesMav(identidad: PrestadorDominio, esMiPropioPerfil: Boolean
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+fun TarjetaActividadProfesionalMav(
+    identidad: PrestadorDominio,
+    esMiPropioPerfil: Boolean,
+    todasLasCategorias: List<CategoriaDominio>,
+    alGuardar: (PrestadorDominio) -> Unit,
+    forma: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp)
+) {
+    var mostrarHoja by remember { mutableStateOf(false) }
+
+    ElevatedCard(modifier = Modifier.fillMaxWidth(), shape = forma, colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF16161D))) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                CabeceraSeccionMav("ACTIVIDAD PROFESIONAL", "🛠️")
+
+                if (esMiPropioPerfil) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(ColorAcentoMav.copy(alpha = 0.1f))
+                            .clickable { mostrarHoja = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Edit, null, tint = ColorAcentoMav, modifier = Modifier.size(15.dp))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            if (identidad.idCategorias.isEmpty()) {
+                Text("No hay rubros configurados.", color = Color.Gray, fontSize = 12.sp)
+            } else {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    for (catId in identidad.idCategorias) {
+                        val cat = todasLasCategorias.find { it.id == catId }
+                        Surface(
+                            color = Color.White.copy(alpha = 0.05f),
+                            shape = RoundedCornerShape(50),
+                            border = BorderStroke(1.dp, ColorAcentoMav.copy(alpha = 0.2f))
+                        ) {
+                            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(cat?.icono ?: "🛠️", fontSize = 12.sp)
+                                Spacer(Modifier.width(6.dp))
+                                Text((cat?.nombre ?: catId).uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(modifier = Modifier.weight(1f)) {
+                    EtiquetaFlagMav("Visitas Técnicas", "🏠", identidad.visitaADomicilio, false)
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    EtiquetaFlagMav("Turnos Online", "📅", identidad.brindaTurnos, false)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(modifier = Modifier.weight(1f)) {
+                    EtiquetaFlagMav("Realizo Envíos", "🚚", identidad.realizaEnvios, false)
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    EtiquetaFlagMav("Venta Productos", "🛍️", identidad.brindaProducto, false)
+                }
+            }
+        }
+    }
+
+    if (mostrarHoja) {
+        HojaEditarActividadProfesionalMav(
+            identidad = identidad,
+            todasLasCategorias = todasLasCategorias,
+            onDismiss = { mostrarHoja = false },
+            onGuardar = { nuevaIdentidad ->
+                alGuardar(nuevaIdentidad)
+                mostrarHoja = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun HojaEditarActividadProfesionalMav(
+    identidad: PrestadorDominio,
+    todasLasCategorias: List<CategoriaDominio>,
+    onDismiss: () -> Unit,
+    onGuardar: (PrestadorDominio) -> Unit
+) {
+    var categoriasSeleccionadas by remember { mutableStateOf(identidad.idCategorias) }
+    var textoBusqueda by remember { mutableStateOf("") }
+    var visitaADomicilio by remember { mutableStateOf(identidad.visitaADomicilio) }
+    var brindaTurnos by remember { mutableStateOf(identidad.brindaTurnos) }
+    var realizaEnvios by remember { mutableStateOf(identidad.realizaEnvios) }
+    var brindaProducto by remember { mutableStateOf(identidad.brindaProducto) }
+
+    val resultadosBusqueda = remember(textoBusqueda, todasLasCategorias) {
+        if (textoBusqueda.isBlank()) emptyList()
+        else todasLasCategorias.filter { it.nombre.contains(textoBusqueda, ignoreCase = true) }.take(15)
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF16161D),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = { Box(modifier = Modifier.padding(top = 10.dp).size(width = 36.dp, height = 4.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(2.dp))) }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(top = 12.dp, bottom = 28.dp)
+        ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Editar actividad profesional", fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color.White)
+                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Default.Close, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            Text("RUBROS Y ESPECIALIDADES", fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color.Gray, letterSpacing = 1.sp)
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = textoBusqueda,
+                onValueChange = { textoBusqueda = it },
+                placeholder = { Text("Buscar nuevos rubros...", fontSize = 13.sp, color = Color.Gray) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                leadingIcon = { Icon(Icons.Default.Search, null, tint = ColorAcentoMav, modifier = Modifier.size(20.dp)) },
+                trailingIcon = { if (textoBusqueda.isNotEmpty()) IconButton(onClick = { textoBusqueda = "" }) { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp)) } },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    cursorColor = ColorAcentoMav,
+                    focusedBorderColor = ColorAcentoMav,
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.03f),
+                    focusedContainerColor = Color.White.copy(alpha = 0.05f),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.1f)
+                ),
+                singleLine = true
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            val chipsAMostrar = if (textoBusqueda.isBlank()) {
+                categoriasSeleccionadas.mapNotNull { id -> todasLasCategorias.find { it.id == id } }
+            } else resultadosBusqueda
+
+            if (chipsAMostrar.isEmpty() && textoBusqueda.isBlank()) {
+                Text("No hay rubros seleccionados todavía.", color = Color.Gray, fontSize = 12.sp)
+            } else {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    chipsAMostrar.forEach { cat ->
+                        val estaSeleccionada = categoriasSeleccionadas.contains(cat.id)
+                        FilterChip(
+                            selected = estaSeleccionada,
+                            onClick = {
+                                categoriasSeleccionadas = if (estaSeleccionada) categoriasSeleccionadas - cat.id else categoriasSeleccionadas + cat.id
+                            },
+                            label = { Text(cat.nombre, fontSize = 11.sp) },
+                            leadingIcon = { Text(cat.icono) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = Color.White.copy(alpha = 0.05f),
+                                labelColor = Color.Gray,
+                                selectedContainerColor = ColorAcentoMav.copy(alpha = 0.15f),
+                                selectedLabelColor = ColorAcentoMav
+                            ),
+                            border = null
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.06f))
+            Spacer(Modifier.height(20.dp))
+
+            Text("CAPACIDADES Y SERVICIOS", fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color.Gray, letterSpacing = 1.sp)
+            Spacer(Modifier.height(10.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                EtiquetaFlagMav("Visitas Técnicas", "🏠", visitaADomicilio, true) { visitaADomicilio = it }
+                EtiquetaFlagMav("Turnos Online", "📅", brindaTurnos, true) { brindaTurnos = it }
+                EtiquetaFlagMav("Realizo Envíos", "🚚", realizaEnvios, true) { realizaEnvios = it }
+                EtiquetaFlagMav("Venta Productos", "🛍️", brindaProducto, true) { brindaProducto = it }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Gray)
+                ) { Text("Cancelar", fontSize = 13.sp, fontWeight = FontWeight.Black) }
+
+                Button(
+                    onClick = {
+                        onGuardar(
+                            identidad.copy(
+                                idCategorias = categoriasSeleccionadas,
+                                visitaADomicilio = visitaADomicilio,
+                                brindaTurnos = brindaTurnos,
+                                realizaEnvios = realizaEnvios,
+                                brindaProducto = brindaProducto
+                            )
+                        )
+                    },
+                    modifier = Modifier.weight(2f).height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ColorAcentoMav)
+                ) { Text("Guardar cambios", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color.White) }
+            }
+        }
+    }
+}
+
 @Composable
 fun TarjetaHorariosMav(
     identidad: PrestadorDominio, 
@@ -706,8 +1208,15 @@ fun TarjetaHorariosMav(
                 }
                 
                 if (esMiPropioPerfil) {
-                    IconButton(onClick = alConfigurar, modifier = Modifier.size(32.dp)) { 
-                        Icon(Icons.Default.Edit, null, tint = ColorAcentoMav, modifier = Modifier.size(20.dp)) 
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(ColorAcentoMav.copy(alpha = 0.1f))
+                            .clickable(onClick = alConfigurar),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Edit, null, tint = ColorAcentoMav, modifier = Modifier.size(15.dp))
                     }
                 }
             }

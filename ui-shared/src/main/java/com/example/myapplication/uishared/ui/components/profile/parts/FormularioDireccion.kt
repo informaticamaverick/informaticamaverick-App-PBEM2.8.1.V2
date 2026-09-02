@@ -44,8 +44,21 @@ fun FormularioDireccionDominio(
     var estaProcesando by remember { mutableStateOf(false) }
     var mostrarRescate by remember { mutableStateOf(false) }
     
-    val colorAcento = Color(0xFF3B82F6)
+    val colorAcento = Color(0xFFFF7043)
     val colorExito = Color(0xFF4ADE80)
+    // [FIX]: sin esto los OutlinedTextField usaban el color de texto/cursor por default del
+    // tema (pensado para fondo claro) sobre un contenedor oscuro a mano — texto invisible al tipear.
+    val coloresCampo = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        cursorColor = colorAcento,
+        focusedBorderColor = colorAcento,
+        unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+        focusedLabelColor = colorAcento,
+        unfocusedLabelColor = Color.Gray,
+        focusedContainerColor = Color.White.copy(alpha = 0.05f),
+        unfocusedContainerColor = Color.White.copy(alpha = 0.03f)
+    )
 
     Column(
         modifier = Modifier
@@ -132,7 +145,8 @@ fun FormularioDireccionDominio(
             label = { Text("Etiqueta (Ej: Mi Casa, Oficina)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            leadingIcon = { Icon(Icons.Default.Label, null, tint = colorAcento) }
+            leadingIcon = { Icon(Icons.Default.Label, null, tint = colorAcento) },
+            colors = coloresCampo
         )
 
         OutlinedTextField(
@@ -145,7 +159,8 @@ fun FormularioDireccionDominio(
             label = { Text("Calle / Avenida") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            leadingIcon = { Icon(Icons.Default.AddLocation, null, tint = colorAcento) }
+            leadingIcon = { Icon(Icons.Default.AddLocation, null, tint = colorAcento) },
+            colors = coloresCampo
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -159,18 +174,20 @@ fun FormularioDireccionDominio(
                 label = { Text("Altura") },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                colors = coloresCampo
             )
             OutlinedTextField(
                 value = borrador.codigoPostal,
-                onValueChange = { 
+                onValueChange = {
                     borrador = borrador.copy(codigoPostal = it)
                     estaCalculado = false
-                    alCambiarDireccion(borrador) 
+                    alCambiarDireccion(borrador)
                 },
                 label = { Text("C.P.") },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = coloresCampo
             )
         }
 
@@ -180,14 +197,16 @@ fun FormularioDireccionDominio(
                 onValueChange = { borrador = borrador.copy(piso = it); alCambiarDireccion(borrador) },
                 label = { Text("Piso") },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = coloresCampo
             )
             OutlinedTextField(
                 value = borrador.departamento,
                 onValueChange = { borrador = borrador.copy(departamento = it); alCambiarDireccion(borrador) },
                 label = { Text("Depto") },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = coloresCampo
             )
         }
 
@@ -201,7 +220,8 @@ fun FormularioDireccionDominio(
             label = { Text("Localidad / Ciudad") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            leadingIcon = { Icon(Icons.Default.LocationCity, null, tint = colorAcento) }
+            leadingIcon = { Icon(Icons.Default.LocationCity, null, tint = colorAcento) },
+            colors = coloresCampo
         )
 
         OutlinedTextField(
@@ -214,7 +234,8 @@ fun FormularioDireccionDominio(
             label = { Text("Provincia") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            leadingIcon = { Icon(Icons.Default.Public, null, tint = colorAcento) }
+            leadingIcon = { Icon(Icons.Default.Public, null, tint = colorAcento) },
+            colors = coloresCampo
         )
         
         OutlinedTextField(
@@ -227,7 +248,8 @@ fun FormularioDireccionDominio(
             label = { Text("País") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            leadingIcon = { Icon(Icons.Default.Language, null, tint = colorAcento) }
+            leadingIcon = { Icon(Icons.Default.Language, null, tint = colorAcento) },
+            colors = coloresCampo
         )
 
         // --- DATOS TÉCNICOS (Solo Lectura) ---
@@ -239,7 +261,8 @@ fun FormularioDireccionDominio(
                 label = { Text("Latitud", fontSize = 10.sp) },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
-                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = Color.Gray)
+                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = Color.Gray),
+                colors = coloresCampo
             )
             OutlinedTextField(
                 value = borrador.longitud.toString(),
@@ -248,7 +271,8 @@ fun FormularioDireccionDominio(
                 label = { Text("Longitud", fontSize = 10.sp) },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
-                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = Color.Gray)
+                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = Color.Gray),
+                colors = coloresCampo
             )
             OutlinedTextField(
                 value = borrador.geohash,
@@ -257,7 +281,8 @@ fun FormularioDireccionDominio(
                 label = { Text("Código Geo", fontSize = 10.sp) },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp),
-                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = colorAcento)
+                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, color = colorAcento),
+                colors = coloresCampo
             )
         }
 
@@ -272,10 +297,16 @@ fun FormularioDireccionDominio(
                         val addressText = borrador.aTextoCompleto()
                         val result = GeoUtils.obtenerDireccionDesdeTexto(context, addressText)
                         if (result != null) {
-                            borrador = result.copy(
-                                id = borrador.id,
-                                etiqueta = borrador.etiqueta,
-                                idPropietario = borrador.idPropietario,
+                            borrador = borrador.copy(
+                                latitud = result.latitud,
+                                longitud = result.longitud,
+                                geohash = result.geohash,
+                                codigoPostal = borrador.codigoPostal.ifBlank { result.codigoPostal },
+                                calle = borrador.calle.ifBlank { result.calle },
+                                numero = borrador.numero.ifBlank { result.numero },
+                                localidad = borrador.localidad.ifBlank { result.localidad },
+                                provincia = borrador.provincia.ifBlank { result.provincia },
+                                pais = borrador.pais.ifBlank { result.pais },
                                 estaVerificadaGps = false // Normalizada por texto, no sensor
                             )
                             estaCalculado = true
@@ -288,7 +319,11 @@ fun FormularioDireccionDominio(
                 },
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.08f)),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.08f),
+                    disabledContainerColor = Color.White.copy(alpha = 0.04f),
+                    disabledContentColor = Color.White.copy(alpha = 0.3f)
+                ),
                 enabled = !estaProcesando && borrador.calle.isNotBlank() && borrador.localidad.isNotBlank()
             ) {
                 if (estaProcesando) {
@@ -304,10 +339,19 @@ fun FormularioDireccionDominio(
                 onClick = { onSave(borrador) },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = colorAcento),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colorAcento,
+                    disabledContainerColor = Color.White.copy(alpha = 0.08f),
+                    disabledContentColor = Color.White.copy(alpha = 0.3f)
+                ),
                 enabled = estaCalculado && !estaProcesando
             ) {
-                Text("GUARDAR CAMBIOS", color = Color.White, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                Text(
+                    if (estaCalculado) "GUARDAR CAMBIOS" else "CALCULÁ LA DIRECCIÓN PRIMERO",
+                    color = if (estaCalculado) Color.White else Color.White.copy(alpha = 0.3f),
+                    fontWeight = FontWeight.Black,
+                    fontSize = 16.sp
+                )
             }
         }
         
@@ -350,7 +394,7 @@ fun DialogoRescateUbicacionMav(
     var estaProcesando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     
-    val colorAcento = Color(0xFF3B82F6)
+    val colorAcento = Color(0xFFFF7043)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -371,6 +415,10 @@ fun DialogoRescateUbicacionMav(
                     shape = RoundedCornerShape(12.dp),
                     maxLines = 3,
                     colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        cursorColor = colorAcento,
+                        focusedBorderColor = colorAcento,
                         unfocusedContainerColor = Color.White.copy(alpha = 0.05f),
                         focusedContainerColor = Color.White.copy(alpha = 0.1f)
                     )

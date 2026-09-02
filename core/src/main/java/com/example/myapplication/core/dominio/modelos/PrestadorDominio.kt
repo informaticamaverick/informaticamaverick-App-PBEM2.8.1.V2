@@ -29,9 +29,10 @@ data class PrestadorDominio(
     val numeroTelefono: String = "",
     val cuitCuil: String? = null,
     val matricula: String? = null,
-    
+    val matriculaFotoUrl: Any? = null, // Soporta URL (String, subida) o path local (String, sin subir todavía)
+
     // --- MÉTRICAS ELITE (SSOT) ---
-    val reputacion: Float = 0f,
+    val reputacion: Float = 5f, // Arranca en 5.0 y baja según cómo lo califique el cliente (sin reseñas todavía: sin penalización)
     val totalReseñas: Int = 0,
     val trabajosRealizados: Int = 0,
     val likes: Int = 0,

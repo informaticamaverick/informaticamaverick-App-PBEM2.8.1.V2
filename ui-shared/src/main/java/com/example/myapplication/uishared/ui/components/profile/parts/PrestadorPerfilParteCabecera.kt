@@ -60,20 +60,25 @@ fun CabeceraPerfilDinamica(
     distintivoPremium: @Composable () -> Unit = {}
 ) {
     val colorFondo = Color(0xFF0F0F0F)
-    val colorAcento = Color(0xFF3B82F6) // Azul Maverick
+    val colorAcento = Color(0xFFFF7043)
     val colorNaranja = Color(0xFFF97316)
     
     val config = LocalConfiguration.current
     val screenWidth = config.screenWidthDp.dp
     
     // --- LÓGICA DE TRANSFORMACIÓN (Morphing de Élite) ---
-    val widthImagen = lerp(screenWidth.value, 42f, fraccionColapso).dp
-    val heightImagen = lerp(altura.value, 42f, fraccionColapso).dp
-    val radioEsquina = lerp(0f, 50f, fraccionColapso).dp
-    
+    // [v2026.REDISEÑO]: el avatar ahora es circular desde el estado expandido (antes era la
+    // foto full-bleed del ancho de pantalla) — solo cambia de tamaño al colapsar, no de forma.
+    val avatarSizeExpandido = 88f
+    val widthImagen = lerp(avatarSizeExpandido, 42f, fraccionColapso).dp
+    val heightImagen = lerp(avatarSizeExpandido, 42f, fraccionColapso).dp
+    val radioEsquina = 50.dp
+
     // Margen de la imagen al colapsar (para dejar espacio a la flecha)
-    val paddingStartImagen = lerp(0f, 56f, fraccionColapso).dp
-    val paddingBottomImagen = lerp(0f, 8f, fraccionColapso).dp
+    // [FIX]: 78f dejaba el avatar pisando la toolbar (flecha atrás) en el estado expandido —
+    // subido a 90f para que quede debajo de la toolbar y arriba de las métricas.
+    val paddingStartImagen = lerp(20f, 56f, fraccionColapso).dp
+    val paddingBottomImagen = lerp(90f, 8f, fraccionColapso).dp
     
     val alphaTextosExtra = (1f - fraccionColapso * 3f).coerceIn(0f, 1f)
 
@@ -112,17 +117,30 @@ fun CabeceraPerfilDinamica(
                 // Elevación solo cuando es círculo para destacar en el Toolbar
                 shadowElevation = if(fraccionColapso > 0.8f) 6f else 0f
             }
+            // [FIX]: antes, sin foto cargada, el círculo quedaba transparente e invisible —
+            // pasaba desapercibido cuando el avatar era el hero gigante, pero ahora que es un
+            // círculo chico y definido la ausencia se nota. Fondo + ícono de respaldo.
+            .background(Color(0xFF2A2A35))
             .clickable(enabled = esMiPropioPerfil, onClick = alEditarAvatar)
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(finalFoto) // Fallback a miniatura si la foto real falla (ej: ruta local inválida)
-                .crossfade(true)
-                .build(),
-            contentDescription = "Foto de Perfil",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop 
-        )
+        if (finalFoto != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(finalFoto) // Fallback a miniatura si la foto real falla (ej: ruta local inválida)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Foto de Perfil",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Icon(
+                Icons.Default.Person,
+                contentDescription = "Foto de Perfil",
+                tint = Color.White.copy(alpha = 0.35f),
+                modifier = Modifier.fillMaxSize(0.55f).align(Alignment.Center)
+            )
+        }
     }
 
         // --- 3. SCRIMS DE PROTECCIÓN (Para textos inferiores) ---
@@ -145,8 +163,8 @@ fun CabeceraPerfilDinamica(
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .padding(
-                    start = lerp(20f, 106f, fraccionColapso).dp, 
-                    bottom = lerp(90f, 12f, fraccionColapso).dp,
+                    start = lerp(124f, 106f, fraccionColapso).dp,
+                    bottom = lerp(120f, 12f, fraccionColapso).dp,
                     end = 8.dp // Menos margen a la derecha para el lápiz
                 ),
             verticalAlignment = Alignment.CenterVertically,

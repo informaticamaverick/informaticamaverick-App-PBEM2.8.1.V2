@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.sp
  */
 
 private val ColorOroMav = Color(0xFFFFD700)
-private val ColorAcentoMav = Color(0xFF3B82F6)
+private val ColorAcentoMav = Color(0xFFFF7043)
 
 @Composable
 fun EstrellasCalificacionMav(

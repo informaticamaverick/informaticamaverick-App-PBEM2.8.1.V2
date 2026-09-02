@@ -134,7 +134,7 @@ fun DialogoPriorizarEmpresa(
         titulo = "¿ACTIVAR MODO EMPRESA?",
         mensaje = "Al activar una empresa, tu perfil personal se ocultará de las búsquedas para priorizar tu marca comercial. Podrás revertirlo en cualquier momento.",
         textoConfirmar = "ACTIVAR SOBERANÍA",
-        colorConfirmar = Color(0xFF3B82F6),
+        colorConfirmar = Color(0xFFFF7043),
         onConfirm = onConfirm,
         onDismiss = onDismiss
     )

@@ -30,7 +30,7 @@ fun HojaEditorDireccionDominio(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF0F0F0F),
+        containerColor = Color(0xFF16161D),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         dragHandle = null // El formulario tiene su propia cabecera
     ) {
@@ -62,9 +62,10 @@ fun HojaRegistroEmpresaMav(
     // --- ESTADO DEL FORMULARIO ---
     var nombreEmpresa by remember { mutableStateOf("") }
     var categoriasSeleccionadas by remember { mutableStateOf(setOf<String>()) }
+    var queryCategoria by remember { mutableStateOf("") }
     var direccionBorrador by remember { mutableStateOf(DireccionDominio()) }
     
-    val colorAcento = Color(0xFF3B82F6)
+    val colorAcento = Color(0xFFFF7043)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -105,7 +106,16 @@ fun HojaRegistroEmpresaMav(
                         label = { Text("Nombre de la Empresa") },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        leadingIcon = { Icon(Icons.Default.Business, null, tint = colorAcento) }
+                        leadingIcon = { Icon(Icons.Default.Business, null, tint = colorAcento) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            cursorColor = colorAcento,
+                            focusedBorderColor = colorAcento,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            focusedLabelColor = colorAcento,
+                            unfocusedLabelColor = Color.Gray
+                        )
                     )
                 }
                 
@@ -117,27 +127,79 @@ fun HojaRegistroEmpresaMav(
                         Text("RUBROS Y SERVICIOS", fontWeight = FontWeight.Black, color = Color.White, fontSize = 20.sp)
                         Spacer(Modifier.height(8.dp))
                         Text("Selecciona las categorías principales de tu empresa.", color = Color.Gray, fontSize = 14.sp)
-                        
+
                         Spacer(Modifier.height(24.dp))
-                        FlowRow(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            todasLasCategorias.forEach { cat ->
-                                val estaSeleccionada = categoriasSeleccionadas.contains(cat.id)
-                                FilterChip(
-                                    selected = estaSeleccionada,
-                                    onClick = {
-                                        categoriasSeleccionadas = if (estaSeleccionada) categoriasSeleccionadas - cat.id else categoriasSeleccionadas + cat.id
-                                    },
-                                    label = { Text(cat.nombre, fontSize = 11.sp) },
-                                    leadingIcon = { Text(cat.icono) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = colorAcento.copy(alpha = 0.2f),
-                                        selectedLabelColor = colorAcento
+
+                        if (categoriasSeleccionadas.isNotEmpty()) {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                todasLasCategorias.filter { categoriasSeleccionadas.contains(it.id) }.forEach { cat ->
+                                    FilterChip(
+                                        selected = true,
+                                        onClick = { categoriasSeleccionadas = categoriasSeleccionadas - cat.id },
+                                        label = { Text(cat.nombre, fontSize = 11.sp) },
+                                        leadingIcon = { Text(cat.icono) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = colorAcento.copy(alpha = 0.2f),
+                                            selectedLabelColor = colorAcento
+                                        )
                                     )
-                                )
+                                }
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                            Spacer(Modifier.height(16.dp))
+                        }
+
+                        OutlinedTextField(
+                            value = queryCategoria,
+                            onValueChange = { queryCategoria = it },
+                            label = { Text("Buscar rubro (ej: plomería, gasista)") },
+                            leadingIcon = { Icon(Icons.Default.Search, null, tint = colorAcento) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                cursorColor = colorAcento,
+                                focusedBorderColor = colorAcento,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                                focusedLabelColor = colorAcento,
+                                unfocusedLabelColor = Color.Gray
+                            )
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        if (queryCategoria.isBlank()) {
+                            Text("Escribí para buscar entre las categorías disponibles.", color = Color.Gray, fontSize = 12.sp)
+                        } else {
+                            val filtradas = remember(queryCategoria, todasLasCategorias, categoriasSeleccionadas) {
+                                todasLasCategorias.filter {
+                                    it.nombre.contains(queryCategoria, ignoreCase = true) && !categoriasSeleccionadas.contains(it.id)
+                                }
+                            }
+                            if (filtradas.isEmpty()) {
+                                Text("Sin resultados para \"$queryCategoria\".", color = Color.Gray, fontSize = 12.sp)
+                            } else {
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    filtradas.forEach { cat ->
+                                        FilterChip(
+                                            selected = false,
+                                            onClick = { categoriasSeleccionadas = categoriasSeleccionadas + cat.id; queryCategoria = "" },
+                                            label = { Text(cat.nombre, fontSize = 11.sp) },
+                                            leadingIcon = { Text(cat.icono) }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -209,7 +271,7 @@ fun HojaRegistroSucursalMav(
     onFinalizar: (SucursalDominio, DireccionDominio) -> Unit
 ) {
     var nombreSucursal by remember { mutableStateOf("") }
-    val colorAcento = Color(0xFF3B82F6)
+    val colorAcento = Color(0xFFFF7043)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -226,7 +288,16 @@ fun HojaRegistroSucursalMav(
                 label = { Text("Nombre de la Sucursal (Ej: Sucursal Centro)") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                leadingIcon = { Icon(Icons.Default.Store, null, tint = colorAcento) }
+                leadingIcon = { Icon(Icons.Default.Store, null, tint = colorAcento) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    cursorColor = colorAcento,
+                    focusedBorderColor = colorAcento,
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                    focusedLabelColor = colorAcento,
+                    unfocusedLabelColor = Color.Gray
+                )
             )
             
             Spacer(Modifier.height(24.dp))

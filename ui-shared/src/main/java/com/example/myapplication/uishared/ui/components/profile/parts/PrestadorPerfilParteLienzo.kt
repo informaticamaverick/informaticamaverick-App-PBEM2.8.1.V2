@@ -76,12 +76,21 @@ fun PrestadorPerfilLienzo(
     var mostrarAvisoPriorizarEmpresa by remember { mutableStateOf(false) }
     var mostrarSheetReseñas by remember { mutableStateOf(false) }
 
+    // [FIX]: "raíz" (personal + empresas) es SOLO para el pager — filtra sucursales a propósito,
+    // no deben ser páginas propias. Pero SeccionEmpresaSoberanaMav necesita la lista COMPLETA
+    // (con sucursales incluidas) para poder encontrar las de cada empresa vía idEmpresa==identidad.id.
+    // Antes se pasaba "identidadesRaiz" (ya sin sucursales) como "todasLasEntidades" y el filtro de
+    // sucursales de la empresa nunca podía matchear nada — se veían siempre 0 sucursales aunque
+    // estuvieran bien guardadas en Firestore/Room.
+    val todasLasEntidadesPlano = remember(identidadPrincipal, identidadesHijas) {
+        listOf(identidadPrincipal) + identidadesHijas
+    }
     val identidadesRaiz = remember(identidadPrincipal, identidadesHijas) {
         (listOf(identidadPrincipal) + identidadesHijas.filter { it.idEmpresa == null && it.tipo == TipoPrestador.EMPRESA })
     }
     val pagerState = rememberPagerState(pageCount = { identidadesRaiz.size })
 
-    val alturaHeaderMax = 400.dp // Aumentado para estilo Telegram inmersivo
+    val alturaHeaderMax = 280.dp // [v2026.REDISEÑO]: header compacto con avatar circular; subido de 220 a 280 porque el avatar quedaba pisando la toolbar de "volver"
     val alturaHeaderMin = 88.dp 
     val densidad = LocalDensity.current
     val maxScroll = with(densidad) { (alturaHeaderMax - alturaHeaderMin).toPx() }
@@ -93,7 +102,10 @@ fun PrestadorPerfilLienzo(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color(0xFF0F0F0F),
         floatingActionButton = {
-            if (fraccionColapso < 0.5f) { // Ocultamos FAB si estamos colapsados para priorizar Toolbar
+            // [FIX]: antes se ocultaba recién a fraccionColapso 0.5 — con el header más alto
+            // (280dp) tardaba mucho en llegar ahí, y el FAB quedaba tapando cards como Horarios
+            // mientras se scrolleaba. Ahora se oculta apenas se empieza a scrollear.
+            if (fraccionColapso < 0.15f) { // Ocultamos FAB si estamos colapsados para priorizar Toolbar
                 FabInteraccionPerfil(
                     paginaActual = pagerState.currentPage,
                     empresas = identidadesHijas.filter { it.tipo == TipoPrestador.EMPRESA },
@@ -115,7 +127,8 @@ fun PrestadorPerfilLienzo(
             isRefreshing = estaCargando,
             onRefresh = alActualizar,
             modifier = Modifier.fillMaxSize().padding(paddingValues),
-            indicator = { PullToRefreshDefaults.Indicator(state = pullToRefreshState, isRefreshing = estaCargando, containerColor = Color(0xFF1A1A24), color = Color(0xFF3B82F6)) }
+            contentAlignment = Alignment.TopCenter,
+            indicator = { PullToRefreshDefaults.Indicator(state = pullToRefreshState, isRefreshing = estaCargando, containerColor = Color(0xFF1A1A24), color = Color(0xFFFF7043)) }
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.fillMaxSize().verticalScroll(scrollState)) {
@@ -131,7 +144,7 @@ fun PrestadorPerfilLienzo(
                         Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                              SeccionPerfilMaestroMav(
                                 identidad = identidadActual,
-                                todasLasEntidades = identidadesRaiz,
+                                todasLasEntidades = todasLasEntidadesPlano,
                                 esMiPropioPerfil = esMiPropioPerfil,
                                 todasLasCategorias = todasLasCategorias,
                                 alGuardarIdentidad = alGuardarCambios, 

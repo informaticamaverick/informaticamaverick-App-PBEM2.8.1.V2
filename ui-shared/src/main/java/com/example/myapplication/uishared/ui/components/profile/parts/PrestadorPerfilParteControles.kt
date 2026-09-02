@@ -42,7 +42,7 @@ fun FabInteraccionPerfil(
     alClickAnadirEmpresa: () -> Unit,
     alClickChat: (String?) -> Unit
 ) {
-    val colorAcento = Color(0xFF3B82F6)
+    val colorAcento = Color(0xFFFF7043)
     
     if (esMiPropioPerfil) {
         Surface(
@@ -132,7 +132,7 @@ fun BurbujaPerfilMini(
 ) {
     val escala by animateFloatAsState(if (estaSeleccionado) 1.2f else 1f, label = "escala")
     val colorBorde by animateColorAsState(
-        if (estaSeleccionado) Color(0xFF3B82F6) else Color.White.copy(alpha = 0.15f),
+        if (estaSeleccionado) Color(0xFFFF7043) else Color.White.copy(alpha = 0.15f),
         label = "colorBorde"
     )
 
