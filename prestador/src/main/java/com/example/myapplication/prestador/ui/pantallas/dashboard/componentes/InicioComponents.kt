@@ -1,6 +1,7 @@
 package com.example.myapplication.prestador.ui.pantallas.dashboard.componentes
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -15,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -25,8 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.myapplication.core.dominio.modelos.InformacionClima
 import com.example.myapplication.prestador.viewmodel.dashboard.EstadoDashboardUi
+import com.example.myapplication.prestador.viewmodel.dashboard.WeatherViewModel
 
 // Paleta de Colores MAV Elite (Estilo Ejecutivo / Industrial)
 private object ThemeColors {
@@ -76,9 +82,14 @@ fun InicioScreen(
     onCrearTurno: () -> Unit = {},
     onCompletarCita: (String, String) -> Unit = { _, _ -> },
     onCompletarTrabajoFast: (String, String) -> Unit = { _, _ -> },
+    weatherViewModel: WeatherViewModel = hiltViewModel(),
 ) {
     var mostrarModalClima by remember { mutableStateOf(false) }
     var mostrarDrawer by remember { mutableStateOf(false) }
+    var mostrarCentroAyuda by remember { mutableStateOf(false) }
+    var mostrarPerfilRapido by remember { mutableStateOf(false) }
+    val estadoClima by weatherViewModel.state.collectAsState()
+    val climaActual = (estadoClima as? WeatherViewModel.WeatherState.Success)?.data
 
     Column(
         modifier = Modifier
@@ -91,9 +102,12 @@ fun InicioScreen(
             fotoUrl = state.photoUrl?.toString() ?: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
             calificacion = "4.95",
             notificacionesPendientes = 3,
+            temperaturaClima = climaActual?.temperatura ?: "--",
+            ciudadClima = climaActual?.nombreCiudad?.uppercase() ?: "UBICANDO",
             onVerClimaClick = { mostrarModalClima = true },
             onNotificacionesClick = onNavigateToNotificaciones,
-            onPerfilClick = { mostrarDrawer = true }
+            onMenuClick = { mostrarDrawer = true },
+            onAvatarClick = { mostrarPerfilRapido = true }
         )
 
         // Contenido Desplazable
@@ -107,9 +121,8 @@ fun InicioScreen(
 
             // 2. CARRUSEL DE PROMOCIONES
             CarruselPromociones(
-                onVerTodasClick = onNavigateToPromotionList,
-                onCompartirPromo = { id -> /* Lógica de compartir */ },
-                onReclamarPromo = { id -> /* Lógica de reclamar */ }
+                avisos = state.publicidad,
+                onVerTodasClick = onNavigateToPromotionList
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -138,24 +151,37 @@ fun InicioScreen(
 
     // Diálogo Detalle de Clima
     if (mostrarModalClima) {
-        DialogoClima(onDismiss = { mostrarModalClima = false })
+        DialogoClima(estado = estadoClima, onDismiss = { mostrarModalClima = false })
     }
 
-    // Menú Lateral (Drawer)
-    if (mostrarDrawer) {
-        ConfiguracionDrawerOverlay(
-            visible = true,
-            onDismiss = { mostrarDrawer = false },
-            onNavigateToPresupuestoConfig = onNavigateToPresupuestoConfig,
-            onNavigateToCalendarioConfig = onNavigateToHorariosConfig,
-            onNavigateToApariencia = onNavigateToApariencia,
-            onNavigateToNotificaciones = onNavigateToNotificaciones,
-            onNavigateToTerminos = onNavigateToTerminos,
-            onNavigateToPrivacidad = onNavigateToPrivacidad,
-            onNavigateToAcercaDe = onNavigateToAcercaDe,
-            onNavigateToEditProfile = onNavigateToEditProfile,
-            onSignOut = onLogout
-        )
+    // Menú Lateral (Drawer) — [ELITE]: se llama SIEMPRE (sin envolver en `if`) para que
+    // AnimatedVisibility pueda animar la salida; antes el `if` desmontaba el composable
+    // de golpe en cuanto mostrarDrawer pasaba a false, y la animación de cierre nunca
+    // llegaba a verse.
+    ConfiguracionDrawerOverlay(
+        visible = mostrarDrawer,
+        onDismiss = { mostrarDrawer = false },
+        onNavigateToPresupuestoConfig = onNavigateToPresupuestoConfig,
+        onNavigateToCalendarioConfig = onNavigateToHorariosConfig,
+        onNavigateToApariencia = onNavigateToApariencia,
+        onNavigateToNotificaciones = onNavigateToNotificaciones,
+        onNavigateToTerminos = onNavigateToTerminos,
+        onNavigateToPrivacidad = onNavigateToPrivacidad,
+        onNavigateToAcercaDe = onNavigateToAcercaDe,
+        onNavigateToEditProfile = onNavigateToEditProfile,
+        onSignOut = onLogout,
+        onNavigateToAyuda = { mostrarCentroAyuda = true }
+    )
+
+    // Tarjeta rápida de perfil (avatar de la cabecera)
+    PerfilRapidoOverlay(
+        visible = mostrarPerfilRapido,
+        onDismiss = { mostrarPerfilRapido = false },
+        onEditarPerfil = onNavigateToEditProfile
+    )
+
+    if (mostrarCentroAyuda) {
+        CentroAyudaSheet(onDismiss = { mostrarCentroAyuda = false })
     }
 }
 
@@ -169,9 +195,12 @@ private fun CabeceraEjecutiva(
     fotoUrl: String?,
     calificacion: String,
     notificacionesPendientes: Int,
+    temperaturaClima: String,
+    ciudadClima: String,
     onVerClimaClick: () -> Unit,
     onNotificacionesClick: () -> Unit,
-    onPerfilClick: () -> Unit
+    onMenuClick: () -> Unit,
+    onAvatarClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -183,15 +212,38 @@ private fun CabeceraEjecutiva(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Usuario + Avatar Rectangular
+            // Botón Menú + Usuario + Avatar Rectangular
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // [ELITE]: antes la única forma de abrir el drawer era tocar el avatar —
+                // sin ninguna referencia visual de que existía un menú lateral. Se agrega
+                // el ícono estándar de hamburguesa para que sea evidente.
+                IconButton(
+                    onClick = onMenuClick,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(ThemeColors.CardBg, RoundedCornerShape(8.dp))
+                        .border(1.dp, ThemeColors.CardBorder, RoundedCornerShape(8.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Abrir menú",
+                        tint = ThemeColors.TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+            // Usuario + Avatar Rectangular — toca para ver la tarjeta rápida de perfil
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.clickable { onPerfilClick() }
+                modifier = Modifier.clickable { onAvatarClick() }
             ) {
                 Box {
                     AsyncImage(
@@ -268,6 +320,7 @@ private fun CabeceraEjecutiva(
                     }
                 }
             }
+            }
 
             // Clima & Botón Notificaciones
             Row(
@@ -294,16 +347,18 @@ private fun CabeceraEjecutiva(
                         )
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = "24°C",
+                                text = temperaturaClima,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = ThemeColors.TextPrimary
                             )
                             Text(
-                                text = "TUCUMÁN",
+                                text = ciudadClima,
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = ThemeColors.TextMuted
+                                color = ThemeColors.TextMuted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -352,10 +407,12 @@ private fun CabeceraEjecutiva(
 // ============================================================================
 @Composable
 private fun CarruselPromociones(
-    onVerTodasClick: () -> Unit,
-    onCompartirPromo: (String) -> Unit,
-    onReclamarPromo: (String) -> Unit
+    avisos: List<com.example.myapplication.core.dominio.modelos.PublicidadDominio>,
+    onVerTodasClick: () -> Unit
 ) {
+    if (avisos.isEmpty()) return
+    val contexto = androidx.compose.ui.platform.LocalContext.current
+
     Column(modifier = Modifier.fillMaxWidth()) {
         // Cabecera de Sección
         Row(
@@ -401,36 +458,39 @@ private fun CarruselPromociones(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
+            items(avisos, key = { it.id }) { aviso ->
                 TarjetaPromocionRectangular(
-                    tag = "HOT SALE 20% OFF",
-                    tagColor = ThemeColors.BrandOrange,
-                    promoId = "PR-882",
-                    vencimiento = "Vence en 3d",
-                    titulo = "Mantenimiento Integral de Aires Split",
-                    descripcion = "Limpieza de filtros, carga de gas y diagnóstico eléctrico.",
-                    infoPie = "Disponibles: 5/10",
-                    textoBoton = "Compartir",
-                    iconoBoton = Icons.Default.Share,
-                    onClickBoton = { onCompartirPromo("PR-882") }
-                )
-            }
-
-            item {
-                TarjetaPromocionRectangular(
-                    tag = "COMBO 2X1",
+                    tag = "PUBLICIDAD",
                     tagColor = ThemeColors.BrandCyan,
-                    promoId = "PR-901",
-                    vencimiento = "Destacado",
-                    titulo = "Inspección de Tableros + Termografía",
-                    descripcion = "Medición de consumo y detección de puntos calientes.",
-                    infoPie = "Zona: Yerba Buena",
-                    textoBoton = "Reclamar",
-                    iconoBoton = Icons.Default.ChevronRight,
-                    onClickBoton = { onReclamarPromo("PR-901") }
+                    promoId = aviso.id.take(6),
+                    vencimiento = aviso.rubro ?: "",
+                    titulo = aviso.empresa,
+                    descripcion = aviso.descripcion ?: aviso.direccion.orEmpty(),
+                    infoPie = aviso.direccion ?: "",
+                    textoBoton = "Contactar",
+                    iconoBoton = Icons.Default.Call,
+                    onClickBoton = { abrirContactoPublicidad(contexto, aviso) }
                 )
             }
         }
+    }
+}
+
+/** Abre el link (web/instagram) si hay, si no llama al teléfono cargado en el aviso. */
+private fun abrirContactoPublicidad(
+    contexto: android.content.Context,
+    aviso: com.example.myapplication.core.dominio.modelos.PublicidadDominio
+) {
+    try {
+        if (!aviso.contactoLink.isNullOrBlank()) {
+            var url = aviso.contactoLink
+            if (!url!!.startsWith("http")) url = "https://$url"
+            contexto.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        } else if (!aviso.contactoTelefono.isNullOrBlank()) {
+            contexto.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:${aviso.contactoTelefono}")))
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("CarruselPublicidad", "No se pudo abrir el contacto: ${e.message}")
     }
 }
 
@@ -919,40 +979,87 @@ private fun TarjetaEventoAgenda(
 // DIÁLOGO DETALLE DE CLIMA
 // ============================================================================
 @Composable
-private fun DialogoClima(onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
+private fun DialogoClima(estado: WeatherViewModel.WeatherState, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Surface(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             color = ThemeColors.CardBg,
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, ThemeColors.BrandCyan.copy(alpha = 0.4f))
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, ThemeColors.CardBorder)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(imageVector = Icons.Default.WbSunny, contentDescription = null, tint = ThemeColors.BrandAmber)
-                        Text(text = "CLIMA OPERATIVO", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ThemeColors.TextPrimary)
-                    }
+                    Text(text = "CLIMA OPERATIVO", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ThemeColors.TextPrimary)
                     IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
                         Icon(imageVector = Icons.Default.Close, contentDescription = null, tint = ThemeColors.TextMuted)
                     }
                 }
 
-                HorizontalDivider(color = Color(0xFF1E293B))
+                when (estado) {
+                    is WeatherViewModel.WeatherState.Loading -> {
+                        Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = ThemeColors.BrandAmber)
+                        }
+                    }
+                    is WeatherViewModel.WeatherState.Error -> {
+                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                            Text("No se pudo obtener el clima", fontSize = 12.sp, color = ThemeColors.TextMuted)
+                        }
+                    }
+                    is WeatherViewModel.WeatherState.Success -> {
+                        val clima = estado.data
+                        val estadoClimatico = remember(clima.emojiClima) { estadoClimaDesdeEmoji(clima.emojiClima) }
 
-                FilaDetalleClima("Ubicación", "San Miguel de Tucumán")
-                FilaDetalleClima("Temperatura", "24°C (Soleado)")
-                FilaDetalleClima("Humedad / Viento", "55% | 12 km/h SE")
-                FilaDetalleClima("Condición Trabajo", "Óptimo para Exterior", ThemeColors.BrandEmerald)
+                        Box(modifier = Modifier.fillMaxWidth().height(190.dp)) {
+                            EscenaClimatica(estado = estadoClimatico, modifier = Modifier.matchParentSize())
 
-                Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 22.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(18.dp)
+                            ) {
+                                val infiniteEmoji = rememberInfiniteTransition(label = "dialogoEmoji")
+                                val escala by infiniteEmoji.animateFloat(
+                                    initialValue = 1f, targetValue = 1.14f,
+                                    animationSpec = infiniteRepeatable(tween(800, easing = EaseInOutSine), RepeatMode.Reverse),
+                                    label = "dialogoEmojiEscala"
+                                )
+                                val balanceo by infiniteEmoji.animateFloat(
+                                    initialValue = -4f, targetValue = 4f,
+                                    animationSpec = infiniteRepeatable(tween(1200, easing = EaseInOutSine), RepeatMode.Reverse),
+                                    label = "dialogoEmojiBalanceo"
+                                )
+
+                                Text(
+                                    text = clima.emojiClima,
+                                    fontSize = 58.sp,
+                                    modifier = Modifier.scale(escala).rotate(balanceo)
+                                )
+                                Column {
+                                    Text(text = clima.temperatura, fontSize = 44.sp, fontWeight = FontWeight.Black, color = Color.White)
+                                    Text(text = clima.descripcionClima, fontSize = 14.sp, color = Color.White.copy(alpha = 0.92f), fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Text("💧 ${clima.humedad}", fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f))
+                                        Text("💨 ${clima.velocidadViento}", fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f))
+                                    }
+                                }
+                            }
+                        }
+
+                        FilaDetalleClima("Ubicación", clima.nombreCiudad)
+                    }
+                }
 
                 Button(
                     onClick = onDismiss,

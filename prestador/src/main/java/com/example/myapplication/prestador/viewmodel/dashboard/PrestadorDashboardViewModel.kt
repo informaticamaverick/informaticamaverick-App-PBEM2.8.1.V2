@@ -8,7 +8,11 @@ import com.example.myapplication.prestador.datos.repositorios.PrestadorAutentica
 import com.example.myapplication.prestador.datos.repositorios.ConsultasPrestadorRepositorio
 import com.example.myapplication.prestador.datos.repositorios.PrestadorPresupuestoRepositorio
 import com.example.myapplication.prestador.datos.repositorios.PrestadorCalendarioRepositorio
+import com.example.myapplication.core.datos.repositorios.SincronizadorRemotoPrestador
+import com.example.myapplication.core.datos.repositorios.PublicidadRepositorio
+import com.example.myapplication.core.dominio.modelos.PublicidadDominio
 import com.example.myapplication.core.utilidades.ImageUtils
+import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
@@ -31,7 +35,8 @@ data class EstadoDashboardUi(
     val serviceType: String = "PRESTADOR",
     val saludo: String = "¡Hola!",
     val eventosProximos: List<EventoEntity> = emptyList(),
-    val concursosActivos: List<ConcursoPublicoEntity> = emptyList()
+    val concursosActivos: List<ConcursoPublicoEntity> = emptyList(),
+    val publicidad: List<PublicidadDominio> = emptyList()
 ) {
     val isLoading: Boolean get() = estaCargando
     val nombrePrestador: String get() = nombreVisible
@@ -49,7 +54,9 @@ class PrestadorDashboardViewModel @Inject constructor(
     private val authRepository: PrestadorAutenticacionRepositorio,
     private val consultasRepo: ConsultasPrestadorRepositorio,
     private val presupuestoRepositorio: PrestadorPresupuestoRepositorio,
-    private val calendarioRepository: PrestadorCalendarioRepositorio
+    private val calendarioRepository: PrestadorCalendarioRepositorio,
+    private val repoRemoto: SincronizadorRemotoPrestador,
+    private val publicidadRepositorio: PublicidadRepositorio
 ) : ViewModel() {
 
     // --- SECTOR: ESTADO REACTIVO (SSOT) ---
@@ -63,8 +70,9 @@ class PrestadorDashboardViewModel @Inject constructor(
                     consultasRepo.obtenerPerfilPrestadorDeepFlujo(usuarioFirebase.uid),
                     presupuestoRepositorio.todasLasLicitaciones,
                     presupuestoRepositorio.todosLosPresupuestos,
-                    presupuestoRepositorio.todosLosPresupuestosFinales // 🔥 [SUPREME]
-                ) { maestro, concursos, presupuestosCocina, presupuestosFinales ->
+                    presupuestoRepositorio.todosLosPresupuestosFinales, // 🔥 [SUPREME]
+                    publicidadRepositorio.observarPublicidadActiva("prestadores")
+                ) { maestro, concursos, presupuestosCocina, presupuestosFinales, publicidad ->
                     maestro?.let {
                         val aceptados = presupuestosFinales.filter { it.estado == com.example.myapplication.core.datos.local.entidades.EstadoPresupuesto.ACEPTADO }
                         
@@ -104,7 +112,8 @@ class PrestadorDashboardViewModel @Inject constructor(
                             totalAceptadoMensual = ingresos,
                             gananciaRealMensual = ingresos - costos,
                             saludo = obtenerSaludo(),
-                            concursosActivos = concursos.take(5)
+                            concursosActivos = concursos.take(5),
+                            publicidad = publicidad
                         )
                     } ?: EstadoDashboardUi(estaCargando = true)
                 }
@@ -118,6 +127,8 @@ class PrestadorDashboardViewModel @Inject constructor(
 
     fun cerrarSesion() {
         viewModelScope.launch {
+            // Marcar offline ANTES de signOut() — después ya no hay uid para ubicar el doc.
+            FirebaseAuth.getInstance().currentUser?.uid?.let { repoRemoto.actualizarPresencia(it, false) }
             authRepository.cerrarSesion()
         }
     }

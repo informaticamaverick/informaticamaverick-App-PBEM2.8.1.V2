@@ -2,11 +2,16 @@ package com.example.myapplication.prestador.ui.pantallas.dashboard.componentes
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -14,20 +19,29 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.myapplication.prestador.ui.theme.LocalIsDarkTheme
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+
+// [ELITE]: paleta calcada de InicioComponents.ThemeColors — el drawer ahora comparte
+// el mismo lenguaje visual que Inicio (tarjetas con borde, chips de ícono, fondo #030712).
+private val DrawerDarkBg = Color(0xFF030712)
+private val DrawerCardBg = Color(0xFF0F172A)
+private val DrawerCardBorder = Color(0xFF334155).copy(alpha = 0.7f)
+private val DrawerDivider = Color(0xFF1E293B)
 
 @Composable
 fun ConfiguracionDrawerOverlay(
@@ -42,9 +56,14 @@ fun ConfiguracionDrawerOverlay(
     onNavigateToAcercaDe: () -> Unit,
     onNavigateToEditProfile: () -> Unit,
     onSignOut: () -> Unit,
+    onNavigateToAyuda: () -> Unit,
 ) {
+    // [ELITE]: el drawer, como Inicio, es siempre oscuro por diseño — antes seguía
+    // getPrestadorColors() sin fijar el tema, que resuelve según el modo claro/oscuro
+    // DEL DISPOSITIVO (quedaba blanco en dispositivos en modo claro, sin combinar con Inicio).
+    CompositionLocalProvider(LocalIsDarkTheme provides true) {
     val colors = getPrestadorColors()
-    
+
     // Simplificado para el reordenamiento, luego se reconecta la lógica de soberanía real
     val priorizarEmpresa = false
     val tieneEmpresa = false
@@ -67,16 +86,19 @@ fun ConfiguracionDrawerOverlay(
             )
         }
 
+        // [ELITE]: slide con resorte, de izquierda (fuera de pantalla) hacia la derecha
+        // (su posición final) — resorte más "blando" (stiffness baja) para que el
+        // movimiento se note en vez de sentirse como un aparecer instantáneo.
         AnimatedVisibility(
             visible = visible,
-            enter = slideInHorizontally(tween(300)) { -it } + fadeIn(tween(300)),
-            exit = slideOutHorizontally(tween(260)) { -it } + fadeOut(tween(260))
+            enter = slideInHorizontally(spring(dampingRatio = 0.82f, stiffness = 190f)) { -it } + fadeIn(tween(200)),
+            exit = slideOutHorizontally(tween(260)) { -it } + fadeOut(tween(200))
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .fillMaxWidth(0.82f)
-                    .background(colors.surfaceColor)
+                    .fillMaxWidth(0.86f)
+                    .background(DrawerDarkBg)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
@@ -87,148 +109,164 @@ fun ConfiguracionDrawerOverlay(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(colors.primaryOrange, colors.primaryOrange.copy(alpha = 0.7f))
-                                )
-                            )
-                            .statusBarsPadding()
-                            .padding(horizontal = 20.dp, vertical = 20.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .background(Color.White.copy(alpha = 0.45f), RoundedCornerShape(12.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.Settings, null, tint = Color.White, modifier = Modifier.size(22.dp))
-                            }
-                            Text(
-                                "Configuración",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    DrawerSectionLabel("Trabajo")
-                    DrawerItem(Icons.Default.Description, Color(0xFF1976D2), "Presupuestos", "Validez, nota legal y más") {
-                        onDismiss(); onNavigateToPresupuestoConfig()
-                    }
-                    DrawerDivider()
-                    DrawerItem(Icons.Default.CalendarMonth, Color(0xFF388E3C), "Horarios de atención", "Días, horarios y duración") {
-                        onDismiss(); onNavigateToCalendarioConfig()
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    DrawerSectionLabel("Preferencias")
-                    DrawerItem(Icons.Default.Palette, Color(0xFF7B1FA2), "Apariencia", "Claro, oscuro o sistema") {
-                        onDismiss(); onNavigateToApariencia()
-                    }
-                    DrawerDivider()
-                    DrawerItem(Icons.Default.Notifications, Color(0xFFE53935), "Notificaciones", "Mensajes, presupuestos y pedidos") {
-                        onDismiss(); onNavigateToNotificaciones()
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    DrawerSectionLabel("Mi perfil")
-                    DrawerItem(Icons.Default.Person, Color(0xFFF57C00), "Editar perfil", "Nombre, foto y descripción") {
-                        onDismiss(); onNavigateToEditProfile()
-                    }
-                    DrawerDivider()
-                    
+                    // --- HEADER: igual al de Inicio (chip de ícono + título, sin banner) ---
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .statusBarsPadding()
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .background(Color(0xFFF57C00).copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                                .size(38.dp)
+                                .background(colors.primaryOrange.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+                                .border(1.dp, colors.primaryOrange.copy(alpha = 0.25f), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Business, null, tint = Color(0xFFF57C00), modifier = Modifier.size(22.dp))
+                            Icon(Icons.Default.Settings, null, tint = colors.primaryOrange, modifier = Modifier.size(19.dp))
                         }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Modo empresa", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
-                            Text(
-                                if (priorizarEmpresa) "Perfil personal desactivado"
-                                else if (tieneEmpresa) "Perfil personal activo"
-                                else "Agregá una empresa primero",
-                                fontSize = 12.sp, color = colors.textSecondary
+                        Text("Configuración", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = colors.textPrimary)
+                    }
+                    HorizontalDivider(color = DrawerDivider)
+
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        var idx = 0
+
+                        SeccionCard(indice = idx++, visible = visible, dot = Color(0xFF06B6D4), label = "Trabajo") {
+                            DrawerItem(Icons.Default.Description, Color(0xFF1976D2), "Presupuestos", "Validez, nota legal y más") {
+                                onDismiss(); onNavigateToPresupuestoConfig()
+                            }
+                            DrawerItemDivider()
+                            DrawerItem(Icons.Default.CalendarMonth, Color(0xFF388E3C), "Horarios de atención", "Días, horarios y duración") {
+                                onDismiss(); onNavigateToCalendarioConfig()
+                            }
+                        }
+
+                        SeccionCard(indice = idx++, visible = visible, dot = Color(0xFFA855F7), label = "Preferencias") {
+                            DrawerItem(Icons.Default.Palette, Color(0xFF7B1FA2), "Apariencia", "Claro, oscuro o sistema") {
+                                onDismiss(); onNavigateToApariencia()
+                            }
+                            DrawerItemDivider()
+                            DrawerItem(Icons.Default.Notifications, Color(0xFFE53935), "Notificaciones", "Mensajes, presupuestos y pedidos") {
+                                onDismiss(); onNavigateToNotificaciones()
+                            }
+                        }
+
+                        SeccionCard(indice = idx++, visible = visible, dot = Color(0xFFF59E0B), label = "Mi perfil") {
+                            DrawerItem(Icons.Default.Person, Color(0xFFF57C00), "Editar perfil", "Nombre, foto y descripción") {
+                                onDismiss(); onNavigateToEditProfile()
+                            }
+                            DrawerItemDivider()
+                            DrawerToggleItem(
+                                icon = Icons.Default.Business,
+                                iconColor = Color(0xFFF57C00),
+                                title = "Modo empresa",
+                                subtitle = if (priorizarEmpresa) "Perfil personal desactivado"
+                                    else if (tieneEmpresa) "Perfil personal activo"
+                                    else "Agregá una empresa primero",
+                                checked = priorizarEmpresa,
+                                enabled = tieneEmpresa,
+                                accent = colors.primaryOrange,
+                                onToggle = { }
                             )
                         }
-                        Switch(
-                            checked = priorizarEmpresa,
-                            onCheckedChange = { },
-                            enabled = tieneEmpresa,
-                            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = colors.primaryOrange)
-                        )
-                    }
 
-                    Spacer(Modifier.height(4.dp))
+                        SeccionCard(indice = idx++, visible = visible, dot = Color(0xFF38BDF8), label = "Soporte") {
+                            DrawerItem(Icons.AutoMirrored.Filled.HelpOutline, Color(0xFF0288D1), "Ayuda y soporte", "Preguntas frecuentes y contacto") {
+                                onDismiss(); onNavigateToAyuda()
+                            }
+                        }
 
-                    DrawerSectionLabel("Legal")
-                    DrawerItem(Icons.Default.Gavel, Color(0xFF455A64), "Términos y condiciones", "Condiciones de uso") {
-                        onDismiss(); onNavigateToTerminos()
-                    }
-                    DrawerDivider()
-                    DrawerItem(Icons.Default.PrivacyTip, Color(0xFF455A64), "Política de privacidad", "Cómo usamos tus datos") {
-                        onDismiss(); onNavigateToPrivacidad()
-                    }
-                    DrawerDivider()
-                    DrawerItem(Icons.Default.Info, Color(0xFF00796B), "Acerca de", "Versión y créditos") {
-                        onDismiss(); onNavigateToAcercaDe()
-                    }
+                        SeccionCard(indice = idx++, visible = visible, dot = Color(0xFF94A3B8), label = "Legal") {
+                            DrawerItem(Icons.Default.Gavel, Color(0xFF455A64), "Términos y condiciones", "Condiciones de uso") {
+                                onDismiss(); onNavigateToTerminos()
+                            }
+                            DrawerItemDivider()
+                            DrawerItem(Icons.Default.PrivacyTip, Color(0xFF455A64), "Política de privacidad", "Cómo usamos tus datos") {
+                                onDismiss(); onNavigateToPrivacidad()
+                            }
+                            DrawerItemDivider()
+                            DrawerItem(Icons.Default.Info, Color(0xFF00796B), "Acerca de", "Versión y créditos") {
+                                onDismiss(); onNavigateToAcercaDe()
+                            }
+                        }
 
-                    Spacer(Modifier.height(4.dp))
-                    
-                    DrawerItem(Icons.Default.Logout, Color.Red, "Cerrar Sesión", "Salir de la cuenta") {
-                        onDismiss(); onSignOut()
-                    }
+                        AnimatedVisibility(
+                            visible = visible,
+                            enter = fadeIn(tween(280, delayMillis = 60 + idx * 45)) + slideInVertically(tween(280, delayMillis = 60 + idx * 45)) { it / 6 }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFFEF4444).copy(alpha = 0.07f))
+                                    .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                                    .clickable { onDismiss(); onSignOut() }
+                                    .padding(horizontal = 14.dp, vertical = 13.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Logout, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                Text("Cerrar sesión", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFFEF4444))
+                            }
+                        }
 
-                    Spacer(Modifier.height(32.dp))
+                        Spacer(Modifier.height(18.dp))
+                    }
                 }
             }
+        }
+    }
+    }
+}
+
+/**
+ * [ELITE]: tarjeta de sección — mismo tratamiento que "Caja de Herramientas"/"Agenda de Hoy"
+ * de Inicio (borde #334155, fondo #0F172A, radio 12dp, punto de color + label en mayúsculas).
+ * Todas las secciones quedan siempre desplegadas (sin acordeón); cada una entra con un
+ * pequeño desfasaje según `indice` para dar sensación de despliegue en cascada al abrir el drawer.
+ */
+@Composable
+private fun SeccionCard(indice: Int, visible: Boolean, dot: Color, label: String, content: @Composable ColumnScope.() -> Unit) {
+    val colors = getPrestadorColors()
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(280, delayMillis = 60 + indice * 45)) + slideInVertically(tween(280, delayMillis = 60 + indice * 45)) { it / 6 }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(DrawerCardBg)
+                .border(1.dp, DrawerCardBorder, RoundedCornerShape(12.dp))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(modifier = Modifier.size(8.dp).background(dot, RoundedCornerShape(2.dp)))
+                Text(
+                    label.uppercase(),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    color = colors.textPrimary,
+                    letterSpacing = 0.7.sp
+                )
+            }
+            content()
         }
     }
 }
 
 @Composable
-private fun DrawerSectionLabel(label: String) {
-    val colors = getPrestadorColors()
-    Text(
-        label,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.ExtraBold,
-        color = colors.primaryOrange,
-        letterSpacing = 0.8.sp,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
-    )
-}
-
-@Composable
-private fun DrawerDivider() {
-    val colors = getPrestadorColors()
-    HorizontalDivider(
-        modifier = Modifier.padding(start = 70.dp, end = 16.dp),
-        color = colors.divider.copy(alpha = 0.5f)
-    )
+private fun DrawerItemDivider() {
+    HorizontalDivider(modifier = Modifier.padding(start = 62.dp, end = 14.dp), color = DrawerDivider)
 }
 
 @Composable
@@ -244,39 +282,62 @@ private fun DrawerItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 11.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .background(iconColor.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                .size(36.dp)
+                .background(iconColor.copy(alpha = 0.12f), RoundedCornerShape(9.dp))
+                .border(1.dp, iconColor.copy(alpha = 0.25f), RoundedCornerShape(9.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, null, tint = iconColor, modifier = Modifier.size(22.dp))
+            Icon(icon, null, tint = iconColor, modifier = Modifier.size(17.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
-            Text(subtitle, fontSize = 12.sp, color = colors.textSecondary)
+            Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+            Text(subtitle, fontSize = 11.sp, color = colors.textSecondary)
         }
-        Icon(Icons.Default.ChevronRight, null, tint = colors.textSecondary.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+        Icon(Icons.Default.ChevronRight, null, tint = colors.textSecondary.copy(alpha = 0.5f), modifier = Modifier.size(15.dp))
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+@Composable
+private fun DrawerToggleItem(
+    icon: ImageVector,
+    iconColor: Color,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean,
+    accent: Color,
+    onToggle: (Boolean) -> Unit
+) {
+    val colors = getPrestadorColors()
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(iconColor.copy(alpha = 0.12f), RoundedCornerShape(9.dp))
+                .border(1.dp, iconColor.copy(alpha = 0.25f), RoundedCornerShape(9.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = iconColor, modifier = Modifier.size(17.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
+            Text(subtitle, fontSize = 11.sp, color = colors.textSecondary)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = { if (enabled) onToggle(it) },
+            enabled = enabled,
+            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = accent)
+        )
+    }
+}

@@ -15,6 +15,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import android.util.Log
 
+data class EstadoCuentaPrestador(
+    val existe: Boolean,
+    val baneado: Boolean,
+    val motivoBaneo: String?
+)
+
 /**
  * --- SINCRONIZADOR REMOTO PRESTADOR (PUSH - v2026.ELITE) ---
  * [RESPONSABILIDAD]: Único encargado de subir identidades soberanas a Firestore.
@@ -221,6 +227,36 @@ class SincronizadorRemotoPrestador @Inject constructor(
             Log.e("SYNC_REMOTO", "❌ Error al subir logo de empresa: ${e.message}")
             null
         }
+    }
+
+    /**
+     * 🔥 [ELITE]: Verifica existencia y estado de baneo en un solo viaje a Firestore.
+     * El panel admin (HTML Admin/js/ban.js) escribe banned/banReason/banDate/banBy
+     * en el mismo documento prestadores/{uid} — acá se lee para bloquear el acceso.
+     */
+    suspend fun verificarEstadoCuenta(uid: String): EstadoCuentaPrestador = try {
+        val doc = firestore.collection(MotorSincRemoto.COL_PRESTADOR).document(uid).get().await()
+        EstadoCuentaPrestador(
+            existe = doc.exists(),
+            baneado = doc.getBoolean("banned") == true,
+            motivoBaneo = doc.getString("banReason")
+        )
+    } catch (e: Exception) {
+        EstadoCuentaPrestador(existe = true, baneado = false, motivoBaneo = null)
+    }
+
+    /**
+     * --- PRESENCIA EN VIVO ---
+     * Fire-and-forget (no suspend): se llama desde `ProcessLifecycleOwner`
+     * (no es corrutina-friendly) y desde el login. `set(merge)` en vez de
+     * `update` para no fallar si el documento todavía no existe.
+     */
+    fun actualizarPresencia(uid: String, enLinea: Boolean) {
+        firestore.collection(MotorSincRemoto.COL_PRESTADOR).document(uid)
+            .set(mapOf("estaEnLinea" to enLinea), com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { e ->
+                Log.e("SYNC_REMOTO", "⚠️ [PRESENCIA_ERR] No se pudo actualizar estaEnLinea: ${e.message}")
+            }
     }
 }
 
