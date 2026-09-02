@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -17,7 +18,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.core.datos.repositorios.ThemeMode
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.config.AppSettingsViewModel
 
 @Composable
@@ -25,7 +25,22 @@ fun AparienciaScreen(
     onBack: () -> Unit = {},
     viewModel: AppSettingsViewModel = hiltViewModel()
 ) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722),
+        primaryOrangeDark = Color(0xFFF4511E),
+        primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712),
+        surfaceColor = Color(0xFF0F172A),
+        surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC),
+        textSecondary = Color(0xFF94A3B8),
+        border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B),
+        chipBackground = Color(0xFF1E293B),
+        chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444),
+        success = Color(0xFF10B981)
+    )
     val themeMode by viewModel.themeMode.collectAsState()
 
     Column(modifier = Modifier.fillMaxSize().background(colors.backgroundColor)) {

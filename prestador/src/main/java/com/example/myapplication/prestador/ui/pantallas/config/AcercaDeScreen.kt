@@ -20,13 +20,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.theme.PrestadorColors
 
 private const val APP_VERSION = "1.0.0"
 
 @Composable
 fun AcercaDeScreen(onBack: () -> Unit = {}) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722), primaryOrangeDark = Color(0xFFF4511E), primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444), success = Color(0xFF10B981)
+    )
 
     Column(
         modifier = Modifier
@@ -107,7 +113,13 @@ fun AcercaDeScreen(onBack: () -> Unit = {}) {
 
 @Composable
 private fun AcercaDeSection(label: String, content: @Composable ColumnScope.() -> Unit) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722), primaryOrangeDark = Color(0xFFF4511E), primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444), success = Color(0xFF10B981)
+    )
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.textSecondary, modifier = Modifier.padding(horizontal = 4.dp))
         Card(
@@ -123,7 +135,13 @@ private fun AcercaDeSection(label: String, content: @Composable ColumnScope.() -
 
 @Composable
 private fun AcercaDeRow(icon: ImageVector, iconColor: Color, label: String, value: String) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722), primaryOrangeDark = Color(0xFFF4511E), primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444), success = Color(0xFF10B981)
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()

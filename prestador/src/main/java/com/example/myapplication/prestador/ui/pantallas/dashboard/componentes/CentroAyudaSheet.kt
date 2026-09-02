@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.theme.PrestadorColors
 
 private data class FaqItem(val pregunta: String, val respuesta: String)
 private data class FaqCategoria(val nombre: String, val icono: androidx.compose.ui.graphics.vector.ImageVector, val items: List<FaqItem>)
@@ -103,11 +103,20 @@ private val faqCategorias = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CentroAyudaSheet(onDismiss: () -> Unit) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722), primaryOrangeDark = Color(0xFFF4511E), primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444), success = Color(0xFF10B981)
+    )
     val accent = colors.primaryOrange
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var busqueda by remember { mutableStateOf("") }
+    var mostrarReportarProblema by remember { mutableStateOf(false) }
+    var mostrarContactarSoporte by remember { mutableStateOf(false) }
+    var mostrarMisReportes by remember { mutableStateOf(false) }
     val categoriasFiltradas = remember(busqueda) {
         if (busqueda.isBlank()) faqCategorias
         else faqCategorias.mapNotNull { cat ->
@@ -218,8 +227,55 @@ fun CentroAyudaSheet(onDismiss: () -> Unit) {
                         Spacer(Modifier.height(12.dp))
                     }
                 }
+
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(color = colors.textSecondary.copy(alpha = 0.1f))
+                Spacer(Modifier.height(16.dp))
+                Text("¿No encontraste tu respuesta?", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = { mostrarMisReportes = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.Forum, null, tint = accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Mis reportes", color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = { mostrarContactarSoporte = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.SupportAgent, null, tint = accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Contactar a soporte", color = colors.textPrimary, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = { mostrarReportarProblema = true },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = accent)
+                ) {
+                    Icon(Icons.Default.BugReport, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Reportar un problema", color = Color.White, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
+    }
+
+    if (mostrarContactarSoporte) {
+        ChatSoporteSheet(onDismiss = { mostrarContactarSoporte = false })
+    }
+    if (mostrarReportarProblema) {
+        ReportarProblemaSheet(onDismiss = { mostrarReportarProblema = false })
+    }
+    if (mostrarMisReportes) {
+        MisReportesSheet(onDismiss = { mostrarMisReportes = false })
     }
 }
 
@@ -229,7 +285,13 @@ private fun FaqCategoriaSection(
     accentColor: Color,
     expandedByDefault: Boolean = false
 ) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722), primaryOrangeDark = Color(0xFFF4511E), primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444), success = Color(0xFF10B981)
+    )
     var expandida by remember(expandedByDefault) { mutableStateOf(expandedByDefault) }
 
     Card(
@@ -300,7 +362,13 @@ private fun FaqCategoriaSection(
 
 @Composable
 private fun FaqItemRow(item: FaqItem, accentColor: Color) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722), primaryOrangeDark = Color(0xFFF4511E), primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444), success = Color(0xFF10B981)
+    )
     var expandido by remember { mutableStateOf(false) }
 
     Column(

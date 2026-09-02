@@ -28,7 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.core.dominio.modelos.PresupuestoConfig
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import androidx.compose.foundation.border
+import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.viewmodel.presupuesto.PrePresupuestoConfigViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,7 +38,22 @@ fun PresupuestoConfigScreen(
     onBack: () -> Unit,
     viewModel: PrePresupuestoConfigViewModel = hiltViewModel()
 ) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722),
+        primaryOrangeDark = Color(0xFFF4511E),
+        primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712),
+        surfaceColor = Color(0xFF0F172A),
+        surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC),
+        textSecondary = Color(0xFF94A3B8),
+        border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B),
+        chipBackground = Color(0xFF1E293B),
+        chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444),
+        success = Color(0xFF10B981)
+    )
     val config by viewModel.config.collectAsState()
 
     //Secciones expandibles
@@ -60,18 +76,32 @@ fun PresupuestoConfigScreen(
                 .fillMaxWidth()
                 .background(colors.surfaceColor)
                 .statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = colors.textPrimary)
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(colors.backgroundColor, RoundedCornerShape(8.dp))
+                    .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = colors.textPrimary, modifier = Modifier.size(16.dp))
             }
-            Text(
-                "Configuración de Presupuestos",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = colors.textPrimary
-            )
+            Column(modifier = Modifier.padding(horizontal = 10.dp)) {
+                Text(
+                    "CONFIGURACIÓN DE PRESUPUESTOS",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.textPrimary,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    "Valores por defecto y numeracion",
+                    fontSize = 11.sp,
+                    color = colors.textSecondary
+                )
+            }
         }
         HorizontalDivider(color = colors.divider)
 

@@ -17,7 +17,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import androidx.compose.ui.graphics.Color
+import com.example.myapplication.prestador.ui.theme.PrestadorColors
 
 @Composable
 fun TerminosScreen(onBack: () -> Unit = {}) {
@@ -87,7 +88,13 @@ private fun LegalContentScreen(
     onBack: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722), primaryOrangeDark = Color(0xFFF4511E), primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444), success = Color(0xFF10B981)
+    )
 
     Column(
         modifier = Modifier
@@ -129,7 +136,13 @@ private fun LegalContentScreen(
 
 @Composable
 private fun LegalParagraph(heading: String, body: String) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722), primaryOrangeDark = Color(0xFFF4511E), primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444), success = Color(0xFF10B981)
+    )
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
