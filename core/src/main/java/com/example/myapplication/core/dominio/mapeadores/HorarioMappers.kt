@@ -26,14 +26,23 @@ object HorarioMappers {
     }
 
     fun deModeloAEntidad(
-        modelo: HorarioDominio, 
-        idReferencia: String, 
+        modelo: HorarioDominio,
+        idReferencia: String,
         idReferenciaPadre: String? = null,
+        idSucursal: String? = null,
         tipo: com.example.myapplication.core.datos.local.entidades.TipoHorario = com.example.myapplication.core.datos.local.entidades.TipoHorario.Horario_Atencion
     ): HorarioEntity {
         return HorarioEntity(
+            // [FIX]: los @Relation que arman el perfil (PrestadorCompletoRelacionesBD,
+            // SucursalCompletaRelacionesBD) buscan el horario por "idPropietario" — este mapper
+            // solo completaba "idReferencia" (el campo "de compatibilidad"), así que la fila se
+            // guardaba bien pero la consulta reactiva de Perfil nunca la encontraba (siempre
+            // null), aunque horarioDao.eliminarPorReferencia sí la borrara correctamente al
+            // filtrar por idReferencia. Se completan los dos para que ambos caminos funcionen.
+            idPropietario = idReferencia,
             idReferencia = idReferencia,
             idReferenciaPadre = idReferenciaPadre,
+            idSucursal = idSucursal,
             tipo = tipo,
             lunes = modelo.lunes,
             martes = modelo.martes,

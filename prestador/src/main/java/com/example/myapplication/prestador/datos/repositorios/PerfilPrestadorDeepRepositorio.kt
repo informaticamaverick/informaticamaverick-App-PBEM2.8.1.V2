@@ -67,10 +67,15 @@ class PerfilPrestadorDeepRepositorio @Inject constructor(
             Log.d("REPO_DEEP", "💾 [INICIO_TRANSACCION] Limpiando ecosistema previo para $uid...")
             db.withTransaction {
                 // 1. Limpieza de hilos antiguos (Cascada Manual)
+                // [FIX]: horarioDao.eliminarPorReferencia(uid) se sacó de acá — borraba el
+                // horario SIEMPRE, incluso cuando "deep.prestador.horario" llegaba null (ej. un
+                // snapshot del borrador que no cargó el horario), y como el insert de abajo es
+                // condicional (?.let), el borrado quedaba sin reemplazo: el horario desaparecía
+                // de Room aunque el usuario nunca lo haya tocado. Ahora el borrado+reinserción
+                // van juntos, atados a que realmente haya un horario nuevo para escribir.
                 direccionDao.eliminarPorPropietario(uid)
                 empresaDao.eliminarPorPropietario(uid)
                 sucursalDao.eliminarPorPropietario(uid)
-                horarioDao.eliminarPorReferencia(uid)
                 equipoTrabajoDao.eliminarPorPropietario(uid)
                 recursoDao.eliminarPorPropietario(uid)
                 Log.d("REPO_DEEP", "🧹 [LIMPIEZA_OK] Tablas de infraestructura reseteadas.")
@@ -78,12 +83,13 @@ class PerfilPrestadorDeepRepositorio @Inject constructor(
                 // 2. Persistencia de Pilares de Identidad
                 cuentaDao.insertar(deep.cuenta)
                 prestadorDao.insertar(PrestadorMappers.deDominioAEntidad(deep.prestador.perfil))
-                
-                deep.prestador.direcciones.forEach { 
-                    direccionDao.insertar(DireccionMappers.deDominioAEntidad(it)) 
+
+                deep.prestador.direcciones.forEach {
+                    direccionDao.insertar(DireccionMappers.deDominioAEntidad(it))
                 }
-                deep.prestador.horario?.let { 
-                    horarioDao.insertar(HorarioMappers.deModeloAEntidad(it, uid)) 
+                deep.prestador.horario?.let {
+                    horarioDao.eliminarPorReferencia(uid)
+                    horarioDao.insertar(HorarioMappers.deModeloAEntidad(it, uid))
                 }
                 Log.d("REPO_DEEP", "👤 [IDENTIDAD_OK] Pilar #1 y #2 guardados con ${deep.prestador.direcciones.size} direcciones.")
 
@@ -96,22 +102,32 @@ class PerfilPrestadorDeepRepositorio @Inject constructor(
                         sucursalDao.insertarSucursal(SucursalMappers.deDominioAEntidad(sucComp.sucursal))
                         
                         // Infraestructura Local de la Sucursal
-                        sucComp.direccion?.let { 
-                            direccionDao.insertar(DireccionMappers.deDominioAEntidad(it)) 
+                        // [FIX]: forzamos idSucursal acá porque el formulario de alta (HojaRegistroSucursalMav)
+                        // nunca lo setea en el DireccionDominio — sin esto se guardaba con idSucursal=null y
+                        // el @Relation de SucursalCompletaRelacionesBD (join por idSucursal) nunca encontraba
+                        // la dirección, dejando la tarjeta y la hoja de edición completamente en blanco.
+                        sucComp.direccion?.let {
+                            direccionDao.insertar(DireccionMappers.deDominioAEntidad(it.copy(idSucursal = sucComp.sucursal.id, idPropietario = uid)))
                         }
-                        sucComp.horario?.let { 
-                            horarioDao.insertar(HorarioMappers.deModeloAEntidad(it, sucComp.sucursal.id)) 
+                        // [FIX]: se limpian los horarios viejos de esta sucursal (branch/equipo/
+                        // recurso) ANTES de reinsertar — mismo criterio "borrar+reinsertar" que ya
+                        // usa el horario personal (arriba). Sin esto, cada sync agregaba una fila
+                        // NUEVA (id = UUID random) en vez de reemplazar, porque REPLACE necesita
+                        // que el id coincida para pisar la fila existente.
+                        horarioDao.eliminarPorSucursal(sucComp.sucursal.id)
+                        sucComp.horario?.let {
+                            horarioDao.insertar(HorarioMappers.deModeloAEntidad(it, sucComp.sucursal.id, idSucursal = sucComp.sucursal.id))
                         }
-                        sucComp.equipoTrabajo.forEach { 
-                            equipoTrabajoDao.insertar(EquipoTrabajoMappers.deModeloAEntidad(it, sucComp.sucursal.id)) 
+                        sucComp.equipoTrabajo.forEach {
+                            equipoTrabajoDao.insertar(EquipoTrabajoMappers.deModeloAEntidad(it, sucComp.sucursal.id))
                             it.horario?.let { h ->
-                                horarioDao.insertar(HorarioMappers.deModeloAEntidad(h, it.id, sucComp.sucursal.id, tipo = it.tipoHorario))
+                                horarioDao.insertar(HorarioMappers.deModeloAEntidad(h, it.id, sucComp.sucursal.id, idSucursal = sucComp.sucursal.id, tipo = it.tipoHorario))
                             }
                         }
-                        sucComp.recursos.forEach { 
-                            recursoDao.insertar(RecursoMappers.deModeloAEntidad(it, sucComp.sucursal.id)) 
+                        sucComp.recursos.forEach {
+                            recursoDao.insertar(RecursoMappers.deModeloAEntidad(it, sucComp.sucursal.id))
                             it.horario?.let { h ->
-                                horarioDao.insertar(HorarioMappers.deModeloAEntidad(h, it.id, sucComp.sucursal.id, tipo = it.tipoHorario))
+                                horarioDao.insertar(HorarioMappers.deModeloAEntidad(h, it.id, sucComp.sucursal.id, idSucursal = sucComp.sucursal.id, tipo = it.tipoHorario))
                             }
                         }
                     }

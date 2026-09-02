@@ -28,7 +28,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.dominio.modelos.HorarioDominio
 import com.example.myapplication.core.dominio.modelos.RangoHorarioDominio
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.viewmodel.calendar.GestionHorariosViewModel
 import java.util.UUID
 
@@ -54,7 +54,22 @@ fun HorariosConfigScreen(
     onBack: () -> Unit,
     disponibilidadViewModel: GestionHorariosViewModel = hiltViewModel()
 ) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722),
+        primaryOrangeDark = Color(0xFFF4511E),
+        primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712),
+        surfaceColor = Color(0xFF0F172A),
+        surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC),
+        textSecondary = Color(0xFF94A3B8),
+        border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B),
+        chipBackground = Color(0xFF1E293B),
+        chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444),
+        success = Color(0xFF10B981)
+    )
     val horarioBase by disponibilidadViewModel.horarioBase.collectAsStateWithLifecycle()
     
     // --- ESTADO DE EDICIÓN MÁSIVA ---
@@ -62,7 +77,7 @@ fun HorariosConfigScreen(
     var rangosBorradorMasivo by remember { mutableStateOf(listOf(RangoHorarioDominio("08:00", "18:00"))) }
     
     var pickerContext by remember { mutableStateOf<PickerContext?>(null) }
-    val colorAcento = Color(0xFFFF7043)
+    val colorAcento = Color(0xFFFF5722)
 
     var mostrarConfirmacionSalida by remember { mutableStateOf(false) }
     val hayCambios = disponibilidadViewModel.hayCambios() 
@@ -93,21 +108,33 @@ fun HorariosConfigScreen(
     Scaffold(
         containerColor = colors.backgroundColor,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("CONFIGURAR HORARIOS", fontSize = 16.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                        Text("GESTIÓN DE DISPONIBILIDAD", fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Bold)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(0xFF020617).copy(alpha = 0.95f),
+                border = BorderStroke(1.dp, Color(0xFF1E293B))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(colors.surfaceColor, RoundedCornerShape(8.dp))
+                            .border(1.dp, colors.border, RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = colors.textPrimary, modifier = Modifier.size(16.dp))
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = colorAcento,
-                    titleContentColor = Color.White
-                )
-            )
+                    Column(modifier = Modifier.padding(horizontal = 10.dp)) {
+                        Text("CONFIGURAR HORARIOS", fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = colors.textPrimary, letterSpacing = 0.5.sp)
+                        Text("Gestión de disponibilidad", fontSize = 11.sp, color = colors.textSecondary)
+                    }
+                }
+            }
         },
         bottomBar = {
             // --- BOTONES DE CONTROL MAESTRO (Grandes Ligas) ---
@@ -282,7 +309,7 @@ fun ConfiguracionRapidaHorario(
     onApply: () -> Unit
 ) {
     val nombresCortos = listOf("", "L", "M", "X", "J", "V", "S", "D")
-    val colorAcento = Color(0xFFFF7043)
+    val colorAcento = Color(0xFFFF5722)
 
     Card(
         modifier = Modifier
@@ -415,10 +442,25 @@ fun DiaHorarioCardElite(
     onClear: () -> Unit,
     onCopyAll: () -> Unit
 ) {
-    val colors = getPrestadorColors()
+    val colors = PrestadorColors(
+        primaryOrange = Color(0xFFFF5722),
+        primaryOrangeDark = Color(0xFFF4511E),
+        primaryOrangeLight = Color(0xFFFB923C),
+        backgroundColor = Color(0xFF030712),
+        surfaceColor = Color(0xFF0F172A),
+        surfaceElevated = Color(0xFF1E293B),
+        textPrimary = Color(0xFFF8FAFC),
+        textSecondary = Color(0xFF94A3B8),
+        border = Color(0xFF334155).copy(alpha = 0.7f),
+        divider = Color(0xFF1E293B),
+        chipBackground = Color(0xFF1E293B),
+        chipText = Color(0xFFF8FAFC),
+        error = Color(0xFFEF4444),
+        success = Color(0xFF10B981)
+    )
     val nombresDias = listOf("", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
     val estaAbierto = rangos.isNotEmpty()
-    val colorAcento = Color(0xFFFF7043)
+    val colorAcento = Color(0xFFFF5722)
 
     Card(
         modifier = Modifier
@@ -537,7 +579,7 @@ fun MavTimePickerDialog(
             shape = RoundedCornerShape(24.dp),
             color = Color(0xFF1A1A24),
             modifier = Modifier.padding(16.dp),
-            border = BorderStroke(1.dp, Color(0xFFFF7043).copy(alpha = 0.2f))
+            border = BorderStroke(1.dp, Color(0xFFFF5722).copy(alpha = 0.2f))
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -546,7 +588,7 @@ fun MavTimePickerDialog(
                 Text(
                     text = title,
                     fontWeight = FontWeight.Black,
-                    color = Color(0xFFFF7043),
+                    color = Color(0xFFFF5722),
                     fontSize = 14.sp,
                     letterSpacing = 1.sp
                 )
@@ -559,14 +601,14 @@ fun MavTimePickerDialog(
                         clockDialColor = Color.White.copy(alpha = 0.05f),
                         clockDialSelectedContentColor = Color.Black,
                         clockDialUnselectedContentColor = Color.White,
-                        selectorColor = Color(0xFFFF7043),
-                        periodSelectorBorderColor = Color(0xFFFF7043),
-                        periodSelectorSelectedContainerColor = Color(0xFFFF7043).copy(alpha = 0.2f),
-                        periodSelectorSelectedContentColor = Color(0xFFFF7043),
+                        selectorColor = Color(0xFFFF5722),
+                        periodSelectorBorderColor = Color(0xFFFF5722),
+                        periodSelectorSelectedContainerColor = Color(0xFFFF5722).copy(alpha = 0.2f),
+                        periodSelectorSelectedContentColor = Color(0xFFFF5722),
                         periodSelectorUnselectedContainerColor = Color.Transparent,
                         periodSelectorUnselectedContentColor = Color.White,
-                        timeSelectorSelectedContainerColor = Color(0xFFFF7043).copy(alpha = 0.2f),
-                        timeSelectorSelectedContentColor = Color(0xFFFF7043),
+                        timeSelectorSelectedContainerColor = Color(0xFFFF5722).copy(alpha = 0.2f),
+                        timeSelectorSelectedContentColor = Color(0xFFFF5722),
                         timeSelectorUnselectedContainerColor = Color.White.copy(alpha = 0.05f),
                         timeSelectorUnselectedContentColor = Color.White
                     )
@@ -585,7 +627,7 @@ fun MavTimePickerDialog(
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = { onConfirm(state.hour, state.minute) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF7043)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5722)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("CONFIRMAR", fontWeight = FontWeight.ExtraBold)
