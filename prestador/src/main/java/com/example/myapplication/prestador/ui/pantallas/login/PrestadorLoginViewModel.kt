@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.core.datos.local.entidades.IdentidadPrestadorEntity
 import com.example.myapplication.core.utilidades.ImageUtils
+import com.example.myapplication.core.datos.repositorios.ChatMotorSincRepositorio
 import com.example.myapplication.core.datos.repositorios.SincronizadorRemotoPrestador
 import com.example.myapplication.prestador.datos.repositorios.PerfilPrestadorDeepRepositorio
 import com.example.myapplication.prestador.datos.repositorios.PrestadorAutenticacionRepositorio
@@ -26,6 +27,7 @@ sealed class EstadoLogin {
     object Cargando : EstadoLogin()
     object Exito : EstadoLogin()
     data class Error(val mensaje: String) : EstadoLogin()
+    data class Suspendido(val motivo: String?) : EstadoLogin()
 }
 
 /**
@@ -39,7 +41,8 @@ class PrestadorLoginViewModel @Inject constructor(
     private val authRepository: PrestadorAutenticacionRepositorio,
     private val repoDeep: PerfilPrestadorDeepRepositorio,
     private val repoRemoto: SincronizadorRemotoPrestador,
-    private val prestadorDao: com.example.myapplication.core.datos.local.dao.IdentidadPrestadorDao
+    private val prestadorDao: com.example.myapplication.core.datos.local.dao.IdentidadPrestadorDao,
+    private val chatRepository: ChatMotorSincRepositorio
 ) : ViewModel() {
 
     private val _estadoLogin = MutableStateFlow<EstadoLogin>(EstadoLogin.Inactivo)
@@ -89,24 +92,50 @@ class PrestadorLoginViewModel @Inject constructor(
         try {
             android.util.Log.d("PrestadorLogin", "🌱 [SEED_SYNC] Delegando preparación de Room para $uid...")
 
-            // 1. Delegar todo al Repositorio Deep
+            // 1. Verificación de estado de cuenta (existe + baneo) ANTES de tocar Room/Dashboard.
+            val estadoCuenta = withTimeoutOrNull(3000) {
+                repoRemoto.verificarEstadoCuenta(uid)
+            } ?: com.example.myapplication.core.datos.repositorios.EstadoCuentaPrestador(
+                existe = true, baneado = false, motivoBaneo = null
+            )
+
+            if (estadoCuenta.baneado) {
+                android.util.Log.w("PrestadorLogin", "🚫 [CUENTA_SUSPENDIDA] $uid: ${estadoCuenta.motivoBaneo}")
+                // No cerramos sesión acá: la dejamos activa para que el diálogo de
+                // cuenta suspendida pueda leer/crear el ticket de apelación en Firestore
+                // (las reglas exigen sesión autenticada). Se cierra recién cuando el
+                // usuario cierra el diálogo, vía cerrarSesionSuspendida().
+                withContext(Dispatchers.Main) {
+                    _estadoLogin.value = EstadoLogin.Suspendido(estadoCuenta.motivoBaneo)
+                }
+                return
+            }
+
+            // 2. Delegar preparación de Room al Repositorio Deep
             repoDeep.finalizarAcceso(usuario)
 
-            // 2. Verificación de Ruteo Táctica (Check remoto ligero)
-            val existe = withTimeoutOrNull(3000) {
-                repoRemoto.existeEnRemoto(uid)
-            } ?: true 
+            // [ELITE]: Marca presencia en vivo de una — no hace falta esperar al
+            // primer onStart de ProcessLifecycleOwner (login exitoso ya implica
+            // que la app está en primer plano).
+            repoRemoto.actualizarPresencia(uid, true)
+
+            // 🐛 FIX (31/08): faltaba acá — el listener de señales de chat (inbox_signals)
+            // solo se activaba en el arranque en frío (PrestadorArranqueViewModel, cuando la
+            // sesión YA estaba iniciada al abrir la app). Un login recién hecho en esta misma
+            // sesión nunca lo activaba, así que el prestador no se enteraba de mensajes nuevos
+            // hasta reiniciar la app por completo.
+            chatRepository.inicializarEcosistemaChat(uid)
 
             withContext(Dispatchers.Main) {
-                _tienePerfil.value = existe
+                _tienePerfil.value = estadoCuenta.existe
                 _estadoLogin.value = EstadoLogin.Exito
             }
 
         } catch (e: Exception) {
             android.util.Log.e("PrestadorLogin", "❌ [LOGIN_ERROR] ${e.message}")
             withContext(Dispatchers.Main) {
-                _tienePerfil.value = true 
-                _estadoLogin.value = EstadoLogin.Exito 
+                _tienePerfil.value = true
+                _estadoLogin.value = EstadoLogin.Exito
             }
         }
     }
@@ -128,6 +157,7 @@ class PrestadorLoginViewModel @Inject constructor(
     fun resetPassword(email: String) = recuperarClave(email)
     fun signInWithGoogle() { /* Lanzado por UI */ }
     fun resetLoginState() { _estadoLogin.value = EstadoLogin.Inactivo }
+    fun cerrarSesionSuspendida() { authRepository.cerrarSesion() }
     fun resetPasswordEmailSentFlag() { _correoRecuperacionEnviado.value = false }
     
     val loginState = estadoLogin
