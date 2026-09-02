@@ -39,7 +39,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myapplication.core.datos.local.entidades.TipoEvento
 import com.example.myapplication.core.datos.local.entidades.EstadoEvento
 import com.example.myapplication.prestador.viewmodel.calendar.CalendarioViewModel
+import com.example.myapplication.prestador.ui.pantallas.empresa.turnos.GestionTurnosTheme
 import coil.compose.AsyncImage
+import com.example.myapplication.prestador.ui.theme.BorderGray
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -56,6 +58,7 @@ fun PrestadorCalendarScreen(
 ) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).apply { timeZone = TimeZone.getTimeZone("UTC") } }
     val eventos by calendarioViewModel.todosLosEventos.collectAsState()
+    val colors = GestionTurnosTheme
 
     
     val indiceInicial = 5000
@@ -84,89 +87,84 @@ fun PrestadorCalendarScreen(
             .toSet()
     }
 
+
     Scaffold(
-        containerColor = Color(0xFF1A1C1E),
+        containerColor = colors.DarkBg,
         topBar = {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color(0xFFF97316), Color(0xFFFF9248))
-                        )
-                    )
-                    .statusBarsPadding()
-                    .padding(bottom = 24.dp)
+                    .background(colors.CardBg)
             ) {
-                Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
-                        }
-                        Text(
-                            text = "MI AGENDA PROFESIONAL",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 0.5.sp
-                            ),
-                            color = Color.White,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { /* Opciones */ }) {
-                            Icon(Icons.Default.MoreVert, null, tint = Color.White)
-                        }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = colors.TextPrimary)
                     }
-                    
-                    Spacer(Modifier.height(8.dp))
-                    
-                    // Resumen rápido en el Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        Column {
-                            Text(
-                                text = SimpleDateFormat("EEEE, d 'de' MMMM", Locale.getDefault()).format(selectedDate.time).uppercase(),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.9f)
-                            )
-                            Text(
-                                text = if (eventosDelDia.isEmpty()) "Sin compromisos" else "${eventosDelDia.size} Eventos hoy",
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
-                        }
-                        
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.White.copy(alpha = 0.2f),
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Event, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                            }
-                        }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "MI AGENDA",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 0.4.sp,
+                            color = colors.TextPrimary
+                        )
+                        Text(
+                            text = SimpleDateFormat("EEEE, d 'de' MMMM", Locale.getDefault()).format(selectedDate.time)
+                                .replaceFirstChar { it.uppercase() },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.BrandOrange
+                        )
+                    }
+                    IconButton(onClick = { /* Opciones */ }) {
+                        Icon(Icons.Default.MoreVert, null, tint = colors.TextSecondary)
                     }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        text = if (eventosDelDia.isEmpty()) "Sin compromisos" else "${eventosDelDia.size} eventos hoy",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        color = colors.TextPrimary
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(
+                                colors.BrandOrange.copy(alpha = 0.12f),
+                                RoundedCornerShape(10.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Event,
+                            null,
+                            tint = colors.BrandOrange,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = colors.BorderGlass)
             }
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { /* Nuevo Evento Manual */ },
-                containerColor = Color(0xFFF97316),
-                contentColor = Color.White,
+                containerColor = colors.BrandOrange,
                 shape = CircleShape
             ) {
-                Icon(Icons.Default.Add, "Agregar")
+                Icon(Icons.Default.Add, "Agregar", tint = Color.Black)
             }
         }
     ) { paddingValues ->
@@ -180,9 +178,10 @@ fun PrestadorCalendarScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF2C2F33)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = colors.CardBg),
+                border = BorderStroke(1.dp, colors.BorderGlass),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(modifier = Modifier.padding(bottom = 16.dp)) {
                     CalendarHeader(
@@ -210,11 +209,11 @@ fun PrestadorCalendarScreen(
             // --- LISTA DE EVENTOS ---
             Text(
                 text = "CRONOGRAMA DEL DÍA",
-                fontSize = 12.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Black,
-                color = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                letterSpacing = 1.sp
+                color = colors.TextMuted,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                letterSpacing = 0.6.sp
             )
 
             LazyColumn(
@@ -324,6 +323,7 @@ fun CalendarGrid(currentDate: Calendar, selectedDate: Calendar, daysWithEvents: 
 
 @Composable
 fun EventoEliteCard(evento: com.example.myapplication.core.dominio.modelos.EventoDominio) {
+    val colors = GestionTurnosTheme
     val colorAcento = Color(evento.colorAcentoHex)
     val startTime = evento.horaTexto
     val endTime = evento.horaFinTexto ?: ""
@@ -407,6 +407,7 @@ fun EventoEliteCard(evento: com.example.myapplication.core.dominio.modelos.Event
 
 @Composable
 fun EmptyDayState() {
+    val colors = GestionTurnosTheme
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -414,15 +415,15 @@ fun EmptyDayState() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
-            Icons.Default.EventBusy, 
-            null, 
-            modifier = Modifier.size(64.dp), 
-            tint = Color.White.copy(alpha = 0.1f)
+            Icons.Default.EventBusy,
+            null,
+            modifier = Modifier.size(64.dp),
+            tint = colors.TextMuted.copy(alpha = 0.4f)
         )
         Spacer(Modifier.height(16.dp))
         Text(
             "Día libre de compromisos",
-            color = Color.White.copy(alpha = 0.4f),
+            color = colors.TextSecondary,
             fontWeight = FontWeight.Medium
         )
     }
