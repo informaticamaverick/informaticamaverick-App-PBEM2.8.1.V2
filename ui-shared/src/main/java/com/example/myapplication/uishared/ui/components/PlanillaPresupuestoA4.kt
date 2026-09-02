@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -590,6 +591,17 @@ fun PlanillaPresupuestoA4Viewer(
         val escalaAjusteInicial = remember(anchoDisponible) { ((anchoDisponible - 32.dp) / EXECUTIVE_A4_WIDTH).coerceAtMost(1f) }
         var escala by remember { mutableFloatStateOf(escalaAjusteInicial) }
         var desplazamiento by remember { mutableStateOf(Offset.Zero) }
+        var tamanioVisor by remember { mutableStateOf(IntSize.Zero) }
+        var tamanioDocumento by remember { mutableStateOf(IntSize.Zero) }
+
+        // Tope de arrastre: no dejar que el documento se corra más allá de su propio
+        // margen — el offset máximo es la mitad de lo que el documento escalado excede
+        // al visor (si el documento entra completo, el tope es 0, queda centrado fijo).
+        fun limitarOffset(offset: Offset): Offset {
+            val maxX = ((tamanioDocumento.width * escala - tamanioVisor.width) / 2f).coerceAtLeast(0f)
+            val maxY = ((tamanioDocumento.height * escala - tamanioVisor.height) / 2f).coerceAtLeast(0f)
+            return Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY))
+        }
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF111111))) {
             Surface(modifier = Modifier.fillMaxWidth(), color = Color.Black.copy(alpha = 0.4f), tonalElevation = 8.dp) {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -602,14 +614,14 @@ fun PlanillaPresupuestoA4Viewer(
                         }
                     }
                     Row(modifier = Modifier.background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp)).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { escala = (escala * 0.8f).coerceAtLeast(escalaAjusteInicial); desplazamiento = Offset.Zero }) { Icon(Icons.Default.Remove, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+                        IconButton(onClick = { escala = (escala * 0.8f).coerceAtLeast(escalaAjusteInicial); desplazamiento = limitarOffset(desplazamiento) }) { Icon(Icons.Default.Remove, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
                         Text("${(escala / escalaAjusteInicial * 100).toInt()}%", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black, modifier = Modifier.widthIn(min = 40.dp), textAlign = TextAlign.Center)
-                        IconButton(onClick = { escala = (escala * 1.25f).coerceAtMost(4f) }) { Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
+                        IconButton(onClick = { escala = (escala * 1.25f).coerceAtMost(4f); desplazamiento = limitarOffset(desplazamiento) }) { Icon(Icons.Default.Add, null, tint = Color.White, modifier = Modifier.size(20.dp)) }
                     }
                 }
             }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth().graphicsLayer(clip = true).pointerInput(Unit) { detectTransformGestures { _, pan, zoom, _ -> escala = (escala * zoom).coerceIn(escalaAjusteInicial, 4f); desplazamiento = Offset(desplazamiento.x + pan.x, desplazamiento.y + pan.y) } }, contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.wrapContentSize(unbounded = true).requiredWidth(EXECUTIVE_A4_WIDTH).graphicsLayer(scaleX = escala, scaleY = escala, translationX = desplazamiento.x, translationY = desplazamiento.y)) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth().onSizeChanged { tamanioVisor = it }.graphicsLayer(clip = true).pointerInput(Unit) { detectTransformGestures { _, pan, zoom, _ -> escala = (escala * zoom).coerceIn(escalaAjusteInicial, 4f); desplazamiento = limitarOffset(Offset(desplazamiento.x + pan.x, desplazamiento.y + pan.y)) } }, contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.wrapContentSize(unbounded = true).requiredWidth(EXECUTIVE_A4_WIDTH).onSizeChanged { tamanioDocumento = it }.graphicsLayer(scaleX = escala, scaleY = escala, translationX = desplazamiento.x, translationY = desplazamiento.y)) {
                     PlanillaPresupuestoA4(
                         prestador = prestador, 
                         relacion = relacion, 
