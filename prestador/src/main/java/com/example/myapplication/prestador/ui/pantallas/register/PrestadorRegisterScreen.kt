@@ -44,7 +44,7 @@ import coil.compose.AsyncImage
 import com.example.myapplication.core.datos.local.entidades.CategoriaEntity
 import com.example.myapplication.core.dominio.modelos.DireccionDominio
 import com.example.myapplication.prestador.ui.pantallas.register.componentes.*
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.pantallas.empresa.turnos.GestionTurnosTheme
 import com.google.firebase.auth.FirebaseAuth
 import java.util.UUID
 
@@ -208,7 +208,7 @@ fun PrestadorRegisterScreenContent(
     onBackToLogin: () -> Unit,
     onResetError: () -> Unit,
 ) {
-    val colors = getPrestadorColors()
+    val colors = GestionTurnosTheme
     var datos by remember { mutableStateOf(DatosRegistro(tieneNegocio = tieneNegocioInicial)) }
     var passwordVisible by remember { mutableStateOf(false) }
     var profileImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -239,59 +239,79 @@ fun PrestadorRegisterScreenContent(
     ) { uri: Uri? -> profileImageUri = uri }
 
     Scaffold(
-        containerColor = colors.backgroundColor,
+        containerColor = colors.DarkBg,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
+                title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Paso $currentStep de $totalSteps", fontSize = 12.sp, color = colors.primaryOrange, fontWeight = FontWeight.Black)
-                        Text("Registro Maverick", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Paso $currentStep de $totalSteps", fontSize = 12.sp, color = colors.BrandOrange, fontWeight = FontWeight.Black)
+                        Text("Registro Maverick", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.TextPrimary)
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onPrevStep) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White) }
+                    IconButton(onClick = onPrevStep) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = colors.TextPrimary) }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = colors.backgroundColor)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = colors.DarkBg)
             )
         },
         bottomBar = {
-            Surface(shadowElevation = 8.dp, color = colors.surfaceColor) {
+            Surface(shadowElevation = 8.dp, color = colors.CardBg, border = BorderStroke(1.dp, colors.BorderGlass)) {
                 Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (currentStep > 1) {
                         OutlinedButton(
                             onClick = onPrevStep,
                             modifier = Modifier.weight(1f).height(56.dp),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, colors.BorderGlass),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.TextPrimary)
                         ) {
                             Text("ATRÁS", fontWeight = FontWeight.Bold)
                         }
                     }
-                    
+
                     Button(
-                        onClick = { 
-                            if (currentStep < totalSteps) onNextStep() 
-                            else onRegisterClick(datos, profileImageUri) 
+                        onClick = {
+                            if (currentStep < totalSteps) onNextStep()
+                            else onRegisterClick(datos, profileImageUri)
                         },
                         modifier = Modifier.weight(2f).height(56.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        if (isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                        else Text(if (currentStep < totalSteps) "CONTINUAR" else "CREAR CUENTA", color = Color.White, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.horizontalGradient(listOf(colors.BrandOrange, Color(0xFFFB923C))),
+                                    shape = RoundedCornerShape(12.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isLoading) CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            else Text(if (currentStep < totalSteps) "CONTINUAR" else "CREAR CUENTA", color = Color.Black, fontWeight = FontWeight.Black)
+                        }
                     }
                 }
             }
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp).verticalScroll(rememberScrollState())) {
-            
+
             LinearProgressIndicator(
                 progress = { currentStep.toFloat() / totalSteps },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp).clip(CircleShape),
-                color = colors.primaryOrange,
-                trackColor = Color.White.copy(0.1f)
+                color = colors.BrandOrange,
+                trackColor = colors.BorderGlass
             )
 
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = colors.CardBg,
+                border = BorderStroke(1.dp, colors.BorderGlass)
+            ) {
+            Box(modifier = Modifier.padding(20.dp)) {
             AnimatedContent(
                 targetState = currentStep,
                 transitionSpec = {
@@ -364,13 +384,23 @@ fun PrestadorRegisterScreenContent(
                     )
                 }
             }
-            
+            }
+            }
+
             Spacer(Modifier.height(32.dp))
         }
     }
 
     if (errorMessage != null) {
-        AlertDialog(onDismissRequest = onResetError, title = { Text("Error") }, text = { Text(errorMessage) }, confirmButton = { TextButton(onClick = onResetError) { Text("OK") } })
+        AlertDialog(
+            onDismissRequest = onResetError,
+            containerColor = colors.CardBg,
+            titleContentColor = colors.AccentRose,
+            textContentColor = colors.TextSecondary,
+            title = { Text("Error", fontWeight = FontWeight.Black) },
+            text = { Text(errorMessage) },
+            confirmButton = { TextButton(onClick = onResetError) { Text("OK", color = colors.BrandOrange, fontWeight = FontWeight.Black) } }
+        )
     }
 }
 
@@ -384,19 +414,20 @@ fun PasoIdentidadDigital(
     passwordVisible: Boolean,
     onTogglePassword: () -> Unit
 ) {
+    val colors = GestionTurnosTheme
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Box(
-            modifier = Modifier.size(120.dp).padding(top = 16.dp).align(Alignment.CenterHorizontally).clip(CircleShape).border(2.dp, Color(0xFFFF7043), CircleShape).clickable { onPickImage() },
+            modifier = Modifier.size(120.dp).padding(top = 16.dp).align(Alignment.CenterHorizontally).clip(CircleShape).background(colors.SurfaceInput).border(2.dp, colors.BrandOrange, CircleShape).clickable { onPickImage() },
             contentAlignment = Alignment.Center
         ) {
             if (profileImageUri != null) {
                 AsyncImage(model = profileImageUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             } else {
-                Icon(Icons.Default.AddAPhoto, null, modifier = Modifier.size(40.dp), tint = Color.Gray)
+                Icon(Icons.Default.AddAPhoto, null, modifier = Modifier.size(40.dp), tint = colors.TextMuted)
             }
         }
-        
-        Text("Foto de Perfil", modifier = Modifier.align(Alignment.CenterHorizontally), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+
+        Text("Foto de Perfil", modifier = Modifier.align(Alignment.CenterHorizontally), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = colors.TextPrimary)
 
         FloatingLabelTextField(valor = datos.nombre, onValorCambio = { onDatosChange(datos.copy(nombre = it)) }, etiqueta = "Nombre", iconoPrimario = Icons.Default.Person)
         FloatingLabelTextField(valor = datos.apellido, onValorCambio = { onDatosChange(datos.copy(apellido = it)) }, etiqueta = "Apellido", iconoPrimario = Icons.Default.Person)
@@ -426,60 +457,106 @@ fun PasoPerfilProfesional(
     categoriasFiltradas: List<CategoriaEntity>,
     loadingServicios: Boolean
 ) {
+    val colors = GestionTurnosTheme
+    val campoColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = colors.BrandOrange,
+        unfocusedBorderColor = colors.BorderGlass,
+        focusedLabelColor = colors.BrandOrange,
+        unfocusedLabelColor = colors.TextMuted,
+        focusedTextColor = colors.TextPrimary,
+        unfocusedTextColor = colors.TextPrimary,
+        focusedContainerColor = colors.SurfaceInput,
+        unfocusedContainerColor = colors.SurfaceInput,
+        cursorColor = colors.BrandOrange
+    )
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ExposedDropdownMenuBox(expanded = menuCategoriaExpandido, onExpandedChange = onMenuExpandChange) {
             OutlinedTextField(
-                value = queryCategoria.ifBlank { 
+                value = queryCategoria.ifBlank {
                     todasLasCategorias.find { it.id == datos.idCategoria }?.nombre ?: ""
                 },
                 onValueChange = { onQueryChange(it); onMenuExpandChange(true) },
                 label = { Text("Buscar Categoría Principal") },
-                trailingIcon = { if (loadingServicios) CircularProgressIndicator(modifier = Modifier.size(20.dp)) else ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuCategoriaExpandido) },
+                trailingIcon = { if (loadingServicios) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = colors.BrandOrange) else ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuCategoriaExpandido) },
                 modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, enabled = true).fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = campoColors
             )
             if (categoriasFiltradas.isNotEmpty()) {
-                ExposedDropdownMenu(expanded = menuCategoriaExpandido, onDismissRequest = { onMenuExpandChange(false) }) {
+                ExposedDropdownMenu(expanded = menuCategoriaExpandido, onDismissRequest = { onMenuExpandChange(false) }, containerColor = colors.CardBg) {
                     categoriasFiltradas.forEach { servicio ->
-                        DropdownMenuItem(text = { Text("${servicio.icono} ${servicio.nombre}") }, onClick = { onDatosChange(datos.copy(idCategoria = servicio.id)); onQueryChange(servicio.nombre); onMenuExpandChange(false) })
+                        DropdownMenuItem(
+                            text = { Text("${servicio.icono} ${servicio.nombre}", color = colors.TextPrimary) },
+                            onClick = { onDatosChange(datos.copy(idCategoria = servicio.id)); onQueryChange(servicio.nombre); onMenuExpandChange(false) }
+                        )
                     }
                 }
             }
         }
-        
+
         FloatingLabelTextField(valor = datos.telefono, onValorCambio = { onDatosChange(datos.copy(telefono = it)) }, etiqueta = "Teléfono de Contacto", iconoPrimario = Icons.Default.Phone, tipoTeclado = KeyboardType.Phone)
         FloatingLabelTextField(valor = datos.dniCuit, onValorCambio = { onDatosChange(datos.copy(dniCuit = it)) }, etiqueta = "DNI / CUIT Personal", iconoPrimario = Icons.Default.Badge)
-        
-        OutlinedTextField(value = datos.mensaje, onValueChange = { onDatosChange(datos.copy(mensaje = it)) }, label = { Text("Breve biografía / especialidades") }, modifier = Modifier.fillMaxWidth().height(120.dp), shape = RoundedCornerShape(8.dp))
+
+        OutlinedTextField(
+            value = datos.mensaje,
+            onValueChange = { onDatosChange(datos.copy(mensaje = it)) },
+            label = { Text("Breve biografía / especialidades") },
+            modifier = Modifier.fillMaxWidth().height(120.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = campoColors
+        )
     }
 }
 
 @Composable
 fun PasoInfraestructuraEmpresa(datos: DatosRegistro, onDatosChange: (DatosRegistro) -> Unit) {
+    val colors = GestionTurnosTheme
+    val campoColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = colors.BrandOrange,
+        unfocusedBorderColor = colors.BorderGlass,
+        focusedLabelColor = colors.BrandOrange,
+        unfocusedLabelColor = colors.TextMuted,
+        focusedTextColor = colors.TextPrimary,
+        unfocusedTextColor = colors.TextPrimary,
+        focusedContainerColor = colors.SurfaceInput,
+        unfocusedContainerColor = colors.SurfaceInput,
+        cursorColor = colors.BrandOrange
+    )
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Datos Corporativos", fontWeight = FontWeight.Black, fontSize = 16.sp)
+        Text("Datos Corporativos", fontWeight = FontWeight.Black, fontSize = 16.sp, color = colors.TextPrimary)
         FloatingLabelTextField(valor = datos.nombreNegocio, onValorCambio = { onDatosChange(datos.copy(nombreNegocio = it)) }, etiqueta = "Nombre de Fantasía", iconoPrimario = Icons.Default.Store)
         FloatingLabelTextField(valor = datos.razonSocial, onValorCambio = { onDatosChange(datos.copy(razonSocial = it)) }, etiqueta = "Razón Social", iconoPrimario = Icons.Default.Description)
         FloatingLabelTextField(valor = datos.cuitNegocio, onValorCambio = { onDatosChange(datos.copy(cuitNegocio = it)) }, etiqueta = "CUIT Empresa", iconoPrimario = Icons.Default.Tag, tipoTeclado = KeyboardType.Number)
-        
+
         Spacer(Modifier.height(8.dp))
-        Text("Configuración de Sucursales (Máx 3)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        
+        Text("Configuración de Sucursales (Máx 3)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = colors.TextPrimary)
+
         datos.sucursales.forEachIndexed { index, sucursal ->
-            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f))) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = colors.SurfaceInput,
+                border = BorderStroke(1.dp, colors.BorderGlass)
+            ) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                        Text("Sucursal ${index + 1}", fontWeight = FontWeight.Bold)
-                        if (index > 0) IconButton(onClick = { onDatosChange(datos.copy(sucursales = datos.sucursales.toMutableList().apply { removeAt(index) })) }) { Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(18.dp)) }
+                        Text("Sucursal ${index + 1}", fontWeight = FontWeight.Bold, color = colors.TextPrimary)
+                        if (index > 0) IconButton(onClick = { onDatosChange(datos.copy(sucursales = datos.sucursales.toMutableList().apply { removeAt(index) })) }) { Icon(Icons.Default.Delete, null, tint = colors.AccentRose, modifier = Modifier.size(18.dp)) }
                     }
-                    OutlinedTextField(value = sucursal.nombre, onValueChange = { n -> onDatosChange(datos.copy(sucursales = datos.sucursales.toMutableList().apply { set(index, sucursal.copy(nombre = n)) })) }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                    OutlinedTextField(value = sucursal.direccion, onValueChange = { d -> onDatosChange(datos.copy(sucursales = datos.sucursales.toMutableList().apply { set(index, sucursal.copy(direccion = d)) })) }, label = { Text("Dirección") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                    OutlinedTextField(value = sucursal.nombre, onValueChange = { n -> onDatosChange(datos.copy(sucursales = datos.sucursales.toMutableList().apply { set(index, sucursal.copy(nombre = n)) })) }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp), colors = campoColors)
+                    OutlinedTextField(value = sucursal.direccion, onValueChange = { d -> onDatosChange(datos.copy(sucursales = datos.sucursales.toMutableList().apply { set(index, sucursal.copy(direccion = d)) })) }, label = { Text("Dirección") }, modifier = Modifier.fillMaxWidth(), singleLine = true, shape = RoundedCornerShape(12.dp), colors = campoColors)
                 }
             }
         }
-        
+
         if (datos.sucursales.size < 3) {
-            TextButton(onClick = { onDatosChange(datos.copy(sucursales = datos.sucursales + SucursalUI())) }) { Icon(Icons.Default.Add, null); Text("AÑADIR OTRA SUCURSAL") }
+            TextButton(onClick = { onDatosChange(datos.copy(sucursales = datos.sucursales + SucursalUI())) }) {
+                Icon(Icons.Default.Add, null, tint = colors.BrandOrange)
+                Spacer(Modifier.width(4.dp))
+                Text("AÑADIR OTRA SUCURSAL", color = colors.BrandOrange, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
@@ -491,28 +568,29 @@ fun PasoUbicacionYAlcance(
     estaDetectando: Boolean = false,
     alDetectarUbicacion: () -> Unit = {}
 ) {
+    val colors = GestionTurnosTheme
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Ubicación Principal", fontWeight = FontWeight.Black, fontSize = 16.sp)
-            
+            Text("Ubicación Principal", fontWeight = FontWeight.Black, fontSize = 16.sp, color = colors.TextPrimary)
+
             Button(
                 onClick = alDetectarUbicacion,
                 enabled = !estaDetectando,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 modifier = Modifier.height(36.dp),
                 shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6).copy(0.2f))
+                colors = ButtonDefaults.buttonColors(containerColor = colors.AccentCyan.copy(alpha = 0.15f))
             ) {
                 if (estaDetectando) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color(0xFF3B82F6), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = colors.AccentCyan, strokeWidth = 2.dp)
                 } else {
-                    Icon(Icons.Default.MyLocation, null, tint = Color(0xFF3B82F6), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.MyLocation, null, tint = colors.AccentCyan, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("DETECTAR", color = Color(0xFF3B82F6), fontSize = 11.sp, fontWeight = FontWeight.Black)
+                    Text("DETECTAR", color = colors.AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Black)
                 }
             }
         }
@@ -558,22 +636,29 @@ fun PasoUbicacionYAlcance(
             iconoPrimario = Icons.Default.Public
         )
         
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.White.copy(0.1f))
-        
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = colors.BorderGlass)
+
+        val switchColors = SwitchDefaults.colors(
+            checkedThumbColor = Color.White,
+            checkedTrackColor = colors.BrandOrange,
+            uncheckedThumbColor = colors.TextMuted,
+            uncheckedTrackColor = colors.SurfaceInput,
+            uncheckedBorderColor = colors.BorderGlass
+        )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = datos.vaDomicilio, onCheckedChange = { onDatosChange(datos.copy(vaDomicilio = it)) })
-            Spacer(Modifier.width(12.dp)); Text("Ofrezco Visitas Técnicas a Domicilio")
+            Switch(checked = datos.vaDomicilio, onCheckedChange = { onDatosChange(datos.copy(vaDomicilio = it)) }, colors = switchColors)
+            Spacer(Modifier.width(12.dp)); Text("Ofrezco Visitas Técnicas a Domicilio", color = colors.TextPrimary)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = datos.atiende24h, onCheckedChange = { onDatosChange(datos.copy(atiende24h = it)) })
-            Spacer(Modifier.width(12.dp)); Text("Atención de Urgencias 24 Horas")
+            Switch(checked = datos.atiende24h, onCheckedChange = { onDatosChange(datos.copy(atiende24h = it)) }, colors = switchColors)
+            Spacer(Modifier.width(12.dp)); Text("Atención de Urgencias 24 Horas", color = colors.TextPrimary)
         }
-        
-        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3B82F6).copy(0.05f))) {
+
+        Surface(shape = RoundedCornerShape(14.dp), color = colors.AccentCyan.copy(alpha = 0.10f)) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Info, null, tint = Color(0xFF3B82F6), modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Info, null, tint = colors.AccentCyan, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(12.dp))
-                Text("Usamos tu ubicación para que los clientes cercanos puedan encontrarte más rápido.", fontSize = 11.sp, color = Color.White.copy(0.7f))
+                Text("Usamos tu ubicación para que los clientes cercanos puedan encontrarte más rápido.", fontSize = 11.sp, color = colors.TextSecondary)
             }
         }
     }

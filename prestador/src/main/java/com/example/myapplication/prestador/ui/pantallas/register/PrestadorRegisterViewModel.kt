@@ -106,52 +106,58 @@ class PrestadorRegisterViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             _estadoRegistro.value = EstadoRegistro.Cargando
-            
-            var rutaLocalFoto: String? = null
-            var miniaturaBase64: String? = null
 
-            // 1. Procesamiento de Imagen (v2026.ELITE)
-            profileImageUri?.let { uri ->
-                try {
-                    val originalBytes = ImageUtils.getBytesFromUri(contexto, uri)
-                    originalBytes?.let { bytes ->
-                        // [SUPREME]: Usamos compresión de alta fidelidad para el perfil principal
-                        val compressed = ImageUtils.compressSupreme(contexto, uri) 
-                        val finalBytes = if (uri.scheme?.startsWith("http") == true) {
-                            ImageUtils.compressBytesToWebP(bytes, 1200, 1200, 90)
-                        } else compressed
-
-                        finalBytes?.let { 
-                            rutaLocalFoto = ImageUtils.saveBytesToFile(contexto, it, "perfil_${System.currentTimeMillis()}")
-                        }
-                        
-                        miniaturaBase64 = if (uri.scheme?.startsWith("http") == true) {
-                            ImageUtils.generateThumbnailFromBytes(bytes)
-                        } else ImageUtils.generateThumbnailBase64(contexto, uri)
-                    }
-                    Log.d("RegisterVM", "📸 [PHOTO_PROCESSED] Miniatura: ${miniaturaBase64?.length} | Local: $rutaLocalFoto")
-                } catch (e: Exception) {
-                    android.util.Log.e("RegisterVM", "❌ [PHOTO_ERROR] ${e.message}")
-                }
-            }
-
-            val uid = authRepository.obtenerUsuarioActual()?.uid ?: throw Exception("Sesión no iniciada")
-
-            val dir = DireccionDominio(
-                id = java.util.UUID.randomUUID().toString(),
-                idPropietario = uid,
-                idReferencia = uid,
-                calle = calle, 
-                numero = numero, 
-                localidad = localidad, 
-                provincia = provincia, 
-                codigoPostal = codigoPostal, 
-                latitud = latitud, 
-                longitud = longitud,
-                tieneLocalFisico = hasPhysicalStore
-            )
-            
             try {
+                var rutaLocalFoto: String? = null
+                var miniaturaBase64: String? = null
+
+                // 1. Procesamiento de Imagen (v2026.ELITE)
+                profileImageUri?.let { uri ->
+                    try {
+                        val originalBytes = ImageUtils.getBytesFromUri(contexto, uri)
+                        originalBytes?.let { bytes ->
+                            // [SUPREME]: Usamos compresión de alta fidelidad para el perfil principal
+                            val compressed = ImageUtils.compressSupreme(contexto, uri)
+                            val finalBytes = if (uri.scheme?.startsWith("http") == true) {
+                                ImageUtils.compressBytesToWebP(bytes, 1200, 1200, 90)
+                            } else compressed
+
+                            finalBytes?.let {
+                                rutaLocalFoto = ImageUtils.saveBytesToFile(contexto, it, "perfil_${System.currentTimeMillis()}")
+                            }
+
+                            miniaturaBase64 = if (uri.scheme?.startsWith("http") == true) {
+                                ImageUtils.generateThumbnailFromBytes(bytes)
+                            } else ImageUtils.generateThumbnailBase64(contexto, uri)
+                        }
+                        Log.d("RegisterVM", "📸 [PHOTO_PROCESSED] Miniatura: ${miniaturaBase64?.length} | Local: $rutaLocalFoto")
+                    } catch (e: Exception) {
+                        android.util.Log.e("RegisterVM", "❌ [PHOTO_ERROR] ${e.message}")
+                    }
+                }
+
+                // 1.5 Crear la cuenta de autenticación (si no venimos ya logueados por Google)
+                if (!isGoogleUser) {
+                    authRepository.registrarseConEmailClave(email, password)
+                        .exceptionOrNull()?.let { throw it }
+                }
+
+                val uid = authRepository.obtenerUsuarioActual()?.uid ?: throw Exception("Sesión no iniciada")
+
+                val dir = DireccionDominio(
+                    id = java.util.UUID.randomUUID().toString(),
+                    idPropietario = uid,
+                    idReferencia = uid,
+                    calle = calle,
+                    numero = numero,
+                    localidad = localidad,
+                    provincia = provincia,
+                    codigoPostal = codigoPostal,
+                    latitud = latitud,
+                    longitud = longitud,
+                    tieneLocalFisico = hasPhysicalStore
+                )
+
                 // 2. Construir Ecosistema Maestro (v2026.DEEP)
                 val cuenta = CuentaEntity(
                     id = uid,

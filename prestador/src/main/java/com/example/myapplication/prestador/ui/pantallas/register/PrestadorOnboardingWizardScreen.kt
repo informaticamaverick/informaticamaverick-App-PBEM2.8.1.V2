@@ -24,12 +24,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.pantallas.empresa.turnos.GestionTurnosTheme
 
 /**
  * --- PANTALLA DE ELECCIÓN MAVERICK (WIZARD) ---
  * Guía al usuario para definir su perfil: Independiente vs Empresa.
- * [v2026.12]: Diseño moderno y segmentación clara.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,34 +37,45 @@ fun PrestadorOnboardingWizardScreen(
     onBack: () -> Unit,
     onNavigateToForm: (tieneNegocio: Boolean) -> Unit
 ) {
-    val colors = getPrestadorColors()
+    val colors = GestionTurnosTheme
     var seleccion by remember { mutableStateOf<Boolean?>(null) } // null: nada, false: personal, true: empresa
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Configura tu Perfil", fontWeight = FontWeight.Bold) },
+                title = { Text("Configurá tu Perfil", fontWeight = FontWeight.Black, color = colors.TextPrimary) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = colors.TextPrimary) }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = colors.backgroundColor)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = colors.DarkBg)
             )
         },
-        containerColor = colors.backgroundColor,
+        containerColor = colors.DarkBg,
         bottomBar = {
             AnimatedVisibility(
                 visible = seleccion != null,
                 enter = slideInVertically { it } + fadeIn(),
                 exit = slideOutVertically { it } + fadeOut()
             ) {
-                Surface(shadowElevation = 8.dp, color = colors.surfaceColor) {
+                Surface(shadowElevation = 8.dp, color = colors.CardBg, border = BorderStroke(1.dp, colors.BorderGlass)) {
                     Button(
                         onClick = { onNavigateToForm(seleccion ?: false) },
                         modifier = Modifier.fillMaxWidth().padding(20.dp).height(56.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.primaryOrange)
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = RoundedCornerShape(14.dp)
                     ) {
-                        Text("CONTINUAR", fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.horizontalGradient(listOf(colors.BrandOrange, Color(0xFFFB923C))),
+                                    shape = RoundedCornerShape(14.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("CONTINUAR", color = Color.Black, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp)
+                        }
                     }
                 }
             }
@@ -79,20 +89,20 @@ fun PrestadorOnboardingWizardScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(20.dp))
-            
+
             Text(
                 text = "¿Cómo vas a ofrecer tus servicios?",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
-                color = Color.White
+                color = colors.TextPrimary
             )
-            
+
             Text(
                 text = "Seleccioná la opción que mejor describa tu actividad actual.",
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
-                color = Color.Gray,
+                color = colors.TextSecondary,
                 modifier = Modifier.padding(top = 8.dp, bottom = 32.dp)
             )
 
@@ -113,22 +123,22 @@ fun PrestadorOnboardingWizardScreen(
                 seleccionada = seleccion == true,
                 onClick = { seleccion = true }
             )
-            
+
             Spacer(Modifier.weight(1f))
-            
+
             if (seleccion == true) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = colors.primaryOrange.copy(0.1f)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.padding(bottom = 20.dp)
+                Surface(
+                    color = colors.AccentViolet.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)
                 ) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CheckCircle, null, tint = colors.primaryOrange, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.CheckCircle, null, tint = colors.AccentViolet, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
                         Text(
                             "Acceso a Jerarquía 3x3: Gestioná hasta 3 sucursales y todo tu equipo operativo.",
                             style = MaterialTheme.typography.labelSmall,
-                            color = colors.primaryOrange,
+                            color = colors.AccentViolet,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -146,9 +156,9 @@ fun WizardChoiceCard(
     seleccionada: Boolean,
     onClick: () -> Unit
 ) {
-    val colors = getPrestadorColors()
-    val borderColor = if (seleccionada) colors.primaryOrange else Color.White.copy(0.1f)
-    val bgColor = if (seleccionada) colors.primaryOrange.copy(0.05f) else Color.White.copy(0.02f)
+    val colors = GestionTurnosTheme
+    val borderColor = if (seleccionada) colors.BrandOrange else colors.BorderGlass
+    val bgColor = if (seleccionada) colors.BrandOrange.copy(alpha = 0.08f) else colors.CardBg
 
     Box(
         modifier = Modifier
@@ -164,21 +174,21 @@ fun WizardChoiceCard(
                 modifier = Modifier
                     .size(56.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(if (seleccionada) colors.primaryOrange else Color.White.copy(0.1f)),
+                    .background(if (seleccionada) colors.BrandOrange else colors.SurfaceInput),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icono, null, tint = if (seleccionada) Color.White else Color.Gray, modifier = Modifier.size(28.dp))
+                Icon(icono, null, tint = if (seleccionada) Color.Black else colors.TextMuted, modifier = Modifier.size(28.dp))
             }
-            
+
             Spacer(Modifier.width(20.dp))
-            
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(titulo, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = if (seleccionada) Color.White else Color.Gray)
-                Text(descripcion, style = MaterialTheme.typography.bodySmall, color = Color.Gray, lineHeight = 16.sp)
+                Text(titulo, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = if (seleccionada) colors.TextPrimary else colors.TextSecondary)
+                Text(descripcion, style = MaterialTheme.typography.bodySmall, color = colors.TextMuted, lineHeight = 16.sp)
             }
-            
+
             if (seleccionada) {
-                Icon(Icons.Default.CheckCircle, null, tint = colors.primaryOrange)
+                Icon(Icons.Default.CheckCircle, null, tint = colors.BrandOrange)
             }
         }
     }

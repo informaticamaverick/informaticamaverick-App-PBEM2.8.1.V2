@@ -20,7 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.pantallas.empresa.turnos.GestionTurnosTheme
 
 @Composable
 fun RegisterSectionCard(
@@ -32,12 +32,12 @@ fun RegisterSectionCard(
     onExpandChange: () -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val colors = getPrestadorColors()
+    val colors = GestionTurnosTheme
 
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = colors.surfaceColor,
+        color = colors.CardBg,
         shadowElevation = 2.dp,
         border = BorderStroke(1.dp, color.copy(alpha = 0.3f))
     ) {
@@ -74,7 +74,7 @@ fun RegisterSectionCard(
                         text = title,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary,
+                        color = colors.TextPrimary,
                         modifier = Modifier.weight(1f)
                     )
                     Icon(
@@ -111,10 +111,10 @@ fun FloatingLabelTextField(
     modifier: Modifier = Modifier,
     fuenteInteraccion: MutableInteractionSource = remember { MutableInteractionSource() }
 ) {
-    val colores = getPrestadorColors()
+    val colores = GestionTurnosTheme
     val enfocado by fuenteInteraccion.collectIsFocusedAsState()
     val tieneTexto = valor.isNotEmpty()
-    
+
     Box(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = valor,
@@ -122,34 +122,37 @@ fun FloatingLabelTextField(
             modifier = Modifier.fillMaxWidth(),
             enabled = habilitado,
             leadingIcon = iconoPrimario?.let { {
-                Icon(it, contentDescription = null, tint = colores.textSecondary)
+                Icon(it, contentDescription = null, tint = colores.TextMuted)
             }},
             trailingIcon = iconoSecundario?.let { {
                 IconButton(onClick = { alClickIconoSecundario?.invoke() }) {
-                    Icon(it, contentDescription = null, tint = colores.textSecondary)
+                    Icon(it, contentDescription = null, tint = colores.TextMuted)
                 }
             }},
             label = {
                 Text(
                     etiqueta,
-                    color = if (enfocado) colores.primaryOrange else colores.textSecondary,
+                    color = if (enfocado) colores.BrandOrange else colores.TextMuted,
                     fontSize = if (enfocado || tieneTexto) 12.sp else 16.sp
                 )
             },
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = colores.primaryOrange,
-                unfocusedBorderColor = if (habilitado) colores.border else Color.Transparent,
-                focusedLabelColor = colores.primaryOrange,
-                unfocusedLabelColor = colores.textSecondary,
-                focusedTextColor = colores.textPrimary,
-                unfocusedTextColor = colores.textPrimary
+                focusedBorderColor = colores.BrandOrange,
+                unfocusedBorderColor = if (habilitado) colores.BorderGlass else Color.Transparent,
+                focusedLabelColor = colores.BrandOrange,
+                unfocusedLabelColor = colores.TextMuted,
+                focusedTextColor = colores.TextPrimary,
+                unfocusedTextColor = colores.TextPrimary,
+                focusedContainerColor = colores.SurfaceInput,
+                unfocusedContainerColor = colores.SurfaceInput,
+                cursorColor = colores.BrandOrange
             ),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(keyboardType = tipoTeclado),
             visualTransformation = transformacionVisual,
             interactionSource = fuenteInteraccion,
             singleLine = true,
-            prefix = prefijo?.let { { Text(it, color = colores.textSecondary)}}
+            prefix = prefijo?.let { { Text(it, color = colores.TextSecondary)}}
         )
     }
 }
