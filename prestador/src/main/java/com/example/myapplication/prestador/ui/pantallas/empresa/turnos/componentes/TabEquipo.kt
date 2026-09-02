@@ -1,6 +1,8 @@
 package com.example.myapplication.prestador.ui.pantallas.empresa.turnos.componentes
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.core.dominio.modelos.InventarioActivoDominio
 import com.example.myapplication.core.dominio.modelos.TipoActivo
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.pantallas.empresa.turnos.GestionTurnosTheme
 
 @Composable
 fun TabEquipo(
@@ -31,74 +33,102 @@ fun TabEquipo(
     onToggleActivo: (InventarioActivoDominio) -> Unit,
     onEliminar: (InventarioActivoDominio) -> Unit
 ) {
-    val colors = getPrestadorColors()
+    val colors = GestionTurnosTheme
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8E1).copy(alpha = 0.1f)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.PersonSearch, null, tint = Color(0xFFF57F17))
+    Box(modifier = Modifier.fillMaxSize().background(colors.DarkBg)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 90.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.AccentViolet.copy(alpha = 0.06f), RoundedCornerShape(10.dp))
+                        .border(BorderStroke(1.dp, colors.AccentViolet.copy(alpha = 0.18f)), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.PersonSearch, null, tint = colors.AccentViolet, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text("Equipo de Trabajo", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = colors.textPrimary)
-                        Text("Vincular colaboradores o especialistas a los puntos de venta.", fontSize = 11.sp, color = colors.textSecondary)
+                        Text("Equipo de Trabajo", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = colors.TextPrimary)
+                        Text("Vincular colaboradores o especialistas a los puntos de venta.", fontSize = 10.sp, color = colors.TextSecondary)
                     }
                 }
             }
-        }
 
-        item {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("COLABORADORES (${equipo.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = colors.textSecondary)
-                Button(onClick = onAsignarPersonal, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)), shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)) {
-                    Icon(Icons.Default.PersonAdd, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Añadir Personal", fontSize = 12.sp)
-                }
-            }
-        }
-
-        if (equipo.isEmpty()) {
             item {
-                Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text("No hay personal asignado a esta sucursal.", fontSize = 12.sp, color = colors.textSecondary)
-                }
+                Text(
+                    "COLABORADORES (${equipo.size})",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.6.sp,
+                    color = colors.TextMuted
+                )
             }
-        } else {
-            items(equipo.filter { it.tipo == TipoActivo.EQUIPO }, key = { it.id }) { persona ->
-                Card(
-                    onClick = { onEditarPersonal(persona.id) },
-                    colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                ) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(colors.primaryOrange.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-                                Text(persona.nombre.take(1).uppercase(), fontWeight = FontWeight.Bold, color = colors.primaryOrange)
+
+            val personas = equipo.filter { it.tipo == TipoActivo.EQUIPO }
+            if (personas.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Text("No hay personal asignado a esta sucursal.", fontSize = 12.sp, color = colors.TextSecondary)
+                    }
+                }
+            } else {
+                items(personas, key = { it.id }) { persona ->
+                    val colorAvatar = if (persona.id.hashCode() % 2 == 0) colors.BrandOrange else colors.AccentCyan
+                    Surface(
+                        onClick = { onEditarPersonal(persona.id) },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = colors.CardBg,
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, colors.BorderGlass)
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(44.dp).clip(CircleShape).background(colorAvatar.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+                                    Text(persona.nombre.take(1).uppercase(), fontWeight = FontWeight.Black, fontSize = 16.sp, color = colorAvatar)
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(persona.nombre, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = colors.TextPrimary)
+                                    Text(persona.subTitulo, fontSize = 10.sp, color = colors.TextSecondary)
+                                }
                             }
-                            Spacer(Modifier.width(12.dp))
-                            Column {
-                                Text(persona.nombre, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = colors.textPrimary)
-                                Text(persona.subTitulo, fontSize = 11.sp, color = colors.textSecondary)
-                            }
-                        }
-                        
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Switch(checked = persona.habilitado, onCheckedChange = { onToggleActivo(persona) }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF10B981)))
-                            Spacer(Modifier.width(8.dp))
-                            IconButton(onClick = { onEliminar(persona) }) {
-                                Icon(Icons.Outlined.PersonRemove, "Quitar", tint = Color.Red.copy(alpha = 0.7f))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(
+                                    checked = persona.habilitado,
+                                    onCheckedChange = { onToggleActivo(persona) },
+                                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = colors.AccentEmerald)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(onClick = { onEliminar(persona) }) {
+                                    Icon(Icons.Outlined.PersonRemove, "Quitar", tint = colors.AccentRose.copy(alpha = 0.8f))
+                                }
                             }
                         }
                     }
                 }
+            }
+        }
+
+        Surface(
+            onClick = onAsignarPersonal,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            color = colors.AccentEmerald,
+            shape = RoundedCornerShape(12.dp),
+            shadowElevation = 6.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.PersonAdd, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("AÑADIR PERSONAL", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color.Black)
             }
         }
     }

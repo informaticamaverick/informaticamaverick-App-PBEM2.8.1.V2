@@ -20,10 +20,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
+
+// --- PALETA OSCURA hardcodeada (mismo criterio que el resto de pantallas ya migradas: en vez de
+// getPrestadorColors(), que cae en modo claro por defecto si no se fuerza LocalIsDarkTheme) ---
+private val ColoresComunesEmpresa = PrestadorColors(
+    primaryOrange = Color(0xFFF97316), primaryOrangeDark = Color(0xFFEA580C), primaryOrangeLight = Color(0xFFFB923C),
+    backgroundColor = Color(0xFF030712), surfaceColor = Color(0xFF0F172A), surfaceElevated = Color(0xFF1E293B),
+    textPrimary = Color(0xFFF8FAFC), textSecondary = Color(0xFF94A3B8), border = Color(0xFF334155).copy(alpha = 0.7f),
+    divider = Color(0xFF1E293B), chipBackground = Color(0xFF1E293B), chipText = Color(0xFFF8FAFC),
+    error = Color(0xFFEF4444), success = Color(0xFF10B981)
+)
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -33,7 +43,7 @@ fun SelectorFecha(
     onCalendarioClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colors = getPrestadorColors()
+    val colors = ColoresComunesEmpresa
     val hoy = LocalDate.now()
     val fechas = remember { (-3..10).map { hoy.plusDays(it.toLong()) } }
 
@@ -100,7 +110,7 @@ fun MetricCard(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val colors = getPrestadorColors()
+    val colors = ColoresComunesEmpresa
     Card(
         onClick = onClick,
         modifier = modifier,

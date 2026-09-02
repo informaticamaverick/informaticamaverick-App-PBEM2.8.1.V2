@@ -1,12 +1,15 @@
 package com.example.myapplication.prestador.ui.pantallas.empresa.turnos.componentes
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.*
@@ -16,67 +19,102 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myapplication.core.dominio.modelos.HorarioDominio
 import com.example.myapplication.core.dominio.modelos.InventarioActivoDominio
 import com.example.myapplication.core.dominio.modelos.TipoActivo
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.ui.pantallas.empresa.turnos.GestionTurnosTheme
+
+private fun HorarioDominio?.tieneAlgunRango(): Boolean {
+    if (this == null) return false
+    return listOf(lunes, martes, miercoles, jueves, viernes, sabado, domingo).any { it.isNotEmpty() }
+}
 
 @Composable
 fun TabHorarios(
     inventario: List<InventarioActivoDominio>,
     onConfigurarHorario: (id: String, nombre: String) -> Unit
 ) {
-    val colors = getPrestadorColors()
+    val colors = GestionTurnosTheme
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.fillMaxSize().background(colors.DarkBg),
+        contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = colors.primaryOrange.copy(alpha = 0.05f)),
-                shape = RoundedCornerShape(16.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.BrandOrange.copy(alpha = 0.06f), RoundedCornerShape(10.dp))
+                    .border(BorderStroke(1.dp, colors.BrandOrange.copy(alpha = 0.15f)), RoundedCornerShape(10.dp))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Schedule, null, tint = colors.primaryOrange)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text("Horarios de Disponibilidad", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = colors.textPrimary)
-                        Text("Configura las franjas horarias de cada recurso o colaborador.", fontSize = 11.sp, color = colors.textSecondary)
-                    }
+                Icon(Icons.Outlined.Schedule, null, tint = colors.BrandOrange, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Horarios de Disponibilidad", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = colors.TextPrimary)
+                    Text("Configura las franjas horarias de cada recurso o colaborador.", fontSize = 10.sp, color = colors.TextSecondary)
                 }
             }
         }
 
         item {
-            Text("SELECCIONAR ACTIVO PARA CONFIGURAR", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = colors.textSecondary)
+            Text(
+                "SELECCIONAR ACTIVO PARA CONFIGURAR",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.6.sp,
+                color = colors.TextMuted
+            )
         }
 
         items(inventario, key = { it.id }) { item ->
-            Card(
+            val configurado = item.horario.tieneAlgunRango()
+            val colorEstado = if (configurado) colors.AccentEmerald else colors.AccentAmber
+
+            Surface(
                 onClick = { onConfigurarHorario(item.id, item.nombre) },
-                colors = CardDefaults.cardColors(containerColor = colors.surfaceColor),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                modifier = Modifier.fillMaxWidth(),
+                color = colors.CardBg,
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, if (configurado) colors.BorderGlass else colors.AccentAmber.copy(alpha = 0.3f))
             ) {
                 Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            if (item.tipo == TipoActivo.EQUIPO) Icons.Outlined.Badge else Icons.Outlined.AccessTime,
-                            null,
-                            tint = colors.primaryOrange,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(colors.BrandOrange.copy(alpha = 0.12f), RoundedCornerShape(9.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                if (item.tipo == TipoActivo.EQUIPO) Icons.Outlined.Badge else Icons.Default.MeetingRoom,
+                                null,
+                                tint = colors.BrandOrange,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text(item.nombre, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = colors.textPrimary)
-                            Text(item.subTitulo, fontSize = 11.sp, color = colors.textSecondary)
+                            Text(item.nombre, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = colors.TextPrimary)
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                                Box(modifier = Modifier.size(5.dp).background(colorEstado, RoundedCornerShape(3.dp)))
+                                Spacer(Modifier.width(5.dp))
+                                Text(
+                                    if (configurado) "Configurado" else "Sin configurar",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colorEstado
+                                )
+                            }
                         }
                     }
-                    Icon(Icons.Default.ChevronRight, null, tint = colors.textSecondary.copy(alpha = 0.5f))
+                    Icon(Icons.Default.ChevronRight, null, tint = colors.TextMuted)
                 }
             }
         }

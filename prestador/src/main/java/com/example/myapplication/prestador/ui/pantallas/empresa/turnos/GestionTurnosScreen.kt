@@ -4,6 +4,8 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -14,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -22,10 +25,26 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.dominio.modelos.InventarioActivoDominio
 import com.example.myapplication.prestador.ui.pantallas.empresa.turnos.componentes.*
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.empresa.turnos.GestionTurnosUiState
 import com.example.myapplication.prestador.viewmodel.empresa.turnos.GestionTurnosViewModel
 import com.example.myapplication.prestador.viewmodel.empresa.turnos.TipoFiltroResumen
+
+// --- PALETA OSCURA (mismo criterio que Presupuesto/Catálogo/Concursos) ---
+internal object GestionTurnosTheme {
+    val DarkBg = Color(0xFF030712)
+    val CardBg = Color(0xFF0F172A)
+    val SurfaceInput = Color(0xFF020617)
+    val BorderGlass = Color(0x1AFFFFFF)
+    val BrandOrange = Color(0xFFF97316)
+    val AccentCyan = Color(0xFF06B6D4)
+    val AccentEmerald = Color(0xFF10B981)
+    val AccentAmber = Color(0xFFF59E0B)
+    val AccentViolet = Color(0xFF8B5CF6)
+    val AccentRose = Color(0xFFF43F5E)
+    val TextPrimary = Color(0xFFF8FAFC)
+    val TextSecondary = Color(0xFF94A3B8)
+    val TextMuted = Color(0xFF64748B)
+}
 
 /**
  * --- PANTALLA: GESTIÓN DE TURNOS (v2026.SUPREME) ---
@@ -39,7 +58,7 @@ fun GestionTurnosScreen(
     viewModel: GestionTurnosViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val colors = getPrestadorColors()
+    val colors = GestionTurnosTheme
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(state.snackbarMensaje) {
@@ -74,38 +93,43 @@ fun GestionTurnosScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Column {
-                        Text("GESTIÓN DE TURNOS", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text(state.sucursalSeleccionada?.titulo ?: "MAVERICK BUSINESS", fontSize = 11.sp, color = colors.primaryOrange)
+                        Text("GESTIÓN DE TURNOS", fontSize = 14.sp, fontWeight = FontWeight.Black, letterSpacing = 0.4.sp, color = colors.TextPrimary)
+                        Text(state.sucursalSeleccionada?.titulo ?: "MAVERICK BUSINESS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = colors.BrandOrange)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = colors.textPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = colors.TextPrimary)
                     }
                 },
                 actions = {
                     if (!state.estaCargando) {
-                        FilledTonalButton(
+                        Surface(
                             onClick = { viewModel.confirmarCambiosGlobales() },
-                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = colors.primaryOrange.copy(alpha = 0.1f), contentColor = colors.primaryOrange),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.padding(end = 8.dp),
-                            shape = RoundedCornerShape(8.dp)
+                            color = colors.BrandOrange.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, colors.BrandOrange.copy(alpha = 0.3f)),
+                            modifier = Modifier.padding(end = 8.dp)
                         ) {
-                            Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Guardar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Check, null, modifier = Modifier.size(14.dp), tint = colors.BrandOrange)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Guardar", fontSize = 11.sp, fontWeight = FontWeight.Black, color = colors.BrandOrange)
+                            }
                         }
                     } else {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp).padding(end = 12.dp), color = colors.primaryOrange, strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp).padding(end = 12.dp), color = colors.BrandOrange, strokeWidth = 2.dp)
                     }
 
                     if (state.sucursales.size > 1) {
                         var expanded by remember { mutableStateOf(false) }
                         IconButton(onClick = { expanded = true }) {
-                            Icon(Icons.Default.Business, null, tint = colors.primaryOrange)
+                            Icon(Icons.Default.Business, null, tint = colors.BrandOrange)
                         }
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                             state.sucursales.forEach { suc ->
@@ -117,11 +141,11 @@ fun GestionTurnosScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.surfaceColor)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.CardBg)
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = colors.backgroundColor
+        containerColor = colors.DarkBg
     ) { padding ->
         GestionTurnosLienzo(
             state = state,
@@ -168,14 +192,13 @@ private fun EliteTabItem(
     seleccionado: Boolean,
     onClick: () -> Unit
 ) {
-    val colors = getPrestadorColors()
     Tab(
         selected = seleccionado,
         onClick = onClick,
-        text = { Text(label, fontSize = 10.sp, fontWeight = if (seleccionado) FontWeight.Black else FontWeight.Medium) },
-        icon = { Icon(icono, null, modifier = Modifier.size(20.dp)) },
-        selectedContentColor = colors.primaryOrange,
-        unselectedContentColor = colors.textSecondary
+        text = { Text(label, fontSize = 9.sp, fontWeight = if (seleccionado) FontWeight.Black else FontWeight.Bold) },
+        icon = { Icon(icono, null, modifier = Modifier.size(18.dp)) },
+        selectedContentColor = GestionTurnosTheme.BrandOrange,
+        unselectedContentColor = GestionTurnosTheme.TextMuted
     )
 }
 
@@ -199,14 +222,14 @@ fun GestionTurnosLienzo(
     obtenerSlots: (InventarioActivoDominio) -> List<SlotTurnoSimulado>,
     modifier: Modifier = Modifier
 ) {
-    val colors = getPrestadorColors()
+    val colors = GestionTurnosTheme
 
-    Column(modifier = modifier.fillMaxSize()) {
+    Column(modifier = modifier.fillMaxSize().background(colors.DarkBg)) {
         TabRow(
             selectedTabIndex = state.tabSeleccionada,
-            containerColor = colors.surfaceColor,
-            contentColor = colors.primaryOrange,
-            divider = { HorizontalDivider(color = colors.border.copy(alpha = 0.5f)) }
+            containerColor = colors.CardBg,
+            contentColor = colors.BrandOrange,
+            divider = { HorizontalDivider(color = colors.BorderGlass) }
         ) {
             EliteTabItem("RESUMEN", Icons.Outlined.Dashboard, state.tabSeleccionada == 0) { onTabSelect(0) }
             EliteTabItem("ESPACIOS", Icons.Outlined.MeetingRoom, state.tabSeleccionada == 1) { onTabSelect(1) }
@@ -263,7 +286,7 @@ fun GestionTurnosLienzo(
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
-@Preview(showBackground = true, backgroundColor = 0xFF0F0F0F)
+@Preview(showBackground = true, backgroundColor = 0xFF030712)
 @Composable
 fun PreviewGestionTurnos() {
     val mockState = GestionTurnosUiState(
