@@ -29,6 +29,9 @@ interface IdentidadPrestadorDao {
     @Query("DELETE FROM prestadores WHERE id = :uid")
     suspend fun eliminarPorId(uid: String)
 
+    @Query("UPDATE prestadores SET estaVerificado = :verificado WHERE id = :uid")
+    suspend fun actualizarVerificacion(uid: String, verificado: Boolean)
+
     @Transaction
     @Query("SELECT * FROM prestadores WHERE id = :uid")
     fun obtenerPrestadorCompleto(uid: String): Flow<PrestadorCompletoRelacionesBD?>
