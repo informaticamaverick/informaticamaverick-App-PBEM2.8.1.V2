@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.core.datos.local.entidades.EstadoPresupuesto
 import com.example.myapplication.prestador.datos.local.entidades.PresupuestoEntity
+import com.example.myapplication.prestador.ui.theme.LocalIsDarkTheme
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.uishared.ui.components.PlanillaPresupuestoA4Viewer
 import com.example.myapplication.core.dominio.modelos.PrestadorDominio
@@ -119,6 +120,10 @@ fun PresupuestosScreenContent(
     onCerrarDetalle: () -> Unit = {},
     onNavegarConfig: () -> Unit = {},
 ) {
+    // [ELITE]: Presupuestos, como Inicio, es siempre oscuro por diseño — antes seguía
+    // getPrestadorColors() sin fijar el tema (quedaba blanco/crema en modo claro del
+    // sistema, sin combinar con el resto de la app).
+    CompositionLocalProvider(LocalIsDarkTheme provides true) {
     val colores = getPrestadorColors()
 
     var activeTab by remember { mutableStateOf(NavTab.DASHBOARD) }
@@ -138,31 +143,18 @@ fun PresupuestosScreenContent(
     Scaffold(
         containerColor = colores.backgroundColor,
         topBar = {
-            TopAppBarElite(
-                activeTab = activeTab,
-                onVolver = onVolver,
-                onCrearNuevo = onCrearNuevo,
-                onNavegarConfig = onNavegarConfig
-            )
-        },
-        bottomBar = {
-            NavigationBar(containerColor = colores.surfaceColor, tonalElevation = 8.dp) {
-                NavTab.entries.forEach { tab ->
-                    val selected = activeTab == tab
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { activeTab = tab },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = colores.primaryOrange,
-                            selectedTextColor = colores.primaryOrange,
-                            unselectedIconColor = colores.textSecondary,
-                            unselectedTextColor = colores.textSecondary,
-                            indicatorColor = colores.primaryOrange.copy(alpha = 0.12f)
-                        )
-                    )
-                }
+            Column {
+                TopAppBarElite(
+                    activeTab = activeTab,
+                    onVolver = onVolver,
+                    onCrearNuevo = onCrearNuevo,
+                    onNavegarConfig = onNavegarConfig
+                )
+                // [ELITE]: las 4 secciones pasan de barra INFERIOR a pestañas debajo del
+                // encabezado — antes quedaba una segunda barra de navegación apilada justo
+                // arriba de la barra principal de la app, confundiendo cuál era cuál
+                // (esta pantalla tenía su propio ítem "Inicio" además del Home real de la app).
+                SelectorSeccionesPresupuesto(activeTab = activeTab, onSeleccionar = { activeTab = it })
             }
         }
     ) { innerPadding ->
@@ -198,6 +190,41 @@ fun PresupuestosScreenContent(
             }
         }
     }
+    }
+}
+
+@Composable
+private fun SelectorSeccionesPresupuesto(activeTab: NavTab, onSeleccionar: (NavTab) -> Unit) {
+    val colores = getPrestadorColors()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colores.surfaceColor.copy(alpha = 0.95f))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        NavTab.entries.forEach { tab ->
+            val selected = activeTab == tab
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (selected) colores.primaryOrange.copy(alpha = 0.12f) else Color.Transparent)
+                    .border(1.dp, if (selected) colores.primaryOrange.copy(alpha = 0.3f) else Color.Transparent, RoundedCornerShape(10.dp))
+                    .clickable { onSeleccionar(tab) }
+                    .padding(vertical = 9.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    tab.label,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (selected) colores.primaryOrange else colores.textSecondary
+                )
+            }
+        }
+    }
+    HorizontalDivider(color = colores.divider)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
