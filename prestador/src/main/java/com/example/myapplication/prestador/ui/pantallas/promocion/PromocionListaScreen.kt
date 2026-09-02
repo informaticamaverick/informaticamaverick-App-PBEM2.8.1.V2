@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,11 +40,23 @@ import com.example.myapplication.core.dominio.modelos.EstadoPromocion
 import com.example.myapplication.core.dominio.modelos.Promocion
 import com.example.myapplication.core.dominio.modelos.TipoCategoriaPromo
 import com.example.myapplication.core.dominio.modelos.TipoPromocion
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.promocion.PrePromocionViewModel
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+// --- PALETA OSCURA (misma que Inicio/Mensajes/Concursos) ---
+private object ThemeColors {
+    val DarkBg = Color(0xFF030712)
+    val CardBg = Color(0xFF0F172A)
+    val CardBorder = Color(0xFF334155).copy(alpha = 0.7f)
+    val HeaderBg = Color(0xFF020617).copy(alpha = 0.95f)
+    val Divider = Color(0xFF1E293B)
+    val BrandOrange = Color(0xFFFF5722)
+    val TextPrimary = Color(0xFFF8FAFC)
+    val TextSecondary = Color(0xFF94A3B8)
+    val TextMuted = Color(0xFF64748B)
+}
 
 /**
  * --- PANTALLA DE ADMINISTRACIÓN DE PROMOCIONES (ELITE v2026.FINAL) ---
@@ -55,7 +68,6 @@ fun PromocionListaScreen(
     onNavigateToCreatePromotion: () -> Unit = {},
     viewModel: PrePromocionViewModel = hiltViewModel()
 ) {
-    val colores = getPrestadorColors()
     val promociones by viewModel.misPublicaciones.collectAsStateWithLifecycle()
     val estaCargando by viewModel.estaCargando.collectAsStateWithLifecycle()
     
@@ -94,42 +106,55 @@ fun PromocionListaScreen(
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = colores.primaryOrange,
-                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-                shadowElevation = 8.dp
+                color = ThemeColors.HeaderBg,
+                border = BorderStroke(1.dp, ThemeColors.Divider)
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(colores.primaryOrange, Color(0xFFEA580C))
-                            )
-                        )
                         .statusBarsPadding()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(ThemeColors.CardBg, RoundedCornerShape(8.dp))
+                                .border(1.dp, ThemeColors.CardBorder, RoundedCornerShape(8.dp))
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = ThemeColors.TextPrimary, modifier = Modifier.size(16.dp))
                         }
-                        Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                            Text("MIS PUBLICACIONES", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White, letterSpacing = 1.sp)
-                            Text("Gestiona tus ofertas", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+                        Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                            Text("MIS PUBLICACIONES", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = ThemeColors.TextPrimary, letterSpacing = 0.5.sp)
+                            Text("Gestiona tus ofertas", fontSize = 11.sp, color = ThemeColors.TextSecondary)
+                        }
+                        Surface(
+                            color = ThemeColors.BrandOrange.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(2.dp),
+                            border = BorderStroke(1.dp, ThemeColors.BrandOrange.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = "${activas.size} ACTIVAS",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Black,
+                                color = ThemeColors.BrandOrange,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
                         }
                     }
                     TabRow(
                         selectedTabIndex = pestanaSeleccionada,
                         containerColor = Color.Transparent,
-                        contentColor = Color.White,
+                        contentColor = ThemeColors.TextPrimary,
                         indicator = { tabPositions ->
                             TabRowDefaults.SecondaryIndicator(
                                 Modifier.tabIndicatorOffset(tabPositions[pestanaSeleccionada]),
-                                color = Color.White
+                                color = ThemeColors.BrandOrange
                             )
                         },
                         divider = {}
@@ -138,12 +163,12 @@ fun PromocionListaScreen(
                             Tab(
                                 selected = pestanaSeleccionada == indice,
                                 onClick = { pestanaSeleccionada = indice },
-                                text = { 
+                                text = {
                                     Text(
                                         text = "$titulo (${if (indice == 0) activas.size else inactivas.size})",
                                         fontWeight = if (pestanaSeleccionada == indice) FontWeight.Black else FontWeight.Normal,
                                         fontSize = 13.sp,
-                                        color = if (pestanaSeleccionada == indice) Color.White else Color.White.copy(alpha = 0.7f)
+                                        color = if (pestanaSeleccionada == indice) ThemeColors.TextPrimary else ThemeColors.TextMuted
                                     )
                                 }
                             )
@@ -155,7 +180,7 @@ fun PromocionListaScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToCreatePromotion,
-                containerColor = colores.primaryOrange,
+                containerColor = ThemeColors.BrandOrange,
                 contentColor = Color.White,
                 shape = CircleShape,
                 elevation = FloatingActionButtonDefaults.elevation(8.dp)
@@ -163,7 +188,7 @@ fun PromocionListaScreen(
                 Icon(Icons.Default.Add, "Crear Publicación")
             }
         },
-        containerColor = colores.backgroundColor
+        containerColor = ThemeColors.DarkBg
     ) { paddingValues ->
         val estadoPull = rememberPullToRefreshState()
 
@@ -171,11 +196,12 @@ fun PromocionListaScreen(
             state = estadoPull,
             isRefreshing = estaCargando,
             onRefresh = { viewModel.refreshMyPromotions() },
-            modifier = Modifier.padding(paddingValues).fillMaxSize()
+            modifier = Modifier.padding(paddingValues).fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (promociones.isEmpty()) {
-                    EstadoVacioPromocionesMav(colores)
+                    EstadoVacioPromocionesMav()
                 } else {
                     val listaActual = if (pestanaSeleccionada == 0) activas else inactivas
                     LazyColumn(
@@ -187,7 +213,6 @@ fun PromocionListaScreen(
                             TarjetaGestionPromoMav(
                                 promo = promo,
                                 ahora = ahora,
-                                colores = colores,
                                 alEliminar = { promocionParaEliminar = promo },
                                 alRepublicar = { viewModel.republishPromotion(promo) },
                                 alHacerClick = { promocionSeleccionadaDetalle = promo }
@@ -204,16 +229,15 @@ fun PromocionListaScreen(
 fun TarjetaGestionPromoMav(
     promo: Promocion,
     ahora: Long,
-    colores: com.example.myapplication.prestador.ui.theme.PrestadorColors,
     alEliminar: () -> Unit,
     alRepublicar: () -> Unit,
     alHacerClick: () -> Unit
 ) {
     val expirada = promo.fechaExpiracion <= ahora
     val colorEstado = when {
-        expirada -> Color.Gray
-        promo.estado == EstadoPromocion.ACTIVA -> Color(0xFF4CAF50)
-        else -> Color(0xFFFF9800)
+        expirada -> ThemeColors.TextMuted
+        promo.estado == EstadoPromocion.ACTIVA -> Color(0xFF10B981)
+        else -> Color(0xFFF59E0B)
     }
 
     val tiempoRestante = if (expirada) "Finalizada" else {
@@ -222,49 +246,74 @@ fun TarjetaGestionPromoMav(
         if (horas > 24) "Faltan ${horas / 24}d" else "Faltan ${horas}h"
     }
 
-    ElevatedCard(
+    Surface(
         modifier = Modifier.fillMaxWidth().clickable { alHacerClick() },
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = colores.surfaceColor)
+        shape = RoundedCornerShape(16.dp),
+        color = ThemeColors.CardBg,
+        border = BorderStroke(1.dp, ThemeColors.CardBorder)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                Box(modifier = Modifier.size(90.dp).clip(RoundedCornerShape(16.dp)).background(Color.Black.copy(alpha = 0.2f))) {
+                Box(modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.2f))) {
                     if (promo.urlImagenes.isNotEmpty()) {
                         AsyncImage(model = promo.urlImagenes.first(), contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     }
                     Surface(
-                        color = if (promo.tipo == TipoPromocion.HISTORIA) Color(0xFFE91E63) else Color(0xFF00E5FF),
+                        color = if (promo.tipo == TipoPromocion.HISTORIA) Color(0xFFF472B6) else Color(0xFF22D3EE),
                         shape = RoundedCornerShape(bottomEnd = 8.dp),
                         modifier = Modifier.align(Alignment.TopStart)
                     ) {
-                        Text(text = if (promo.tipo == TipoPromocion.HISTORIA) "STORY" else "OFERTA", fontSize = 8.sp, fontWeight = FontWeight.Black, color = Color.Black, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                        Text(text = if (promo.tipo == TipoPromocion.HISTORIA) "STORY" else "OFERTA", fontSize = 8.sp, fontWeight = FontWeight.Black, color = ThemeColors.CardBg, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                     }
                 }
-                
-                Spacer(Modifier.width(16.dp))
-                
+
+                Spacer(Modifier.width(14.dp))
+
                 Column(modifier = Modifier.weight(1f)) {
-                    Surface(shape = RoundedCornerShape(50), color = colorEstado.copy(alpha = 0.1f), border = BorderStroke(0.5.dp, colorEstado.copy(alpha = 0.3f))) {
-                        Text(text = if (expirada) "EXPIRADA" else promo.estado.name, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = colorEstado, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = colorEstado.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, colorEstado.copy(alpha = 0.4f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Box(modifier = Modifier.size(5.dp).clip(CircleShape).background(colorEstado))
+                            Spacer(Modifier.width(5.dp))
+                            Text(text = if (expirada) "EXPIRADA" else promo.estado.name, fontSize = 9.sp, fontWeight = FontWeight.Black, color = colorEstado, letterSpacing = 0.5.sp)
+                        }
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(text = promo.titulo, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(text = promo.descripcion, fontSize = 13.sp, color = colores.textSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(text = promo.titulo, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = ThemeColors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = promo.descripcion, fontSize = 12.sp, color = ThemeColors.TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
-            
-            Spacer(Modifier.height(20.dp))
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = ThemeColors.Divider)
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    MetricaAdminItem(label = "Vistas", valor = promo.conteoVistas.toString(), icono = Icons.Default.Visibility, color = Color.Gray)
-                    MetricaAdminItem(label = "Likes", valor = promo.conteoLikes.toString(), icono = Icons.Default.Favorite, color = Color(0xFFE91E63))
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    MetricaAdminItem(label = "Vistas", valor = promo.conteoVistas.toString(), icono = Icons.Default.Visibility, color = ThemeColors.TextMuted)
+                    MetricaAdminItem(label = "Likes", valor = promo.conteoLikes.toString(), icono = Icons.Default.Favorite, color = Color(0xFFF43F5E))
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (expirada) {
-                        IconButton(onClick = alRepublicar) { Icon(Icons.Default.Refresh, null, tint = colores.primaryOrange) }
+                        IconButton(
+                            onClick = alRepublicar,
+                            modifier = Modifier
+                                .size(30.dp)
+                                .background(ThemeColors.CardBg, RoundedCornerShape(8.dp))
+                                .border(1.dp, ThemeColors.BrandOrange.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                        ) { Icon(Icons.Default.Refresh, null, tint = ThemeColors.BrandOrange, modifier = Modifier.size(14.dp)) }
                     }
-                    IconButton(onClick = alEliminar) { Icon(Icons.Default.DeleteOutline, null, tint = Color.Red) }
+                    IconButton(
+                        onClick = alEliminar,
+                        modifier = Modifier
+                            .size(30.dp)
+                            .background(ThemeColors.CardBg, RoundedCornerShape(8.dp))
+                            .border(1.dp, ThemeColors.CardBorder, RoundedCornerShape(8.dp))
+                    ) { Icon(Icons.Default.DeleteOutline, null, tint = Color(0xFFF43F5E), modifier = Modifier.size(14.dp)) }
                 }
             }
         }
@@ -274,20 +323,20 @@ fun TarjetaGestionPromoMav(
 @Composable
 fun MetricaAdminItem(label: String, valor: String, icono: androidx.compose.ui.graphics.vector.ImageVector, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icono, null, tint = color, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
+        Icon(icono, null, tint = color, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(7.dp))
         Column {
-            Text(text = valor, fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color.White)
-            Text(text = label.uppercase(), fontSize = 8.sp, color = Color.Gray)
+            Text(text = valor, fontSize = 13.sp, fontWeight = FontWeight.Black, color = ThemeColors.TextPrimary)
+            Text(text = label.uppercase(), fontSize = 8.sp, color = ThemeColors.TextMuted, letterSpacing = 0.5.sp)
         }
     }
 }
 
 @Composable
-fun EstadoVacioPromocionesMav(colores: com.example.myapplication.prestador.ui.theme.PrestadorColors) {
+fun EstadoVacioPromocionesMav() {
     Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(Icons.Default.Campaign, null, tint = colores.primaryOrange, modifier = Modifier.size(60.dp))
+        Icon(Icons.Default.Campaign, null, tint = ThemeColors.BrandOrange, modifier = Modifier.size(60.dp))
         Spacer(Modifier.height(24.dp))
-        Text("No tienes publicaciones", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = colores.textPrimary)
+        Text("No tienes publicaciones", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = ThemeColors.TextPrimary)
     }
 }

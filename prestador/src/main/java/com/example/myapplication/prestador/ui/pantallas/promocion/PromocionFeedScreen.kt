@@ -1,7 +1,9 @@
 package com.example.myapplication.prestador.ui.pantallas.promocion
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -32,6 +34,18 @@ import com.example.myapplication.uishared.ui.components.InstagramPromoSkeleton
 import com.example.myapplication.uishared.ui.components.InstagramNativeAdCard
 import com.example.myapplication.uishared.ui.components.AdMobNativeAd
 
+// --- PALETA OSCURA (misma que Inicio/Mensajes/Concursos/Mis Publicaciones---
+private object FeedThemeColors {
+        val DarkBg = Color(0xFF030712)
+        val CardBg = Color(0xFF0F172A)
+        val CardBorder = Color(0xFF334155).copy(alpha = 0.7f)
+        val HeaderBg = Color(0xFF020617).copy(alpha = 0.95f)
+        val Divider = Color(0xFF1E293B)
+        val BrandOrange = Color(0xFFFF5722)
+        val TextPrimary = Color(0xFFF8FAFC)
+        val TextSecondary = Color(0xFF94A3B8)
+}
+
 /**
  * --- PANTALLA DE FEED DE PROMOCIONES (PRESTADOR v2026.FINAL) ---
  * [ELITE]: Ahora con soporte para Google Ads (Video/Multimedia) integrados orgánicamente.
@@ -44,7 +58,6 @@ fun PromocionFeedScreen(
     viewModel: PrestadorPromocionFeedViewModel = hiltViewModel(),
     scrollState: LazyListState = rememberLazyListState()
 ) {
-    val colores = getPrestadorColors()
     val historias by viewModel.historias.collectAsStateWithLifecycle()
     val feedItems by viewModel.feedItems.collectAsStateWithLifecycle()
     val estaCargando by viewModel.estaCargando.collectAsStateWithLifecycle()
@@ -59,38 +72,39 @@ fun PromocionFeedScreen(
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = colores.primaryOrange,
-                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-                shadowElevation = 8.dp
+                color = FeedThemeColors.HeaderBg,
+                border = BorderStroke(1.dp, FeedThemeColors.Divider)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(colores.primaryOrange, Color(0xFFEA580C))
-                            )
-                        )
                         .statusBarsPadding()
-                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = Color.White)
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(FeedThemeColors.CardBg, RoundedCornerShape(8.dp))
+                            .border(1.dp, FeedThemeColors.CardBorder, RoundedCornerShape(8.dp))
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Volver", tint = FeedThemeColors.TextPrimary, modifier = Modifier.size(16.dp))
                     }
-                    Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                        Text("DESCUBRIR", fontWeight = FontWeight.Black, fontSize = 18.sp, color = Color.White, letterSpacing = 1.sp)
-                        Text("Mercado Profesional", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+                    Column(modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                        Text("DESCUBRIR", fontWeight = FontWeight.ExtraBold, fontSize = 13.sp, color = FeedThemeColors.TextPrimary, letterSpacing = 0.5.sp)
+                        Text("Mercado Profesional", fontSize = 11.sp, color = FeedThemeColors.TextSecondary)
                     }
                 }
             }
         },
-        containerColor = colores.backgroundColor
+        containerColor = FeedThemeColors.DarkBg
     ) { paddingValues ->
         PullToRefreshBox(
             isRefreshing = estaCargando,
             onRefresh = { viewModel.refrescar() },
-            modifier = Modifier.padding(paddingValues).fillMaxSize()
+            modifier = Modifier.padding(paddingValues).fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
         ) {
             LazyColumn(
                 state = scrollState,
@@ -102,13 +116,13 @@ fun PromocionFeedScreen(
                         modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 16.dp, start = 32.dp, end = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(Icons.Default.BusinessCenter, null, tint = colores.primaryOrange.copy(alpha = 0.5f), modifier = Modifier.size(32.dp))
+                        Icon(Icons.Default.BusinessCenter, null, tint = FeedThemeColors.BrandOrange.copy(alpha = 0.5f), modifier = Modifier.size(32.dp))
                         Spacer(Modifier.height(12.dp))
-                        Text("SHOPPING", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color.White, letterSpacing = 2.sp)
+                        Text("SHOPPING", fontWeight = FontWeight.Black, fontSize = 16.sp, color = FeedThemeColors.TextPrimary, letterSpacing = 2.sp)
                         Spacer(Modifier.height(8.dp))
                         Text(
                             text = "Proveedores destacados y herramientas para potenciar tu productividad.",
-                            color = Color.Gray, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            color = FeedThemeColors.TextSecondary, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             lineHeight = 18.sp
                         )
                     }
