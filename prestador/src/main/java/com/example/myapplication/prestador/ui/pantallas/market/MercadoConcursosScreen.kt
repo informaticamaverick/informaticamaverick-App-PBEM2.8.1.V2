@@ -1,11 +1,14 @@
 package com.example.myapplication.prestador.ui.pantallas.market
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import com.example.myapplication.prestador.ui.theme.PrestadorTheme
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,17 +36,29 @@ import com.example.myapplication.prestador.datos.local.entidades.PresupuestoEnti
 import com.example.myapplication.uishared.ui.components.PlanillaPresupuestoA4Dialog
 import coil.compose.AsyncImage
 import com.example.myapplication.prestador.ui.pantallas.market.ConcursoDetalleSheet
-import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.dashboard.NotificacionesViewModel
 import com.example.myapplication.prestador.viewmodel.profile.PerfilPrestadorDeepViewModel
 import com.example.myapplication.core.dominio.modelos.PrestadorDominio
 import com.example.myapplication.core.dominio.modelos.ConcursoDominio
+
+// --- PALETA OSCURA (misma que Inicio/Mensajes, ver InicioComponents.kt/ChatListScreen.kt) ---
+private object ThemeColors {
+    val DarkBg = Color(0xFF030712)
+    val CardBg = Color(0xFF0F172A)
+    val CardBorder = Color(0xFF334155).copy(alpha = 0.7f)
+    val HeaderBg = Color(0xFF020617).copy(alpha = 0.95f)
+    val Divider = Color(0xFF1E293B)
+    val BrandOrange = Color(0xFFFF5722)
+    val TextPrimary = Color(0xFFF8FAFC)
+    val TextSecondary = Color(0xFF94A3B8)
+}
 
 /**
  * --- MERCADO DE CONCURSOS (V2026.FINAL) ---
  */
 @Composable
 fun MercadoConcursosScreen(
+    onBack: () -> Unit = {},
     onNavigateToPresupuesto: (String) -> Unit,
     onNavigateToPaywall: () -> Unit = {},
     onNavigateToClientePerfil: (String) -> Unit = {},
@@ -65,6 +81,7 @@ fun MercadoConcursosScreen(
     LaunchedEffect(Unit) { viewModel.refrescarMercado() }
 
     MercadoConcursosContent(
+        onBack = onBack,
         concursos = concursosPaginados,
         estaCargando = estaCargandoConcurso,
         concursoSeleccionado = concursoSeleccionado,
@@ -85,6 +102,7 @@ fun MercadoConcursosScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MercadoConcursosContent(
+    onBack: () -> Unit = {},
     concursos: LazyPagingItems<ConcursoDominio>,
     estaCargando: Boolean,
     concursoSeleccionado: ConcursoDominio?,
@@ -100,40 +118,61 @@ fun MercadoConcursosContent(
     onNavigateToPaywall: () -> Unit = {},
     alNavegarAPerfilCliente: (String) -> Unit = {}
 ) {
-    val colores = getPrestadorColors()
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = colores.backgroundColor,
+        containerColor = ThemeColors.DarkBg,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = colores.primaryOrange,
-                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-                shadowElevation = 8.dp
+                color = ThemeColors.HeaderBg,
+                border = BorderStroke(1.dp, ThemeColors.Divider)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(colores.primaryOrange, Color(0xFFEA580C))
-                            )
-                        )
                         .statusBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("COTIZACIONES", fontWeight = FontWeight.Black, fontSize = 20.sp, color = Color.White, letterSpacing = 1.sp)
-                        Text("Concursos Públicos en tu zona", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+                    IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = ThemeColors.TextPrimary)
                     }
-                    
-                    IconButton(onClick = alRefrescar) {
+
+                    Spacer(Modifier.width(4.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("COTIZACIONES", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, color = ThemeColors.TextPrimary, letterSpacing = 0.5.sp)
+                        Text("Concursos Públicos en tu zona", fontSize = 11.sp, color = ThemeColors.TextSecondary)
+                    }
+
+                    Surface(
+                        color = Color(0xFF10B981).copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.3f)),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Row (
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(6.dp).background(Color(0xFF10B981), CircleShape))
+                            Spacer(Modifier.width(5.dp))
+                            Text("${concursos.itemCount} ACTIVOS", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFF10B981))
+                        }
+                    }
+
+                    IconButton(
+                        onClick = alRefrescar,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(ThemeColors.CardBg, RoundedCornerShape(8.dp))
+                            .border(1.dp, ThemeColors.CardBorder, RoundedCornerShape(8.dp))
+                    ) {
                         if (estaCargando) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = ThemeColors.BrandOrange, strokeWidth = 2.dp)
                         } else {
-                            Icon(Icons.Default.Refresh, null, tint = Color.White)
+                            Icon(Icons.Default.Refresh, null, tint = ThemeColors.TextPrimary, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -141,10 +180,10 @@ fun MercadoConcursosContent(
         }
     ) { relleno ->
         val cargandoRefresh = concursos.loadState.refresh is LoadState.Loading || estaCargando
-        
-        Column(modifier = Modifier.fillMaxSize().padding(relleno).background(colores.backgroundColor)) {
+
+        Column(modifier = Modifier.fillMaxSize().padding(relleno).background(ThemeColors.DarkBg)) {
             if (concursos.itemCount == 0 && !cargandoRefresh) {
-                EstadoVacioMercado()
+                EstadoVacioMercado(onActualizar = alRefrescar)
             } else {
                 LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(
@@ -213,12 +252,52 @@ fun MercadoConcursosContent(
 
 
 @Composable
-private fun EstadoVacioMercado() {
-    val colores = getPrestadorColors()
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Default.Search, null, modifier = Modifier.size(64.dp), tint = colores.divider)
-            Text("Explorando el Mercado...", fontWeight = FontWeight.Bold, color = colores.textSecondary)
+private fun EstadoVacioMercado(onActualizar: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize().padding(40.dp), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(88.dp)
+                    .background(ThemeColors.BrandOrange.copy(alpha = 0.1f), RoundedCornerShape(24.dp))
+                    .border(1.dp, ThemeColors.BrandOrange.copy(alpha = 0.25f), RoundedCornerShape(24.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.SearchOff, null, modifier = Modifier.size(40.dp), tint = ThemeColors.BrandOrange)
+            }
+
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "Todavía no hay concursos en tu zona",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    color = ThemeColors.TextPrimary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Los clientes publican pedidos de presupuesto público acá. Te avisamos apenas aparezca uno que coincida con tus rubros.",
+                    fontSize = 13.sp,
+                    color = ThemeColors.TextSecondary,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    lineHeight = 19.sp
+                )
+            }
+
+            Surface(
+                onClick = onActualizar,
+                color = ThemeColors.CardBg,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, ThemeColors.CardBorder)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Refresh, null, tint = ThemeColors.BrandOrange, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("ACTUALIZAR AHORA", fontSize = 12.sp, fontWeight = FontWeight.Black, color = ThemeColors.TextPrimary)
+                }
+            }
         }
     }
 }
