@@ -34,7 +34,8 @@ class SincronizadorRemotoPrestador @Inject constructor(
     private val cuentaDao: CuentaDao,
     private val empresaDao: EmpresaDao,
     private val sucursalDao: SucursalDao,
-    private val direccionDao: DireccionDao
+    private val direccionDao: DireccionDao,
+    private val horarioDao: HorarioDao
 ) {
 
     /**
@@ -61,6 +62,13 @@ class SincronizadorRemotoPrestador @Inject constructor(
                 localP.urlFotoPerfil
             }
 
+            // Foto de matrícula (opcional, evidencia para el admin): mismo criterio que la foto de perfil.
+            val matriculaFotoUrlFinal = if (localP.matriculaFotoUrl != null && !localP.matriculaFotoUrl.startsWith("http")) {
+                subirFotoMatricula(uid, localP.matriculaFotoUrl) ?: localP.matriculaFotoUrl
+            } else {
+                localP.matriculaFotoUrl
+            }
+
             val pMap = mapOf(
                 "id" to localP.id,
                 "nombre" to localP.nombre,
@@ -75,14 +83,24 @@ class SincronizadorRemotoPrestador @Inject constructor(
                 "idCategorias" to localP.idCategorias,
                 "especialidades" to localP.especialidades,
                 "matricula" to localP.matricula,
-                "reputacion" to localP.reputacion,
+                "matriculaFotoUrl" to matriculaFotoUrlFinal,
                 "totalReseñas" to localP.totalReseñas,
                 "trabajosRealizados" to localP.trabajosRealizados,
                 "likes" to localP.likes,
                 "dislikes" to localP.dislikes,
                 "nivelElite" to localP.nivelElite,
-                "estaVerificado" to localP.estaVerificado,
-                "estaEnLinea" to localP.estaEnLinea,
+                // "reputacion" NO va acá a propósito (31/08, mismo motivo que estaVerificado):
+                // es un campo "solo admin" en las reglas de Firestore (soloAdminPrestadores()).
+                // El default local (5f) casi nunca coincide con el valor real ya guardado en el
+                // servidor (calificado por clientes o ajustado por el panel), así que subirlo acá
+                // bloqueaba CADA sync de identidad con PERMISSION_DENIED apenas la regla dejó de
+                // estar tapada por el fallback abierto — no solo en este caso de prueba.
+                // "estaVerificado" NO va acá a propósito (mismo motivo que estaEnLinea): lo escribe
+                // el panel admin al aprobar la matrícula (MonitorSesionPrestador lo baja a Room en
+                // vivo). Subir el valor local acá pisaría esa verificación en el próximo sync.
+                // "estaEnLinea" NO va acá a propósito: lo maneja en vivo actualizarPresencia()
+                // (ProcessLifecycleOwner). Room nunca lo actualiza, así que subir el valor
+                // local (siempre false) pisaba la presencia real cada vez que corría este sync.
                 "brindaServicio" to localP.brindaServicio,
                 "brindaProducto" to localP.brindaProducto,
                 "atiende24Horas" to localP.atiende24Horas,
@@ -98,7 +116,14 @@ class SincronizadorRemotoPrestador @Inject constructor(
             )
 
             val batch = firestore.batch()
-            batch.set(firestore.collection(MotorSincRemoto.COL_PRESTADOR).document(uid), pMap)
+            // [FIX]: merge en vez de overwrite completo — antes esto borraba cualquier campo
+            // que no gestione Room (banned/banReason/banDate/banBy, estaEnLinea) cada vez que
+            // se sincronizaba la identidad, aunque el admin lo hubiera puesto desde el panel.
+            batch.set(
+                firestore.collection(MotorSincRemoto.COL_PRESTADOR).document(uid),
+                pMap,
+                com.google.firebase.firestore.SetOptions.merge()
+            )
             batch.set(firestore.collection(MotorSincRemoto.COL_CUENTA).document(uid), localC)
             
             batch.commit().await()
@@ -111,14 +136,17 @@ class SincronizadorRemotoPrestador @Inject constructor(
 
     /**
      * 🔥 [ELITE]: Sincroniza el ecosistema jerárquico completo (PUSH Deep).
-     * [LEY #6]: Soberanía. Excluye infraestructura privada (Horarios, Recursos).
+     * [FIX]: antes excluía Horarios de la subida ("infraestructura privada") — pero el
+     * turnero web y la búsqueda del cliente necesitan leer prestadores/{uid}/infraestructura/horario
+     * para mostrar disponibilidad real, así que ahora se sube junto con el resto.
      */
     suspend fun subirEcosistemaCompleto(uid: String) {
         try {
             Log.d("SYNC_REMOTO", "📤 [INICIO_PUSH_DEEP] Subiendo jerarquía profesional completa para $uid")
-            
+
             // 1. Identidad Base
             subirIdentidadBase(uid)
+            subirHorarioPrestador(uid)
 
             val batch = firestore.batch()
             val rootRef = firestore.collection(MotorSincRemoto.COL_PRESTADOR).document(uid)
@@ -169,6 +197,39 @@ class SincronizadorRemotoPrestador @Inject constructor(
         }
     }
 
+    /**
+     * 🔥 Sube el horario de atención propio del prestador a
+     * prestadores/{uid}/infraestructura/horario — mismo schema que ya usan el turnero web
+     * y el panel admin (lunes..domingo con {inicio, fin, estaHabilitado}, zonaHoraria).
+     * Silencioso si el prestador todavía no configuró ningún horario (no rompe la subida del resto).
+     */
+    private suspend fun subirHorarioPrestador(uid: String) {
+        try {
+            val horarioLocal = horarioDao.obtenerPorReferenciaSync(uid) ?: run {
+                Log.d("SYNC_REMOTO", "📅 [HORARIO] Sin horario configurado todavía para $uid, se omite.")
+                return
+            }
+            val mapa = mapOf(
+                "lunes" to horarioLocal.lunes,
+                "martes" to horarioLocal.martes,
+                "miercoles" to horarioLocal.miercoles,
+                "jueves" to horarioLocal.jueves,
+                "viernes" to horarioLocal.viernes,
+                "sabado" to horarioLocal.sabado,
+                "domingo" to horarioLocal.domingo,
+                "zonaHoraria" to horarioLocal.zonaHoraria,
+                "ultimaSincronizacion" to System.currentTimeMillis()
+            )
+            firestore.collection(MotorSincRemoto.COL_PRESTADOR).document(uid)
+                .collection(MotorSincRemoto.SUB_INFRAESTRUCTURA).document(MotorSincRemoto.DOC_HORARIO)
+                .set(mapa)
+                .await()
+            Log.d("SYNC_REMOTO", "📅 [HORARIO_OK] Horario de atención subido a la nube.")
+        } catch (e: Exception) {
+            Log.e("SYNC_REMOTO", "❌ [HORARIO_ERR] Fallo al subir horario: ${e.message}")
+        }
+    }
+
     suspend fun actualizarEstadoSuscripcionElite(uid: String, activa: Boolean) {
         try {
             firestore.collection(MotorSincRemoto.COL_CUENTA).document(uid).update("estaSuscrito", activa).await()
@@ -201,34 +262,6 @@ class SincronizadorRemotoPrestador @Inject constructor(
         false
     }
 
-    private suspend fun subirFotoPerfil(uid: String, pathLocal: String): String? {
-        return try {
-            val file = java.io.File(pathLocal)
-            if (!file.exists()) return null
-            
-            val ref = storage.reference.child("perfiles/$uid/foto_perfil.webp")
-            ref.putFile(file.toUri()).await()
-            ref.downloadUrl.await().toString()
-        } catch (e: Exception) {
-            Log.e("SYNC_REMOTO", "❌ Error al subir foto de perfil: ${e.message}")
-            null
-        }
-    }
-
-    private suspend fun subirFotoEmpresa(uid: String, empresaId: String, pathLocal: String): String? {
-        return try {
-            val file = java.io.File(pathLocal)
-            if (!file.exists()) return null
-            
-            val ref = storage.reference.child("empresas/$uid/$empresaId/logo.webp")
-            ref.putFile(file.toUri()).await()
-            ref.downloadUrl.await().toString()
-        } catch (e: Exception) {
-            Log.e("SYNC_REMOTO", "❌ Error al subir logo de empresa: ${e.message}")
-            null
-        }
-    }
-
     /**
      * 🔥 [ELITE]: Verifica existencia y estado de baneo en un solo viaje a Firestore.
      * El panel admin (HTML Admin/js/ban.js) escribe banned/banReason/banDate/banBy
@@ -254,9 +287,53 @@ class SincronizadorRemotoPrestador @Inject constructor(
     fun actualizarPresencia(uid: String, enLinea: Boolean) {
         firestore.collection(MotorSincRemoto.COL_PRESTADOR).document(uid)
             .set(mapOf("estaEnLinea" to enLinea), com.google.firebase.firestore.SetOptions.merge())
+            // 🐛 FIX (01/09): mismo fix que en SincronizadorRemotoUsuario — sin listener,
+            // un rechazo del servidor quedaba como Task sin consumir y tumbaba la app.
             .addOnFailureListener { e ->
                 Log.e("SYNC_REMOTO", "⚠️ [PRESENCIA_ERR] No se pudo actualizar estaEnLinea: ${e.message}")
             }
+    }
+
+    private suspend fun subirFotoPerfil(uid: String, pathLocal: String): String? {
+        return try {
+            val file = java.io.File(pathLocal)
+            if (!file.exists()) return null
+            
+            val ref = storage.reference.child("perfiles/$uid/foto_perfil.webp")
+            ref.putFile(file.toUri()).await()
+            ref.downloadUrl.await().toString()
+        } catch (e: Exception) {
+            Log.e("SYNC_REMOTO", "❌ Error al subir foto de perfil: ${e.message}")
+            null
+        }
+    }
+
+    private suspend fun subirFotoMatricula(uid: String, pathLocal: String): String? {
+        return try {
+            val file = java.io.File(pathLocal)
+            if (!file.exists()) return null
+
+            val ref = storage.reference.child("matriculas/$uid/matricula.webp")
+            ref.putFile(file.toUri()).await()
+            ref.downloadUrl.await().toString()
+        } catch (e: Exception) {
+            Log.e("SYNC_REMOTO", "❌ Error al subir foto de matrícula: ${e.message}")
+            null
+        }
+    }
+
+    private suspend fun subirFotoEmpresa(uid: String, empresaId: String, pathLocal: String): String? {
+        return try {
+            val file = java.io.File(pathLocal)
+            if (!file.exists()) return null
+            
+            val ref = storage.reference.child("empresas/$uid/$empresaId/logo.webp")
+            ref.putFile(file.toUri()).await()
+            ref.downloadUrl.await().toString()
+        } catch (e: Exception) {
+            Log.e("SYNC_REMOTO", "❌ Error al subir logo de empresa: ${e.message}")
+            null
+        }
     }
 }
 
