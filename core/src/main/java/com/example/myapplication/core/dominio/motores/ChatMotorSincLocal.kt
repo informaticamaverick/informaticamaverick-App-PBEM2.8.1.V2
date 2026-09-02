@@ -24,6 +24,7 @@ class ChatMotorSincLocal @Inject constructor(
     private val motorSincCuentas: MotorSincLocal,
     private val repositorioEvento: EventoRepositorio
 ) {
+    private val ioScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
     private val chatDao = db.ChatDao()
     private val presupuestoFinalDao = db.presupuestoFinalDao()
     private val usuarioDao = db.usuarioDao()
@@ -76,7 +77,7 @@ class ChatMotorSincLocal @Inject constructor(
             mensaje.idEmisor
         }
         
-        if (idRemoto.isEmpty() || idRemoto == "SISTEMA" || idRemoto.startsWith("SISTEMA_")) return
+        if (idRemoto.isEmpty() || idRemoto == "SISTEMA") return
 
         if (prestadorDao.obtenerPorIdSync(idRemoto) == null && 
             sucursalDao.obtenerPorIdSync(idRemoto) == null && 
@@ -95,20 +96,23 @@ class ChatMotorSincLocal @Inject constructor(
         val miUid = auth.currentUser?.uid ?: ""
         
         // --- CÁLCULO DE SOBERANÍA (ELITE v2026) ---
+        // Identificamos cuál de los participantes es el "Yo local".
         val idLocalBandeja = if (mensaje.idPropietarioEmisor == miUid) {
             mensaje.idEmisor 
         } else if (mensaje.idPropietarioReceptor == miUid) {
             mensaje.idReceptor
         } else {
+            // Fallback: Si no coincide mi UID, este mensaje podría ser de un sistema o un reenvío
+            // Intentamos adivinar por coincidencia de IDs
             if (mensaje.idEmisor.startsWith("P_") || mensaje.idEmisor.length > 20) mensaje.idReceptor else mensaje.idEmisor
         }
 
         val idRemoto = if (mensaje.idEmisor == idLocalBandeja) mensaje.idReceptor else mensaje.idEmisor
+        
         val conversacionExistente = chatDao.obtenerConversacionPorId(mensaje.idChat)
 
-        // 🔥 [ELITE v2026]: Si es un mensaje de SISTEMA, solo actualizamos el contenido.
-        if (mensaje.idEmisor == "SISTEMA" || mensaje.idPropietarioEmisor == "SISTEMA" || 
-            mensaje.idEmisor.startsWith("SISTEMA_") || mensaje.idPropietarioEmisor.startsWith("SISTEMA_")) {
+        // 🔥 [ELITE v2026]: Si es un mensaje de SISTEMA, no corrompemos la identidad del contacto.
+        if (mensaje.idEmisor == "SISTEMA" || mensaje.idPropietarioEmisor == "SISTEMA") {
             conversacionExistente?.let {
                 val resumen = it.copy(
                     ultimoMensaje = mensaje.contenido,
@@ -119,10 +123,39 @@ class ChatMotorSincLocal @Inject constructor(
             }
             return
         }
+        
+        // Resolución de Metadatos (Nombre/Foto) para usuarios reales
+        // 🔥 [ELITE]: Mantenemos el nombre anterior si ya existe, para evitar parpadeos a "Usuario Maverick"
+        var nombre = conversacionExistente?.nombreRemoto ?: "Usuario Maverick"
+        var foto: String? = conversacionExistente?.fotoRemotaUrl
+        var miniatura: String? = conversacionExistente?.miniaturaRemotaBase64
 
-        // [v2026.ELITE]: Minimalismo en el impacto. 
-        // Delegamos la resolución de metadatos a ConversacionResumenSQLView (SSOT).
-        // Solo guardamos datos efímeros o de referencia para FTS.
+        val p = prestadorDao.obtenerPorIdSync(idRemoto)
+        if (p != null) {
+            nombre = p.nombreVisible; foto = p.urlFotoPerfil; miniatura = p.miniaturaBase64
+        } else {
+            val s = sucursalDao.obtenerPorIdSync(idRemoto)
+            if (s != null) {
+                nombre = s.nombre
+                db.empresaDao().obtenerPorIdSync(s.idEmpresaPadre)?.let { e ->
+                    foto = e.urlFoto; miniatura = e.miniaturaBase64
+                }
+            } else {
+                val u = usuarioDao.obtenerPorIdSync(idRemoto)
+                if (u != null) {
+                    nombre = u.nombreVisible; foto = u.urlFotoPerfil; miniatura = u.miniaturaBase64
+                }
+            }
+        }
+
+        // 🔥 [ELITE]: Validación de Integridad de Nombre
+        // Si el nombre sigue siendo el ID o está vacío, disparamos Pull Shallow para corregir.
+        if (nombre == "Usuario Maverick" || (nombre.length > 20 && !nombre.contains(" "))) {
+             ioScope.launch { 
+                 asegurarIdentidadRemota(mensaje) 
+             }
+        }
+
         val resumen = ConversacionEntity(
             idChat = mensaje.idChat,
             idIdentidadLocal = idLocalBandeja,
@@ -130,10 +163,9 @@ class ChatMotorSincLocal @Inject constructor(
             ultimoMensaje = mensaje.contenido,
             fechaUltimoMensaje = mensaje.marcaTiempo,
             tipoUltimoMensaje = mensaje.tipo.name,
-            nombreRemoto = conversacionExistente?.nombreRemoto ?: "", 
-            fotoRemotaUrl = conversacionExistente?.fotoRemotaUrl,
-            miniaturaRemotaBase64 = conversacionExistente?.miniaturaRemotaBase64,
-            idCategoriaRemota = conversacionExistente?.idCategoriaRemota,
+            nombreRemoto = nombre,
+            fotoRemotaUrl = foto,
+            miniaturaRemotaBase64 = miniatura,
             contadorNoLeidos = if (mensaje.idReceptor == idLocalBandeja && mensaje.idEmisor != idLocalBandeja) {
                 (conversacionExistente?.contadorNoLeidos ?: 0) + 1 
             } else {
@@ -142,7 +174,7 @@ class ChatMotorSincLocal @Inject constructor(
         )
 
         chatDao.insertarOActualizarConversacion(resumen)
-        android.util.Log.d("CHAT_AUDIT_LOCAL", "🗂️ [ROOM_UPDATE] Resumen actualizado para chat ${mensaje.idChat}. Identidad delegada a SQL View.")
+        android.util.Log.d("CHAT_AUDIT_LOCAL", "🗂️ [ROOM_UPDATE] Resumen de bandeja actualizado para chat ${mensaje.idChat}. Último: ${mensaje.contenido.take(20)}...")
     }
 
     suspend fun marcarHiloComoLeido(idChat: String) {

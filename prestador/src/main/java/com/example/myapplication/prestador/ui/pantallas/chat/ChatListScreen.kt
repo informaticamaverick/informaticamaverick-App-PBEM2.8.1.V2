@@ -151,7 +151,8 @@ fun ChatListScreen(
             state = pullState,
             isRefreshing = false,
             onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
         ) {
             Column(
                 modifier = Modifier
