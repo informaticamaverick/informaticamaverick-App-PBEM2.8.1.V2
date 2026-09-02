@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.*
@@ -35,7 +36,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // La app siempre usa tema oscuro visualmente (colores hardcodeados en cada pantalla,
+        // no siguen el tema del sistema) - forzamos la barra de navegación a estilo oscuro
+        // para que no quede clara cuando el sistema del dispositivo está en modo claro.
+        enableEdgeToEdge(
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+        )
 
         // [ELITE]: Mantener Splash hasta que el gestor decida la ruta inicial
         splashScreen.setKeepOnScreenCondition {
@@ -46,8 +52,12 @@ class MainActivity : ComponentActivity() {
         startupManager.performInitialStartup()
 
         setContent {
-            // Simplificación temporal del tema para evitar errores
-            val isDark = isSystemInDarkTheme()
+            // La app siempre se disena en oscuro (todas las pantallas usan colores
+            // hardcodeados a oscuro) - no depender de isSystemInDarkTheme(), porque si
+            // el dispositivo esta en modo claro, getPrestadorColors() (que si respeta
+            // LocalIsDarkTheme) cae a la paleta clara y deja ver el fondo crema
+            // (BackgroundLight) detras de la barra de navegacion flotante.
+            val isDark = true
 
             val tenderId = remember { intent.getStringExtra("tenderId") }
 
