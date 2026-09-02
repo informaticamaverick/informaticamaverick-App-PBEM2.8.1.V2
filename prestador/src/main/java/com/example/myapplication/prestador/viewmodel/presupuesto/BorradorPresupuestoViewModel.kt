@@ -18,6 +18,7 @@ import com.example.myapplication.core.dominio.mapeadores.*
 import com.example.myapplication.prestador.datos.local.entidades.*
 import com.example.myapplication.prestador.datos.repositorios.PrestadorPresupuestoRepositorio
 import com.example.myapplication.core.datos.repositorios.ConcursoPublicoRepositorio
+import com.example.myapplication.core.dominio.motores.MotorSincLocal
 import com.example.myapplication.core.datos.repositorios.CategoriaRepositorio
 import com.example.myapplication.core.dominio.motores.CalculadoraPresupuesto
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,14 +49,43 @@ class BorradorPresupuestoViewModel @Inject constructor(
     private val chatRepositorio: com.example.myapplication.core.datos.repositorios.ChatMotorSincRepositorio,
     private val identidadRepo: com.example.myapplication.prestador.datos.repositorios.ConsultasPrestadorRepositorio,
     private val categoryRepo: CategoriaRepositorio,
-    private val auth: com.google.firebase.auth.FirebaseAuth
+    private val auth: com.google.firebase.auth.FirebaseAuth,
+    private val motorLocal: MotorSincLocal,
+    private val cuentaDao: com.example.myapplication.core.datos.local.dao.CuentaDao
 ) : ViewModel() {
+
+    // 🐛 FIX: al simular la suscripción desde el Paywall, la app solo hacía
+    // popBackStack() y dejaba al usuario en la pantalla del armador sin reintentar
+    // el envío — parecía que "no pasaba nada" aunque la suscripción sí se activó.
+    // Se guarda qué se estaba por enviar y se reintenta solo apenas Room refleja
+    // la suscripción activa (sin depender de que el usuario vuelva a tocar Enviar).
+    private var miniaturaPendiente: String? = null
+    private val _huboEnvioPendiente = MutableStateFlow(false)
 
     private val categoriasMap = categoryRepo.todasLasCategorias
         .map { lista -> lista.associateBy { it.id } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
+    // 🐛 FIX (01/09): esta propiedad tiene que declararse ANTES del init{} de abajo —
+    // en Kotlin las propiedades e init{} corren en el orden en que aparecen en el
+    // archivo, no por dependencia. Con el init{} arriba, idPrestadorActual todavía
+    // no estaba asignada (quedaba null) cuando se llamaba a cuentaDao.obtenerPorId(),
+    // y Room tiraba NullPointerException porque el parámetro "uid" es no-nulo.
+    // Esto crasheaba SIEMPRE al entrar al Armador de Presupuesto, no solo con
+    // concursos de otra persona — coincidencia de cuándo se probó primero.
     private val idPrestadorActual = auth.currentUser?.uid ?: ""
+
+    init {
+        viewModelScope.launch {
+            cuentaDao.obtenerPorId(idPrestadorActual).collect { cuenta ->
+                if (_huboEnvioPendiente.value && cuenta?.estaSuscrito == true) {
+                    _huboEnvioPendiente.value = false
+                    android.util.Log.d("BorradorVM", "🔁 [REINTENTO_AUTO] Suscripción detectada, reintentando envío pendiente.")
+                    enviarPresupuesto(miniaturaPendiente)
+                }
+            }
+        }
+    }
 
     private val _seccionActual = MutableStateFlow(SeccionPresupuesto.IDENTIDAD)
     val seccionActual = _seccionActual.asStateFlow()
@@ -243,10 +273,46 @@ class BorradorPresupuestoViewModel @Inject constructor(
     fun inicializarBorrador(idCliente: String, idPrestador: String, idConcurso: String? = null) {
         viewModelScope.launch {
             val sesionId = idConcurso ?: idCliente
-            
+
+            // 🐛 FIX: el prestador no siempre tiene sincronizado localmente el perfil de
+            // sus clientes (solo lo que ya vio del chat) — sin esto, "datosCliente" nunca
+            // encontraba nada y la UI mostraba el fallback hardcodeado ("Cliente Maverick").
+            // Se trae el perfil real de Firestore, mismo mecanismo que ya usa
+            // ClientePerfilViewModel.refreshProfile().
+            suspend fun asegurarClienteSincronizado(idClienteReal: String) {
+                if (idClienteReal.isBlank()) return
+                val existeLocal = usuarioDao.obtenerPorIdSync(idClienteReal)
+                android.util.Log.d("BorradorVM", "🔎 [FETCH_CLIENTE] idCliente=$idClienteReal existeLocal=${existeLocal != null}")
+                if (existeLocal == null) {
+                    launch {
+                        try {
+                            motorLocal.impactarUsuarioDeep(idClienteReal)
+                            val despues = usuarioDao.obtenerPorIdSync(idClienteReal)
+                            android.util.Log.d("BorradorVM", "🔎 [FETCH_CLIENTE] impactarUsuarioDeep terminó, encontrado=${despues != null} nombre=${despues?.nombreVisible}")
+                        } catch (e: Exception) {
+                            android.util.Log.e("BorradorVM", "❌ [FETCH_CLIENTE_ERR] ${e.message}", e)
+                        }
+                    }
+                }
+            }
+
+            if (idConcurso == null) {
+                asegurarClienteSincronizado(idCliente)
+            }
+
             // Intentar recuperar el concurso si existe
             concursoPublicoRepositorio.obtenerConcursoPorId(sesionId)?.let {
                 _concursoVinculado.value = it
+                // 🐛 FIX (01/09): cuando se entra desde Concursos, el "idCliente" que llega a
+                // este método viene vacío (PrestadorDashboardScreen no lo conoce todavía en ese
+                // punto) — el fetch remoto de arriba se saltaba siempre para este camino, que es
+                // justo el que más lo necesita (un concurso puede ser de alguien con quien el
+                // prestador nunca chateó, así que su perfil nunca se sincronizó localmente).
+                // "Cargando cliente..." quedaba pegado para siempre. Usamos el idCliente real
+                // que trae el propio concurso.
+                if (idConcurso != null) {
+                    asegurarClienteSincronizado(it.idCliente)
+                }
             }
 
             presupuestoRepositorio.obtenerBorradorConItems(sesionId).first()?.let { borradorFull ->
@@ -514,10 +580,10 @@ class BorradorPresupuestoViewModel @Inject constructor(
                 val b = _estadoBorrador.value
                 val p = perfilPrestador.value
                 val res = calculos.value
-                
+
                 val idEmisorReal = p?.id ?: b.idPrestador
                 val idReceptorReal = _concursoVinculado.value?.idCliente ?: b.idBorrador
-                
+
                 val definitivo = PresupuestoEntity(
                     idPresupuesto = UUID.randomUUID().toString(),
                     idCliente = idReceptorReal,
@@ -539,24 +605,36 @@ class BorradorPresupuestoViewModel @Inject constructor(
                     tipo = b.tipo,
                     marcaTiempo = System.currentTimeMillis()
                 )
-                
-                // 1. Persistencia Local y Envío Shared (Manejo de Elite)
-                val finalConItems = presupuestoRepositorio.enviarPresupuesto(definitivo, b.idBorrador, "MANO DE OBRA")
-                
-                // 2. Envío al Chat (Tránsito Realtime)
-                val idChat = com.example.myapplication.core.utilidades.ChatIdHelper.generateChatId(idEmisorReal, idReceptorReal)
-                
-                chatRepositorio.enviarMensajePresupuesto(
-                    idChat = idChat,
-                    emisor = idEmisorReal,
-                    receptor = idReceptorReal,
-                    presupuesto = finalConItems
-                )
 
-                // 4. Limpiar Borrador
-                presupuestoRepositorio.eliminarBorrador(b.idBorrador)
+                // 🐛 FIX (01/09): el botón "SÍ, ENVIAR AHORA" llama a este método y en la
+                // MISMA línea siguiente navega para atrás (ArmadorPresupuestoContenedor.kt) —
+                // como este ViewModel está atado al back stack entry, salir de la pantalla
+                // cancela viewModelScope de inmediato, y esta corrutina (que todavía estaba
+                // escribiendo el presupuesto/mandando el mensaje de chat) se cortaba a mitad
+                // de camino con JobCancellationException. El presupuesto podía quedar a medio
+                // guardar o nunca llegar al chat, sin ningún aviso. NonCancellable hace que
+                // este bloque termine sí o sí, aunque la pantalla ya se haya cerrado.
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    // 1. Persistencia Local y Envío Shared (Manejo de Elite)
+                    val finalConItems = presupuestoRepositorio.enviarPresupuesto(definitivo, b.idBorrador, "MANO DE OBRA")
+
+                    // 2. Envío al Chat (Tránsito Realtime)
+                    val idChat = com.example.myapplication.core.utilidades.ChatIdHelper.generateChatId(idEmisorReal, idReceptorReal)
+
+                    chatRepositorio.enviarMensajePresupuesto(
+                        idChat = idChat,
+                        emisor = idEmisorReal,
+                        receptor = idReceptorReal,
+                        presupuesto = finalConItems
+                    )
+
+                    // 4. Limpiar Borrador
+                    presupuestoRepositorio.eliminarBorrador(b.idBorrador)
+                }
             } catch (e: SecurityException) {
                 if (e.message == "MEMBERSHIP_REQUIRED") {
+                    miniaturaPendiente = miniatura
+                    _huboEnvioPendiente.value = true
                     _navegarAPaywall.emit(Unit)
                 }
             } catch (e: Exception) {

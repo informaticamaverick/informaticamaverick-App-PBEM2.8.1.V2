@@ -46,9 +46,7 @@ class ConcursoPublicoRepositorio @Inject constructor(
             idCliente = idCliente,
             consulta = consultaFts,
             soloActivos = filtros.soloActivos,
-            soloCerrados = filtros.soloCerrados,
             soloAdjudicados = filtros.soloAdjudicados,
-            soloNoLeidos = filtros.soloNoLeidos,
             idCategoria = filtros.idsCategorias.firstOrNull(),
             orden = filtros.orden
         )
@@ -61,9 +59,7 @@ class ConcursoPublicoRepositorio @Inject constructor(
             idCliente = idCliente,
             consulta = consultaFts,
             soloActivos = filtros.soloActivos,
-            soloCerrados = filtros.soloCerrados,
             soloAdjudicados = filtros.soloAdjudicados,
-            soloNoLeidos = filtros.soloNoLeidos,
             idCategoria = filtros.idsCategorias.firstOrNull(),
             orden = filtros.orden
         )
@@ -78,42 +74,65 @@ class ConcursoPublicoRepositorio @Inject constructor(
 
     @OptIn(ExperimentalPagingApi::class)
     fun obtenerMercadoPaginado(cp: String, categorias: List<String>): Flow<PagingData<ConcursoPublicoEntity>> {
-        val idConsulta = "MERCADO_GLOBAL"
+        // 🐛 FIX (01/09): "cp" y "categorias" llegaban hasta acá y se ignoraban por completo —
+        // se mandaba tagsConsulta = emptyList(), así que el mediador y la query de Firestore
+        // (ver IndiceConcursoPrestadorRepositorio) traían TODOS los concursos del mercado sin
+        // filtrar, de cualquier categoría y zona. La infraestructura de etiquetado ya existe y
+        // funciona del lado de quien publica (IndiceConcursoUsuarioRepositorio.publicarConcurso
+        // guarda "filtrosBusqueda" = [C_<cp>_<categoria>, Z_<cp>] en cada documento) — acá solo
+        // había que armar las mismas etiquetas para el prestador y usarlas para filtrar.
+        val tagsCategoriaZona = categorias
+            .map { cat -> generadorTopicos.generarTópicoMaestro(ProtocoloPrefijos.CONCURSO, cp, cat) }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        val idConsulta = "MERCADO_" + tagsCategoriaZona.sorted().joinToString("_").ifBlank { "GLOBAL" }
 
         return Pager(
             config = PagingConfig(pageSize = 15, enablePlaceholders = false),
             remoteMediator = ConcursoRemoteMediator(
-                idConsulta = idConsulta, 
-                tagsConsulta = emptyList(), 
-                baseDeDatos = baseDeDatos, 
+                idConsulta = idConsulta,
+                tagsConsulta = tagsCategoriaZona,
+                baseDeDatos = baseDeDatos,
                 indiceRepo = indiceRepo
             )
         ) {
-            baseDeDatos.concursoPublicoDao().obtenerMercadoPaginado()
+            baseDeDatos.concursoPublicoDao().obtenerMercadoPaginado(cp, categorias)
         }.flow
     }
 
     suspend fun guardarConcursoLocalConMultimedia(concurso: ConcursoPublicoEntity): ConcursoPublicoEntity = coroutineScope {
         try {
             val cpNormalizado = NormalizadorDirecciones.limpiarCodigoPostal(concurso.direccionCodigoPostal ?: "")
-            
+
+            // 🐛 FIX (01/09): Storage no está disponible en este proyecto (decisión del dueño,
+            // no un problema de config) — cualquier concurso con una foto adjunta fallaba la
+            // publicación COMPLETA (título, descripción, categoría, todo) solo porque una sola
+            // imagen no podía subirse. Ahora cada imagen se sube "a lo mejor esfuerzo": si falla,
+            // se descarta esa imagen puntual y el concurso se publica igual sin ella, en vez de
+            // abortar todo. El día que Storage esté disponible, esto vuelve a subir fotos solo.
             val deferredUrls = concurso.urlImagenes.map { cadenaUri ->
                 async {
-                    if (cadenaUri.startsWith("http")) cadenaUri 
-                    else subirImagenConcurso(concurso.idConcurso, Uri.parse(cadenaUri))
+                    if (cadenaUri.startsWith("http")) cadenaUri
+                    else try {
+                        subirImagenConcurso(concurso.idConcurso, Uri.parse(cadenaUri))
+                    } catch (e: Exception) {
+                        Log.e("ConcursoRepo", "⚠️ [IMG_SKIP] No se pudo subir una imagen (Storage no disponible) — se publica el concurso sin ella: ${e.message}")
+                        null
+                    }
                 }
             }
-            
-            val urlsPublicas = deferredUrls.awaitAll()
+
+            val urlsPublicas = deferredUrls.awaitAll().filterNotNull()
 
             val concursoNormalizado = concurso.copy(
                 direccionCodigoPostal = cpNormalizado,
                 urlImagenes = urlsPublicas
             )
-            
+
             concursoDao.insertar(concursoNormalizado)
             concursoNormalizado
-                
+
         } catch (e: Exception) {
             Log.e("ConcursoRepo", "❌ [CONCURSO_ERR] Error al guardar localmente: ${e.message}")
             throw e

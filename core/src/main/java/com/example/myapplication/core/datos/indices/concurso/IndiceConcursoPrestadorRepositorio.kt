@@ -74,9 +74,19 @@ class IndiceConcursoPrestadorRepositorio @Inject constructor(
     ): com.google.firebase.firestore.QuerySnapshot? {
         return try {
             val coleccion = firestore.collection(IndiceConcursoUsuarioRepositorio.COLECCION_CONCURSOS)
-            var query = coleccion
+            var query: Query = coleccion
                 .orderBy("marcaTiempo", Query.Direction.DESCENDING)
-                .limit(limite.toLong())
+
+            // 🐛 FIX (01/09): "tags" llegaba hasta acá y nunca se usaba — la consulta traía
+            // TODO el mercado sin filtrar por zona/categoría. Cada documento ya guarda
+            // "filtrosBusqueda" = [C_<cp>_<categoria>, Z_<cp>] (ver
+            // IndiceConcursoUsuarioRepositorio.publicarConcurso); whereArrayContainsAny exige
+            // 1-10 valores no vacíos, así que solo se aplica cuando efectivamente hay tags.
+            if (tags.isNotEmpty()) {
+                query = query.whereArrayContainsAny("filtrosBusqueda", tags.take(10))
+            }
+
+            query = query.limit(limite.toLong())
 
             if (ultimoDocId != null) {
                 val lastDoc = coleccion.document(ultimoDocId).get().await()

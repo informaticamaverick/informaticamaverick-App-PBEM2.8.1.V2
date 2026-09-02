@@ -58,31 +58,31 @@ interface ConcursoPublicoDao {
     @Query("SELECT * FROM concursos_publicos WHERE idConcurso = :id")
     fun obtenerConcursoConPresupuestos(id: String): Flow<ConcursoPublicoConPresupuestos?>
 
-    @Query("SELECT * FROM concursos_publicos ORDER BY marcaTiempo DESC")
-    fun obtenerMercadoPaginado(): PagingSource<Int, ConcursoPublicoEntity>
+    // 🐛 FIX (01/09): esta consulta no filtraba nada — devolvía TODOS los concursos
+    // guardados localmente sin importar zona ni categoría del prestador. Aparte de que
+    // la query remota (ver ConcursoRemoteMediator) ahora sí filtra al traer de Firestore,
+    // esta capa local también tiene que filtrar: la tabla puede tener filas viejas
+    // cacheadas de antes del fix (o de otra sesión) que la sincronización remota no borra.
+    @Query("SELECT * FROM concursos_publicos WHERE direccionCodigoPostal = :cp AND idCategoria IN (:categorias) ORDER BY marcaTiempo DESC")
+    fun obtenerMercadoPaginado(cp: String, categorias: List<String>): PagingSource<Int, ConcursoPublicoEntity>
 
     @Query("""
         SELECT cp.* FROM concursos_publicos cp
+        LEFT JOIN concursos_publicos_fts fts ON cp.rowid = fts.rowid
         WHERE cp.idCliente = :idCliente
-        AND (:consulta = '' OR cp.rowid IN (SELECT rowid FROM concursos_publicos_fts WHERE concursos_publicos_fts MATCH :consulta))
-        AND (:soloActivos = 0 OR cp.estado = 'ABIERTA')
-        AND (:soloCerrados = 0 OR cp.estado = 'CERRADA')
+        AND (:consulta = '' OR concursos_publicos_fts MATCH :consulta)
+        AND (:soloActivos = 0 OR cp.estaActivo = 1)
         AND (:soloAdjudicados = 0 OR cp.idPrestadorAdjudicado IS NOT NULL)
-        AND (:soloNoLeidos = 0 OR (SELECT COUNT(*) FROM presupuestos_finales p WHERE p.idConcurso = cp.idConcurso AND p.leido = 0) > 0)
         AND (:idCategoria IS NULL OR cp.idCategoria = :idCategoria)
         ORDER BY 
-            CASE WHEN :orden = 'sort_date' THEN cp.marcaTiempo END DESC,
-            CASE WHEN :orden = 'sort_alpha' THEN cp.titulo END ASC,
-            CASE WHEN :orden = 'sort_concursos_conteo' THEN cp.conteoPresupuestos END DESC,
-            CASE WHEN :orden = 'reciente' THEN cp.marcaTiempo END DESC
+            CASE WHEN :orden = 'reciente' THEN cp.marcaTiempo END DESC,
+            CASE WHEN :orden = 'antiguo' THEN cp.marcaTiempo END ASC
     """)
     fun buscarPropiosFts(
         idCliente: String,
         consulta: String,
         soloActivos: Boolean,
-        soloCerrados: Boolean,
         soloAdjudicados: Boolean,
-        soloNoLeidos: Boolean,
         idCategoria: String?,
         orden: String
     ): Flow<List<ConcursoPublicoEntity>>
@@ -90,26 +90,21 @@ interface ConcursoPublicoDao {
     @Query("""
         SELECT v.* FROM ConcursoPublicoResumenSQLView v
         JOIN concursos_publicos cp ON v.idConcurso = cp.idConcurso
+        LEFT JOIN concursos_publicos_fts fts ON cp.rowid = fts.rowid
         WHERE cp.idCliente = :idCliente
-        AND (:consulta = '' OR cp.rowid IN (SELECT rowid FROM concursos_publicos_fts WHERE concursos_publicos_fts MATCH :consulta))
-        AND (:soloActivos = 0 OR cp.estado = 'ABIERTA')
-        AND (:soloCerrados = 0 OR cp.estado = 'CERRADA')
+        AND (:consulta = '' OR concursos_publicos_fts MATCH :consulta)
+        AND (:soloActivos = 0 OR cp.estaActivo = 1)
         AND (:soloAdjudicados = 0 OR cp.idPrestadorAdjudicado IS NOT NULL)
-        AND (:soloNoLeidos = 0 OR v.ofertasNuevas > 0)
         AND (:idCategoria IS NULL OR cp.idCategoria = :idCategoria)
         ORDER BY 
-            CASE WHEN :orden = 'sort_date' THEN cp.marcaTiempo END DESC,
-            CASE WHEN :orden = 'sort_alpha' THEN cp.titulo END ASC,
-            CASE WHEN :orden = 'sort_concursos_conteo' THEN v.totalOfertas END DESC,
-            CASE WHEN :orden = 'reciente' THEN cp.marcaTiempo END DESC
+            CASE WHEN :orden = 'reciente' THEN cp.marcaTiempo END DESC,
+            CASE WHEN :orden = 'antiguo' THEN cp.marcaTiempo END ASC
     """)
     fun buscarPropiosResumenFts(
         idCliente: String,
         consulta: String,
         soloActivos: Boolean,
-        soloCerrados: Boolean,
         soloAdjudicados: Boolean,
-        soloNoLeidos: Boolean,
         idCategoria: String?,
         orden: String
     ): Flow<List<ConcursoPublicoResumenSQLView>>
