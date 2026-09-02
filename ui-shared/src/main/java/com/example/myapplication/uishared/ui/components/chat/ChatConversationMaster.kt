@@ -69,6 +69,7 @@ fun ChatConversationMaster(
     alCambiarEstadoEscritura: (Boolean) -> Unit = {},
     mensajeRespuesta: MensajeEntity? = null,
     alResponderMensaje: (MensajeEntity?) -> Unit = {},
+    alEliminarMensaje: (String) -> Unit = {},
     alHacerClickOpciones: () -> Unit = {},
     alHacerClickBuscar: () -> Unit = {},
     alHacerClickInfo: () -> Unit = {},
