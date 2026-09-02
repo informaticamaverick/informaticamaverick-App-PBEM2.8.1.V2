@@ -25,10 +25,17 @@ class PrestadorPromocionRepositorio @Inject constructor(
      * 🔥 [ELITE]: Guarda la promoción en Room y sube multimedia.
      */
     suspend fun guardarPromocionLocalConMultimedia(promo: Promocion): Promocion {
-        // 1. Subir imágenes a Firebase Storage
-        val urlsPublicas = promo.urlImagenes.map { uriString ->
-            if (uriString.startsWith("http")) uriString 
-            else subirImagen(promo.idPrestador, promo.id, Uri.parse(uriString))
+        // 1. Subir imágenes a Firebase Storage — "a lo mejor esfuerzo": si Storage no está
+        // disponible (404 "Object does not exist", plan sin activar) o falla una imagen puntual,
+        // se descarta esa imagen y se sigue con el resto en vez de abortar TODA la publicación.
+        val urlsPublicas = promo.urlImagenes.mapNotNull { uriString ->
+            if (uriString.startsWith("http")) uriString
+            else try {
+                subirImagen(promo.idPrestador, promo.id, Uri.parse(uriString))
+            } catch (e: Exception) {
+                Log.e("PROMO_UPLOAD", "❌ Fallo al subir imagen, se descarta y se sigue: ${e.message}")
+                null
+            }
         }
 
         val promoConUrls = promo.copy(urlImagenes = urlsPublicas)

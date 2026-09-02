@@ -39,6 +39,11 @@ class PrePromocionViewModel @Inject constructor(
     private val _estaCargando = MutableStateFlow(false)
     val estaCargando: StateFlow<Boolean> = _estaCargando.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    fun limpiarError() { _error.value = null }
+
     private val _idPerfilActivo = MutableStateFlow<String?>(null)
     val idPerfilActivo = _idPerfilActivo.asStateFlow()
 
@@ -111,6 +116,9 @@ class PrePromocionViewModel @Inject constructor(
             _estaCargando.value = true
             try {
                 motorPromocion.eliminarPromocion(id)
+            } catch (e: Exception) {
+                android.util.Log.e("PrePromocionVM", "❌ Fallo al eliminar promoción: ${e.message}", e)
+                _error.value = "No se pudo eliminar: ${e.message ?: "error desconocido"}"
             } finally {
                 _estaCargando.value = false
             }
@@ -192,6 +200,11 @@ class PrePromocionViewModel @Inject constructor(
                 )
                 motorPromocion.publicarNuevaPromocion(promo)
                 onSuccess()
+            } catch (e: Exception) {
+                // [ELITE]: si falla la subida de imágenes (p.ej. Storage sin emulador/sin red),
+                // no dejamos que la excepción se propague sin atajar — eso tumbaba toda la app.
+                android.util.Log.e("PrePromocionVM", "❌ Fallo al publicar promoción: ${e.message}", e)
+                _error.value = "No se pudo publicar: ${e.message ?: "error desconocido"}"
             } finally {
                 _estaCargando.value = false
             }

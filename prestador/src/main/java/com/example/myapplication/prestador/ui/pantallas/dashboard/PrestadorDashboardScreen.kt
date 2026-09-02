@@ -3,6 +3,7 @@ package com.example.myapplication.prestador.ui.pantallas.dashboard
 import com.example.myapplication.uishared.estilos.SharedPalette
 import android.net.Uri
 import android.os.Build
+import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
@@ -11,6 +12,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -19,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,6 +61,8 @@ import com.example.myapplication.prestador.viewmodel.dashboard.PrestadorDashboar
 import com.example.myapplication.prestador.viewmodel.promocion.PrePromocionViewModel
 import com.example.myapplication.uishared.ui.components.InstagramPromoCard
 import com.example.myapplication.prestador.ui.pantallas.dashboard.componentes.*
+import com.example.myapplication.prestador.ui.pantallas.empresa.turnos.GestionTurnosTheme
+import java.nio.channels.Selector
 
 /**
  * --- PRESTADOR DASHBOARD (ORQUESTADOR ELITE v2026.FINAL) ---
@@ -97,7 +102,6 @@ fun PrestadorDashboardScreen(
     var idUsuarioChatObjetivo by remember { mutableStateOf<String?>(null) }
 
     val feedScrollState = rememberLazyListState()
-    val isScrolling by remember { derivedStateOf { feedScrollState.isScrollInProgress } }
 
     var mostrarSheetPromocion by remember { mutableStateOf(false) }
     val estadoSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -113,13 +117,18 @@ fun PrestadorDashboardScreen(
     }
 
     if (estadoUi.estaCargando) {
-        Box(modifier = Modifier.fillMaxSize().background(colores.backgroundColor), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF030712)), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = Color(0xFFFF7043))
         }
     } else {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = colores.backgroundColor,
+            // [ELITE]: Inicio es siempre oscuro por diseño (todas las tarjetas de
+            // InicioComponents usan su propia paleta hardcodeada, sin seguir el sistema) —
+            // `colores.backgroundColor` sí cambia con el tema claro/oscuro DEL DISPOSITIVO,
+            // y en modo claro caía en el crema del tema base, asomando detrás de la barra
+            // de navegación flotante. Fijo al mismo oscuro que ya usan las tarjetas.
+            containerColor = Color(0xFF030712),
             contentWindowInsets = WindowInsets(0, 0, 0, 0), // 🔥 [ELITE] Inmersión total
             floatingActionButton = {
                 if (!estaEnConversacion) {
@@ -136,11 +145,13 @@ fun PrestadorDashboardScreen(
                             }
                         }
                         4 -> {
+                            // 🔥 [FIX]: naranja alineado al resto del rediseño oscuro (#FF5722, no
+                            // el #F97316 viejo de `colores`), y ya no se colapsa con el scroll —
+                            // se pidió sacar esa animación por distractiva.
                             ExtendedFloatingActionButton(
                                 onClick = { pestanaSeleccionada = 6 },
-                                containerColor = colores.primaryOrange,
+                                containerColor = Color(0xFFFF5722),
                                 contentColor = Color.White,
-                                expanded = !isScrolling, 
                                 icon = { Icon(Icons.Default.History, null) },
                                 text = { Text("Mis Publicaciones", fontWeight = FontWeight.Bold) },
                                 shape = RoundedCornerShape(16.dp)
@@ -201,6 +212,7 @@ fun PrestadorDashboardScreen(
                             onNavigateToGestionVisitas = onNavigateToGestionVisitas,
                         )
                         3 -> MercadoConcursosScreen(
+                            onBack = { pestanaSeleccionada = 2 },
                             onNavigateToPresupuesto = { onNavigateToPresupuesto(it, "") },
                             onNavigateToPaywall = onNavigateToPaywall,
                             onNavigateToClientePerfil = onNavigateToClientePerfil
@@ -233,9 +245,10 @@ fun PrestadorDashboardScreen(
                     ModalBottomSheet(
                         onDismissRequest = { mostrarSheetPromocion = false },
                         sheetState = estadoSheet,
-                        containerColor = SharedPalette.EliteSurface,
-                        contentColor = Color.White,
-                        dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f)) }
+                        containerColor = GestionTurnosTheme.CardBg,
+                        contentColor = GestionTurnosTheme.TextPrimary,
+                        dragHandle = { BottomSheetDefaults.DragHandle(color = GestionTurnosTheme.TextMuted) },
+                        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                     ) {
                         ContenidoCrearPromoSheet(
                             viewModel = createPromotionViewModel,
@@ -254,9 +267,10 @@ fun ContenidoCrearPromoSheet(
     alCerrar: () -> Unit
 ) {
     val contexto = LocalContext.current
+    val colors = GestionTurnosTheme
     val perfilActivo by viewModel.perfilActivo.collectAsStateWithLifecycle()
     val identidades by viewModel.todasMisIdentidades.collectAsStateWithLifecycle()
-    
+
     var titulo by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
     var etiquetaPromocion by remember { mutableStateOf("") }
@@ -267,9 +281,17 @@ fun ContenidoCrearPromoSheet(
     var modoPrevisualizacion by remember { mutableStateOf(false) }
 
     val estaCargando by viewModel.estaCargando.collectAsState()
+    val errorPublicacion by viewModel.error.collectAsState()
+
+    LaunchedEffect(errorPublicacion) {
+        errorPublicacion?.let {
+            android.widget.Toast.makeText(contexto, it, android.widget.Toast.LENGTH_LONG).show()
+            viewModel.limpiarError()
+        }
+    }
     val rubros by viewModel.rubrosDisponibles.collectAsStateWithLifecycle()
     var rubroSeleccionadoId by remember { mutableStateOf<String?>(null) }
-    
+
     var mostrarMenuIdentidades by remember { mutableStateOf(false) }
 
     // Auto-seleccionar el primer rubro si cambia el perfil o los rubros
@@ -282,19 +304,34 @@ fun ContenidoCrearPromoSheet(
         }
     }
 
-    val seleccionadorImagenes = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        if (imagenesSeleccionadas.size + uris.size <= 3) imagenesSeleccionadas = imagenesSeleccionadas + uris
-        else android.widget.Toast.makeText(contexto, "Máximo 3 imágenes", android.widget.Toast.LENGTH_SHORT).show()
-    }
+    val seleccionadorImagenes =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            if (imagenesSeleccionadas.size + uris.size <= 3) imagenesSeleccionadas =
+                imagenesSeleccionadas + uris
+            else android.widget.Toast.makeText(
+                contexto,
+                "Máximo 3 imágenes",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(16.dp).verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = if (modoPrevisualizacion) "Vista Previa" else "Nueva Publicación",
-            fontSize = 20.sp, fontWeight = FontWeight.Black, color = Color.White
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (modoPrevisualizacion) "Vista Previa" else "Nueva Publicación",
+                fontSize = 18.sp, fontWeight = FontWeight.Black, color = colors.TextPrimary
+            )
+            IconButton(onClick = alCerrar) {
+                Icon(Icons.Default.Close, contentDescription = "Cerrar", tint = colors.TextMuted)
+            }
+        }
         Spacer(Modifier.height(16.dp))
 
         if (modoPrevisualizacion) {
@@ -302,7 +339,8 @@ fun ContenidoCrearPromoSheet(
                 id = "preview",
                 idPrestador = perfilActivo?.id ?: "preview_id",
                 nombrePrestador = perfilActivo?.titulo ?: "App",
-                urlFotoPrestador = perfilActivo?.urlMiniatura?.toString() ?: perfilActivo?.urlFoto?.toString(),
+                urlFotoPrestador = com.example.myapplication.core.utilidades.ImageUtils.prepareForStorage(perfilActivo?.urlMiniatura)
+                    ?: com.example.myapplication.core.utilidades.ImageUtils.prepareForStorage(perfilActivo?.urlFoto),
                 tipo = tipoSeleccionado,
                 tipoPromocion = categoriaSeleccionada,
                 titulo = titulo,
@@ -315,20 +353,22 @@ fun ContenidoCrearPromoSheet(
             val uiModelVistaPrevia = PromocionMappers.aUiModel(promoVistaPrevia)
 
             Surface(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(20.dp)),
-                color = Color(0xFF0F172A)
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(20.dp)),
+                color = colors.SurfaceInput
             ) {
                 InstagramPromoCard(promotion = uiModelVistaPrevia, isClickable = false)
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick = { modoPrevisualizacion = false },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
-                ) { Text("EDITAR DATOS") }
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.TextPrimary),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f))
+                ) { Text("EDITAR DATOS", fontWeight = FontWeight.Black, fontSize = 12.sp) }
 
                 Button(
                     onClick = {
@@ -336,7 +376,8 @@ fun ContenidoCrearPromoSheet(
                             viewModel.createPromotion(
                                 idPrestador = perfil.id,
                                 nombrePrestador = perfil.titulo,
-                                urlFotoPrestador = perfil.urlMiniatura?.toString() ?: perfil.urlFoto?.toString(),
+                                urlFotoPrestador = com.example.myapplication.core.utilidades.ImageUtils.prepareForStorage(perfil.urlMiniatura)
+                                    ?: com.example.myapplication.core.utilidades.ImageUtils.prepareForStorage(perfil.urlFoto),
                                 tipo = tipoSeleccionado,
                                 tipoCategoria = categoriaSeleccionada,
                                 titulo = titulo,
@@ -353,200 +394,385 @@ fun ContenidoCrearPromoSheet(
                         }
                     },
                     modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22D3EE)),
                     enabled = !estaCargando && perfilActivo != null
                 ) {
-                    if (estaCargando) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.Black)
-                    else Text("PUBLICAR AHORA", color = Color.Black, fontWeight = FontWeight.Bold)
+                    if (estaCargando) CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.Black
+                    )
+                    else Text(
+                        "PUBLICAR AHORA",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 12.sp
+                    )
                 }
             }
         } else {
-            // --- SELECTOR DE IDENTIDAD (PUBLICADOR) ---
-            Text("Publicar como", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-            Spacer(Modifier.height(8.dp))
-            
-            Surface(
-                onClick = { mostrarMenuIdentidades = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = Color.White.copy(alpha = 0.05f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+            // --- IDENTIDAD ---
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.SurfaceInput, RoundedCornerShape(10.dp))
+                    .border(BorderStroke(1.dp, colors.BorderGlass), RoundedCornerShape(10.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Text(
+                    "PUBLICAR COMO",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    color = colors.BrandOrange
+                )
+
+                Surface(
+                    onClick = { mostrarMenuIdentidades = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.White.copy(alpha = 0.04f),
+                    border = BorderStroke(1.dp, colors.BorderGlass)
                 ) {
-                    val img = perfilActivo?.urlMiniatura ?: perfilActivo?.urlFoto
-                    if (img != null) {
-                        AsyncImage(
-                            model = img, contentDescription = null,
-                            modifier = Modifier.size(32.dp).clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Box(Modifier.size(32.dp).background(Color(0xFF22D3EE).copy(0.1f), CircleShape), contentAlignment = Alignment.Center) {
-                            Text(perfilActivo?.titulo?.take(1) ?: "?", color = Color(0xFF22D3EE), fontWeight = FontWeight.Black)
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(perfilActivo?.titulo ?: "Cargando...", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text(perfilActivo?.subtitulo ?: "Identidad App", color = Color.White.copy(0.5f), fontSize = 10.sp)
-                    }
-                    if (identidades.size > 1) {
-                        Icon(Icons.Default.ArrowDropDown, null, tint = Color.White)
-                    }
-                }
-            }
-            
-            DropdownMenu(
-                expanded = mostrarMenuIdentidades,
-                onDismissRequest = { mostrarMenuIdentidades = false },
-                modifier = Modifier.fillMaxWidth(0.9f).background(Color(0xFF0F172A))
-            ) {
-                identidades.forEach { iden ->
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                val mini = iden.urlMiniatura ?: iden.urlFoto
-                                if (mini != null) {
-                                    AsyncImage(model = mini, null, Modifier.size(24.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                Column {
-                                    Text(iden.titulo, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Text(iden.subtitulo ?: "", color = Color.White.copy(0.6f), fontSize = 9.sp)
-                                }
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val img = perfilActivo?.urlMiniatura ?: perfilActivo?.urlFoto
+                        if (img != null) {
+                            AsyncImage(
+                                model = img,
+                                contentDescription = null,
+                                Modifier.size(32.dp).clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                Modifier.size(32.dp)
+                                    .background(colors.BrandOrange.copy(0.15f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    perfilActivo?.titulo?.take(1) ?: "?",
+                                    color = colors.BrandOrange,
+                                    fontWeight = FontWeight.Black
+                                )
                             }
-                        },
-                        onClick = {
-                            viewModel.setPerfilPublicador(iden)
-                            mostrarMenuIdentidades = false
                         }
-                    )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                perfilActivo?.titulo ?: "Cargando...",
+                                color = colors.TextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                perfilActivo?.subtitulo ?: "Identidad App",
+                                color = colors.TextSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
+                        if (identidades.size > 1) {
+                            Icon(Icons.Default.ArrowDropDown, null, tint = colors.TextSecondary)
+                        }
+                    }
                 }
-            }
 
-            Spacer(Modifier.height(16.dp))
-
-            SelectorTipoSegmentado(tipoSeleccionado) { tipoSeleccionado = it }
-            Spacer(Modifier.height(16.dp))
-
-            Text("Rubro vinculado", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-            Spacer(Modifier.height(8.dp))
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(rubros) { (id, nombre) ->
-                    FilterChip(
-                        selected = rubroSeleccionadoId == id,
-                        onClick = { rubroSeleccionadoId = id },
-                        label = { Text(nombre) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Color(0xFF22D3EE),
-                            selectedLabelColor = Color.Black,
-                            containerColor = Color.White.copy(alpha = 0.05f),
-                            labelColor = Color.White
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = rubroSeleccionadoId == id,
-                            borderColor = Color.White.copy(alpha = 0.2f),
-                            selectedBorderColor = Color(0xFF22D3EE)
+                DropdownMenu(
+                    expanded = mostrarMenuIdentidades,
+                    onDismissRequest = { mostrarMenuIdentidades = false },
+                    modifier = Modifier.fillMaxWidth(0.9f).background(colors.CardBg)
+                ) {
+                    identidades.forEach { iden ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val mini = iden.urlMiniatura ?: iden.urlFoto
+                                    if (mini != null) {
+                                        AsyncImage(
+                                            model = mini,
+                                            null,
+                                            Modifier.size(24.dp).clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            iden.titulo,
+                                            color = colors.TextPrimary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            iden.subtitulo ?: "",
+                                            color = colors.TextSecondary,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                viewModel.setPerfilPublicador(iden)
+                                mostrarMenuIdentidades = false
+                            }
                         )
+                    }
+                }
+            }
+
+            // --- TIPO DE PUBLICACION ---
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "TIPO DE PUBLICACIÓN",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    color = colors.TextMuted
+                )
+                SelectorTipoSegmentado(tipoSeleccionado) { tipoSeleccionado = it }
+            }
+
+            // --- RUBRO VINCULO ---
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "RUBRO VINCULADO",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    color = colors.TextMuted
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(rubros) { (id, nombre) ->
+                        val seleccionado = rubroSeleccionadoId == id
+                        Surface(
+                            onClick = { rubroSeleccionadoId = id },
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (seleccionado) colors.BrandOrange.copy(alpha = 0.14f) else Color.White.copy(
+                                alpha = 0.04f
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (seleccionado) colors.BrandOrange else colors.BorderGlass
+                            )
+                        ) {
+                            Text(
+                                nombre,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (seleccionado) colors.BrandOrange else colors.TextSecondary,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // --  CATEGORIA DE LA OFERTA ---
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "CATEGORÍA DE LA OFERTA",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    color = colors.TextMuted
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OpcionCategoria(
+                        tipo = TipoCategoriaPromo.SERVICIO,
+                        seleccionado = categoriaSeleccionada == TipoCategoriaPromo.SERVICIO,
+                        onClick = { categoriaSeleccionada = TipoCategoriaPromo.SERVICIO },
+                        modifier = Modifier.weight(1f)
+                    )
+                    OpcionCategoria(
+                        tipo = TipoCategoriaPromo.PRODUCTO,
+                        seleccionado = categoriaSeleccionada == TipoCategoriaPromo.PRODUCTO,
+                        onClick = { categoriaSeleccionada = TipoCategoriaPromo.PRODUCTO },
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
-            Spacer(Modifier.height(16.dp))
 
-            Text("Categoría de la Oferta", fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-            Spacer(Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OpcionCategoria(
-                    tipo = TipoCategoriaPromo.SERVICIO,
-                    seleccionado = categoriaSeleccionada == TipoCategoriaPromo.SERVICIO,
-                    onClick = { categoriaSeleccionada = TipoCategoriaPromo.SERVICIO },
-                    modifier = Modifier.weight(1f)
+            // --- FOTOS ---
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "FOTOS (${imagenesSeleccionadas.size}/3)",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    color = colors.TextMuted
                 )
-                OpcionCategoria(
-                    tipo = TipoCategoriaPromo.PRODUCTO,
-                    seleccionado = categoriaSeleccionada == TipoCategoriaPromo.PRODUCTO,
-                    onClick = { categoriaSeleccionada = TipoCategoriaPromo.PRODUCTO },
-                    modifier = Modifier.weight(1f)
-                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        Surface(
+                            onClick = {
+                                if (imagenesSeleccionadas.size < 3) seleccionadorImagenes.launch(
+                                    "image/*"
+                                )
+                            },
+                            modifier = Modifier.size(80.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color.White.copy(alpha = 0.04f),
+                            border = BorderStroke(1.dp, colors.BorderGlass)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.AddAPhoto, null, tint = colors.TextSecondary)
+                            }
+                        }
+                    }
+                    items(imagenesSeleccionadas) { uri ->
+                        Box(modifier = Modifier.size(80.dp)) {
+                            AsyncImage(
+                                model = uri,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = {
+                                    imagenesSeleccionadas =
+                                        imagenesSeleccionadas.filter { it != uri }
+                                },
+                                modifier = Modifier.align(Alignment.TopEnd).size(22.dp)
+                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                            ) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
-            Spacer(Modifier.height(16.dp))
+            // --- DETALLES ---
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.SurfaceInput, RoundedCornerShape(10.dp))
+                    .border(BorderStroke(1.dp, colors.BorderGlass), RoundedCornerShape(10.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "DETALLES",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    color = colors.BrandOrange
+                )
 
-            OutlinedTextField(
-                value = etiquetaPromocion, onValueChange = { if (it.length <= 15) etiquetaPromocion = it },
-                label = { Text("Etiqueta (Opcional)") }, modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(unfocusedTextColor = Color.White, focusedTextColor = Color.White)
-            )
+                OutlinedTextField(
+                    value = etiquetaPromocion,
+                    onValueChange = { if (it.length <= 15) etiquetaPromocion = it },
+                    label = { Text("Etiqueta (Opcional)", color = Color.Gray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = campoPublicacionColors(colors)
+                )
 
-            Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = titulo,
+                    onValueChange = { if (it.length <= 60) titulo = it },
+                    label = { Text("Título de la oferta", color = Color.Gray) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = campoPublicacionColors(colors)
+                )
 
-            OutlinedTextField(
-                value = titulo, onValueChange = { if (it.length <= 60) titulo = it },
-                label = { Text("Título de la oferta") }, modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(unfocusedTextColor = Color.White, focusedTextColor = Color.White)
-            )
-            Spacer(Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = descripcion, onValueChange = { if (it.length <= 300) descripcion = it },
-                label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth().height(100.dp),
-                colors = OutlinedTextFieldDefaults.colors(unfocusedTextColor = Color.White, focusedTextColor = Color.White)
-            )
-            
-            Spacer(Modifier.height(24.dp))
+                OutlinedTextField(
+                    value = descripcion,
+                    onValueChange = { if (it.length <= 300) descripcion = it },
+                    label = { Text("Descripción", color = Color.Gray) },
+                    modifier = Modifier.fillMaxWidth().height(100.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = campoPublicacionColors(colors)
+                )
+            }
             Button(
                 onClick = { modoPrevisualizacion = true },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.BrandOrange),
+                shape = RoundedCornerShape(12.dp),
                 enabled = titulo.isNotBlank() && descripcion.isNotBlank()
             ) {
-                Icon(Icons.Default.Visibility, null, tint = Color(0xFF22D3EE))
+                Icon(Icons.Default.Visibility, null, tint = Color.Black)
                 Spacer(Modifier.width(8.dp))
-                Text("VER VISTA PREVIA", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(
+                    "VER VISTA PREVIA",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 13.sp
+                )
             }
+
         }
-        Spacer(Modifier.height(32.dp))
     }
 }
 
 @Composable
-fun OpcionCategoria(tipo: TipoCategoriaPromo, seleccionado: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun campoPublicacionColors(colors: GestionTurnosTheme) = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = colors.TextPrimary,
+    unfocusedTextColor = colors.TextPrimary,
+    cursorColor = colors.BrandOrange,
+    focusedBorderColor = colors.BrandOrange,
+    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+    focusedLabelColor = colors.BrandOrange,
+    unfocusedLabelColor = Color.Gray,
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent
+)
+
+
+
+
+
+
+
+@Composable
+fun OpcionCategoria(tipo:  TipoCategoriaPromo, seleccionado: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = GestionTurnosTheme
     Surface(
-        onClick = onClick, modifier = modifier.height(54.dp), shape = RoundedCornerShape(12.dp),
-        color = if (seleccionado) Color(0xFF22D3EE).copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(1.dp, if (seleccionado) Color(0xFF22D3EE) else Color.White.copy(alpha = 0.1f))
+        onClick = onClick, modifier = modifier.height(52.dp), shape = RoundedCornerShape(10.dp),
+        color = if (seleccionado) colors.BrandOrange.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.04f),
+        border = BorderStroke(1.dp, if (seleccionado) colors.BrandOrange else colors.BorderGlass)
     ) {
         Row(modifier = Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            Text(tipo.icono, fontSize = 18.sp)
+            Text(tipo.icono, fontSize = 17.sp)
             Spacer(Modifier.width(8.dp))
-            Text(text = tipo.etiqueta, fontSize = 12.sp, fontWeight = if (seleccionado) FontWeight.Black else FontWeight.Normal, color = if (seleccionado) Color(0xFF22D3EE) else Color.White)
+            Text(text = tipo.etiqueta, fontSize = 12.sp, fontWeight = if (seleccionado) FontWeight.Black else FontWeight.Bold, color = if (seleccionado) colors.BrandOrange else colors.TextSecondary)
         }
     }
 }
 
 @Composable
 fun SelectorTipoSegmentado(seleccionado: TipoPromocion, alSeleccionar: (TipoPromocion) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.05f))) {
+    val colors = GestionTurnosTheme
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .background(colors.SurfaceInput, RoundedCornerShape(10.dp))
+            .border(BorderStroke(1.dp, colors.BorderGlass), RoundedCornerShape(10.dp))
+            .padding(4.dp)
+    ) {
         TipoPromocion.entries.forEach { tipo ->
             val esSeleccionado = seleccionado == tipo
             Box(
-                modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
-                    .background(if (esSeleccionado) Color.White.copy(alpha = 0.15f) else Color.Transparent)
+                modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(8.dp))
+                    .background(if (esSeleccionado) colors.BrandOrange else Color.Transparent)
                     .clickable { alSeleccionar(tipo) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (tipo == TipoPromocion.HISTORIA) "Historia" else "Promoción",
-                    color = if (esSeleccionado) Color(0xFF22D3EE) else Color.Gray,
-                    fontWeight = if (esSeleccionado) FontWeight.Bold else FontWeight.Normal,
+                    color = if (esSeleccionado) Color.Black else colors.TextSecondary,
+                    fontWeight = if (esSeleccionado) FontWeight.Black else FontWeight.Bold,
                     fontSize = 13.sp
                 )
             }
@@ -561,11 +787,11 @@ fun BandaNavegacionPrestador(seleccionada: Int, conteoAlertas: Int, conteoChat: 
         shape = RoundedCornerShape(32.dp), color = Color(0xFF1A1C1E), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
     ) {
         Row(modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-            ItemNavegacion(Icons.Default.Description, "Presup.", seleccionada == 0) { alSeleccionar(0) }
-            ItemNavegacion(Icons.Default.Email, "Mensajes", seleccionada == 1, conteoChat > 0, conteoChat) { alSeleccionar(1) }
-            Box(modifier = Modifier.size(60.dp).offset(y = (-4).dp).shadow(12.dp, CircleShape).background(brush = Brush.verticalGradient(colors = listOf(Color(0xFFFF7043), Color(0xFFFF5722))), shape = CircleShape).clickable { alSeleccionar(2) }, contentAlignment = Alignment.Center) { Icon(Icons.Default.Home, "Inicio", tint = Color.White, modifier = Modifier.size(28.dp)) }
-            ItemNavegacion(Icons.Default.Gavel, "Concursos", seleccionada == 3) { alSeleccionar(3) }
-            ItemNavegacion(Icons.Default.Campaign, "Promos", seleccionada == 4) { alSeleccionar(4) }
+            ItemNavegacion(Icons.Outlined.Description, "Presup.", seleccionada == 0) { alSeleccionar(0) }
+            ItemNavegacion(Icons.Outlined.Email, "Mensajes", seleccionada == 1, conteoChat > 0, conteoChat) { alSeleccionar(1) }
+            Box(modifier = Modifier.size(60.dp).offset(y = (-4).dp).shadow(12.dp, CircleShape).background(brush = Brush.verticalGradient(colors = listOf(Color(0xFFFF7043), Color(0xFFFF5722))), shape = CircleShape).clickable { alSeleccionar(2) }, contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Home, "Inicio", tint = Color.White, modifier = Modifier.size(26.dp)) }
+            ItemNavegacion(Icons.Outlined.Gavel, "Concursos", seleccionada == 3) { alSeleccionar(3) }
+            ItemNavegacion(Icons.Outlined.Campaign, "Promos", seleccionada == 4) { alSeleccionar(4) }
         }
     }
 }
