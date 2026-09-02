@@ -28,7 +28,6 @@ enum class AccionFab(val titulo: String, val icono: ImageVector) {
     VISITA_TECNICA("Nueva Visita Técnica", Icons.Default.HomeWork),
     NUEVO_TURNO("Nuevo Turno", Icons.Default.Event),
     ENVIAR_PRODUCTO("Enviar Producto", Icons.Default.Storefront),
-    UBICACION("Enviar Ubicación", Icons.Default.LocationOn),
     FINALIZAR_TRABAJO("Finalizar Trabajo", Icons.Default.TaskAlt)
 }
 

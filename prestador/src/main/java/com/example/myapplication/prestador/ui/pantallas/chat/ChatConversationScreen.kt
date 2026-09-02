@@ -231,7 +231,6 @@ fun ChatConversationScreen(
                         AccionFab.VISITA_TECNICA -> showVisitaSheet = true
                         AccionFab.NUEVO_TURNO -> showTurnoSheet = true
                         AccionFab.ENVIAR_PRODUCTO -> showProductSheet = true
-                        AccionFab.UBICACION -> showLocationSheet = true
                         AccionFab.FINALIZAR_TRABAJO -> {
                             val idEmisor = maestro?.cuenta?.idPerfilActivo ?: providerId
                             chatViewModel.enviarFinalizacionServicio(idEmisor, userId)
@@ -257,7 +256,8 @@ fun ChatConversationScreen(
                 showAttachmentMenu = false
             },
             alHacerClickPdf = { showAttachmentMenu = false },
-            alHacerClickArchiveroImagenes = { 
+            alHacerClickUbicacion = { showLocationSheet = true; showAttachmentMenu = false },
+            alHacerClickArchiveroImagenes = {
                 chatViewModel.cargarSeccionArchivero(1)
                 showArchiveroImagenes = true
                 showAttachmentMenu = false 
