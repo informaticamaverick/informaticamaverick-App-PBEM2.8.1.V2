@@ -32,10 +32,11 @@ class ClimaRepositorio @Inject constructor(
      * [OPTIMIZACIÓN]: Prioriza el Código Postal (CP) para evitar llamadas redundantes.
      */
     suspend fun obtenerClimaActual(
-        latitud: Double, 
-        longitud: Double, 
+        latitud: Double,
+        longitud: Double,
         codigoPostal: String? = null,
-        forzar: Boolean = false
+        forzar: Boolean = false,
+        nombreCiudad: String? = null
     ): InformacionClima? {
         val ahora = System.currentTimeMillis()
         
@@ -72,6 +73,11 @@ class ClimaRepositorio @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.let { data ->
                     val nuevoClima = InformacionClima(
+                        // [FIX]: nunca se pasaba — la tarjeta de clima siempre mostraba el
+                        // default "Buenos Aires" del modelo, sin importar la ubicación real
+                        // usada para pedir la temperatura (Open-Meteo no devuelve nombre de
+                        // ciudad, hay que traerlo de la geocodificación inversa del GPS).
+                        nombreCiudad = nombreCiudad?.takeIf { it.isNotBlank() } ?: "Buenos Aires",
                         temperatura = "${data.current.temperature_2m.toInt()}°C",
                         emojiClima = mapCodeToEmoji(data.current.weathercode),
                         descripcionClima = mapCodeToDescription(data.current.weathercode),
