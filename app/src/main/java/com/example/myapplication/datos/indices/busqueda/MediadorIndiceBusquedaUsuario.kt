@@ -73,6 +73,11 @@ class MediadorIndiceBusquedaUsuario(
             // --- PERSISTENCIA SOBERANA ---
             if (loadType == LoadType.REFRESH) {
                 db.claveRemotaBusquedaDao().eliminarClave(idConsulta)
+                // [FIX]: sin esto, un resultado que dejó de matchear en Firestore (ej. un
+                // prestador que activó "Modo empresa" y se borró del índice) seguía apareciendo
+                // para siempre en el caché local — solo se insertaban relaciones nuevas, nunca
+                // se limpiaban las viejas que ya no vienen en la respuesta fresca.
+                db.resultadoBusquedaPrestadorDao().limpiarResultadosDeConsulta(idConsulta)
             }
 
             val ultimoId = itemsShallow.lastOrNull()?.id
