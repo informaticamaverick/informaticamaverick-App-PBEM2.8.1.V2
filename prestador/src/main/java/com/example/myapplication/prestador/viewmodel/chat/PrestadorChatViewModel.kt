@@ -25,6 +25,7 @@ import com.example.myapplication.uishared.ui.components.chat.ItemPaginacionChat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -58,6 +59,8 @@ class PrestadorChatViewModel @Inject constructor(
 
     private val _estadoUi = MutableStateFlow(EstadoChatUi())
     val uiState: StateFlow<EstadoChatUi> = _estadoUi.asStateFlow()
+
+    private var jobIdentidadRemota: Job? = null
 
     val estaGrabando: StateFlow<Boolean> = audioMavManager.estaGrabando
     val tiempoGrabacion: StateFlow<Int> = audioMavManager.tiempoTranscurrido
@@ -163,11 +166,18 @@ class PrestadorChatViewModel @Inject constructor(
 
         _estadoUi.update { it.copy(idChatActivo = idRealChat, mensajesActuales = emptyList(), identidadRemota = null) }
 
+        // [FIX]: este observador de identidad remota nunca se cancelaba al cambiar de chat —
+        // quedaba corriendo para siempre en viewModelScope, y si el chat anterior recibía
+        // cualquier actualización (ej. un mensaje nuevo) mientras el usuario ya estaba viendo
+        // OTRO chat, pisaba identidadRemota con el nombre/foto del chat viejo. Los mensajes
+        // mostrados sí eran los correctos porque esos se resetean en cada llamada.
+        jobIdentidadRemota?.cancel()
+
         viewModelScope.launch {
             chatRepository.observarChat(idRealChat)
 
             idRemoto?.let { remoteId ->
-                launch {
+                jobIdentidadRemota = launch {
                     motorLocal.impactarUsuarioShallow(remoteId)
                     chatRepository.obtenerConversaciones(miUid).map { list ->
                         list.find { it.idChat == idRealChat }

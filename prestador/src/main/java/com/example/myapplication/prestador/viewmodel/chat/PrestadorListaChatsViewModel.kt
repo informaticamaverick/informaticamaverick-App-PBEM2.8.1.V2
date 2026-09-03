@@ -23,25 +23,30 @@ class PrestadorListaChatsViewModel @Inject constructor(
     private val authRepository: PrestadorAutenticacionRepositorio
 ) : ViewModel() {
 
-    private val _idIdentidadActiva = MutableStateFlow<String?>(null)
-    val idIdentidadActiva = _idIdentidadActiva.asStateFlow()
+    // [FIX]: "TODAS" (agrupar todas las sucursales de una empresa) necesita filtrar por
+    // varios ids a la vez, no uno solo — cada conversación queda etiquetada con el id de
+    // UNA sucursal puntual, nunca con el id de la empresa.
+    private val _idsIdentidadActiva = MutableStateFlow<List<String>>(emptyList())
+    val idsIdentidadActiva = _idsIdentidadActiva.asStateFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val conversaciones: StateFlow<List<ConversacionEntity>> = _idIdentidadActiva
-        .filterNotNull()
-        .flatMapLatest { id ->
-            chatRepository.obtenerConversaciones(id)
+    val conversaciones: StateFlow<List<ConversacionEntity>> = _idsIdentidadActiva
+        .filter { it.isNotEmpty() }
+        .flatMapLatest { ids ->
+            chatRepository.obtenerConversaciones(ids)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * 🔥 [ELITE]: Establece qué bandeja estamos visualizando.
+     * 🔥 [ELITE]: Establece qué bandeja(s) estamos visualizando.
      */
-    fun establecerBandeja(idIdentidad: String) {
-        if (_idIdentidadActiva.value == idIdentidad) return
-        android.util.Log.d("ListaChatsVM", "📥 [BANDEJA_SET] Cambiando a identidad: $idIdentidad")
-        _idIdentidadActiva.value = idIdentidad
+    fun establecerBandeja(ids: List<String>) {
+        if (_idsIdentidadActiva.value == ids) return
+        android.util.Log.d("ListaChatsVM", "📥 [BANDEJA_SET] Cambiando a identidades: $ids")
+        _idsIdentidadActiva.value = ids
     }
+
+    fun establecerBandeja(idIdentidad: String) = establecerBandeja(listOf(idIdentidad))
 
     /**
      * 🔥 [ELITE]: Obtiene el conteo de mensajes no leídos global para el profesional.
@@ -54,10 +59,10 @@ class PrestadorListaChatsViewModel @Inject constructor(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     fun refrescarBandeja() {
-        val id = _idIdentidadActiva.value ?: return
+        val ids = _idsIdentidadActiva.value.takeIf { it.isNotEmpty() } ?: return
         viewModelScope.launch {
             // Aquí podríamos disparar un pull shallow si fuera necesario
-            android.util.Log.d("ListaChatsVM", "🔄 [REFRESH] Refrescando bandeja para: $id")
+            android.util.Log.d("ListaChatsVM", "🔄 [REFRESH] Refrescando bandeja para: $ids")
         }
     }
 }

@@ -51,11 +51,42 @@ fun PrestadorChatScreen(
     var idUsuarioChatActivo by remember { mutableStateOf(initialChatUserId) }
     var idChatActivo by remember { mutableStateOf<String?>(null) }
 
+    // [FIX]: el buscador ya filtraba de verdad adentro de ChatListScreen, pero acá se le
+    // pasaban siempre valores fijos (isSearchActive=false, onSearchQueryChange={}) — tocar la
+    // lupa o escribir no hacía nada porque nada actualizaba un estado real.
+    var busquedaActiva by remember { mutableStateOf(false) }
+    var textoBusqueda by remember { mutableStateOf("") }
+
     // --- CABLEADO DE SOBERANÍA ---
+    // [FIX]: se separa "qué pestaña/sucursal estoy mirando" (estado local de UI, lo controla
+    // el selector) de "qué ids se le piden al ViewModel" — antes ambas cosas dependían del
+    // mismo idPerfilActivo, así que "TODAS" (agrupar las sucursales de la empresa) terminaba
+    // pidiendo el id de la EMPRESA, que ninguna conversación usa nunca, y no traía nada.
+    var inboxSeleccionado by remember { mutableStateOf(com.example.myapplication.prestador.viewmodel.chat.InboxType.PERSONAL) }
+    var empresaSeleccionadaId by remember { mutableStateOf<String?>(null) }
+    var sucursalSeleccionadaId by remember { mutableStateOf<String?>(null) }
+
+    // [FIX]: "maestro" es un objeto nuevo cada vez que algo del ecosistema se sincroniza
+    // (no solo el chat) — al re-ejecutarse con cada emisión, esto pisaba SIEMPRE la bandeja
+    // activa con idPerfilActivo, aunque el usuario ya hubiera elegido Personal/Empresa a mano
+    // con el selector. Ahora solo fija la bandeja inicial una vez; el selector manual manda después.
+    var bandejaInicializada by remember { mutableStateOf(false) }
     LaunchedEffect(maestro) {
-        maestro?.let {
-            val idLocal = it.cuenta.idPerfilActivo ?: it.cuenta.id
-            listaChatsViewModel.establecerBandeja(idLocal)
+        if (!bandejaInicializada) {
+            maestro?.let {
+                val idActivo = it.cuenta.idPerfilActivo
+                val empresaConSucursalActiva = idActivo?.let { id -> it.empresas.find { e -> e.sucursales.any { s -> s.sucursal.id == id } } }
+                if (it.cuenta.priorizarEmpresa && idActivo != null && empresaConSucursalActiva != null) {
+                    inboxSeleccionado = com.example.myapplication.prestador.viewmodel.chat.InboxType.EMPRESA
+                    empresaSeleccionadaId = empresaConSucursalActiva.empresa.id
+                    sucursalSeleccionadaId = idActivo
+                    listaChatsViewModel.establecerBandeja(idActivo)
+                } else {
+                    inboxSeleccionado = com.example.myapplication.prestador.viewmodel.chat.InboxType.PERSONAL
+                    listaChatsViewModel.establecerBandeja(it.cuenta.id)
+                }
+                bandejaInicializada = true
+            }
         }
     }
 
@@ -77,14 +108,17 @@ fun PrestadorChatScreen(
             val maestroActual = maestro // 🔥 [FIX]: Local variable for smart cast
             ChatListScreen(
                 conversations = conversaciones,
-                isSearchActive = false,
-                searchQuery = "",
+                isSearchActive = busquedaActiva,
+                searchQuery = textoBusqueda,
                 currentFilter = ChatFilterState.ALL,
                 sortMode = SortMode.RECENT,
                 isDeletionMode = false,
                 selectedChatsForDeletion = emptySet(),
-                onSearchActiveChange = {},
-                onSearchQueryChange = {},
+                onSearchActiveChange = { activa ->
+                    busquedaActiva = activa
+                    if (!activa) textoBusqueda = ""
+                },
+                onSearchQueryChange = { textoBusqueda = it },
                 onFilterChange = {},
                 onSortModeChange = {},
                 onDeletionModeChange = {},
@@ -102,30 +136,39 @@ fun PrestadorChatScreen(
                 onShowLockDialog = {},
                 onRequestDeleteConfirmation = {},
                 onDeleteSelected = {},
-                selectedInbox = if (maestroActual?.cuenta?.priorizarEmpresa == true) com.example.myapplication.prestador.viewmodel.chat.InboxType.EMPRESA else com.example.myapplication.prestador.viewmodel.chat.InboxType.PERSONAL,
+                selectedInbox = inboxSeleccionado,
                 hasCompanyInbox = (maestroActual?.empresas?.size ?: 0) > 0,
                 providerPhotoUrl = maestroActual?.prestador?.perfil?.urlFoto?.toString(),
                 companyPhotoUrl = maestroActual?.empresas?.firstOrNull()?.empresa?.urlFoto,
                 companyName = maestroActual?.empresas?.firstOrNull()?.empresa?.nombre ?: "",
-                onInboxChange = { type, idEmp, idSuc -> 
-                    val idDestino = idSuc ?: idEmp ?: maestroActual?.cuenta?.id
-                    idDestino?.let { listaChatsViewModel.establecerBandeja(it) }
+                onInboxChange = { type, idEmp, idSuc ->
+                    inboxSeleccionado = type
+                    empresaSeleccionadaId = idEmp
+                    sucursalSeleccionadaId = idSuc
+                    when {
+                        type == com.example.myapplication.prestador.viewmodel.chat.InboxType.PERSONAL ->
+                            maestroActual?.cuenta?.id?.let { listaChatsViewModel.establecerBandeja(it) }
+                        idSuc != null -> listaChatsViewModel.establecerBandeja(idSuc)
+                        idEmp != null -> {
+                            // "TODAS": agrupar las conversaciones de TODAS las sucursales de esta empresa.
+                            val idsSucursales = maestroActual?.empresas?.find { it.empresa.id == idEmp }
+                                ?.sucursales?.map { it.sucursal.id } ?: emptyList()
+                            if (idsSucursales.isNotEmpty()) listaChatsViewModel.establecerBandeja(idsSucursales)
+                        }
+                    }
                 },
                 providerCompanies = maestroActual?.empresas?.map { empComp ->
                     com.example.myapplication.core.dominio.mapeadores.PrestadorMappers.deEmpresaAModeloUi(empComp)
                 } ?: emptyList(),
-                activeCompanyId = maestroActual?.empresas?.find { e -> 
-                    e.empresa.id == maestroActual.cuenta.idPerfilActivo || e.sucursales.any { s -> s.sucursal.id == maestroActual.cuenta.idPerfilActivo } 
-                }?.empresa?.id,
-                activeBranchId = maestroActual?.empresas?.flatMap { it.sucursales }?.find { it.sucursal.id == maestroActual.cuenta.idPerfilActivo }?.sucursal?.id,
-                onRefresh = { 
+                activeCompanyId = empresaSeleccionadaId,
+                activeBranchId = sucursalSeleccionadaId,
+                onRefresh = {
                     listaChatsViewModel.refrescarBandeja()
                 },
-                companyBranches = maestroActual?.empresas?.find { e -> 
-                    e.empresa.id == maestroActual.cuenta.idPerfilActivo || e.sucursales.any { s -> s.sucursal.id == maestroActual.cuenta.idPerfilActivo } 
-                }?.sucursales?.map { sucComp ->
-                    com.example.myapplication.core.dominio.mapeadores.PrestadorMappers.deSucursalAModeloUi(sucComp)
-                } ?: emptyList()
+                companyBranches = maestroActual?.empresas?.find { it.empresa.id == empresaSeleccionadaId }
+                    ?.sucursales?.map { sucComp ->
+                        com.example.myapplication.core.dominio.mapeadores.PrestadorMappers.deSucursalAModeloUi(sucComp)
+                    } ?: emptyList()
             )
         } else {
             // Detalle de conversación

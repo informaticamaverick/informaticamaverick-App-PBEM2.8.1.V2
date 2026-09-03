@@ -42,6 +42,9 @@ class ChatMotorSincRepositorio @Inject constructor(
     fun obtenerConversaciones(idIdentidadLocal: String): Flow<List<ConversacionEntity>> =
         chatDao.obtenerConversacionesPorIdentidad(idIdentidadLocal)
 
+    fun obtenerConversaciones(idsIdentidadLocal: List<String>): Flow<List<ConversacionEntity>> =
+        chatDao.obtenerConversacionesPorIdentidades(idsIdentidadLocal)
+
     /**
      * 🔥 [ELITE]: Obtiene un flujo paginado de mensajes (Ley #3).
      */

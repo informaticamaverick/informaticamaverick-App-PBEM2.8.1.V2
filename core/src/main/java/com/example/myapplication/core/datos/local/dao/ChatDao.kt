@@ -83,6 +83,12 @@ interface ChatDao {
     @Query("SELECT * FROM conversaciones WHERE idIdentidadLocal = :idIdentidadLocal ORDER BY fechaUltimoMensaje DESC")
     fun obtenerConversacionesPorIdentidad(idIdentidadLocal: String): Flow<List<ConversacionEntity>>
 
+    // [FIX]: "TODAS" (agrupar todas las sucursales de una empresa) necesita filtrar por
+    // varios ids a la vez — cada conversación queda etiquetada con el id de UNA sucursal
+    // puntual, nunca con el id de la empresa, así que no alcanza con una sola coincidencia.
+    @Query("SELECT * FROM conversaciones WHERE idIdentidadLocal IN (:ids) ORDER BY fechaUltimoMensaje DESC")
+    fun obtenerConversacionesPorIdentidades(ids: List<String>): Flow<List<ConversacionEntity>>
+
     @Query("SELECT * FROM conversaciones")
     suspend fun obtenerTodasLasConversacionesSync(): List<ConversacionEntity>
 
