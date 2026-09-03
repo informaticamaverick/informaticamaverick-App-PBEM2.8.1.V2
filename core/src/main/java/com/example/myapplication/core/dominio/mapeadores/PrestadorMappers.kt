@@ -27,7 +27,11 @@ object PrestadorMappers {
     ): PrestadorDominio {
         val base = deEntidadAModeloUi(relacion.prestador, cuenta)
         return base.copy(
-            direcciones = relacion.direcciones.map { DireccionMappers.deEntidadAModelo(it) }
+            // [FIX]: el @Relation solo filtra por idPropietario, y las direcciones de
+            // sucursal/empresa se guardan con idPropietario = uid (mismo dueño) para que
+            // otras consultas las encuentren. Sin este filtro, la dirección de una sucursal
+            // aparecía mezclada con la personal en el perfil del prestador independiente.
+            direcciones = relacion.direcciones.filter { it.idSucursal == null }.map { DireccionMappers.deEntidadAModelo(it) }
         )
     }
 
@@ -40,7 +44,8 @@ object PrestadorMappers {
     ): PrestadorDominioCompleto {
         return PrestadorDominioCompleto(
             perfil = deEntidadAModeloUi(relacion.prestador, cuenta),
-            direcciones = relacion.direcciones.map { DireccionMappers.deEntidadAModelo(it) },
+            // [FIX]: mismo caso que deRelacionADominio() arriba - excluir direcciones de sucursal.
+            direcciones = relacion.direcciones.filter { it.idSucursal == null }.map { DireccionMappers.deEntidadAModelo(it) },
             horario = relacion.horario?.let { HorarioMappers.deEntidadAModelo(it) },
             reseñas = relacion.reseñas.map { ReviewMappers.deEntidadADominio(it) }
         )
