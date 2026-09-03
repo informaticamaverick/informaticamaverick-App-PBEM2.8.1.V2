@@ -30,4 +30,7 @@ interface CuentaDao {
 
     @Query("UPDATE cuentas SET estaSuscrito = :activa WHERE id = :uid")
     suspend fun actualizarEstadoSuscripcion(uid: String, activa: Boolean)
+
+    @Query("UPDATE cuentas SET idPerfilActivo = :idPerfilActivo, priorizarEmpresa = :priorizarEmpresa WHERE id = :uid")
+    suspend fun actualizarModoSoberania(uid: String, idPerfilActivo: String?, priorizarEmpresa: Boolean)
 }

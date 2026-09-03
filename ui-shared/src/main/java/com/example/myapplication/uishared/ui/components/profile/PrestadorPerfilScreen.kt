@@ -55,7 +55,10 @@ fun PrestadorPerfilScreen(
     alGuardarYSalir: (alTerminar: () -> Unit) -> Unit = { it() },
     onNavigateToConfig: () -> Unit = {},
     alChat: (String) -> Unit = {},
-    distintivoPremium: @Composable () -> Unit = {}
+    distintivoPremium: @Composable () -> Unit = {},
+    priorizarEmpresa: Boolean = false,
+    alRevertirModoEmpresa: () -> Unit = {},
+    alActivarModoEmpresa: (String) -> Unit = {}
 ) {
     var mostrarConfirmacionSalida by remember { mutableStateOf(false) }
 
@@ -132,7 +135,10 @@ fun PrestadorPerfilScreen(
         alChat = { id -> id?.let { alChat(it) } },
         hayCambiosPendientes = hayCambiosPendientes,
         alSyncCloud = alSyncCloud,
-        distintivoPremium = distintivoPremium
+        distintivoPremium = distintivoPremium,
+        priorizarEmpresa = priorizarEmpresa,
+        alRevertirModoEmpresa = alRevertirModoEmpresa,
+        alActivarModoEmpresa = alActivarModoEmpresa
     )
 }
 

@@ -23,6 +23,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.prestador.ui.theme.PrestadorColors
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
 import com.example.myapplication.prestador.viewmodel.profile.PerfilPrestadorDeepViewModel
+import com.example.myapplication.uishared.ui.components.profile.parts.DialogoPriorizarEmpresa
+import com.example.myapplication.uishared.ui.components.profile.parts.DialogoDesactivarEmpresa
 
 private val IconColorPresupuesto   = Color(0xFF1976D2)
 private val IconColorCalendario    = Color(0xFF388E3C)
@@ -52,6 +54,8 @@ fun ConfiguracionScreen(
     val maestro = stateDeep.ecosistema
     val priorizarEmpresa = maestro?.cuenta?.priorizarEmpresa ?: false
     val tieneEmpresa = maestro?.empresas?.isNotEmpty() ?: false
+    var mostrarConfirmarActivarEmpresa by remember { mutableStateOf(false) }
+    var mostrarConfirmarDesactivarEmpresa by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.refrescarDatos() }
 
@@ -78,8 +82,8 @@ fun ConfiguracionScreen(
             }
 
             ConfigSection(label = "Mi perfil") {
-                ConfigGroupToggle(icon = Icons.Default.Business, iconColor = IconColorPerfil, title = "Modo empresa", subtitle = if (priorizarEmpresa) "Perfil personal desactivado" else if (tieneEmpresa) "Perfil personal activo" else "Necesitás agregar una empresa", checked = priorizarEmpresa, enabled = tieneEmpresa, colors = colors, onToggle = { enabled -> 
-                    viewModel.alternarSoberania(maestro?.empresas?.firstOrNull()?.empresa?.id, enabled)
+                ConfigGroupToggle(icon = Icons.Default.Business, iconColor = IconColorPerfil, title = "Modo empresa", subtitle = if (priorizarEmpresa) "Perfil personal desactivado" else if (tieneEmpresa) "Perfil personal activo" else "Necesitás agregar una empresa", checked = priorizarEmpresa, enabled = tieneEmpresa, colors = colors, onToggle = { enabled ->
+                    if (enabled) mostrarConfirmarActivarEmpresa = true else mostrarConfirmarDesactivarEmpresa = true
                 })
                 if (priorizarEmpresa) {
                     HorizontalDivider(modifier = Modifier.padding(start = 68.dp), color = colors.divider.copy(alpha = 0.6f))
@@ -101,6 +105,27 @@ fun ConfiguracionScreen(
                         onClick = onNavigateToGestionVisitas
                     )
                 }
+            }
+
+            if (mostrarConfirmarActivarEmpresa) {
+                DialogoPriorizarEmpresa(
+                    onConfirm = {
+                        mostrarConfirmarActivarEmpresa = false
+                        // [FIX]: chat y búsqueda operan a nivel de SUCURSAL, no de empresa.
+                        viewModel.alternarSoberania(maestro?.empresas?.firstOrNull()?.sucursales?.firstOrNull()?.sucursal?.id, true)
+                    },
+                    onDismiss = { mostrarConfirmarActivarEmpresa = false }
+                )
+            }
+
+            if (mostrarConfirmarDesactivarEmpresa) {
+                DialogoDesactivarEmpresa(
+                    onConfirm = {
+                        mostrarConfirmarDesactivarEmpresa = false
+                        viewModel.alternarSoberania(null, false)
+                    },
+                    onDismiss = { mostrarConfirmarDesactivarEmpresa = false }
+                )
             }
 
             ConfigSection(label = "Legal") {

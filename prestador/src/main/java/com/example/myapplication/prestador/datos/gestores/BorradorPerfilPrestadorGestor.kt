@@ -72,6 +72,20 @@ class BorradorPerfilPrestadorGestor @Inject constructor() {
 
     // --- SECTOR: MUTACIONES TÁCTICAS (100% Español) ---
 
+    /**
+     * 🔥 [ELITE]: Refleja en el borrador un cambio que YA se persistió (Room + Firestore)
+     * por fuera del flujo normal de edición — como alternarSoberania(). Se actualizan
+     * borrador Y línea base juntos (no es un cambio "pendiente" de guardar) para que un
+     * guardado posterior de otro campo no lo pise con el valor viejo.
+     */
+    fun actualizarModoSoberania(idPerfilActivo: String?, priorizarEmpresa: Boolean) {
+        val actualizarCuenta: (CuentaEntity) -> CuentaEntity = {
+            it.copy(idPerfilActivo = idPerfilActivo, priorizarEmpresa = priorizarEmpresa)
+        }
+        _borrador.update { actual -> actual?.copy(cuenta = actualizarCuenta(actual.cuenta)) }
+        _estadoOriginal.update { actual -> actual?.copy(cuenta = actualizarCuenta(actual.cuenta)) }
+    }
+
     fun actualizarPerfilPersonal(nuevoPerfil: PrestadorDominio) {
         _borrador.update { actual ->
             actual?.copy(

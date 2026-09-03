@@ -51,24 +51,37 @@ class IndiceBusquedaPrestadorRepositorio @Inject constructor(
             val estaSuscrito = cuenta?.estaSuscrito ?: false
 
             // --- 1. PROYECCIÓN PERFIL PERSONAL ---
-            // [ELITE]: Indexamos el perfil profesional (Las categorías mandan en la visibilidad del buscador)
-            val direcciones = direccionDao.obtenerPorPropietarioSync(uid)
-            val dirBase = direcciones.find { it.idReferencia == uid } ?: direcciones.firstOrNull()
-            
-            val shallowPersonal = com.example.myapplication.core.dominio.mapeadores.shallow.PrestadorShallowMappers.deEntidadADominio(
-                entidad = prestador,
-                direccion = dirBase,
-                estaSuscrito = estaSuscrito
-            )
-            publicarPerfilProfesional(shallowPersonal)
+            // [FIX]: con "Modo empresa" activo, el perfil personal debe quedar OCULTO del
+            // buscador (soberanía de marca) — antes se publicaba siempre, sin mirar el flag.
+            // Si ya estaba publicado de antes (antes de activar el modo), no alcanza con dejar
+            // de escribirlo: hay que borrar el documento viejo o queda visible para siempre.
+            if (cuenta?.priorizarEmpresa == true) {
+                eliminarDelIndice(uid)
+            } else {
+                // [ELITE]: Indexamos el perfil profesional (Las categorías mandan en la visibilidad del buscador)
+                val direcciones = direccionDao.obtenerPorPropietarioSync(uid)
+                val dirBase = direcciones.find { it.idReferencia == uid } ?: direcciones.firstOrNull()
+
+                val shallowPersonal = com.example.myapplication.core.dominio.mapeadores.shallow.PrestadorShallowMappers.deEntidadADominio(
+                    entidad = prestador,
+                    direccion = dirBase,
+                    estaSuscrito = estaSuscrito
+                )
+                publicarPerfilProfesional(shallowPersonal)
+            }
 
             // --- 2. PROYECCIÓN SUCURSALES (MODO EMPRESA) ---
             val empresas = empresaDao.obtenerPorPropietarioSync(uid)
             empresas.forEach { emp ->
                 val sucursales = sucursalDao.obtenerPorEmpresaSync(emp.id)
                 sucursales.forEach { suc ->
-                    // [ELITE]: La sucursal se indexa incondicionalmente (Hereda rubros de la empresa madre)
-                    val dirSuc = direccionDao.obtenerPorPropietarioSync(suc.id).firstOrNull()
+                    // [FIX]: la dirección de una sucursal se guarda con idPropietario = uid del
+                    // dueño (no el id de la sucursal) y se distingue por idSucursal — buscarla
+                    // por obtenerPorPropietarioSync(suc.id) nunca matcheaba nada, así que la
+                    // sucursal quedaba SIEMPRE indexada sin CP/lat/lng, invisible en toda
+                    // búsqueda por zona o proximidad. [ELITE]: se indexa incondicionalmente
+                    // (hereda rubros de la empresa madre).
+                    val dirSuc = direccionDao.obtenerPorSucursalSync(suc.id).firstOrNull()
                     
                     val shallowSuc = com.example.myapplication.core.dominio.mapeadores.shallow.SucursalShallowMappers.deEntidadADominio(
                         sucursal = suc,

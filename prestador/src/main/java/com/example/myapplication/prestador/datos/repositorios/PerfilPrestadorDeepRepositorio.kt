@@ -58,6 +58,17 @@ class PerfilPrestadorDeepRepositorio @Inject constructor(
     }
 
     /**
+     * 🔥 [ELITE]: Persiste el modo de soberanía (idPerfilActivo/priorizarEmpresa) en Room.
+     * [FIX]: antes de esto, alternarSoberania() solo escribía en Firestore y confiaba en
+     * sincronizarEcosistemaCloud() para propagarlo — pero esa función usa el borrador en RAM
+     * (gestorBorrador), que no tiene este cambio, y termina reescribiendo la cuenta local con
+     * los valores VIEJOS, pisando el toggle recién hecho. Update directo y puntual a Room.
+     */
+    suspend fun actualizarModoSoberaniaLocal(uid: String, idPerfilActivo: String?, priorizarEmpresa: Boolean) {
+        cuentaDao.actualizarModoSoberania(uid, idPerfilActivo, priorizarEmpresa)
+    }
+
+    /**
      * 🔥 [ELITE]: Persiste el ecosistema profesional completo en Room (SSOT Local).
      * [LEY #13]: Atómico. Realiza una limpieza total antes de insertar la nueva jerarquía.
      */

@@ -21,6 +21,8 @@ import com.example.myapplication.prestador.datos.repositorios.PerfilPrestadorDee
 import com.example.myapplication.prestador.datos.repositorios.PrestadorAutenticacionRepositorio
 import com.example.myapplication.prestador.dominio.motores.MotorPerfilPrestadorDeep
 import com.example.myapplication.core.datos.repositorios.SincronizadorRemotoPrestador
+import com.example.myapplication.core.datos.repositorios.ChatMotorSincRepositorio
+import com.example.myapplication.core.datos.indices.busqueda.IndiceBusquedaPrestadorRepositorio
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
@@ -41,7 +43,9 @@ class PerfilPrestadorDeepViewModel @Inject constructor(
     private val authRepo: PrestadorAutenticacionRepositorio,
     private val categoryRepo: CategoriaRepositorio,
     private val gestorBorrador: BorradorPerfilPrestadorGestor,
-    private val gestorUbicacion: GestorUbicacionGps
+    private val gestorUbicacion: GestorUbicacionGps,
+    private val repoIndice: IndiceBusquedaPrestadorRepositorio,
+    private val chatRepository: ChatMotorSincRepositorio
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PerfilPrestadorDeepUiState())
@@ -135,9 +139,15 @@ class PerfilPrestadorDeepViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(estaCargando = true) }
             try {
+                // [FIX]: antes esto terminaba en sincronizarEcosistemaCloud(), que sube el
+                // borrador viejo en RAM y pisa este cambio en Room con los valores anteriores.
+                // Acá el cambio va directo a Firestore Y a Room, sin pasar por el borrador.
                 repoRemoto.cambiarModoSoberania(uid, idPerfil, esEmpresa)
-                // Tras cambio estructural, forzamos refresco de nube
-                sincronizarEcosistemaCloud()
+                deepRepo.actualizarModoSoberaniaLocal(uid, idPerfil, esEmpresa)
+                gestorBorrador.actualizarModoSoberania(idPerfil, esEmpresa)
+                // [FIX]: hasta acá solo cambia el flag — sin esto, el perfil personal seguía
+                // publicado (o dejaba de publicarse) recién en el próximo guardado manual.
+                repoIndice.sincronizarTodoElDescubrimiento(uid)
             } finally { _state.update { it.copy(estaCargando = false) } }
         }
     }
@@ -217,10 +227,14 @@ class PerfilPrestadorDeepViewModel @Inject constructor(
         val (empresa, sucursal, direccion) = datos
         gestorBorrador.actualizarEmpresa(empresa)
         gestorBorrador.actualizarSucursal(empresa.id, sucursal, direccion)
+        // [FIX]: sin esto, una sucursal creada en la misma sesión (sin reiniciar la app)
+        // no queda escuchando su buzón de mensajes hasta el próximo arranque en frío.
+        chatRepository.agregarIdentidadASincronizacion(sucursal.id)
     }
 
     fun anadirSucursal(idEmpresa: String, sucursal: SucursalDominio, direccion: DireccionDominio) {
         gestorBorrador.actualizarSucursal(idEmpresa, sucursal, direccion)
+        chatRepository.agregarIdentidadASincronizacion(sucursal.id)
     }
 
     /**

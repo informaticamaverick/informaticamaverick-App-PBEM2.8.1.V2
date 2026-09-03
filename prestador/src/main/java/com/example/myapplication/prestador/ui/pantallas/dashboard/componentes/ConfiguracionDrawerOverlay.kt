@@ -33,8 +33,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.prestador.ui.theme.LocalIsDarkTheme
 import com.example.myapplication.prestador.ui.theme.getPrestadorColors
+import com.example.myapplication.prestador.viewmodel.profile.PerfilPrestadorDeepViewModel
+import com.example.myapplication.uishared.ui.components.profile.parts.DialogoPriorizarEmpresa
+import com.example.myapplication.uishared.ui.components.profile.parts.DialogoDesactivarEmpresa
 
 // [ELITE]: paleta calcada de InicioComponents.ThemeColors — el drawer ahora comparte
 // el mismo lenguaje visual que Inicio (tarjetas con borde, chips de ícono, fondo #030712).
@@ -57,6 +61,7 @@ fun ConfiguracionDrawerOverlay(
     onNavigateToEditProfile: () -> Unit,
     onSignOut: () -> Unit,
     onNavigateToAyuda: () -> Unit,
+    viewModel: PerfilPrestadorDeepViewModel = hiltViewModel()
 ) {
     // [ELITE]: el drawer, como Inicio, es siempre oscuro por diseño — antes seguía
     // getPrestadorColors() sin fijar el tema, que resuelve según el modo claro/oscuro
@@ -64,9 +69,12 @@ fun ConfiguracionDrawerOverlay(
     CompositionLocalProvider(LocalIsDarkTheme provides true) {
     val colors = getPrestadorColors()
 
-    // Simplificado para el reordenamiento, luego se reconecta la lógica de soberanía real
-    val priorizarEmpresa = false
-    val tieneEmpresa = false
+    val stateDeep by viewModel.state.collectAsStateWithLifecycle()
+    val maestro = stateDeep.ecosistema
+    val priorizarEmpresa = maestro?.cuenta?.priorizarEmpresa ?: false
+    val tieneEmpresa = maestro?.empresas?.isNotEmpty() ?: false
+    var mostrarConfirmarActivarEmpresa by remember { mutableStateOf(false) }
+    var mostrarConfirmarDesactivarEmpresa by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -172,7 +180,9 @@ fun ConfiguracionDrawerOverlay(
                                 checked = priorizarEmpresa,
                                 enabled = tieneEmpresa,
                                 accent = colors.primaryOrange,
-                                onToggle = { }
+                                onToggle = { enabled ->
+                                    if (enabled) mostrarConfirmarActivarEmpresa = true else mostrarConfirmarDesactivarEmpresa = true
+                                }
                             )
                         }
 
@@ -220,6 +230,27 @@ fun ConfiguracionDrawerOverlay(
                     }
                 }
             }
+        }
+
+        if (mostrarConfirmarActivarEmpresa) {
+            DialogoPriorizarEmpresa(
+                onConfirm = {
+                    mostrarConfirmarActivarEmpresa = false
+                    // [FIX]: chat y búsqueda operan a nivel de SUCURSAL, no de empresa.
+                    viewModel.alternarSoberania(maestro?.empresas?.firstOrNull()?.sucursales?.firstOrNull()?.sucursal?.id, true)
+                },
+                onDismiss = { mostrarConfirmarActivarEmpresa = false }
+            )
+        }
+
+        if (mostrarConfirmarDesactivarEmpresa) {
+            DialogoDesactivarEmpresa(
+                onConfirm = {
+                    mostrarConfirmarDesactivarEmpresa = false
+                    viewModel.alternarSoberania(null, false)
+                },
+                onDismiss = { mostrarConfirmarDesactivarEmpresa = false }
+            )
         }
     }
     }

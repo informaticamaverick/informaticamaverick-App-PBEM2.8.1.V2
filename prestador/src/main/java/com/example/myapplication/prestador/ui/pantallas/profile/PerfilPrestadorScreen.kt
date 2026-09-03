@@ -57,6 +57,9 @@ fun PerfilPrestadorScreen(
             alDetectarGps = { viewModel.detectarGps() },
             alSyncCloud = { viewModel.sincronizarEcosistemaCloud() },
             onNavigateToConfig = onConfig,
+            priorizarEmpresa = deep.cuenta.priorizarEmpresa,
+            alRevertirModoEmpresa = { viewModel.alternarSoberania(null, false) },
+            alActivarModoEmpresa = { idEmpresa -> viewModel.alternarSoberania(idEmpresa, true) },
             distintivoPremium = {
                 if (identidadPrincipal.estaSuscrito) {
                     EtiquetaEliteMaestra()

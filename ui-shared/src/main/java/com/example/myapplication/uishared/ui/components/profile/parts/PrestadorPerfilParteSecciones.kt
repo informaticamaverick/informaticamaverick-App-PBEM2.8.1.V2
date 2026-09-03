@@ -75,12 +75,12 @@ fun SeccionPerfilMaestroMav(
     alEliminarRecurso: (RecursoDominio) -> Unit = {},
     alEliminarEmpleado: (EquipoTrabajoDominio) -> Unit = {},
     alAbrirEditorDireccion: (PrestadorDominio, DireccionDominio) -> Unit = { _, _ -> },
-    alEliminarDireccion: (DireccionDominio) -> Unit = {}
+    alEliminarDireccion: (DireccionDominio) -> Unit = {},
+    priorizarEmpresa: Boolean = false
 ) {
     val esEmpresa = identidad.tipo == TipoPrestador.EMPRESA
-    
-    // TODO: Vínculo con priorizarEmpresa de Cuenta
-    val estaBloqueado = false 
+
+    val estaBloqueado = priorizarEmpresa && identidad.tipo == TipoPrestador.INDIVIDUAL
 
     if (estaBloqueado) {
         CompanyModeLockedOverlay(onVolver = alDeshacerModoEmpresa)

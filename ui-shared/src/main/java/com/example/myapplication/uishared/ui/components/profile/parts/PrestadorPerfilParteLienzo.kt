@@ -60,7 +60,10 @@ fun PrestadorPerfilLienzo(
     alDetectarGps: ((DireccionDominio) -> Unit) -> Unit = {},
     
     distintivoPremium: @Composable () -> Unit = {},
-    contenidoExtra: @Composable ColumnScope.() -> Unit = {}
+    contenidoExtra: @Composable ColumnScope.() -> Unit = {},
+    priorizarEmpresa: Boolean = false,
+    alRevertirModoEmpresa: () -> Unit = {},
+    alActivarModoEmpresa: (String) -> Unit = {}
 ) {
     val scrollState = rememberScrollState()
     val coroutineScope = rememberCoroutineScope()
@@ -74,6 +77,7 @@ fun PrestadorPerfilLienzo(
     var mostrarRevertirModoEmpresa by remember { mutableStateOf(false) }
     var mostrarSheetSucursalParaEmpresaId by remember { mutableStateOf<String?>(null) }
     var mostrarAvisoPriorizarEmpresa by remember { mutableStateOf(false) }
+    var idSucursalRecienCreada by remember { mutableStateOf<String?>(null) }
     var mostrarSheetReseñas by remember { mutableStateOf(false) }
 
     // [FIX]: "raíz" (personal + empresas) es SOLO para el pager — filtra sucursales a propósito,
@@ -154,7 +158,8 @@ fun PrestadorPerfilLienzo(
                                 alEliminarIdentidad = { id, tipo -> mostrarConfirmacionEliminar = id to tipo },
                                 alAñadirEmpresa = { mostrarSheetEmpresa = true },
                                 alAbrirEditorDireccion = { _, addr -> mostrarSheetDireccion = addr },
-                                alEliminarDireccion = alEliminarDireccion
+                                alEliminarDireccion = alEliminarDireccion,
+                                priorizarEmpresa = priorizarEmpresa
                             )
                         }
                     }
@@ -246,9 +251,14 @@ fun PrestadorPerfilLienzo(
             estaDetectandoGps = estaDetectandoGps,
             alDetectarGps = alDetectarGps,
             onDismiss = { mostrarSheetEmpresa = false },
-            onFinalizar = { e, s, d -> 
+            onFinalizar = { e, s, d ->
                 alAnadirEmpresa(Triple(e, s, d))
                 mostrarSheetEmpresa = false
+                // [FIX]: el chat/búsqueda operan a nivel de SUCURSAL, no de empresa — activar
+                // con el id de la empresa dejaba la bandeja de mensajes filtrando por un id
+                // que ninguna conversación real usa nunca.
+                idSucursalRecienCreada = s.id
+                mostrarAvisoPriorizarEmpresa = true
             }
         )
     }
@@ -269,14 +279,24 @@ fun PrestadorPerfilLienzo(
 
     if (mostrarAvisoPriorizarEmpresa) {
         DialogoPriorizarEmpresa(
-            onConfirm = { mostrarAvisoPriorizarEmpresa = false },
-            onDismiss = { mostrarAvisoPriorizarEmpresa = false }
+            onConfirm = {
+                mostrarAvisoPriorizarEmpresa = false
+                idSucursalRecienCreada?.let { alActivarModoEmpresa(it) }
+                idSucursalRecienCreada = null
+            },
+            onDismiss = {
+                mostrarAvisoPriorizarEmpresa = false
+                idSucursalRecienCreada = null
+            }
         )
     }
 
     if (mostrarRevertirModoEmpresa) {
         DialogoDesactivarEmpresa(
-            onConfirm = { mostrarRevertirModoEmpresa = false },
+            onConfirm = {
+                mostrarRevertirModoEmpresa = false
+                alRevertirModoEmpresa()
+            },
             onDismiss = { mostrarRevertirModoEmpresa = false }
         )
     }

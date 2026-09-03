@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -48,6 +49,16 @@ class PrestadorArranqueViewModel @Inject constructor(
                 }
                 
                 chatRepository.inicializarEcosistemaChat(usuarioActual.uid)
+                // [FIX]: inicializarEcosistemaChat solo escucha señales para el uid personal.
+                // Los mensajes dirigidos a una sucursal (idIdentidad = sucursal.id) nunca
+                // disparaban nada acá porque nadie se suscribía a su buzón — un cliente podía
+                // escribirle a la empresa y el prestador nunca se enteraba. Se registra cada
+                // sucursal existente al arrancar, igual que ya hacía (sin usarse) ArmadorPrestadorViewModel.
+                repoDeep.obtenerPerfilDeepFlujo(usuarioActual.uid).firstOrNull()?.empresas?.forEach { emp ->
+                    emp.sucursales.forEach { suc ->
+                        chatRepository.agregarIdentidadASincronizacion(suc.sucursal.id)
+                    }
+                }
                 _rutaInicial.value = "home"
             }
         }
