@@ -178,7 +178,10 @@ class ChatMotorSincLocal @Inject constructor(
     }
 
     suspend fun marcarHiloComoLeido(idChat: String) {
-        chatDao.marcarMensajesComoLeidos(idChat)
+        db.withTransaction {
+            chatDao.marcarMensajesComoLeidos(idChat)
+            chatDao.resetearContadorNoLeidos(idChat)
+        }
     }
 
     suspend fun eliminarHilo(idChat: String) {

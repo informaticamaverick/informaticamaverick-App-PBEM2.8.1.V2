@@ -69,6 +69,12 @@ interface ChatDao {
     @Query("UPDATE mensajes SET estado = 'LEIDO' WHERE idChat = :idChat AND estado != 'LEIDO'")
     suspend fun marcarMensajesComoLeidos(idChat: String)
 
+    // [FIX]: contadorNoLeidos es un campo aparte del estado de cada mensaje — marcar los
+    // mensajes como leídos nunca lo reseteaba, así que el contador de la bandeja solo subía
+    // y nunca bajaba, aunque el usuario ya hubiera leído todo.
+    @Query("UPDATE conversaciones SET contadorNoLeidos = 0 WHERE idChat = :idChat")
+    suspend fun resetearContadorNoLeidos(idChat: String)
+
     // --- GESTIÓN DE CONVERSACIONES ---
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

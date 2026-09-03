@@ -93,6 +93,7 @@ fun PrestadorChatScreen(
                     idUsuarioChatActivo = idRemoto
                     idChatActivo = chatId
                     chatViewModel.cargarHilo(chatId, idRemoto)
+                    chatViewModel.marcarLeido(chatId)
                 },
                 onBack = onBack,
                 onShowNotificationDialog = {},
