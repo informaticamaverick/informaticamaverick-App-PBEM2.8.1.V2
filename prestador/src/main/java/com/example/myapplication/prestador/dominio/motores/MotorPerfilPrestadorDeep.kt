@@ -37,7 +37,14 @@ class MotorPerfilPrestadorDeep @Inject constructor(
             // 2. Sincronización Remota (Los Pilares de Identidad)
             Log.d("MOTOR_DEEP", "☁️ [PASO_2_FIREBASE] Subiendo identidades soberanas a la nube...")
             repoRemoto.subirEcosistemaCompleto(uid)
-            
+
+            // [FIX 04/09]: subirEcosistemaCompleto (subirIdentidadBase) ya NO sube
+            // idPerfilActivo/priorizarEmpresa — ese push corre también en cada apertura de la
+            // app con Room de ESTE dispositivo y pisaba el toggle hecho desde otro dispositivo.
+            // Acá sí corresponde subirlos: este método solo se llama en registro y en guardado
+            // explícito del usuario, donde el Room local es realmente la intención del usuario.
+            repoRemoto.cambiarModoSoberania(uid, deep.cuenta.idPerfilActivo, deep.cuenta.priorizarEmpresa)
+
             // 3. Actualización de Visibilidad (Discovery Liviano)
             Log.d("MOTOR_DEEP", "🔍 [PASO_3_ÍNDICE] Proyectando datos livianos al índice de búsqueda...")
             repoIndice.sincronizarTodoElDescubrimiento(uid)

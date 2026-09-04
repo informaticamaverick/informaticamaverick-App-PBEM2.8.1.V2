@@ -1013,6 +1013,22 @@ fun TarjetaActividadProfesionalMav(
                     EtiquetaFlagMav("Venta Productos", "🛍️", identidad.brindaProducto, false)
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(modifier = Modifier.weight(1f)) {
+                    EtiquetaFlagMav("Brinda Servicio", "🔧", identidad.brindaServicio, false)
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    EtiquetaFlagMav("Urgencias 24Hs", "🚨", identidad.atiende24h, false)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(modifier = Modifier.weight(1f)) {
+                    EtiquetaFlagMav("Local Físico", "🏪", identidad.tieneLocalFisico, false)
+                }
+                Box(modifier = Modifier.weight(1f)) {}
+            }
         }
     }
 
@@ -1043,6 +1059,9 @@ private fun HojaEditarActividadProfesionalMav(
     var brindaTurnos by remember { mutableStateOf(identidad.brindaTurnos) }
     var realizaEnvios by remember { mutableStateOf(identidad.realizaEnvios) }
     var brindaProducto by remember { mutableStateOf(identidad.brindaProducto) }
+    var brindaServicio by remember { mutableStateOf(identidad.brindaServicio) }
+    var atiende24h by remember { mutableStateOf(identidad.atiende24h) }
+    var tieneLocalFisico by remember { mutableStateOf(identidad.tieneLocalFisico) }
 
     val resultadosBusqueda = remember(textoBusqueda, todasLasCategorias) {
         if (textoBusqueda.isBlank()) emptyList()
@@ -1142,6 +1161,9 @@ private fun HojaEditarActividadProfesionalMav(
                 EtiquetaFlagMav("Turnos Online", "📅", brindaTurnos, true) { brindaTurnos = it }
                 EtiquetaFlagMav("Realizo Envíos", "🚚", realizaEnvios, true) { realizaEnvios = it }
                 EtiquetaFlagMav("Venta Productos", "🛍️", brindaProducto, true) { brindaProducto = it }
+                EtiquetaFlagMav("Brinda Servicio", "🔧", brindaServicio, true) { brindaServicio = it }
+                EtiquetaFlagMav("Urgencias 24Hs", "🚨", atiende24h, true) { atiende24h = it }
+                EtiquetaFlagMav("Local Físico", "🏪", tieneLocalFisico, true) { tieneLocalFisico = it }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -1163,7 +1185,10 @@ private fun HojaEditarActividadProfesionalMav(
                                 visitaADomicilio = visitaADomicilio,
                                 brindaTurnos = brindaTurnos,
                                 realizaEnvios = realizaEnvios,
-                                brindaProducto = brindaProducto
+                                brindaProducto = brindaProducto,
+                                brindaServicio = brindaServicio,
+                                atiende24h = atiende24h,
+                                tieneLocalFisico = tieneLocalFisico
                             )
                         )
                     },

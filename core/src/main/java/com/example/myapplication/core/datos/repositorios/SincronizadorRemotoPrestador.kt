@@ -124,8 +124,30 @@ class SincronizadorRemotoPrestador @Inject constructor(
                 pMap,
                 com.google.firebase.firestore.SetOptions.merge()
             )
-            batch.set(firestore.collection(MotorSincRemoto.COL_CUENTA).document(uid), localC)
-            
+
+            // [FIX 04/09]: mismo problema que arriba, pero con "cuenta". "idPerfilActivo" y
+            // "priorizarEmpresa" NO van acá a propósito: los escribe cambiarModoSoberania()
+            // como canal dedicado. Este push corre automáticamente en CADA apertura de la app
+            // (PrestadorArranqueViewModel) usando el Room LOCAL de ese dispositivo — si se subían
+            // acá, cualquier dispositivo con una copia vieja pisaba en la nube el toggle que se
+            // hubiera hecho desde otro dispositivo (ej: modo empresa desactivado en el celular,
+            // pero el emulador lo reactivaba solo con abrir la app).
+            val cMap = mapOf(
+                "id" to localC.id,
+                "correoGoogle" to localC.correoGoogle,
+                "estaSuscrito" to localC.estaSuscrito,
+                "nivelSuscripcion" to localC.nivelSuscripcion,
+                "estadoSuscripcion" to localC.estadoSuscripcion,
+                "fechaVencimiento" to localC.fechaVencimiento,
+                "ultimaSincronizacion" to localC.ultimaSincronizacion,
+                "fechaCreacion" to localC.fechaCreacion
+            )
+            batch.set(
+                firestore.collection(MotorSincRemoto.COL_CUENTA).document(uid),
+                cMap,
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+
             batch.commit().await()
             Log.d("SYNC_REMOTO", "✅ [IDENTIDAD_BASE_OK] Perfil (con Foto Google) y Cuenta sincronizados.")
         } catch (e: Exception) {

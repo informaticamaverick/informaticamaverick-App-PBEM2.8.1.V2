@@ -51,6 +51,7 @@ class PrestadorChatViewModel @Inject constructor(
     private val chatRepository: ChatMotorSincRepositorio,
     private val authRepository: PrestadorAutenticacionRepositorio,
     private val motorLocal: MotorSincLocal,
+    private val motorSincRemoto: com.example.myapplication.core.dominio.motores.MotorSincRemoto,
     private val budgetFinalDao: PresupuestoFinalDao,
     private val eventoRepositorio: EventoRepositorio,
     private val audioMavManager: AudioManager,
@@ -179,17 +180,20 @@ class PrestadorChatViewModel @Inject constructor(
             idRemoto?.let { remoteId ->
                 jobIdentidadRemota = launch {
                     motorLocal.impactarUsuarioShallow(remoteId)
-                    chatRepository.obtenerConversaciones(miUid).map { list ->
-                        list.find { it.idChat == idRealChat }
-                    }.collectLatest { conv ->
+                    combine(
+                        chatRepository.obtenerConversaciones(miUid).map { list -> list.find { it.idChat == idRealChat } },
+                        motorSincRemoto.observarPresencia(com.example.myapplication.core.dominio.motores.MotorSincRemoto.COL_CLIENTE, remoteId)
+                    ) { conv, estaOnline -> conv to estaOnline }
+                    .collectLatest { (conv, estaOnline) ->
                         conv?.let {
                             val uiModel = PrestadorDominio(
                                 id = it.idIdentidadRemota,
                                 titulo = if (it.nombreRemoto == "Usuario Maverick") "Cargando..." else it.nombreRemoto,
-                                urlMiniatura = it.fotoRemotaUrl ?: it.miniaturaRemotaBase64
+                                urlMiniatura = it.fotoRemotaUrl ?: it.miniaturaRemotaBase64,
+                                estaOnline = estaOnline
                             )
                             _estadoUi.update { state -> state.copy(identidadRemota = uiModel) }
-                            
+
                             if (it.nombreRemoto == "Usuario Maverick") {
                                 motorLocal.impactarUsuarioShallow(it.idIdentidadRemota)
                                 motorLocal.impactarPrestadorShallow(it.idIdentidadRemota)

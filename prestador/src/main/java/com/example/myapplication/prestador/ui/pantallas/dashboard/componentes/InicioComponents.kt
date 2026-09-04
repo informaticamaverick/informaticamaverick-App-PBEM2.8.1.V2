@@ -4,6 +4,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -33,6 +34,13 @@ import coil.compose.AsyncImage
 import com.example.myapplication.core.dominio.modelos.InformacionClima
 import com.example.myapplication.prestador.viewmodel.dashboard.EstadoDashboardUi
 import com.example.myapplication.prestador.viewmodel.dashboard.WeatherViewModel
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import com.example.myapplication.core.dominio.modelos.DireccionDominio
 
 // Paleta de Colores MAV Elite (Estilo Ejecutivo / Industrial)
 private object ThemeColors {
@@ -76,6 +84,10 @@ fun InicioScreen(
     onNavigateToTerminos: () -> Unit = {},
     onNavigateToPrivacidad: () -> Unit = {},
     onNavigateToAcercaDe: () -> Unit = {},
+    onToggleConexion: () -> Unit = {},
+    direccionGps: DireccionDominio? = null,
+    estaDetectandoGps: Boolean = false,
+    onSolicitarUbicacion: () -> Unit = {},
     onNavigateToGestionTurnos: () -> Unit = {},
     onNavigateToGestionVisitas: () -> Unit = {},
     // Parámetros adicionales para compatibilidad con InicioContent
@@ -91,6 +103,15 @@ fun InicioScreen(
     val estadoClima by weatherViewModel.state.collectAsState()
     val climaActual = (estadoClima as? WeatherViewModel.WeatherState.Success)?.data
 
+    val contexto = LocalContext.current
+    val lanzadorPermisoUbicacion = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { concedido -> if (concedido) onSolicitarUbicacion() }
+
+    LaunchedEffect(Unit) {
+        val tienePermiso = ContextCompat.checkSelfPermission( contexto, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (tienePermiso) onSolicitarUbicacion()
+        else lanzadorPermisoUbicacion.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -99,15 +120,15 @@ fun InicioScreen(
         // 1. CABECERA EJECUTIVA (Usuario + Clima + Notificaciones Unificados)
         CabeceraEjecutiva(
             nombreUsuario = state.nombreVisible.ifEmpty { "Sofía Martínez" },
-            fotoUrl = state.photoUrl?.toString() ?: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-            calificacion = "4.95",
-            notificacionesPendientes = 3,
-            temperaturaClima = climaActual?.temperatura ?: "--",
-            ciudadClima = climaActual?.nombreCiudad?.uppercase() ?: "UBICANDO",
-            onVerClimaClick = { mostrarModalClima = true },
-            onNotificacionesClick = onNavigateToNotificaciones,
-            onMenuClick = { mostrarDrawer = true },
-            onAvatarClick = { mostrarPerfilRapido = true }
+            fotoUrl = state.photoUrl,
+            calificacion = "%.1f".format(state.reputacion),
+            estaVerificado = state.esVerificado,
+            estaEnLinea = state.estaEnLinea,
+            onToggleConexion = onToggleConexion,
+            direccionGps = direccionGps,
+            estaDetectandoGps = estaDetectandoGps,
+            onAvatarClick = { mostrarDrawer = true },
+            onNombreClick = { mostrarPerfilRapido = true }
         )
 
         // Contenido Desplazable
@@ -170,7 +191,7 @@ fun InicioScreen(
         onNavigateToAcercaDe = onNavigateToAcercaDe,
         onNavigateToEditProfile = onNavigateToEditProfile,
         onSignOut = onLogout,
-        onNavigateToAyuda = { mostrarCentroAyuda = true }
+        onNavigateToAyuda = { mostrarCentroAyuda = true },
     )
 
     // Tarjeta rápida de perfil (avatar de la cabecera)
@@ -192,15 +213,15 @@ fun InicioScreen(
 @Composable
 private fun CabeceraEjecutiva(
     nombreUsuario: String,
-    fotoUrl: String?,
+    fotoUrl: Any?,
     calificacion: String,
-    notificacionesPendientes: Int,
-    temperaturaClima: String,
-    ciudadClima: String,
-    onVerClimaClick: () -> Unit,
-    onNotificacionesClick: () -> Unit,
-    onMenuClick: () -> Unit,
-    onAvatarClick: () -> Unit
+    estaVerificado: Boolean,
+    estaEnLinea: Boolean,
+    onToggleConexion: () -> Unit,
+    direccionGps: DireccionDominio?,
+    estaDetectandoGps: Boolean,
+    onAvatarClick: () -> Unit,
+    onNombreClick: () -> Unit,
 ) {
     Surface(
         modifier = Modifier
@@ -209,6 +230,7 @@ private fun CabeceraEjecutiva(
         color = ThemeColors.HeaderBg,
         border = BorderStroke(1.dp, Color(0xFF1E293B))
     ) {
+        Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -216,45 +238,42 @@ private fun CabeceraEjecutiva(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Botón Menú + Usuario + Avatar Rectangular
+            // Avatar (toca para abrir el menú lateral) + Nombre (toca para ver el perfil)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // [ELITE]: antes la única forma de abrir el drawer era tocar el avatar —
-                // sin ninguna referencia visual de que existía un menú lateral. Se agrega
-                // el ícono estándar de hamburguesa para que sea evidente.
-                IconButton(
-                    onClick = onMenuClick,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(ThemeColors.CardBg, RoundedCornerShape(8.dp))
-                        .border(1.dp, ThemeColors.CardBorder, RoundedCornerShape(8.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Menu,
-                        contentDescription = "Abrir menú",
-                        tint = ThemeColors.TextPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Box(modifier = Modifier.clickable { onAvatarClick() }) {
 
-            // Usuario + Avatar Rectangular — toca para ver la tarjeta rápida de perfil
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.clickable { onAvatarClick() }
-            ) {
-                Box {
-                    AsyncImage(
-                        model = fotoUrl,
-                        contentDescription = "Avatar Usuario",
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
+                    if (fotoUrl != null) {
+                        AsyncImage(
+                            model = fotoUrl,
+                            contentDescription = "Avatar Usuario",
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        // Sin foto real: mostramos la inicial en vez de una foto de stock
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(ThemeColors.BrandOrange)
+                                .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = nombreUsuario.trim().firstOrNull()?.uppercase() ?: "?",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                        }
+                    }
+
                     // Dot indicador En Línea
                     Box(
                         modifier = Modifier
@@ -262,15 +281,18 @@ private fun CabeceraEjecutiva(
                             .background(ThemeColors.BrandEmerald, CircleShape)
                             .border(1.5.dp, ThemeColors.DarkBg, CircleShape)
                             .align(Alignment.BottomEnd)
+
                     )
                 }
 
-                Column {
+                Column(modifier = Modifier.clickable { onNombreClick() }) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+
                         Text(
+
                             text = nombreUsuario,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -311,7 +333,7 @@ private fun CabeceraEjecutiva(
                         }
                         Text(text = "•", fontSize = 10.sp, color = ThemeColors.TextMuted)
                         Text(
-                            text = "Especialista App",
+                            text = if (estaVerificado) "Verificado" else "Sin verificar",
                             fontSize = 11.sp,
                             color = ThemeColors.TextSecondary,
                             maxLines = 1,
@@ -320,85 +342,127 @@ private fun CabeceraEjecutiva(
                     }
                 }
             }
-            }
 
-            // Clima & Botón Notificaciones
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // [PULIDO]: transición suave de color al alternar + pulso en el punto cuando
+            // está en línea (mismo patrón de rememberInfiniteTransition que ya usan los rayos
+            // del sol en EscenaClimatica y el radar de MoldeCabeceraSuperiorUbicacion).
+            val colorConexion by animateColorAsState(
+                targetValue = if (estaEnLinea) ThemeColors.BrandEmerald else ThemeColors.TextMuted,
+                animationSpec = tween(280),
+                label = "colorConexion"
+            )
+            val pulso = rememberInfiniteTransition(label = "pulsoConexion")
+            val alphaPulso by pulso.animateFloat(
+                initialValue = 0.35f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1100, easing = EaseInOutSine),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "alphaPulso"
+            )
+
+            Surface(
+                onClick = onToggleConexion,
+                shape = RoundedCornerShape(20.dp),
+                color = ThemeColors.CardBg,
+                border = BorderStroke(1.dp, ThemeColors.CardBorder)
             ) {
-                // Widget Clima
-                Surface(
-                    onClick = onVerClimaClick,
-                    color = ThemeColors.CardBg,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, ThemeColors.CardBorder)
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.WbSunny,
-                            contentDescription = "Clima",
-                            tint = ThemeColors.BrandAmber,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = temperaturaClima,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = ThemeColors.TextPrimary
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(
+                                colorConexion.copy(alpha = if (estaEnLinea) alphaPulso else 1f),
+                                CircleShape
                             )
-                            Text(
-                                text = ciudadClima,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = ThemeColors.TextMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
+                    )
+                    Text(
+                        text = if (estaEnLinea) "EN LÍNEA" else "DESCONECTADO",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        color = colorConexion
+                    )
+                }
+            }
+        }
+
+        // --- FILA DE UBICACIÓN (GPS EN VIVO) ---
+        if (direccionGps != null || estaDetectandoGps) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.White.copy(alpha = 0.04f))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(6.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "🛰️", fontSize = 16.sp)
                 }
 
-                // Botón Notificaciones
-                Box {
-                    IconButton(
-                        onClick = onNotificacionesClick,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(ThemeColors.CardBg, RoundedCornerShape(8.dp))
-                            .border(1.dp, ThemeColors.CardBorder, RoundedCornerShape(8.dp))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Notifications,
-                            contentDescription = "Notificaciones",
-                            tint = ThemeColors.TextPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    if (notificacionesPendientes > 0) {
-                        Surface(
-                            color = ThemeColors.BrandOrange,
-                            shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        ) {
+                if (estaDetectandoGps) {
+                    Text(
+                        text = "DETECTANDO UBICACIÓN…",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ThemeColors.TextMuted
+                    )
+                } else if (direccionGps != null) {
+                    val infiniteRadar = rememberInfiniteTransition(label = "radarGps")
+                    val alphaRadar by infiniteRadar.animateFloat(
+                        initialValue = 0.3f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(tween(1400, easing = EaseInOutSine), RepeatMode.Reverse),
+                        label = "alphaRadar"
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(5.dp)
+                                    .background(ThemeColors.BrandOrange.copy(alpha = alphaRadar), CircleShape)
+                            )
                             Text(
-                                text = notificacionesPendientes.toString(),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                text = "GPS EN VIVO",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Black,
+                                color = ThemeColors.BrandOrange
                             )
                         }
+                        Text(
+                            text = direccionGps.calleYNumero.uppercase().ifBlank { "UBICACIÓN DETECTADA" },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ThemeColors.TextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = listOf(direccionGps.localidad, direccionGps.codigoPostal)
+                                .filter { it.isNotBlank() }.joinToString(" "),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ThemeColors.TextMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
         }
+    }
     }
 }
 

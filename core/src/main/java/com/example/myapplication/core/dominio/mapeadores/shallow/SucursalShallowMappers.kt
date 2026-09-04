@@ -33,9 +33,13 @@ object SucursalShallowMappers {
             estaSuscrito = estaSuscrito,
             brindaServicio = sucursal.brindaServicio,
             brindaProducto = sucursal.brindaProducto,
+            brindaTurnos = sucursal.brindaTurnos,
             atiende24Horas = sucursal.atiende24Horas,
             visitaADomicilio = sucursal.visitaADomicilio,
             realizaEnvios = sucursal.realizaEnvios,
+            // [ELITE]: una sucursal por definición tiene local físico (mismo criterio que
+            // PrestadorMappers usa al convertir sucursal->PrestadorDominio).
+            tieneLocalFisico = true,
             calle = direccion?.calle ?: "",
             numero = direccion?.numero ?: "",
             codigoPostal = direccion?.codigoPostal ?: "",
@@ -75,9 +79,12 @@ object SucursalShallowMappers {
             "estaEnLinea" to dominio.estaEnLinea,
             "brindaServicio" to dominio.brindaServicio,
             "brindaProducto" to dominio.brindaProducto,
-            "atiende24Horas" to dominio.atiende24Horas,
+            "brindaTurnos" to dominio.brindaTurnos,
+            // [FIX]: mismo fix de nombre de clave que en PrestadorShallowMappers.
+            "atiende24h" to dominio.atiende24Horas,
             "visitaADomicilio" to dominio.visitaADomicilio,
             "realizaEnvios" to dominio.realizaEnvios,
+            "tieneLocalFisico" to dominio.tieneLocalFisico,
             "calle" to dominio.calle,
             "numero" to dominio.numero,
             "codigoPostal" to dominio.codigoPostal,

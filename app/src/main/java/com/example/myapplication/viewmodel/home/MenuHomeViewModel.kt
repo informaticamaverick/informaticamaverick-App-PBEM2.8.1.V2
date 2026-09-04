@@ -21,6 +21,7 @@ import javax.inject.Inject
 class MenuHomeViewModel @Inject constructor(
     private val authRepository: UsuarioAutenticacionRepositorio,
     private val consultasUserRepo: ConsultasUsuarioRepositorio,
+    private val sincRepo: com.example.myapplication.datos.repositorios.SincUsuarioRepositorio,
     private val coordinador: CoordinadorAcciones,
     private val navCoordinador: com.example.myapplication.coordinadores.CoordinadorNavegacion // 🔥 [NEW]
 ) : ViewModel() {
@@ -48,6 +49,7 @@ class MenuHomeViewModel @Inject constructor(
     fun cerrarSesion(onSuccess: () -> Unit) {
         viewModelScope.launch {
             android.util.Log.d("MenuHomeVM", "🚪 [LOGOUT] Cerrando sesión...")
+            authRepository.obtenerUsuarioActual()?.uid?.let { sincRepo.actualizarPresencia(it, false) }
             authRepository.cerrarSesion()
             onSuccess()
         }

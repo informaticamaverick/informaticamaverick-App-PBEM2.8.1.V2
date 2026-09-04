@@ -34,6 +34,7 @@ class ChatViewModel @Inject constructor(
     private val consultasUserRepo: ConsultasUsuarioRepositorio,
     private val consultasPrestadorRepo: ArmadorPerfilPrestadorRepositorio,
     private val motorLocal: MotorSincLocal,
+    private val motorSincRemoto: com.example.myapplication.core.dominio.motores.MotorSincRemoto,
     private val promotionRepository: PromocionRepositorio,
     private val budgetDao: com.example.myapplication.core.datos.local.dao.PresupuestoFinalDao,
     private val eventoRepositorio: com.example.myapplication.core.datos.repositorios.EventoRepositorio,
@@ -141,14 +142,19 @@ class ChatViewModel @Inject constructor(
         if (resolvedRemota.isNotEmpty() && _uiState.value.activeProvider == null) {
             viewModelScope.launch {
                 motorLocal.impactarPrestadorShallow(resolvedRemota)
-                combine(consultasUserRepo.obtenerUsuarioCompletoFlujo(resolvedRemota), consultasPrestadorRepo.obtenerPerfilPolimorficoFlujo(resolvedRemota)) { u, p ->
+                combine(
+                    consultasUserRepo.obtenerUsuarioCompletoFlujo(resolvedRemota),
+                    consultasPrestadorRepo.obtenerPerfilPolimorficoFlujo(resolvedRemota),
+                    motorSincRemoto.observarPresencia(com.example.myapplication.core.dominio.motores.MotorSincRemoto.COL_PRESTADOR, resolvedRemota)
+                ) { u, p, estaOnline ->
                     // [CORRECCIÓN]: Mappers actualizados a PrestadorDominio (SSOT)
-                    if (u != null) com.example.myapplication.core.dominio.mapeadores.UsuarioMappers.deDominioAPrestadorUi(u.perfil)
+                    val prestador = if (u != null) com.example.myapplication.core.dominio.mapeadores.UsuarioMappers.deDominioAPrestadorUi(u.perfil)
                     else p
-                }.collect { ui -> 
-                    ui?.let { prestador -> 
-                        _uiState.update { s -> s.copy(activeProvider = prestador, isCargando = false) } 
-                    } 
+                    prestador to estaOnline
+                }.collect { (ui, estaOnline) ->
+                    ui?.let { prestador ->
+                        _uiState.update { s -> s.copy(activeProvider = prestador, isProviderOnline = estaOnline, isCargando = false) }
+                    }
                 }
             }
         } else {

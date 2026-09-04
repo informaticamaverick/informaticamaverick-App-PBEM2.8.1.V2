@@ -23,9 +23,11 @@ data class PrestadorShallowDominio(
     // --- CAPACIDADES RÁPIDAS ---
     val brindaServicio: Boolean = false,
     val brindaProducto: Boolean = false,
+    val brindaTurnos: Boolean = false,
     val atiende24Horas: Boolean = false,
     val visitaADomicilio: Boolean = false,
     val realizaEnvios: Boolean = false,
+    val tieneLocalFisico: Boolean = false,
     
     // --- GEOLOCALIZACIÓN ---
     val calle: String = "",

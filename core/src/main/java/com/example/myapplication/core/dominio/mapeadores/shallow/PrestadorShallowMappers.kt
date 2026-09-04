@@ -31,9 +31,11 @@ object PrestadorShallowMappers {
             estaSuscrito = estaSuscrito,
             brindaServicio = entidad.brindaServicio,
             brindaProducto = entidad.brindaProducto,
+            brindaTurnos = entidad.brindaTurnos,
             atiende24Horas = entidad.atiende24Horas,
             visitaADomicilio = entidad.visitaADomicilio,
             realizaEnvios = entidad.realizaEnvios,
+            tieneLocalFisico = entidad.tieneLocalFisico,
             calle = direccion?.calle ?: "",
             numero = direccion?.numero ?: "",
             codigoPostal = direccion?.codigoPostal ?: "",
@@ -74,9 +76,14 @@ object PrestadorShallowMappers {
             "estaEnLinea" to dominio.estaEnLinea,
             "brindaServicio" to dominio.brindaServicio,
             "brindaProducto" to dominio.brindaProducto,
-            "atiende24Horas" to dominio.atiende24Horas,
+            "brindaTurnos" to dominio.brindaTurnos,
+            // [FIX]: la clave era "atiende24Horas" pero el lector (ResultadoIndiceBusquedaMappers)
+            // espera "atiende24h" — nunca coincidían, el filtro de 24hs en el buscador del
+            // cliente siempre leía false sin importar el valor real.
+            "atiende24h" to dominio.atiende24Horas,
             "visitaADomicilio" to dominio.visitaADomicilio,
             "realizaEnvios" to dominio.realizaEnvios,
+            "tieneLocalFisico" to dominio.tieneLocalFisico,
             "calle" to dominio.calle,
             "numero" to dominio.numero,
             "codigoPostal" to dominio.codigoPostal,

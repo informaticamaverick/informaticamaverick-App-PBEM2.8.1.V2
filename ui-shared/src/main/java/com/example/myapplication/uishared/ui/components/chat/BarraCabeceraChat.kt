@@ -116,7 +116,7 @@ fun BarraCabeceraChat(
                                 Spacer(Modifier.width(6.dp))
                             }
                             Text(
-                                text = if (estaOnline) "EN LÍNEA" else "ÚLTIMA VEZ RECIENTE",
+                                text = if (estaOnline) "EN LÍNEA" else "DESCONECTADO",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,

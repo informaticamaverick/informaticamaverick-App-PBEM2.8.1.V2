@@ -12,6 +12,9 @@ import com.example.myapplication.core.datos.repositorios.SincronizadorRemotoPres
 import com.example.myapplication.core.datos.repositorios.PublicidadRepositorio
 import com.example.myapplication.core.dominio.modelos.PublicidadDominio
 import com.example.myapplication.core.utilidades.ImageUtils
+import com.example.myapplication.core.datos.local.dao.IdentidadPrestadorDao
+import com.example.myapplication.core.datos.repositorios.GestorUbicacionGps
+import com.example.myapplication.core.dominio.modelos.DireccionDominio
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,6 +30,8 @@ data class EstadoDashboardUi(
     val nombreVisible: String = "",
     val photoUrl: Any? = null,
     val esVerificado: Boolean = false,
+    val estaEnLinea: Boolean = false,
+    val reputacion: Float = 5f,
     val profileCompletion: Float = 0.8f,
     val totalPresupuestos: Int = 0,
     val totalTurnos: Int = 0,
@@ -56,7 +61,9 @@ class PrestadorDashboardViewModel @Inject constructor(
     private val presupuestoRepositorio: PrestadorPresupuestoRepositorio,
     private val calendarioRepository: PrestadorCalendarioRepositorio,
     private val repoRemoto: SincronizadorRemotoPrestador,
-    private val publicidadRepositorio: PublicidadRepositorio
+    private val publicidadRepositorio: PublicidadRepositorio,
+    private val prestadorDao: IdentidadPrestadorDao,
+    private val gestorUbicacion: GestorUbicacionGps
 ) : ViewModel() {
 
     // --- SECTOR: ESTADO REACTIVO (SSOT) ---
@@ -108,6 +115,8 @@ class PrestadorDashboardViewModel @Inject constructor(
                             nombreVisible = nombre,
                             photoUrl = ImageUtils.processImageSource(fotoRaw),
                             esVerificado = it.prestador.perfil.estaVerificado,
+                            estaEnLinea = it.prestador.perfil.estaOnline,
+                            reputacion = it.prestador.perfil.reputacion,
                             totalPresupuestos = presupuestosCocina.size,
                             totalAceptadoMensual = ingresos,
                             gananciaRealMensual = ingresos - costos,
@@ -123,6 +132,21 @@ class PrestadorDashboardViewModel @Inject constructor(
 
     val uiState = estadoUi
 
+    // --- SECTOR: UBICACIÓN GPS (independiente del combine principal) ---
+    private val _direccionGps = MutableStateFlow<DireccionDominio?>(null)
+    val direccionGps: StateFlow<DireccionDominio?> = _direccionGps.asStateFlow()
+
+    private val _estaDetectandoGps = MutableStateFlow(false)
+    val estaDetectandoGps: StateFlow<Boolean> = _estaDetectandoGps.asStateFlow()
+
+    fun detectarUbicacion() {
+        viewModelScope.launch {
+            _estaDetectandoGps.value = true
+            _direccionGps.value = gestorUbicacion.detectarUbicacionActual()
+            _estaDetectandoGps.value = false
+        }
+    }
+
     // --- SECTOR: ACCIONES ---
 
     fun cerrarSesion() {
@@ -130,6 +154,15 @@ class PrestadorDashboardViewModel @Inject constructor(
             // Marcar offline ANTES de signOut() — después ya no hay uid para ubicar el doc.
             FirebaseAuth.getInstance().currentUser?.uid?.let { repoRemoto.actualizarPresencia(it, false) }
             authRepository.cerrarSesion()
+        }
+    }
+
+    fun alternarConexion() {
+        viewModelScope.launch {
+            val uid = authRepository.obtenerUsuarioActual()?.uid ?: return@launch
+            val nuevoEstado = !estadoUi.value.estaEnLinea
+            prestadorDao.actualizarEstaEnLinea(uid, nuevoEstado)
+            repoRemoto.actualizarPresencia(uid, nuevoEstado)
         }
     }
 

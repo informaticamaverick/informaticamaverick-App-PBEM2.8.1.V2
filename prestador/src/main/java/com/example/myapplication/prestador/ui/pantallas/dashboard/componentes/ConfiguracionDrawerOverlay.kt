@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -117,11 +118,80 @@ fun ConfiguracionDrawerOverlay(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    // --- HEADER: igual al de Inicio (chip de ícono + título, sin banner) ---
+                    // --- TARJETA DE PERFIL: foto + nombre + PRO + rating, toca para ver detalles ---
+                    val perfilPrestador = maestro?.prestador?.perfil
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
+                            .padding(horizontal = 18.dp, vertical = 16.dp)
+                            .clickable { onDismiss(); onNavigateToEditProfile() },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        val fotoPerfil = com.example.myapplication.core.utilidades.ImageUtils.processImageSource(
+                            perfilPrestador?.urlMiniatura ?: perfilPrestador?.urlFoto
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(colors.primaryOrange.copy(alpha = if (fotoPerfil != null) 0f else 1f))
+                                .border(1.dp, DrawerDivider, RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (fotoPerfil != null) {
+                                coil.compose.AsyncImage(
+                                    model = fotoPerfil,
+                                    contentDescription = "Avatar",
+                                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            } else {
+                                Text(
+                                    text = perfilPrestador?.titulo?.trim()?.firstOrNull()?.uppercase() ?: "?",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    text = perfilPrestador?.titulo?.ifBlank { "Mi perfil" } ?: "Mi perfil",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = colors.textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (perfilPrestador?.estaSuscrito == true) {
+                                    Surface(color = colors.primaryOrange, shape = RoundedCornerShape(2.dp)) {
+                                        Text(
+                                            text = "PRO",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                text = "Editar perfil",
+                                fontSize = 12.sp,
+                                color = colors.textSecondary
+                            )
+                        }
+                        Icon(Icons.Default.ChevronRight, null, tint = colors.textSecondary, modifier = Modifier.size(18.dp))
+                    }
+                    HorizontalDivider(color = DrawerDivider)
+
+                    // --- HEADER: chip de ícono + título "Configuración" ---
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
                             .padding(horizontal = 18.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -166,10 +236,6 @@ fun ConfiguracionDrawerOverlay(
                         }
 
                         SeccionCard(indice = idx++, visible = visible, dot = Color(0xFFF59E0B), label = "Mi perfil") {
-                            DrawerItem(Icons.Default.Person, Color(0xFFF57C00), "Editar perfil", "Nombre, foto y descripción") {
-                                onDismiss(); onNavigateToEditProfile()
-                            }
-                            DrawerItemDivider()
                             DrawerToggleItem(
                                 icon = Icons.Default.Business,
                                 iconColor = Color(0xFFF57C00),

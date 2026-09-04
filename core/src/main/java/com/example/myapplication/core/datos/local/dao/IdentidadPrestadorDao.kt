@@ -32,6 +32,12 @@ interface IdentidadPrestadorDao {
     @Query("UPDATE prestadores SET estaVerificado = :verificado WHERE id = :uid")
     suspend fun actualizarVerificacion(uid: String, verificado: Boolean)
 
+    @Query("UPDATE prestadores SET estaVerificado = :verificado WHERE id = :uid")
+    suspend fun actualizarVerificacionSync(uid: String, verificado: Boolean)
+
+    @Query("UPDATE prestadores SET estaEnLinea = :enLinea WHERE id = :uid")
+    suspend fun actualizarEstaEnLinea(uid: String, enLinea: Boolean)
+
     @Transaction
     @Query("SELECT * FROM prestadores WHERE id = :uid")
     fun obtenerPrestadorCompleto(uid: String): Flow<PrestadorCompletoRelacionesBD?>

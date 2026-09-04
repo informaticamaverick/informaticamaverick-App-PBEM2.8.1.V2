@@ -96,6 +96,8 @@ fun PrestadorDashboardScreen(
 ) {
     val colores = getPrestadorColors()
     val estadoUi by dashboardViewModel.uiState.collectAsStateWithLifecycle()
+    val direccionGps by dashboardViewModel.direccionGps.collectAsStateWithLifecycle()
+    val estaDetectandoGps by dashboardViewModel.estaDetectandoGps.collectAsStateWithLifecycle()
 
     var pestanaSeleccionada by rememberSaveable { mutableIntStateOf(2) }
     var estaEnConversacion by remember { mutableStateOf(false) }
@@ -194,6 +196,10 @@ fun PrestadorDashboardScreen(
                             state = estadoUi,
                             onNavigateToEditProfile = onNavigateToEditProfile,
                             onLogout = { dashboardViewModel.cerrarSesion(); onLogout() },
+                            onToggleConexion = { dashboardViewModel.alternarConexion() },
+                            direccionGps = direccionGps,
+                            estaDetectandoGps = estaDetectandoGps,
+                            onSolicitarUbicacion = { dashboardViewModel.detectarUbicacion() },
                             onNavigateToCalendar = { pestanaSeleccionada = 8 },
                             onNavigateToCreatePromo = { mostrarSheetPromocion = true },
                             onNavigateToPromotionList = { pestanaSeleccionada = 6 },

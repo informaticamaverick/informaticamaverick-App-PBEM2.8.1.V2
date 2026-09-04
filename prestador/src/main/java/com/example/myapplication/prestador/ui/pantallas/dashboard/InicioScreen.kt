@@ -59,6 +59,7 @@ fun InicioContent(
         onNavigateToHorariosConfig = onNavigateToHorariosConfig,
         onNavigateToApariencia = onNavigateToApariencia,
         onNavigateToNotificaciones = onNavigateToNotificaciones,
+        onToggleConexion = { viewModel.alternarConexion() },
         onNavigateToTerminos = onNavigateToTerminos,
         onNavigateToPrivacidad = onNavigateToPrivacidad,
         onNavigateToAcercaDe = onNavigateToAcercaDe,

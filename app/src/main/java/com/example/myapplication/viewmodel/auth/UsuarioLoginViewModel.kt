@@ -102,6 +102,7 @@ class UsuarioLoginViewModel @Inject constructor(
         try {
             android.util.Log.d("UsuarioLoginVM", "🌱 [SEED_SYNC] Delegando preparación de Room...")
             sincRepo.finalizarAcceso(usuario)
+            sincRepo.actualizarPresencia(usuario.uid, true)
             withContext(Dispatchers.Main) {
                 _objetivoNavegacion.value = "home"
                 _uiState.update { it.copy(estaCargando = false, exitoLogin = true) }

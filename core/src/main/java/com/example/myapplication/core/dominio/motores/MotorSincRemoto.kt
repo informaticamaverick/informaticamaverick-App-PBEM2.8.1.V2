@@ -6,6 +6,9 @@ import com.example.myapplication.core.datos.local.entidades.CuentaEntity
 
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -65,6 +68,23 @@ class MotorSincRemoto @Inject constructor(
             null
         }
     }
+
+    /**
+     * 🔥 [ELITE]: Escucha en vivo el campo estaEnLinea de un documento remoto
+     * (cliente o prestador), sin depender del pull gateado de shallow sync.
+     */
+    fun observarPresencia(coleccion: String, uid: String): Flow<Boolean> =
+        callbackFlow {
+            val registro = firestore.collection(coleccion).document(uid)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        trySend(false)
+                        return@addSnapshotListener
+                    }
+                    trySend(snapshot?.getBoolean("estaEnLinea") ?: false)
+                }
+            awaitClose { registro.remove() }
+        }
 
 
     // --- ACCESORES DE REFERENCIA PARA SYNC DEEP ---

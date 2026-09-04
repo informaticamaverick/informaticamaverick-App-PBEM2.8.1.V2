@@ -45,6 +45,17 @@ class SincUsuarioRepositorio @Inject constructor(
     } catch (e: Exception) { false }
 
     /**
+     * 🔥 [ELITE]: Marca presencia en vivo del cliente (mismo patrón que el prestador).
+     */
+    fun actualizarPresencia(uid: String, enLinea: Boolean) {
+        nubeFirestore.collection(MotorSincRemoto.COL_CLIENTE).document(uid)
+            .set(mapOf("estaEnLinea" to enLinea), com.google.firebase.firestore.SetOptions.merge())
+            .addOnFailureListener { e ->
+                android.util.Log.e("SincUsuarioRepo", "⚠️ [PRESENCIA_ERR] No se pudo actualizar estaEnLinea: ${e.message}")
+            }
+    }
+
+    /**
      * 🔥 [ELITE]: Motor Central de Acceso para el Cliente.
      * [ORDEN]: 1. Extraer datos de cuenta -> 2. Descargar Foto Original -> 3. Semilla Room.
      */

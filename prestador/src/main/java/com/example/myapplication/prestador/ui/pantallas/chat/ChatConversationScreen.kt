@@ -210,7 +210,7 @@ fun ChatConversationScreen(
                 }
             }
         },
-        estaOnline = false,
+        estaOnline = estadoUi.identidadRemota?.estaOnline ?: false,
         menuAdjuntosAbierto = showAttachmentMenu,
         nombreCliente = estadoUi.identidadRemota?.titulo ?: userName,
         nombrePrestador = maestro?.prestador?.perfil?.titulo ?: "Yo",
